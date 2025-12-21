@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Child {
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  surname             String
+  patronymic          String?
+  birthDate           String               @map("birth_date")
+  birthWeight         Int                  @default(0) @map("birth_weight") // in grams
+  gender              String
+  createdAt           DateTime             @default(now()) @map("created_at")
+  vaccinationProfile  VaccinationProfile?
+  vaccinationRecords  VaccinationRecord[]
+
+  @@map("children")
+}
+
+model VaccinationProfile {
+  id                         Int      @id @default(autoincrement())
+  child                      Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId                    Int      @unique @map("child_id")
+  hepBRiskFactors            String?  @map("hep_b_risk_factors") // Stored as JSON string
+  pneumoRiskFactors          String?  @map("pneumo_risk_factors") // Stored as JSON string
+  pertussisContraindications String?  @map("pertussis_contraindications") // Stored as JSON string
+  polioRiskFactors           String?  @map("polio_risk_factors") // Stored as JSON string
+  mmrContraindications       String?  @map("mmr_contraindications") // Stored as JSON string
+  meningRiskFactors          String?  @map("mening_risk_factors") // Stored as JSON string
+  mantouxDate                String?  @map("mantoux_date")
+  mantouxResult              Boolean? @map("mantoux_result")
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  @@map("vaccination_profiles")
+}
+
+model VaccinationRecord {
+  id            Int      @id @default(autoincrement())
+  child         Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId       Int      @map("child_id")
+  vaccineId     String   @map("vaccine_id")
+  isCompleted   Boolean  @default(false) @map("is_completed")
+  completedDate String?  @map("completed_date")
+  vaccineBrand  String?  @map("vaccine_brand")
+  notes         String?
+  
+  @@unique([childId, vaccineId])
+  @@map("vaccination_records")
+}

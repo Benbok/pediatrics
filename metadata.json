@@ -1,0 +1,5 @@
+{
+  "name": "VaxTrack RF",
+  "description": "A pediatric vaccination tracking application based on the Russian National Vaccination Calendar. Tracks upcoming, overdue, and completed vaccines with AI-powered insights.",
+  "requestFramePermissions": []
+}
