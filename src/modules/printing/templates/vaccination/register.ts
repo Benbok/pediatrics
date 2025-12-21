@@ -13,7 +13,7 @@ const vaccinationCertificateTemplate: PrintTemplate<VaccinationCertificateData> 
     category: 'medical',
     component: VaccinationCertificate,
     defaultOptions: {
-        orientation: 'portrait',
+        orientation: 'landscape',
         pageSize: 'A4',
         margins: {
             top: 20,

@@ -8,6 +8,34 @@ interface CompletedVaccinationsTableProps {
     groupByType?: boolean;
 }
 
+const VACCINE_GROUPS = [
+    { name: 'Вирусный гепатит А', keywords: ['гепатит а', 'гепатит a', 'hep a', 'хаврикс', 'альгавак'] },
+    { name: 'Вирусный гепатит B', keywords: ['гепатит b', 'гепатит в', 'гепатит', 'hep b', 'эувакс', 'регевак', 'комбитех', 'энджерикс', 'regevac', 'euvax'] },
+    { name: 'Туберкулез (БЦЖ)', keywords: ['туберкулез', 'бцж', 'bcg', 'бцж-м'] },
+    { name: 'Пневмококковая инфекция', keywords: ['пневмо', 'превенар', 'prevenar', 'синфлорикс', 'пневмотекс', 'пневмовакс'] },
+    { name: 'Коклюш, Дифтерия, Столбняк (АКДС)', keywords: ['акдс', 'dtp', 'пентаксим', 'инфанрикс', 'адасель', 'тетраксим', 'коклюш', 'адсм', 'ас'] },
+    { name: 'Полиомиелит', keywords: ['полио', 'polio', 'ипв', 'опв', 'бивак', 'полимилекс', 'имовакс'] },
+    { name: 'Корь, Краснуха, Паротит', keywords: ['корь', 'краснуха', 'паротит', 'mmr', 'приорикс', 'вактривир', 'дивакцина', 'паротитно'] },
+    { name: 'Гемофильная инфекция', keywords: ['гемофильн', 'hib', 'хиберикс', 'акт-хиб'] },
+    { name: 'Менингококковая инфекция', keywords: ['менинго', 'менактра', 'menactra'] },
+    { name: 'Ротавирусная инфекция', keywords: ['рота', 'rota', 'ротатек'] },
+    { name: 'Грипп', keywords: ['грипп', 'flu', 'ультрикс', 'ваксигрип', 'совигрипп', 'инфлювак', 'гриппол'] },
+    { name: 'Ветряная оспа', keywords: ['ветрян', 'varicella', 'варилрикс', 'varilrix'] },
+    { name: 'Клещевой энцефалит', keywords: ['клещ', 'tick', 'энце', 'клещ-э-вак', 'энецевир'] },
+];
+
+function normalizeVaccineName(name: string): string {
+    const lower = name.toLowerCase();
+
+    for (const group of VACCINE_GROUPS) {
+        if (group.keywords.some(k => lower.includes(k))) {
+            return group.name;
+        }
+    }
+
+    return name;
+}
+
 /**
  * Группирует вакцинации по типу вакцины
  */
@@ -15,9 +43,10 @@ function groupVaccinations(vaccinations: CompletedVaccination[]): Map<string, Co
     const groups = new Map<string, CompletedVaccination[]>();
 
     vaccinations.forEach(vac => {
-        const existing = groups.get(vac.vaccineName) || [];
+        const groupName = normalizeVaccineName(vac.vaccineName);
+        const existing = groups.get(groupName) || [];
         existing.push(vac);
-        groups.set(vac.vaccineName, existing);
+        groups.set(groupName, existing);
     });
 
     return groups;

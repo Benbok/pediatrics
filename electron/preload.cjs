@@ -12,4 +12,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateVaccinationProfile: (profile) => ipcRenderer.invoke('db:update-vaccination-profile', profile),
     getRecords: (childId) => ipcRenderer.invoke('db:get-records', childId),
     saveRecord: (record) => ipcRenderer.invoke('db:save-record', record),
+    print: () => ipcRenderer.send('print-window'),
+    exportPDF: (certificateData) => ipcRenderer.invoke('export-pdf', certificateData),
 });

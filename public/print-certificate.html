@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сертификат прививок - Печать</title>
+    <style>
+        /* Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            background: #fff;
+            color: #000;
+        }
+
+        @page {
+            margin: 10mm;
+            size: A4 landscape;
+        }
+
+        /* Certificate Container */
+        .certificate {
+            width: 100%;
+            max-width: 297mm;
+            /* A4 landscape width */
+            margin: 0 auto;
+            padding: 10mm;
+        }
+
+        /* Page Sections */
+        .page {
+            width: 100%;
+            min-height: 170mm;
+            /* A4 landscape height minus margins */
+            padding: 5mm;
+            page-break-after: always;
+            background: #fff;
+        }
+
+        .page:last-child {
+            page-break-after: auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #2563eb;
+        }
+
+        .header-badge {
+            width: 50px;
+            height: 50px;
+            margin: 0 auto 10px;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 28px;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e40af;
+            text-transform: uppercase;
+            margin: 10px 0;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .cert-number {
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+
+        /* Info Sections */
+        .info-section {
+            margin: 10px 0;
+            padding: 10px 15px;
+            background: #f9fafb;
+            border-left: 4px solid #2563eb;
+            border-radius: 4px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 5px;
+        }
+
+        .info-row {
+            display: flex;
+            padding: 4px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+        }
+
+        .info-label {
+            width: 200px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .info-value {
+            flex: 1;
+            color: #111;
+        }
+
+        /* Signature Block */
+        .signature-block {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .stamp-area {
+            width: 80px;
+            height: 80px;
+            border: 2px dashed #999;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 11px;
+        }
+
+        .signature-line {
+            flex: 1;
+            margin-left: 30px;
+        }
+
+        .signature-line p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #555;
+        }
+
+        /* Timeline Grid */
+        .timeline-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .month-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .month-header {
+            background: #f3f4f6;
+            padding: 8px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .month-body {
+            padding: 8px;
+        }
+
+        .vaccine-chip {
+            padding: 6px 8px;
+            margin: 4px 0;
+            font-size: 11px;
+            border-radius: 4px;
+            border-left: 3px solid #2563eb;
+            background: #eff6ff;
+        }
+
+        .vaccine-chip.overdue {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .vaccine-chip.due {
+            border-left-color: #fbbf24;
+            background: #fffbeb;
+        }
+
+        /* Tables */
+        .vaccine-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 11px;
+        }
+
+        .vaccine-table th,
+        .vaccine-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .vaccine-table th {
+            background: #f3f4f6;
+            font-weight: bold;
+        }
+
+        .vaccine-group-title {
+            font-size: 14px;
+            font-weight: bold;
+            padding: 10px;
+            background: #f3f4f6;
+            border-left: 4px solid #2563eb;
+            margin: 20px 0 10px;
+        }
+
+        /* Footer */
+        .footer {
+            position: fixed;
+            bottom: 10mm;
+            left: 10mm;
+            right: 10mm;
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 5px;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .legend-icon {
+            font-size: 16px;
+        }
+
+        /* Print specific */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .page {
+                page-break-after: always;
+            }
+
+            .page:last-child {
+                page-break-after: auto;
+            }
+
+            .info-section {
+                background: #f9fafb !important;
+                -webkit-print-color-adjust: exact;
+            }
+        }
+
+        /* Loading state */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-size: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app" class="loading">
+        Загрузка данных сертификата...
+    </div>
+
+    <script>
+        // This script will receive certificate data and render it
+        window.addEventListener('DOMContentLoaded', () => {
+            // Wait for data to be passed from main process
+            if (window.electronAPI && window.electronAPI.onPrintData) {
+                window.electronAPI.onPrintData((data) => {
+                    renderCertificate(data);
+                });
+            }
+        });
+
+        function renderCertificate(data) {
+            const app = document.getElementById('app');
+            app.className = 'certificate';
+
+            const { patient, completedVaccinations, plannedVaccinations, certificateNumber, issueDate, issuedBy } = data;
+
+            // Format date helper
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '—';
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' });
+            };
+
+            // Calculate age
+            const calculateAge = (birthDate) => {
+                if (!birthDate) return '—';
+                const birth = new Date(birthDate);
+                const now = new Date();
+                const years = now.getFullYear() - birth.getFullYear();
+                const months = now.getMonth() - birth.getMonth();
+                if (years > 0) {
+                    return `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}${months > 0 ? ` ${months} мес.` : ''}`;
+                }
+                return `${months + 12} месяцев`;
+            };
+
+            // Group vaccinations by type
+            const VACCINE_GROUPS = [
+                { name: 'Вирусный гепатит B', keywords: ['гепатит b', 'гепатит в', 'гепатит', 'hep b', 'эувакс', 'регевак', 'энджерикс'] },
+                { name: 'Туберкулез (БЦЖ)', keywords: ['туберкулез', 'бцж', 'bcg'] },
+                { name: 'Пневмококковая инфекция', keywords: ['пневмо', 'превенар', 'prevenar'] },
+                { name: 'АКДС / Коклюш, Дифтерия, Столбняк', keywords: ['акдс', 'dtp', 'пентаксим', 'инфанрикс', 'адасель'] },
+                { name: 'Полиомиелит', keywords: ['полио', 'polio', 'ипв', 'опв'] },
+                { name: 'Корь, Краснуха, Паротит', keywords: ['корь', 'краснуха', 'паротит', 'mmr', 'приорикс'] },
+            ];
+
+            const normalizeVaccineName = (name) => {
+                const lower = name.toLowerCase();
+                for (const group of VACCINE_GROUPS) {
+                    if (group.keywords.some(k => lower.includes(k))) {
+                        return group.name;
+                    }
+                }
+                return name;
+            };
+
+            const groupVaccinations = (vaccinations) => {
+                const groups = {};
+                vaccinations.forEach(v => {
+                    const groupName = normalizeVaccineName(v.vaccineName);
+                    if (!groups[groupName]) groups[groupName] = [];
+                    groups[groupName].push(v);
+                });
+                return groups;
+            };
+
+            // Build HTML
+            let html = '';
+
+            // PAGE 1: Title Page
+            html += `
+                <div class="page">
+                    <div class="header">
+                        <div class="header-badge">⚕</div>
+                        <h1 class="title">Сертификат<br>профилактических прививок</h1>
+                        <p class="subtitle">Форма № 156/У-93</p>
+                        <p class="cert-number">Сертификат № ${certificateNumber || '—'}</p>
+                    </div>
+
+                    <div class="info-section">
+                        <h3 class="section-title">Сведения о пациенте</h3>
+                        <div class="info-row">
+                            <span class="info-label">Фамилия, Имя, Отчество:</span>
+                            <span class="info-value">${patient?.fullName || '—'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Дата рождения:</span>
+                            <span class="info-value">${formatDate(patient?.birthDate)}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Возраст:</span>
+                            <span class="info-value">${calculateAge(patient?.birthDate)}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Пол:</span>
+                            <span class="info-value">${patient?.gender === 'male' ? 'Мужской' : patient?.gender === 'female' ? 'Женский' : '—'}</span>
+                        </div>
+                        ${patient?.birthWeight ? `
+                        <div class="info-row">
+                            <span class="info-label">Вес при рождении:</span>
+                            <span class="info-value">${patient.birthWeight} кг</span>
+                        </div>` : ''}
+                    </div>
+
+                    <div class="info-section">
+                        <h3 class="section-title">Информация о выдаче</h3>
+                        <div class="info-row">
+                            <span class="info-label">Дата выдачи:</span>
+                            <span class="info-value">${formatDate(issueDate)}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Выдан:</span>
+                            <span class="info-value">${issuedBy || '—'}</span>
+                        </div>
+                    </div>
+
+                    <div class="signature-block">
+                        <div class="stamp-area">М.П.</div>
+                        <div class="signature-line">
+                            <p>Подпись врача: _________________________</p>
+                            <p style="margin-top: 15px; font-size: 11px; color: #999;">Отмена невозможна.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // PAGE 2: Vaccination Timeline
+            if (plannedVaccinations && plannedVaccinations.length > 0) {
+                // Helper to get age label from months
+                const getAgeLabel = (months) => {
+                    if (months === undefined || months === null) return 'Прочее';
+                    if (months === 0) return 'При рождении';
+                    if (months < 12) return `${months} мес.`;
+                    const years = Math.floor(months / 12);
+                    const remainingMonths = months % 12;
+                    if (remainingMonths === 0) {
+                        return `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}`;
+                    }
+                    return `${years} г. ${remainingMonths} мес.`;
+                };
+
+                // Group by age/month
+                const monthGroups = {};
+                plannedVaccinations.forEach(v => {
+                    const monthLabel = getAgeLabel(v.ageInMonths);
+                    if (!monthGroups[monthLabel]) monthGroups[monthLabel] = [];
+                    monthGroups[monthLabel].push(v);
+                });
+
+                html += `
+                    <div class="page">
+                        <h2 class="section-title" style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">
+                            Календарь профилактических прививок (План)
+                        </h2>
+
+                        <div class="legend">
+                            <div class="legend-item"><span class="legend-icon">✅</span> Запланировано</div>
+                            <div class="legend-item"><span class="legend-icon">⚠️</span> Срок подходит</div>
+                            <div class="legend-item"><span class="legend-icon">❌</span> Просрочено</div>
+                        </div>
+
+                        <div class="timeline-grid">
+                `;
+
+                Object.keys(monthGroups).forEach(monthLabel => {
+                    html += `
+                        <div class="month-card">
+                            <div class="month-header">${monthLabel}</div>
+                            <div class="month-body">
+                    `;
+                    monthGroups[monthLabel].forEach(v => {
+                        const statusClass = v.status === 'overdue' ? 'overdue' : v.status === 'due_now' ? 'due' : '';
+                        html += `
+                            <div class="vaccine-chip ${statusClass}">
+                                <strong>${v.vaccineName}</strong>
+                                ${v.recommendedDate ? `<br><small>${formatDate(v.recommendedDate)}</small>` : ''}
+                            </div>
+                        `;
+                    });
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            // PAGE 3+: Completed Vaccinations
+            if (completedVaccinations && completedVaccinations.length > 0) {
+                const grouped = groupVaccinations(completedVaccinations);
+
+                html += `<div class="page">`;
+                html += `<h2 class="section-title" style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">Выполненные прививки</h2>`;
+
+                Object.keys(grouped).forEach(groupName => {
+                    const vaccines = grouped[groupName];
+                    html += `
+                        <div class="vaccine-group-title">${groupName}</div>
+                        <table class="vaccine-table">
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Доза</th>
+                                    <th>Препарат / Производитель</th>
+                                    <th>Серия / Срок</th>
+                                    <th>Медучреждение</th>
+                                    <th>Примечание</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    vaccines.forEach(v => {
+                        html += `
+                            <tr>
+                                <td>${formatDate(v.completedDate)}</td>
+                                <td>${v.doseNumber || '—'}</td>
+                                <td>${v.vaccineBrand || v.vaccineName}<br><small>${v.manufacturer || ''}</small></td>
+                                <td>${v.series || '—'}<br><small>${v.expiryDate ? 'до ' + formatDate(v.expiryDate) : ''}</small></td>
+                                <td>${v.clinic || '—'}</td>
+                                <td>${v.notes || '—'}</td>
+                            </tr>
+                        `;
+                    });
+                    html += `
+                            </tbody>
+                        </table>
+                    `;
+                });
+
+                html += `</div>`;
+            }
+
+            // Footer
+            html += `
+                <div class="footer">
+                    <span>${issuedBy || ''}</span>
+                    <span>Сертификат № ${certificateNumber || '—'}</span>
+                    <span>${formatDate(issueDate)}</span>
+                </div>
+            `;
+
+            app.innerHTML = html;
+
+            // Signal that rendering is complete
+            if (window.electronAPI && window.electronAPI.printReady) {
+                setTimeout(() => {
+                    window.electronAPI.printReady();
+                }, 500);
+            }
+        }
+
+        // Also check if data is already available (passed via query params or global)
+        if (window.__PRINT_DATA__) {
+            renderCertificate(window.__PRINT_DATA__);
+        }
+    </script>
+</body>
+
+</html>

@@ -20,7 +20,7 @@ export const VaccinationCertificate: React.FC<PrintTemplateProps<VaccinationCert
     const { patient, completedVaccinations, plannedVaccinations, certificateNumber, issueDate, issuedBy } = data;
 
     return (
-        <div className="vaccination-certificate">
+        <div className="vaccination-certificate print-content">
             {/* Страница 1: Титульный лист */}
             <div className="certificate-page page-1">
                 {/* Заголовок */}
@@ -84,15 +84,9 @@ export const VaccinationCertificate: React.FC<PrintTemplateProps<VaccinationCert
                         <span className="info-label">Дата выдачи:</span>
                         <span className="info-value">{formatDate(issueDate, 'full')}</span>
                     </div>
-                    {issuedBy && (
-                        <div className="info-row">
-                            <span className="info-label">Выдан:</span>
-                            <span className="info-value">{issuedBy}</span>
-                        </div>
-                    )}
                 </section>
 
-                {/* Подпись места для печати */}
+                {/* Подпись места для печати (Версия 1) */}
                 <div className="signature-block print-only">
                     <div className="stamp-area">
                         <p>М.П.</p>
@@ -106,21 +100,21 @@ export const VaccinationCertificate: React.FC<PrintTemplateProps<VaccinationCert
             {/* Разрыв страницы */}
             <div className="page-break"></div>
 
-            {/* Страница 2+: Выполненные прививки */}
+            {/* График плановых прививок (Теперь сверху для наглядности) */}
             <div className="certificate-page page-2">
-                <h2 className="page-title">Выполненные прививки</h2>
-                <CompletedVaccinationsTable
-                    vaccinations={completedVaccinations}
-                    groupByType={data.groupByVaccineType}
-                />
+                <VaccinationTimeline plannedVaccinations={plannedVaccinations} />
             </div>
 
             {/* Разрыв страницы */}
             <div className="page-break"></div>
 
-            {/* Последняя страница: График плановых прививок */}
+            {/* Выполненные прививки */}
             <div className="certificate-page page-3">
-                <VaccinationTimeline plannedVaccinations={plannedVaccinations} />
+                <h2 className="page-title">Выполненные прививки</h2>
+                <CompletedVaccinationsTable
+                    vaccinations={completedVaccinations}
+                    groupByType={data.groupByVaccineType}
+                />
             </div>
 
             {/* Футер на каждой странице (только для печати) */}

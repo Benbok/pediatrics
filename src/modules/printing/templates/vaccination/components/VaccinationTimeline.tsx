@@ -55,8 +55,26 @@ function getStatusText(status: PlannedVaccinationStatus): string {
     }
 }
 
+// Определение возрастных интервалов (столбцов)
+const AGE_INTERVALS = [
+    { label: '0 дн.', months: 0 },
+    { label: '3-5 дн.', months: 0.1 },
+    { label: '1 мес.', months: 1 },
+    { label: '2 мес.', months: 2 },
+    { label: '3 мес.', months: 3 },
+    { label: '4.5 мес.', months: 4.5 },
+    { label: '6 мес.', months: 6 },
+    { label: '12 мес.', months: 12 },
+    { label: '15 мес.', months: 15 },
+    { label: '18 мес.', months: 18 },
+    { label: '20 мес.', months: 20 },
+    { label: '6 лет', months: 72 },
+    { label: '7 лет', months: 84 },
+    { label: '14 лет', months: 168 },
+];
+
 /**
- * График плановых прививок
+ * График плановых прививок (Визуальный календарь)
  */
 export const VaccinationTimeline: React.FC<VaccinationTimelineProps> = ({
     plannedVaccinations,
@@ -69,23 +87,10 @@ export const VaccinationTimeline: React.FC<VaccinationTimelineProps> = ({
         );
     }
 
-    // Разделяем на обязательные и рекомендованные
-    const required = plannedVaccinations.filter(v => v.isRequired);
-    const recommended = plannedVaccinations.filter(v => !v.isRequired);
-
-    // Сортируем по дате
-    const sortByDate = (a: PlannedVaccination, b: PlannedVaccination) => {
-        return new Date(a.recommendedDate).getTime() - new Date(b.recommendedDate).getTime();
-    };
-
-    required.sort(sortByDate);
-    recommended.sort(sortByDate);
-
     return (
         <div className="vaccination-timeline">
-            <h2 className="timeline-title">График профилактических прививок</h2>
+            <h2 className="timeline-title">Календарь профилактических прививок (План)</h2>
 
-            {/* Легенда */}
             <div className="timeline-legend avoid-break">
                 <div className="legend-item">
                     <span className="legend-icon">⏰</span>
@@ -93,7 +98,7 @@ export const VaccinationTimeline: React.FC<VaccinationTimelineProps> = ({
                 </div>
                 <div className="legend-item">
                     <span className="legend-icon">🔔</span>
-                    <span className="legend-text">Сейчас</span>
+                    <span className="legend-text">Срок подошел</span>
                 </div>
                 <div className="legend-item">
                     <span className="legend-icon">❗</span>
@@ -101,75 +106,48 @@ export const VaccinationTimeline: React.FC<VaccinationTimelineProps> = ({
                 </div>
             </div>
 
-            {/* Обязательные прививки */}
-            {required.length > 0 && (
-                <div className="timeline-section avoid-break">
-                    <h3 className="section-title">Обязательные прививки</h3>
-                    <div className="timeline-items">
-                        {required.map((vac, idx) => (
-                            <div
-                                key={`required-${vac.vaccineId}-${idx}`}
-                                className={`timeline-item ${getStatusClass(vac.status)}`}
-                            >
-                                <div className="timeline-item-header">
-                                    <span className="timeline-icon">{getStatusIcon(vac.status)}</span>
-                                    <span className="timeline-vaccine-name">{vac.vaccineName}</span>
-                                    <span className="timeline-status">{getStatusText(vac.status)}</span>
-                                </div>
-                                <div className="timeline-item-body">
-                                    <div className="timeline-date">
-                                        <strong>Дата:</strong> {formatDate(vac.recommendedDate)}
-                                        {vac.ageInMonths !== undefined && (
-                                            <span className="timeline-age"> ({vac.ageInMonths} мес.)</span>
-                                        )}
-                                    </div>
-                                    {vac.description && (
-                                        <div className="timeline-description">{vac.description}</div>
-                                    )}
-                                    {vac.alertMessage && (
-                                        <div className="timeline-alert">{vac.alertMessage}</div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            <div className="timeline-month-grid avoid-break">
+                {AGE_INTERVALS.map((interval) => {
+                    // Ищем прививки для этого возрастного интервала
+                    const vaccinesInInterval = plannedVaccinations.filter(v => {
+                        const age = v.ageInMonths || 0;
+                        if (interval.months === 0) return age === 0;
+                        if (interval.months === 0.1) return age > 0 && age < 1;
+                        return Math.abs(age - interval.months) < 0.3;
+                    });
 
-            {/* Рекомендованные прививки */}
-            {recommended.length > 0 && (
-                <div className="timeline-section avoid-break">
-                    <h3 className="section-title">Рекомендованные прививки</h3>
-                    <div className="timeline-items">
-                        {recommended.map((vac, idx) => (
-                            <div
-                                key={`recommended-${vac.vaccineId}-${idx}`}
-                                className={`timeline-item ${getStatusClass(vac.status)} recommended`}
-                            >
-                                <div className="timeline-item-header">
-                                    <span className="timeline-icon">{getStatusIcon(vac.status)}</span>
-                                    <span className="timeline-vaccine-name">{vac.vaccineName}</span>
-                                    <span className="timeline-status">{getStatusText(vac.status)}</span>
-                                </div>
-                                <div className="timeline-item-body">
-                                    <div className="timeline-date">
-                                        <strong>Дата:</strong> {formatDate(vac.recommendedDate)}
-                                        {vac.ageInMonths !== undefined && (
-                                            <span className="timeline-age"> ({vac.ageInMonths} мес.)</span>
-                                        )}
-                                    </div>
-                                    {vac.description && (
-                                        <div className="timeline-description">{vac.description}</div>
-                                    )}
-                                    {vac.alertMessage && (
-                                        <div className="timeline-alert">{vac.alertMessage}</div>
-                                    )}
-                                </div>
+                    // Если прививок нет, не показываем этот месяц (или показываем пустым, если нужно сохранить структуру)
+                    if (vaccinesInInterval.length === 0) return null;
+
+                    return (
+                        <div key={interval.label} className="month-card avoid-break">
+                            <div className="month-card-header">
+                                <span className="month-label">{interval.label}</span>
                             </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+                            <div className="month-card-body">
+                                {vaccinesInInterval.map((vac, idx) => (
+                                    <div
+                                        key={`${vac.vaccineId}-${idx}`}
+                                        className={`vaccine-chip ${getStatusClass(vac.status)}`}
+                                    >
+                                        <div className="chip-header">
+                                            <span className="chip-name">{vac.vaccineName}</span>
+                                            <span className="chip-icon">{getStatusIcon(vac.status)}</span>
+                                        </div>
+                                        <div className="chip-date">
+                                            {formatDate(vac.recommendedDate)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <p className="sub-text" style={{ marginTop: '15px', textAlign: 'center' }}>
+                * Календарь сформирован автоматически на основе текущего профиля пациента.
+            </p>
         </div>
     );
 };
