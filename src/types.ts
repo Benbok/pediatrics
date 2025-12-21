@@ -156,6 +156,10 @@ export interface UserVaccineRecord {
   completedDate: string | null;
   vaccineBrand?: string;
   notes?: string;
+  dose?: string;
+  series?: string;
+  expiryDate?: string;
+  manufacturer?: string;
 }
 
 export enum VaccineStatus {

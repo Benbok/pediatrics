@@ -14,6 +14,7 @@ import { hepaRules } from './hepa';
 import { fluRules } from './flu';
 import { hpvRules } from './hpv';
 import { tbeRules } from './tbe';
+import { atsRules } from './ats';
 
 const RULES = [
     bcgRules,
@@ -29,7 +30,8 @@ const RULES = [
     hepaRules,
     fluRules,
     hpvRules,
-    tbeRules
+    tbeRules,
+    atsRules
 ];
 
 export const calculateVaccineSchedule = (
@@ -124,5 +126,9 @@ export const calculateVaccineSchedule = (
             }
         }
         return { ...v, ...updates };
-    }).sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+    }).sort((a, b) => {
+        const timeA = a.dueDate?.getTime() || 0;
+        const timeB = b.dueDate?.getTime() || 0;
+        return timeA - timeB;
+    });
 };

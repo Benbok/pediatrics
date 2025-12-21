@@ -5,6 +5,9 @@ import { Dashboard } from './modules/dashboard/Dashboard';
 import { PatientsModule } from './modules/patients/PatientsModule';
 import { PatientDetails } from './modules/patients/PatientDetails';
 import { VaccinationModule } from './modules/vaccination/VaccinationModule';
+import { PrintPreviewManager } from './modules/printing/components/PrintPreviewManager';
+// Register vaccination certificate template
+import './modules/printing/templates/vaccination/register';
 
 const router = createBrowserRouter([
     {
@@ -37,6 +40,7 @@ const App: React.FC = () => {
     return (
         <ChildProvider>
             <RouterProvider router={router} />
+            <PrintPreviewManager />
         </ChildProvider>
     );
 };

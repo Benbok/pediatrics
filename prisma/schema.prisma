@@ -54,6 +54,10 @@ model VaccinationRecord {
   completedDate String?  @map("completed_date")
   vaccineBrand  String?  @map("vaccine_brand")
   notes         String?
+  dose          String?
+  series        String?
+  expiryDate    String?  @map("expiry_date")
+  manufacturer  String?
   
   @@unique([childId, vaccineId])
   @@map("vaccination_records")

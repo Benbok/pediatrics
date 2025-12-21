@@ -170,31 +170,62 @@ function setupDatabaseHandlers() {
   });
 
   ipcMain.handle('db:save-record', async (_, record) => {
-    const { childId, vaccineId, isCompleted, completedDate, vaccineBrand, notes } = record;
-
-    await prisma.vaccinationRecord.upsert({
-      where: {
-        childId_vaccineId: {
-          childId: Number(childId),
-          vaccineId: vaccineId,
-        },
-      },
-      update: {
-        isCompleted,
-        completedDate,
-        vaccineBrand,
-        notes,
-      },
-      create: {
-        childId: Number(childId),
+    try {
+      const {
+        childId,
         vaccineId,
         isCompleted,
         completedDate,
         vaccineBrand,
         notes,
-      },
-    });
-    return true;
+        dose,
+        series,
+        expiryDate,
+        manufacturer
+      } = record;
+
+      console.log(`[Database] Saving record for child ${childId}, vaccine ${vaccineId}:`, {
+        isCompleted,
+        dose,
+        series,
+        expiryDate
+      });
+
+      await prisma.vaccinationRecord.upsert({
+        where: {
+          childId_vaccineId: {
+            childId: Number(childId),
+            vaccineId: vaccineId,
+          },
+        },
+        update: {
+          isCompleted,
+          completedDate,
+          vaccineBrand,
+          notes,
+          dose,
+          series,
+          expiryDate,
+          manufacturer
+        },
+        create: {
+          childId: Number(childId),
+          vaccineId,
+          isCompleted,
+          completedDate,
+          vaccineBrand,
+          notes,
+          dose,
+          series,
+          expiryDate,
+          manufacturer
+        },
+      });
+      return true;
+    } catch (error) {
+      console.error('[Database] Failed to save vaccination record:', error);
+      throw error;
+    }
   });
 }
 

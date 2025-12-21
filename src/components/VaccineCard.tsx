@@ -7,7 +7,13 @@ interface Props {
   data: AugmentedVaccine;
   child: ChildProfile;
   vaccinationProfile?: VaccinationProfile;
-  onToggleComplete: (id: string, date: string | null, brand?: string, notes?: string) => void;
+  onToggleComplete: (
+    id: string,
+    date: string | null,
+    brand?: string,
+    notes?: string,
+    extra?: { dose?: string; series?: string; expiryDate?: string; manufacturer?: string }
+  ) => void;
   onDeleteCustom?: (id: string) => void;
   onEditCustom?: (id: string) => void;
   onOpenLecture?: (lectureId: string) => void;
@@ -34,11 +40,29 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
   const [showInfo, setShowInfo] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
-  const [selectedBrandName, setSelectedBrandName] = useState<string>('');
-  const [userNotes, setUserNotes] = useState<string>('');
+  const [dose, setDose] = useState<string>(data.userRecord?.dose || '');
+  const [series, setSeries] = useState<string>(data.userRecord?.series || '');
+  const [manufacturer, setManufacturer] = useState<string>(data.userRecord?.manufacturer || '');
+  const [expiryDate, setExpiryDate] = useState<string>(data.userRecord?.expiryDate || '');
+  const [userNotes, setUserNotes] = useState<string>(data.userRecord?.notes || '');
+  const [selectedBrandName, setSelectedBrandName] = useState<string>(data.userRecord?.vaccineBrand || '');
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Sync states with userRecord updates
+  React.useEffect(() => {
+    if (!isEditing) {
+      setDose(data.userRecord?.dose || '');
+      setSeries(data.userRecord?.series || '');
+      setManufacturer(data.userRecord?.manufacturer || '');
+      setExpiryDate(data.userRecord?.expiryDate || '');
+      setUserNotes(data.userRecord?.notes || '');
+      setSelectedBrandName(data.userRecord?.vaccineBrand || '');
+    }
+  }, [data.userRecord, isEditing]);
 
   // Initialize date with the planned due date, handle potential invalid dates gracefully
   const [selectedDate, setSelectedDate] = useState<string>(() => {
+    if (data.userRecord?.completedDate) return data.userRecord.completedDate;
     try {
       return data.dueDate.toISOString().split('T')[0];
     } catch (e) {
@@ -47,6 +71,9 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
   });
 
   const getStatusColor = (status: VaccineStatus) => {
+    // Special handling for emergency vaccines to make them look more "available" even if skipped
+    const isEmergency = data.id.endsWith('-sos');
+
     switch (status) {
       case VaccineStatus.COMPLETED:
         return 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400';
@@ -55,9 +82,11 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
       case VaccineStatus.DUE_NOW:
         return 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400';
       case VaccineStatus.MISSED:
-        return 'bg-slate-100 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500 opacity-75';
+        return `bg-slate-100 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500 ${isEmergency ? '' : 'opacity-75'}`;
       case VaccineStatus.SKIPPED:
-        return 'bg-slate-50 border-slate-100 text-slate-400 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-600 opacity-60';
+        return isEmergency
+          ? 'bg-blue-50 border-blue-100 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400'
+          : 'bg-slate-50 border-slate-100 text-slate-400 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-600 opacity-60';
       case VaccineStatus.PLANNED:
       default:
         return 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400';
@@ -94,7 +123,34 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
         alert("Дата прививки не может быть раньше даты рождения ребенка.");
         return;
       }
-      onToggleComplete(data.id, selectedDate, selectedBrandName, userNotes);
+
+      // Dose Validation
+      if (dose.trim()) {
+        const numericDose = parseFloat(dose.replace(',', '.'));
+        const isATS = data.id === 'ats-sos';
+        const maxDose = isATS ? 5000 : 10; // ATS uses IU (250-3000), others use ml (max 10)
+
+        if (isNaN(numericDose)) {
+          alert("Пожалуйста, введите корректное числовое значение для дозы (например: 0.5 или 3000).");
+          return;
+        }
+        if (numericDose > maxDose) {
+          alert(`Внимание: Доза не может превышать ${maxDose} ${isATS ? 'МЕ' : 'мл'}. Пожалуйста, проверьте ввод.`);
+          return;
+        }
+        if (numericDose <= 0) {
+          alert("Доза должна быть больше 0.");
+          return;
+        }
+      }
+
+      onToggleComplete(data.id, selectedDate, selectedBrandName, userNotes, {
+        dose,
+        series,
+        manufacturer,
+        expiryDate
+      });
+      setIsEditing(false);
     }
   };
 
@@ -104,7 +160,9 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
 
   // If skipped or missed, allow forcing completion via a "Force" button hidden in details?
   // For now, allow regular completion but show visually distinct.
-  const isActionDisabled = data.status === VaccineStatus.MISSED || data.status === VaccineStatus.SKIPPED;
+  // Disable actions for missed/skipped vaccines UNLESS it's an emergency (SOS) vaccine like ATS
+  const isEmergency = data.id.endsWith('-sos');
+  const isActionDisabled = (data.status === VaccineStatus.MISSED || data.status === VaccineStatus.SKIPPED) && !isEmergency;
 
   return (
     <div
@@ -145,12 +203,44 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
           )}
 
           {data.status === VaccineStatus.COMPLETED && data.userRecord?.vaccineBrand && (
-            <p className="text-xs mt-1 font-medium bg-white/40 dark:bg-black/20 inline-block px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-300">
-              Препарат: {data.userRecord.vaccineBrand}
+            <p className="text-xs mt-1 font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 inline-block px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+              Препарат: <span className="font-bold">{data.userRecord.vaccineBrand}</span>
             </p>
           )}
+
+          {data.status === VaccineStatus.COMPLETED && (data.userRecord?.dose || data.userRecord?.series || data.userRecord?.manufacturer || data.userRecord?.expiryDate) && (
+            <div className="mt-2 text-[10px] space-y-1.5 bg-white/40 dark:bg-black/20 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
+              <div className="grid grid-cols-2 gap-2">
+                {data.userRecord.dose && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-slate-500 font-bold uppercase text-[9px]">Доза:</span>
+                    <span className="font-semibold text-emerald-900 dark:text-emerald-200">{data.userRecord.dose} {data.id === 'ats-sos' ? 'МЕ' : 'мл'}</span>
+                  </div>
+                )}
+                {data.userRecord.series && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 font-bold uppercase text-[9px]">Серия:</span>
+                    <span className="font-semibold text-emerald-900 dark:text-emerald-200">{data.userRecord.series}</span>
+                  </div>
+                )}
+                {data.userRecord.expiryDate && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 font-bold uppercase text-[9px]">Годен до:</span>
+                    <span className="font-semibold text-emerald-900 dark:text-emerald-200">{new Date(data.userRecord.expiryDate).toLocaleDateString('ru-RU')}</span>
+                  </div>
+                )}
+              </div>
+              {data.userRecord.manufacturer && (
+                <div className="flex items-baseline gap-1.5 pt-1 border-t border-emerald-50 dark:border-emerald-900/20">
+                  <span className="text-slate-500 font-bold uppercase text-[9px]">Производитель:</span>
+                  <span className="font-medium text-emerald-900 dark:text-emerald-200 italic">{data.userRecord.manufacturer}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {data.status === VaccineStatus.COMPLETED && data.userRecord?.notes && (
-            <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 bg-white/50 dark:bg-black/20 p-2 rounded italic">
+            <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 bg-white/50 dark:bg-black/20 p-2 rounded-xl italic border border-slate-100 dark:border-slate-800/50">
               <span className="font-semibold not-italic text-[10px] uppercase opacity-70 block mb-0.5">Заметки:</span>
               "{data.userRecord.notes}"
             </div>
@@ -158,8 +248,8 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          {data.status !== VaccineStatus.COMPLETED ? (
-            <div className={`flex flex-col items-end gap-2 w-full sm:w-auto ${isActionDisabled ? 'opacity-50 pointer-events-none' : ''}`}>
+          {data.status !== VaccineStatus.COMPLETED || isEditing ? (
+            <div className={`flex flex-col items-end gap-2 w-full sm:w-auto ${isActionDisabled && !isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
               {data.availableBrands && data.availableBrands.length > 0 && (
                 <div className="w-full sm:w-56">
                   <select
@@ -179,6 +269,40 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
                   )}
                 </div>
               )}
+
+              {/* Enhanced Inputs for Completion */}
+              <div className="w-full sm:w-56 grid grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={dose}
+                  onChange={(e) => setDose(e.target.value)}
+                  placeholder={data.id === 'ats-sos' ? "Доза (МЕ)" : "Доза (мл)"}
+                  className="text-[10px] p-2 rounded border border-slate-300 bg-white/80 outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200"
+                />
+                <input
+                  type="text"
+                  value={series}
+                  onChange={(e) => setSeries(e.target.value)}
+                  placeholder="Серия"
+                  className="text-[10px] p-2 rounded border border-slate-300 bg-white/80 outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200"
+                />
+                <input
+                  type="text"
+                  value={manufacturer}
+                  onChange={(e) => setManufacturer(e.target.value)}
+                  placeholder="Производитель"
+                  className="col-span-2 text-[10px] p-2 rounded border border-slate-300 bg-white/80 outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200"
+                />
+                <div className="col-span-2">
+                  <label className="text-[9px] uppercase font-bold opacity-60 ml-1">Срок годности:</label>
+                  <input
+                    type="date"
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                    className="w-full text-[10px] p-2 rounded border border-slate-300 bg-white/80 outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200"
+                  />
+                </div>
+              </div>
 
               {/* Notes Input */}
               <textarea
@@ -207,16 +331,35 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
                       <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
                     </svg>
                   </button>
+                  {isEditing && (
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      className="bg-white/50 hover:bg-slate-500 hover:text-white text-slate-700 p-2 rounded border border-slate-300 transition-colors dark:bg-slate-800 dark:text-slate-500 dark:border-slate-800 dark:hover:bg-slate-600 dark:hover:text-white"
+                      title="Отмена"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                        <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           ) : (
-            <button
-              onClick={() => onToggleComplete(data.id, null)}
-              className="text-xs bg-white/50 hover:bg-white text-emerald-700 px-3 py-1.5 rounded-md border border-emerald-200 font-medium dark:bg-black/20 dark:hover:bg-black/40 dark:text-emerald-400 dark:border-emerald-800"
-            >
-              Отменить
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setIsEditing(true)}
+                className="text-xs bg-white/50 hover:bg-blue-50 text-blue-700 px-3 py-1.5 rounded-md border border-blue-200 font-medium dark:bg-black/20 dark:hover:bg-black/40 dark:text-blue-400 dark:border-blue-800 transition-colors"
+              >
+                Редактировать
+              </button>
+              <button
+                onClick={() => onToggleComplete(data.id, null)}
+                className="text-xs bg-white/50 hover:bg-rose-50 text-rose-700 px-3 py-1.5 rounded-md border border-rose-200 font-medium dark:bg-black/20 dark:hover:bg-black/40 dark:text-rose-400 dark:border-rose-800 transition-colors"
+              >
+                Отменить
+              </button>
+            </div>
           )}
 
           {/* Custom Vaccine Actions */}

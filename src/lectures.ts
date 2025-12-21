@@ -359,5 +359,66 @@ export const LECTURES: Record<string, LectureContent> = {
          </section>
       </div>
     `
+  },
+  'ats': {
+    title: 'Экстренная профилактика столбняка (ПСС/ПСЧИ)',
+    content: `
+      <div class="space-y-6">
+        <section>
+          <h3>1. Нормативная база</h3>
+          <p>Экстренная профилактика столбняка регулируется методическими указаниями <strong>МУ 3.1.2436-09</strong> (от 20.01.2009) "Эпидемиологический надзор за столбняком".</p>
+        </section>
+
+        <section>
+          <h3>2. Показания к экстренной профилактике</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Травмы</strong> с нарушением целостности кожных покровов и слизистых оболочек.</li>
+            <li><strong>Ожоги</strong> и обморожения второй, третьей и четвертой степеней.</li>
+            <li><strong>Роды вне стационара</strong> и аборты вне лечебных учреждений.</li>
+            <li><strong>Укусы</strong> животными.</li>
+            <li>Проникающие повреждения желудочно-кишечного тракта.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>3. Алгоритм действий</h3>
+          <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border-l-4 border-blue-500">
+            <p>Экстренная профилактика должна проводиться как можно раньше, но не позднее <strong>20 дней</strong> с момента получения травмы.</p>
+            <p class="mt-2">Она включает:</p>
+            <ol class="list-decimal pl-5 mt-1 space-y-1 text-sm">
+              <li>Первичную хирургическую обработку раны (ПХО).</li>
+              <li>Специфическую иммунопрофилактику (введение препаратов).</li>
+            </ol>
+          </div>
+        </section>
+
+        <section>
+          <h3>4. Новорожденные и Роды в домашних условиях</h3>
+          <p>Если ребенок родился вне стационара от матери с неизвестным или неполным прививочным анамнезом:</p>
+          <ul class="list-disc pl-5 mt-2 space-y-2">
+            <li class="p-2 bg-emerald-50 dark:bg-emerald-900/10 rounded">
+                <strong>Приоритет:</strong> Противостолбнячный человеческий иммуноглобулин (ПСЧИ) — <strong>250 ME</strong>.
+            </li>
+            <li class="p-2 bg-amber-50 dark:bg-amber-900/10 rounded">
+                <strong>Альтернатива:</strong> При отсутствии ПСЧИ вводят сыворотку противостолбнячную (ПСС) — <strong>3000 ME</strong>.
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>5. Препараты</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div class="border dark:border-slate-800 p-3 rounded">
+                <h4 class="font-bold text-xs uppercase opacity-60">АС-анатоксин</h4>
+                <p class="text-sm">Столбнячный анатоксин. Служит для создания/поддержания активного иммунитета.</p>
+             </div>
+             <div class="border dark:border-slate-800 p-3 rounded">
+                <h4 class="font-bold text-xs uppercase opacity-60">ПСЧИ / ПСС</h4>
+                <p class="text-sm">Готовые антитела для немедленной (пассивной) защиты.</p>
+             </div>
+          </div>
+        </section>
+      </div>
+    `
   }
 };
