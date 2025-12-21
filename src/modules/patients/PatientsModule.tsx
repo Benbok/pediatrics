@@ -65,7 +65,7 @@ export const PatientsModule: React.FC = () => {
 
     const handleSelectPatient = (child: ChildProfile) => {
         setSelectedChild(child); // For UI convenience only
-        navigate(`/vaccination/${child.id}`); // Module isolation: pass data via URL
+        navigate(`/patients/${child.id}`); // Navigate to Patient Hub
     };
 
     const handleAddChild = async (e: React.FormEvent<HTMLFormElement>) => {

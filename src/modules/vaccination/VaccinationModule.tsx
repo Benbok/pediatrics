@@ -56,11 +56,12 @@ export const VaccinationModule: React.FC = () => {
         }
     }, [childId]);
 
-    // Load custom vaccines from localStorage (could be moved to DB later)
+    // Sync custom vaccines from proper DB source when profile loads
     useEffect(() => {
-        const savedCustom = localStorage.getItem('vax_custom_defs');
-        if (savedCustom) setCustomVaccines(JSON.parse(savedCustom));
-    }, []);
+        if (vaccinationProfile?.customVaccines) {
+            setCustomVaccines(vaccinationProfile.customVaccines);
+        }
+    }, [vaccinationProfile]);
 
     const loadAllData = async (id: number) => {
         setIsLoading(true);
@@ -148,7 +149,8 @@ export const VaccinationModule: React.FC = () => {
                 mmrContraindications,
                 meningRiskFactors,
                 mantouxDate: vaccinationProfile.mantouxDate,
-                mantouxResult: vaccinationProfile.mantouxResult
+                mantouxResult: vaccinationProfile.mantouxResult,
+                customVaccines: vaccinationProfile.customVaccines
             });
             setVaccinationProfile({
                 ...vaccinationProfile,
@@ -174,6 +176,7 @@ export const VaccinationModule: React.FC = () => {
                 childId: Number(childId),
                 mantouxDate: date,
                 mantouxResult: result
+                // customVaccines is kept as is inside vaccinationProfile spread
             });
             setVaccinationProfile({ ...vaccinationProfile, mantouxDate: date, mantouxResult: result });
         } catch (error) {
@@ -256,14 +259,39 @@ export const VaccinationModule: React.FC = () => {
 
         const newCustoms = [...customVaccines, newVaccine];
         setCustomVaccines(newCustoms);
-        localStorage.setItem('vax_custom_defs', JSON.stringify(newCustoms));
+
+        if (vaccinationProfile && childId) {
+            window.electronAPI.updateVaccinationProfile({
+                ...vaccinationProfile,
+                childId: Number(childId),
+                customVaccines: newCustoms
+            }).catch(console.error);
+
+            // Optimistic update of profile state
+            setVaccinationProfile({
+                ...vaccinationProfile,
+                customVaccines: newCustoms
+            });
+        }
         setIsAddModalOpen(false);
     };
 
     const handleDeleteCustomVaccine = (id: string) => {
         const newCustoms = customVaccines.filter(v => v.id !== id);
         setCustomVaccines(newCustoms);
-        localStorage.setItem('vax_custom_defs', JSON.stringify(newCustoms));
+
+        if (vaccinationProfile && childId) {
+            window.electronAPI.updateVaccinationProfile({
+                ...vaccinationProfile,
+                childId: Number(childId),
+                customVaccines: newCustoms
+            }).catch(console.error);
+
+            setVaccinationProfile({
+                ...vaccinationProfile,
+                customVaccines: newCustoms
+            });
+        }
     };
 
     const scrollToVaccine = (id: string) => {
@@ -370,6 +398,11 @@ export const VaccinationModule: React.FC = () => {
                 <div className="flex items-center gap-2">
                     <button onClick={() => setIsRiskFactorsModalOpen(true)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Группы риска">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    </button>
+                    <button onClick={() => navigate(`/patients/${child.id}`)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Назад к пациенту">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                        </svg>
                     </button>
                     <button onClick={handleExportCSV} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Экспорт CSV">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>

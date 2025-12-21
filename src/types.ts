@@ -80,6 +80,7 @@ export interface VaccinationProfile {
   meningRiskFactors?: MeningoRiskFactor[]; // Meningococcal specific risks
   mantouxDate?: string | null;
   mantouxResult?: boolean | null;
+  customVaccines?: VaccineDefinition[];
   createdAt?: string;
 }
 

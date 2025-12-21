@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { PatientsModule } from './modules/patients/PatientsModule';
+import { PatientDetails } from './modules/patients/PatientDetails';
 import { VaccinationModule } from './modules/vaccination/VaccinationModule';
 
 const router = createBrowserRouter([
@@ -17,6 +18,10 @@ const router = createBrowserRouter([
             {
                 path: 'patients',
                 element: <PatientsModule />,
+            },
+            {
+                path: 'patients/:id',
+                element: <PatientDetails />,
             },
             {
                 path: 'vaccination/:childId', // URL parameter for module isolation

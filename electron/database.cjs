@@ -96,6 +96,7 @@ function setupDatabaseHandlers() {
           polioRiskFactors: JSON.stringify([]),
           mmrContraindications: JSON.stringify([]),
           meningRiskFactors: JSON.stringify([]),
+          customVaccines: JSON.stringify([]),
         },
       });
     }
@@ -109,6 +110,7 @@ function setupDatabaseHandlers() {
       polioRiskFactors: JSON.parse(profile.polioRiskFactors || '[]'),
       mmrContraindications: JSON.parse(profile.mmrContraindications || '[]'),
       meningRiskFactors: JSON.parse(profile.meningRiskFactors || '[]'),
+      customVaccines: JSON.parse(profile.customVaccines || '[]'),
       mantouxDate: profile.mantouxDate,
       mantouxResult: profile.mantouxResult,
       createdAt: profile.createdAt,
@@ -136,7 +138,8 @@ function setupDatabaseHandlers() {
         mmrContraindications: JSON.stringify(profile.mmrContraindications || []),
         meningRiskFactors: JSON.stringify(profile.meningRiskFactors || []),
         mantouxDate,
-        mantouxResult
+        mantouxResult,
+        customVaccines: JSON.stringify(profile.customVaccines || []),
       },
     });
     return true;

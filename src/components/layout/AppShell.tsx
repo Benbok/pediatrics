@@ -1,13 +1,12 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Baby, 
-  Syringe, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Baby,
+  Settings,
   LogOut,
   Menu,
-  X 
+  X
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -17,13 +16,12 @@ export const AppShell: React.FC = () => {
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Главная' },
     { to: '/patients', icon: Baby, label: 'Пациенты' },
-    { to: '/vaccination', icon: Syringe, label: 'Вакцинация' },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex transition-colors duration-300">
       {/* Sidebar */}
-      <aside 
+      <aside
         className={clsx(
           "fixed inset-y-0 left-0 z-50 bg-white dark:bg-slate-900 border-r dark:border-slate-800 transition-all duration-300 flex flex-col",
           isSidebarOpen ? "w-64" : "w-20"
@@ -35,7 +33,7 @@ export const AppShell: React.FC = () => {
               VaxTrack
             </span>
           )}
-          <button 
+          <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
           >
@@ -50,8 +48,8 @@ export const AppShell: React.FC = () => {
               to={item.to}
               className={({ isActive }) => clsx(
                 "flex items-center gap-3 p-3 rounded-lg transition-colors",
-                isActive 
-                  ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" 
+                isActive
+                  ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
                   : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               )}
             >
@@ -74,7 +72,7 @@ export const AppShell: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main 
+      <main
         className={clsx(
           "flex-1 transition-all duration-300 min-h-screen",
           isSidebarOpen ? "ml-64" : "ml-20"

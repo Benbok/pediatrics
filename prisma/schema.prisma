@@ -33,6 +33,7 @@ model VaccinationProfile {
   meningRiskFactors          String?  @map("mening_risk_factors") // Stored as JSON string
   mantouxDate                String?  @map("mantoux_date")
   mantouxResult              Boolean? @map("mantoux_result")
+  customVaccines             String?  @map("custom_vaccines") // Stored as JSON string
   createdAt                  DateTime @default(now()) @map("created_at")
 
   @@map("vaccination_profiles")
