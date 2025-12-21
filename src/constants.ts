@@ -19,7 +19,7 @@ export const VACCINE_SCHEDULE: VaccineDefinition[] = [
   {
     id: 'bcg-1',
     name: 'БЦЖ / БЦЖ-М',
-    disease: 'Туберкулез',
+    disease: 'БЦЖ',
     ageMonthStart: 0,
     isLive: true,
     description: 'Вводится на 3-7 день жизни. БЦЖ: Здоровые дети в роддоме. БЦЖ-М: Недоношенные (>2000г), не привитые в роддоме, ослабленные. Защищает от смертельных форм ТБ. Интервал 30 дней ДО и ПОСЛЕ любых других прививок.',
@@ -458,6 +458,42 @@ export const VACCINE_SCHEDULE: VaccineDefinition[] = [
     availableBrands: [
       { name: 'БиВак Полио', country: 'Россия', description: 'Живые капли.' },
       { name: 'Полимилекс', country: 'Россия', description: 'Инактивированная (ИПВ).' }
+    ]
+  },
+  {
+    id: 'covid-1',
+    name: 'COVID-19 (1)',
+    disease: 'Коронавирусная инфекция',
+    ageMonthStart: 144, // 12 years
+    isRecommended: true,
+    description: 'V1. Вакцинация подростков 12-17 лет. Проводится добровольно по заявлению родителей.',
+    lectureId: 'covid',
+    availableBrands: [
+      { name: 'Спутник М', country: 'Россия', description: 'Гам-КОВИД-Вак-М. Ослабленная в 5 раз доза взрослой вакцины.' }
+    ]
+  },
+  {
+    id: 'covid-2',
+    name: 'COVID-19 (2)',
+    disease: 'Коронавирусная инфекция',
+    ageMonthStart: 145, // 12 years + 3 weeks
+    isRecommended: true,
+    description: 'V2. Вторая доза через 21 день.',
+    lectureId: 'covid',
+    availableBrands: [
+      { name: 'Спутник М', country: 'Россия' }
+    ]
+  },
+  {
+    id: 'rabies-sos',
+    name: 'Бешенство (SOS)',
+    disease: 'Бешенство',
+    ageMonthStart: 0,
+    isRecommended: true,
+    description: 'ЭКСТРЕННАЯ ПРОФИЛАКТИКА. При укусах животных начинать немедленно! Курс 0-3-7-14-30-90 дней. Противопоказаний НЕТ, так как болезнь смертельна.',
+    lectureId: 'rabies',
+    availableBrands: [
+      { name: 'КОКАВ', country: 'Россия', description: 'Культуральная очищенная концентрированная антирабическая вакцина.' }
     ]
   }
 ];

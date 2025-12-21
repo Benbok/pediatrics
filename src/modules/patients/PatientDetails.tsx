@@ -7,6 +7,15 @@ export const PatientDetails: React.FC = () => {
     const navigate = useNavigate();
     const [child, setChild] = useState<ChildProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editForm, setEditForm] = useState({
+        name: '',
+        surname: '',
+        patronymic: '',
+        birthDate: '',
+        birthWeight: '',
+        gender: 'male' as 'male' | 'female'
+    });
 
     useEffect(() => {
         if (id) {
@@ -22,6 +31,39 @@ export const PatientDetails: React.FC = () => {
             console.error('Failed to load child:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleEditClick = () => {
+        if (!child) return;
+        setEditForm({
+            name: child.name,
+            surname: child.surname,
+            patronymic: child.patronymic,
+            birthDate: child.birthDate,
+            birthWeight: String(child.birthWeight),
+            gender: child.gender
+        });
+        setIsEditModalOpen(true);
+    };
+
+    const handleUpdateChild = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!child || !child.id) return;
+
+        try {
+            await window.electronAPI.updateChild(child.id, {
+                name: editForm.name,
+                surname: editForm.surname,
+                patronymic: editForm.patronymic,
+                birthDate: editForm.birthDate,
+                birthWeight: parseInt(editForm.birthWeight) || 0,
+                gender: editForm.gender
+            });
+            setIsEditModalOpen(false);
+            loadChild(child.id);
+        } catch (error) {
+            console.error('Failed to update child:', error);
         }
     };
 
@@ -59,7 +101,16 @@ export const PatientDetails: React.FC = () => {
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Header / Patient Card */}
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4">
+                <div className="absolute top-0 right-0 p-4 flex gap-2">
+                    <button
+                        onClick={handleEditClick}
+                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400"
+                        title="Редактировать профиль"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                        </svg>
+                    </button>
                     <button
                         onClick={() => navigate('/patients')}
                         className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400"
@@ -149,6 +200,121 @@ export const PatientDetails: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Edit Modal */}
+            {isEditModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-xl border dark:border-slate-800">
+                        <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center">
+                            <h2 className="text-xl font-bold dark:text-white">Редактирование профиля</h2>
+                            <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleUpdateChild} className="p-6 space-y-4">
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Фамилия</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        value={editForm.surname}
+                                        onChange={e => setEditForm({ ...editForm, surname: e.target.value })}
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Имя</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        value={editForm.name}
+                                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Отчество</label>
+                                    <input
+                                        type="text"
+                                        value={editForm.patronymic}
+                                        onChange={e => setEditForm({ ...editForm, patronymic: e.target.value })}
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Дата рождения</label>
+                                    <input
+                                        required
+                                        type="date"
+                                        value={editForm.birthDate}
+                                        onChange={e => setEditForm({ ...editForm, birthDate: e.target.value })}
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Вес при рождении (г)</label>
+                                    <input
+                                        type="number"
+                                        value={editForm.birthWeight}
+                                        onChange={e => setEditForm({ ...editForm, birthWeight: e.target.value })}
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Пол</label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="gender"
+                                            value="male"
+                                            checked={editForm.gender === 'male'}
+                                            onChange={() => setEditForm({ ...editForm, gender: 'male' })}
+                                            className="text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span className="dark:text-white">Мальчик</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="gender"
+                                            value="female"
+                                            checked={editForm.gender === 'female'}
+                                            onChange={() => setEditForm({ ...editForm, gender: 'female' })}
+                                            className="text-pink-600 focus:ring-pink-500"
+                                        />
+                                        <span className="dark:text-white">Девочка</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEditModalOpen(false)}
+                                    className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                                >
+                                    Отмена
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                                >
+                                    Сохранить
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

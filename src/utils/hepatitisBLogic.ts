@@ -35,8 +35,8 @@ export const HEP_B_RISK_SCHEDULE: HepBDose[] = [
 /**
  * Determine which Hepatitis B schedule applies to a child
  */
-export function determineHepBSchedule(profile: VaccinationProfile): HepBSchedule {
-    if (!profile.hepBRiskFactors || profile.hepBRiskFactors.length === 0) {
+export function determineHepBSchedule(profile: VaccinationProfile | null): HepBSchedule {
+    if (!profile || !profile.hepBRiskFactors || profile.hepBRiskFactors.length === 0) {
         return 'standard';
     }
     return 'risk';
@@ -166,8 +166,8 @@ export function getHepBCatchUpPlan(
 /**
  * Check if HBIG (Hepatitis B Immunoglobulin) is required
  */
-export function requiresHBIG(profile: VaccinationProfile): boolean {
-    if (!profile.hepBRiskFactors) return false;
+export function requiresHBIG(profile: VaccinationProfile | null): boolean {
+    if (!profile || !profile.hepBRiskFactors) return false;
 
     // HBIG is required for newborns from HBsAg+ mothers
     const criticalRisks = [HepBRiskFactor.MOTHER_HBSAG, HepBRiskFactor.MOTHER_SICK];
@@ -177,8 +177,8 @@ export function requiresHBIG(profile: VaccinationProfile): boolean {
 /**
  * Get HBIG instructions
  */
-export function getHBIGInstructions(profile: VaccinationProfile): string | null {
-    if (!requiresHBIG(profile)) return null;
+export function getHBIGInstructions(profile: VaccinationProfile | null): string | null {
+    if (!profile || !requiresHBIG(profile)) return null;
 
     return `⚠️ Одновременно с первой дозой вакцины (в разные бедра) необходимо ввести специфический иммуноглобулин человека против гепатита В (HBIG) в дозе 100 МЕ. Это нужно сделать в первые 12 часов жизни. Эффективность предотвращения инфекции — до 97%.`;
 }

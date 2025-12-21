@@ -69,6 +69,43 @@ export enum MeningoRiskFactor {
   ENDEMIC_TRAVEL = 'mening-travel',         // Travel to endemic zones (Hajj, Africa)
 }
 
+// Varicella Risk Factor Categories
+export enum VaricellaRiskFactor {
+  CONTACT = 'varicella-contact',            // Contact with infected (SOS prophylaxis)
+}
+
+// Hepatitis A Risk Factor Categories
+export enum HepARiskFactor {
+  REGION_MOSCOW = 'hepa-moscow',            // Lives in Moscow (Regional Calendar - Mandatory)
+  TRAVEL_SOUTH = 'hepa-travel',             // Travel to South/Asia (Recommended)
+  CONTACT = 'hepa-contact',                 // Contact with infected (Emergency)
+  OCCUPATIONAL = 'hepa-occupational',       // Occupational risk (Food service, etc.)
+}
+
+// Influenza Risk Factor Categories
+export enum FluRiskFactor {
+  STUDENT = 'flu-student',                  // School/University student
+  CHRONIC = 'flu-chronic',                  // Chronic diseases (Asthma, Diabetes, Heart)
+}
+
+// HPV Risk Factor Categories
+export enum HpvRiskFactor {
+  REGION_MOSCOW = 'hpv-moscow',             // Lives in Moscow (Free for girls 12-13)
+}
+
+// TBE Risk Factor Categories
+export enum TbeRiskFactor {
+  ENDEMIC_REGION = 'tbe-endemic',           // Lives in endemic region
+  TRAVEL_FOREST = 'tbe-travel',             // Plans to travel to forest/dacha
+}
+
+// Rotavirus Risk Factor Categories (Contraindications for live vaccine)
+export enum RotavirusRiskFactor {
+  INTUSSUSCEPTION_HISTORY = 'rota-intussusception', // History of intussusception
+  GI_MALFORMATION = 'rota-gi-malformation',         // Uncorrected GI malformations
+  SCID = 'rota-scid',                               // Severe Combined Immunodeficiency
+}
+
 export interface VaccinationProfile {
   id?: number;
   childId: number;
@@ -78,6 +115,12 @@ export interface VaccinationProfile {
   polioRiskFactors?: PolioRiskFactor[]; // Polio specific risks (implies IPV-only)
   mmrContraindications?: MMRContraindication[]; // MMR specific risks (live vaccine rules)
   meningRiskFactors?: MeningoRiskFactor[]; // Meningococcal specific risks
+  varicellaRiskFactors?: VaricellaRiskFactor[]; // Chickenpox specific risks
+  hepaRiskFactors?: HepARiskFactor[]; // Hepatitis A specific risks
+  fluRiskFactors?: FluRiskFactor[]; // Influenza specific risks
+  hpvRiskFactors?: HpvRiskFactor[]; // HPV specific risks
+  tbeRiskFactors?: TbeRiskFactor[]; // TBE specific risks
+  rotaRiskFactors?: RotavirusRiskFactor[]; // Rotavirus specific risks
   mantouxDate?: string | null;
   mantouxResult?: boolean | null;
   customVaccines?: VaccineDefinition[];

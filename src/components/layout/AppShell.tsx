@@ -6,12 +6,36 @@ import {
   Settings,
   LogOut,
   Menu,
-  X
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 import clsx from 'clsx';
 
 export const AppShell: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
+
+  // Theme State
+  const [isDarkMode, setIsDarkMode] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('theme');
+      return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
+  // Apply Theme Effect
+  React.useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Главная' },
@@ -60,6 +84,13 @@ export const AppShell: React.FC = () => {
         </nav>
 
         <div className="p-4 border-t dark:border-slate-800 space-y-2">
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-3 p-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
+            {isSidebarOpen && <span className="font-medium">{isDarkMode ? 'Светлая тема' : 'Темная тема'}</span>}
+          </button>
           <button className="w-full flex items-center gap-3 p-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
             <Settings size={24} />
             {isSidebarOpen && <span className="font-medium">Настройки</span>}

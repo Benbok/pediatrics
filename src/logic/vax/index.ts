@@ -9,6 +9,11 @@ import { dtpRules } from './dtp';
 import { mmrRules } from './mmr';
 import { polioRules } from './polio';
 import { meningoRules } from './meningo';
+import { varicellaRules } from './varicella';
+import { hepaRules } from './hepa';
+import { fluRules } from './flu';
+import { hpvRules } from './hpv';
+import { tbeRules } from './tbe';
 
 const RULES = [
     bcgRules,
@@ -19,7 +24,12 @@ const RULES = [
     dtpRules,
     polioRules,
     mmrRules,
-    meningoRules
+    meningoRules,
+    varicellaRules,
+    hepaRules,
+    fluRules,
+    hpvRules,
+    tbeRules
 ];
 
 export const calculateVaccineSchedule = (

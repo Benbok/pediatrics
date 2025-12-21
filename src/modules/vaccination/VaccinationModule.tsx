@@ -12,8 +12,14 @@ import { getPertussisContraindicationLabel, getPertussisSpecificInstructions } f
 import { getPolioRiskFactorLabel } from '../../utils/polioLogic';
 import { getMMRContraindicationLabel } from '../../utils/mmrLogic';
 import { getMeningoRiskFactorLabel } from '../../utils/meningoLogic';
+import { getVaricellaRiskFactorLabel } from '../../utils/varicellaLogic';
+import { getHepARiskFactorLabel } from '../../utils/hepaLogic';
+import { getFluRiskFactorLabel } from '../../utils/fluLogic';
+import { getHpvRiskFactorLabel } from '../../utils/hpvLogic';
+import { getTbeRiskFactorLabel } from '../../utils/tbeLogic';
+import { getRotavirusRiskFactorLabel } from '../../utils/rotaLogic';
 import { calculateVaccineSchedule } from '../../logic/vax';
-import { PneumoRiskFactor, PertussisContraindication, PolioRiskFactor, MMRContraindication, MeningoRiskFactor } from '../../types';
+import { PneumoRiskFactor, PertussisContraindication, PolioRiskFactor, MMRContraindication, MeningoRiskFactor, VaricellaRiskFactor, HepARiskFactor, FluRiskFactor, HpvRiskFactor, TbeRiskFactor, RotavirusRiskFactor } from '../../types';
 
 /**
  * VACCINATION MODULE
@@ -47,6 +53,7 @@ export const VaccinationModule: React.FC = () => {
     const [isRiskFactorsModalOpen, setIsRiskFactorsModalOpen] = useState(false);
     const [editingVaccine, setEditingVaccine] = useState<VaccineDefinition | null>(null);
     const [viewingLecture, setViewingLecture] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
 
     // Load all data when childId changes
@@ -94,6 +101,12 @@ export const VaccinationModule: React.FC = () => {
         const polioRiskFactors: PolioRiskFactor[] = [];
         const mmrContraindications: MMRContraindication[] = [];
         const meningRiskFactors: MeningoRiskFactor[] = [];
+        const varicellaRiskFactors: VaricellaRiskFactor[] = [];
+        const hepaRiskFactors: HepARiskFactor[] = [];
+        const fluRiskFactors: FluRiskFactor[] = [];
+        const hpvRiskFactors: HpvRiskFactor[] = [];
+        const tbeRiskFactors: TbeRiskFactor[] = [];
+        const rotaRiskFactors: RotavirusRiskFactor[] = [];
 
         const possibleHepB = Object.values(HepBRiskFactor);
         const possiblePneumo = Object.values(PneumoRiskFactor);
@@ -102,6 +115,12 @@ export const VaccinationModule: React.FC = () => {
         const possibleMMR = Object.values(MMRContraindication);
 
         const possibleMening = Object.values(MeningoRiskFactor);
+        const possibleVaricella = Object.values(VaricellaRiskFactor);
+        const possibleHepA = Object.values(HepARiskFactor);
+        const possibleFlu = Object.values(FluRiskFactor);
+        const possibleHpv = Object.values(HpvRiskFactor);
+        const possibleTbe = Object.values(TbeRiskFactor);
+        const possibleRota = Object.values(RotavirusRiskFactor);
 
         possibleHepB.forEach(factor => {
             if (formData.get(factor) === 'on') {
@@ -139,6 +158,42 @@ export const VaccinationModule: React.FC = () => {
             }
         });
 
+        possibleVaricella.forEach(factor => {
+            if (formData.get(factor) === 'on') {
+                varicellaRiskFactors.push(factor as VaricellaRiskFactor);
+            }
+        });
+
+        possibleHepA.forEach(factor => {
+            if (formData.get(factor) === 'on') {
+                hepaRiskFactors.push(factor as HepARiskFactor);
+            }
+        });
+
+        possibleFlu.forEach(factor => {
+            if (formData.get(factor) === 'on') {
+                fluRiskFactors.push(factor as FluRiskFactor);
+            }
+        });
+
+        possibleHpv.forEach(factor => {
+            if (formData.get(factor) === 'on') {
+                hpvRiskFactors.push(factor as HpvRiskFactor);
+            }
+        });
+
+        possibleTbe.forEach(factor => {
+            if (formData.get(factor) === 'on') {
+                tbeRiskFactors.push(factor as TbeRiskFactor);
+            }
+        });
+
+        possibleRota.forEach(factor => {
+            if (formData.get(factor) === 'on') {
+                rotaRiskFactors.push(factor as RotavirusRiskFactor);
+            }
+        });
+
         try {
             await window.electronAPI.updateVaccinationProfile({
                 childId: Number(childId),
@@ -148,6 +203,12 @@ export const VaccinationModule: React.FC = () => {
                 polioRiskFactors,
                 mmrContraindications,
                 meningRiskFactors,
+                varicellaRiskFactors,
+                hepaRiskFactors,
+                fluRiskFactors,
+                hpvRiskFactors,
+                tbeRiskFactors,
+                rotaRiskFactors,
                 mantouxDate: vaccinationProfile.mantouxDate,
                 mantouxResult: vaccinationProfile.mantouxResult,
                 customVaccines: vaccinationProfile.customVaccines
@@ -159,7 +220,13 @@ export const VaccinationModule: React.FC = () => {
                 pertussisContraindications,
                 polioRiskFactors,
                 mmrContraindications,
-                meningRiskFactors
+                meningRiskFactors,
+                varicellaRiskFactors,
+                hepaRiskFactors,
+                fluRiskFactors,
+                hpvRiskFactors,
+                tbeRiskFactors,
+                rotaRiskFactors
             });
             setIsRiskFactorsModalOpen(false);
         } catch (error) {
@@ -199,11 +266,19 @@ export const VaccinationModule: React.FC = () => {
 
     const filteredVaccines = useMemo(() => {
         return augmentedSchedule.filter(v => {
-            if (activeTab === 'completed') return v.status === VaccineStatus.COMPLETED;
-            if (activeTab === 'due') return v.status === VaccineStatus.OVERDUE || v.status === VaccineStatus.DUE_NOW;
+            if (activeTab === 'completed' && v.status !== VaccineStatus.COMPLETED) return false;
+            if (activeTab === 'due' && v.status !== VaccineStatus.OVERDUE && v.status !== VaccineStatus.DUE_NOW) return false;
+
+            if (searchQuery.trim()) {
+                const query = searchQuery.toLowerCase();
+                return v.name.toLowerCase().includes(query) ||
+                    v.disease.toLowerCase().includes(query) ||
+                    (v.userRecord?.vaccineBrand?.toLowerCase().includes(query) ?? false);
+            }
+
             return true;
         });
-    }, [augmentedSchedule, activeTab]);
+    }, [augmentedSchedule, activeTab, searchQuery]);
 
     const groupedVaccines = useMemo(() => {
         const groups: Record<number, AugmentedVaccine[]> = {};
@@ -411,15 +486,39 @@ export const VaccinationModule: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl overflow-hidden">
-                <div className="grid grid-cols-3">
-                    <button onClick={() => setActiveTab('all')} className={`p-3 text-center transition ${activeTab === 'all' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700' : ''}`}><div className="text-xl font-bold">{stats.total}</div><div className="text-[10px] uppercase">Всего</div></button>
-                    <button onClick={() => setActiveTab('due')} className={`p-3 text-center transition ${activeTab === 'due' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700' : ''}`}><div className="text-xl font-bold">{stats.due + stats.overdue}</div><div className="text-[10px] uppercase">План</div></button>
-                    <button onClick={() => setActiveTab('completed')} className={`p-3 text-center transition ${activeTab === 'completed' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700' : ''}`}><div className="text-xl font-bold">{stats.done}</div><div className="text-[10px] uppercase">Готово</div></button>
+            <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl overflow-hidden p-2 flex gap-4 items-center">
+                <div className="flex-1 max-w-xs relative group">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Поиск по вакцине, болезни..."
+                        className="block w-full pl-10 pr-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg leading-5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 sm:text-xs transition-all"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute inset-y-0 right-0 pr-2 flex items-center"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
+                <div className="flex gap-1">
+                    <button onClick={() => setActiveTab('all')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'all' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>Все ({stats.total})</button>
+                    <button onClick={() => setActiveTab('due')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'due' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>План ({stats.due + stats.overdue})</button>
+                    <button onClick={() => setActiveTab('completed')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>Готово ({stats.done})</button>
                 </div>
             </div>
 
-            {activeTab === 'all' && <VisualStats schedule={augmentedSchedule} onVaccineClick={scrollToVaccine} />}
+            {activeTab === 'all' && <VisualStats schedule={filteredVaccines} onVaccineClick={scrollToVaccine} />}
 
             <section className="bg-indigo-50 dark:bg-slate-900 rounded-xl p-4 border dark:border-slate-800">
                 <h2 className="font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-2 mb-3"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>AI Педиатр</h2>
@@ -627,6 +726,104 @@ export const VaccinationModule: React.FC = () => {
                                                 </label>
                                             ))}
                                         </div>
+                                    </div>
+
+                                    <div className="space-y-3 bg-cyan-50 dark:bg-cyan-900/10 p-4 rounded-2xl border border-cyan-100 dark:border-cyan-900/30 md:col-span-2">
+                                        <h5 className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider">Гепатит А (Желтуха)</h5>
+                                        <div className="grid md:grid-cols-2 gap-3">
+                                            {(Object.values(HepARiskFactor) as HepARiskFactor[]).map((factor) => (
+                                                <label key={factor} className="flex items-start gap-3 cursor-pointer group">
+                                                    <input
+                                                        type="checkbox"
+                                                        name={factor}
+                                                        defaultChecked={vaccinationProfile.hepaRiskFactors?.includes(factor)}
+                                                        className="mt-1 w-4 h-4 text-cyan-600 rounded border-slate-300 focus:ring-cyan-500 bg-white"
+                                                    />
+                                                    <span className="text-xs text-slate-700 dark:text-slate-300 group-hover:text-cyan-600 transition-colors leading-snug">
+                                                        {getHepARiskFactorLabel(factor)}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3 bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 md:col-span-2">
+                                        <h5 className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Грипп (Ежегодно)</h5>
+                                        <div className="grid md:grid-cols-2 gap-3">
+                                            {(Object.values(FluRiskFactor) as FluRiskFactor[]).map((factor) => (
+                                                <label key={factor} className="flex items-start gap-3 cursor-pointer group">
+                                                    <input
+                                                        type="checkbox"
+                                                        name={factor}
+                                                        defaultChecked={vaccinationProfile.fluRiskFactors?.includes(factor)}
+                                                        className="mt-1 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 bg-white"
+                                                    />
+                                                    <span className="text-xs text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition-colors leading-snug">
+                                                        {getFluRiskFactorLabel(factor)}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3 bg-fuchsia-50 dark:bg-fuchsia-900/10 p-4 rounded-2xl border border-fuchsia-100 dark:border-fuchsia-900/30 md:col-span-2">
+                                        <h5 className="text-[10px] font-bold text-fuchsia-600 dark:text-fuchsia-400 uppercase tracking-wider">ВПЧ (Вирус папилломы)</h5>
+                                        <div className="grid md:grid-cols-2 gap-3">
+                                            {(Object.values(HpvRiskFactor) as HpvRiskFactor[]).map((factor) => (
+                                                <label key={factor} className="flex items-start gap-3 cursor-pointer group">
+                                                    <input
+                                                        type="checkbox"
+                                                        name={factor}
+                                                        defaultChecked={vaccinationProfile.hpvRiskFactors?.includes(factor)}
+                                                        className="mt-1 w-4 h-4 text-fuchsia-600 rounded border-slate-300 focus:ring-fuchsia-500 bg-white"
+                                                    />
+                                                    <span className="text-xs text-slate-700 dark:text-slate-300 group-hover:text-fuchsia-600 transition-colors leading-snug">
+                                                        {getHpvRiskFactorLabel(factor)}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 md:col-span-2">
+                                        <h5 className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Клещевой Энцефалит</h5>
+                                        <div className="grid md:grid-cols-2 gap-3">
+                                            {(Object.values(TbeRiskFactor) as TbeRiskFactor[]).map((factor) => (
+                                                <label key={factor} className="flex items-start gap-3 cursor-pointer group">
+                                                    <input
+                                                        type="checkbox"
+                                                        name={factor}
+                                                        defaultChecked={vaccinationProfile.tbeRiskFactors?.includes(factor)}
+                                                        className="mt-1 w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 bg-white"
+                                                    />
+                                                    <span className="text-xs text-slate-700 dark:text-slate-300 group-hover:text-emerald-600 transition-colors leading-snug">
+                                                        {getTbeRiskFactorLabel(factor)}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3 bg-yellow-50 dark:bg-yellow-900/10 p-4 rounded-2xl border border-yellow-100 dark:border-yellow-900/30 md:col-span-2">
+                                        <h5 className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-wider flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.34c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                            </svg>
+                                            Ветряная Оспа (SOS)
+                                        </h5>
+                                        {(Object.values(VaricellaRiskFactor) as VaricellaRiskFactor[]).map((factor) => (
+                                            <label key={factor} className="flex items-start gap-3 cursor-pointer group">
+                                                <input
+                                                    type="checkbox"
+                                                    name={factor}
+                                                    defaultChecked={vaccinationProfile.varicellaRiskFactors?.includes(factor)}
+                                                    className="mt-1 w-4 h-4 text-yellow-600 rounded border-slate-300 focus:ring-yellow-500 bg-white"
+                                                />
+                                                <span className="text-xs text-slate-900 dark:text-slate-100 font-bold group-hover:text-yellow-600 transition-colors leading-snug">
+                                                    {getVaricellaRiskFactorLabel(factor)}
+                                                </span>
+                                            </label>
+                                        ))}
                                     </div>
                                 </div>
                             </div>

@@ -72,10 +72,10 @@ function setupDatabaseHandlers() {
   });
 
   ipcMain.handle('db:update-child', async (_, id, updates) => {
-    const { name, surname, patronymic, birthDate, gender } = updates;
+    const { name, surname, patronymic, birthDate, gender, birthWeight } = updates;
     await prisma.child.update({
       where: { id: Number(id) },
-      data: { name, surname, patronymic, birthDate, gender },
+      data: { name, surname, patronymic, birthDate, gender, birthWeight },
     });
     return true;
   });
@@ -96,6 +96,11 @@ function setupDatabaseHandlers() {
           polioRiskFactors: JSON.stringify([]),
           mmrContraindications: JSON.stringify([]),
           meningRiskFactors: JSON.stringify([]),
+          varicellaRiskFactors: JSON.stringify([]),
+          hepaRiskFactors: JSON.stringify([]),
+          fluRiskFactors: JSON.stringify([]),
+          hpvRiskFactors: JSON.stringify([]),
+          tbeRiskFactors: JSON.stringify([]),
           customVaccines: JSON.stringify([]),
         },
       });
@@ -110,6 +115,12 @@ function setupDatabaseHandlers() {
       polioRiskFactors: JSON.parse(profile.polioRiskFactors || '[]'),
       mmrContraindications: JSON.parse(profile.mmrContraindications || '[]'),
       meningRiskFactors: JSON.parse(profile.meningRiskFactors || '[]'),
+      varicellaRiskFactors: JSON.parse(profile.varicellaRiskFactors || '[]'),
+      hepaRiskFactors: JSON.parse(profile.hepaRiskFactors || '[]'),
+      fluRiskFactors: JSON.parse(profile.fluRiskFactors || '[]'),
+      hpvRiskFactors: JSON.parse(profile.hpvRiskFactors || '[]'),
+      tbeRiskFactors: JSON.parse(profile.tbeRiskFactors || '[]'),
+      rotaRiskFactors: JSON.parse(profile.rotaRiskFactors || '[]'),
       customVaccines: JSON.parse(profile.customVaccines || '[]'),
       mantouxDate: profile.mantouxDate,
       mantouxResult: profile.mantouxResult,
@@ -137,6 +148,12 @@ function setupDatabaseHandlers() {
         polioRiskFactors: JSON.stringify(polioRiskFactors || []),
         mmrContraindications: JSON.stringify(profile.mmrContraindications || []),
         meningRiskFactors: JSON.stringify(profile.meningRiskFactors || []),
+        varicellaRiskFactors: JSON.stringify(profile.varicellaRiskFactors || []),
+        hepaRiskFactors: JSON.stringify(profile.hepaRiskFactors || []),
+        fluRiskFactors: JSON.stringify(profile.fluRiskFactors || []),
+        hpvRiskFactors: JSON.stringify(profile.hpvRiskFactors || []),
+        tbeRiskFactors: JSON.stringify(profile.tbeRiskFactors || []),
+        rotaRiskFactors: JSON.stringify(profile.rotaRiskFactors || []),
         mantouxDate,
         mantouxResult,
         customVaccines: JSON.stringify(profile.customVaccines || []),

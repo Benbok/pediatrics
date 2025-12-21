@@ -31,6 +31,12 @@ model VaccinationProfile {
   polioRiskFactors           String?  @map("polio_risk_factors") // Stored as JSON string
   mmrContraindications       String?  @map("mmr_contraindications") // Stored as JSON string
   meningRiskFactors          String?  @map("mening_risk_factors") // Stored as JSON string
+  varicellaRiskFactors       String?  @map("varicella_risk_factors") // Stored as JSON string
+  hepaRiskFactors            String?  @map("hepa_risk_factors") // Stored as JSON string
+  fluRiskFactors             String?  @map("flu_risk_factors") // Stored as JSON string
+  hpvRiskFactors             String?  @map("hpv_risk_factors") // Stored as JSON string
+  tbeRiskFactors             String?  @map("tbe_risk_factors") // Stored as JSON string
+  rotaRiskFactors            String?  @map("rota_risk_factors") // Stored as JSON string
   mantouxDate                String?  @map("mantoux_date")
   mantouxResult              Boolean? @map("mantoux_result")
   customVaccines             String?  @map("custom_vaccines") // Stored as JSON string
