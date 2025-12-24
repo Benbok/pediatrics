@@ -187,12 +187,16 @@ declare global {
       getChild: (id: number) => Promise<ChildProfile>;
       createChild: (child: ChildProfile) => Promise<ChildProfile>;
       updateChild: (id: number, updates: Partial<ChildProfile>) => Promise<boolean>;
+      deleteChild: (id: number) => Promise<boolean>;
 
       // VACCINATION MODULE API
       getVaccinationProfile: (childId: number) => Promise<VaccinationProfile>;
       updateVaccinationProfile: (profile: VaccinationProfile) => Promise<boolean>;
       getRecords: (childId: number) => Promise<UserVaccineRecord[]>;
       saveRecord: (record: UserVaccineRecord) => Promise<boolean>;
+      print: () => void;
+      exportPDF: (certificateData: any) => Promise<string>;
+      closeApp: () => void;
     }
   }
 }

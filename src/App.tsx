@@ -1,15 +1,16 @@
 import React from 'react';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createHashRouter, RouterProvider } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { PatientsModule } from './modules/patients/PatientsModule';
 import { PatientDetails } from './modules/patients/PatientDetails';
 import { VaccinationModule } from './modules/vaccination/VaccinationModule';
+import { SettingsModule } from './modules/settings/SettingsModule';
 import { PrintPreviewManager } from './modules/printing/components/PrintPreviewManager';
 // Register vaccination certificate template
 import './modules/printing/templates/vaccination/register';
 
-const router = createBrowserRouter([
+const router = createHashRouter([
     {
         path: '/',
         element: <AppShell />,
@@ -29,6 +30,10 @@ const router = createBrowserRouter([
             {
                 path: 'vaccination/:childId', // URL parameter for module isolation
                 element: <VaccinationModule />,
+            },
+            {
+                path: 'settings',
+                element: <SettingsModule />,
             }
         ]
     }

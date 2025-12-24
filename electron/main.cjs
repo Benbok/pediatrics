@@ -5,18 +5,19 @@ const fs = require('fs');
 const { setupDatabaseHandlers } = require('./database.cjs');
 const isDev = !app.isPackaged;
 
-setupDatabaseHandlers();
-
 function createWindow() {
     const win = new BrowserWindow({
         width: 1200,
         height: 800,
+        icon: path.join(__dirname, 'icon.png'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
         },
     });
+
+    win.maximize();
 
     // Set Content Security Policy
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -40,7 +41,12 @@ function createWindow() {
     }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    console.log('[Main] ========== APP READY ==========');
+    console.log('[Main] Calling setupDatabaseHandlers...');
+    await setupDatabaseHandlers();
+    console.log('[Main] setupDatabaseHandlers completed');
+    console.log('[Main] Creating window...');
     createWindow();
 
     ipcMain.on('print-window', (event) => {
@@ -53,15 +59,14 @@ app.whenReady().then(() => {
                 silent: false,
                 printBackground: true
             }, (success, failureReason) => {
-                if (!success) {
-                    console.error(`[Main] Print failed: ${failureReason}`);
-                } else {
-                    console.log('[Main] Print dialog opened successfully');
-                }
+                console.log(`[Main] Print finished. Success: ${success}, Reason: ${failureReason}`);
             });
-        } else {
-            console.error('[Main] Could not find window for print-window request');
         }
+    });
+
+    ipcMain.on('app-close', () => {
+        console.log('[Main] Received app-close request, quitting...');
+        app.quit();
     });
 
     // New clean PDF export using dedicated print window
@@ -106,6 +111,7 @@ app.whenReady().then(() => {
                 printBackground: true,
                 landscape: true,
                 pageSize: 'A4',
+                preferCSSPageSize: true, // CRITICAL: Respect CSS @page and break-inside rules
                 margins: {
                     top: 0.4,
                     bottom: 0.4,

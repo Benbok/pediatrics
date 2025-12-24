@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
 
     return {
+        base: './', // Use relative paths for Electron
         server: {
             port: 5173,
             host: '0.0.0.0',

@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getChild: (id) => ipcRenderer.invoke('db:get-child', id),
     createChild: (child) => ipcRenderer.invoke('db:create-child', child),
     updateChild: (id, updates) => ipcRenderer.invoke('db:update-child', id, updates),
+    deleteChild: (id) => ipcRenderer.invoke('db:delete-child', id),
 
     // VACCINATION MODULE API
     getVaccinationProfile: (childId) => ipcRenderer.invoke('db:get-vaccination-profile', childId),
@@ -14,4 +15,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveRecord: (record) => ipcRenderer.invoke('db:save-record', record),
     print: () => ipcRenderer.send('print-window'),
     exportPDF: (certificateData) => ipcRenderer.invoke('export-pdf', certificateData),
+    closeApp: () => ipcRenderer.send('app-close'),
 });

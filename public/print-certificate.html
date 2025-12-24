@@ -153,18 +153,25 @@
             color: #555;
         }
 
-        /* Timeline Grid */
-        .timeline-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
+        /* Timeline Row Layout (for proper page breaks) */
+        .timeline-row {
+            display: flex;
+            flex-wrap: nowrap;
             gap: 15px;
-            margin: 20px 0;
+            margin-bottom: 15px;
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+            -webkit-column-break-inside: avoid !important;
         }
 
         .month-card {
+            flex: 1;
+            min-width: 0;
             border: 1px solid #ddd;
             border-radius: 8px;
             overflow: hidden;
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
         }
 
         .month-header {
@@ -453,6 +460,9 @@
                     monthGroups[monthLabel].push(v);
                 });
 
+                // Convert to array for row grouping
+                const monthEntries = Object.entries(monthGroups);
+
                 html += `
                     <div class="page">
                         <h2 class="section-title" style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">
@@ -464,33 +474,39 @@
                             <div class="legend-item"><span class="legend-icon">⚠️</span> Срок подходит</div>
                             <div class="legend-item"><span class="legend-icon">❌</span> Просрочено</div>
                         </div>
-
-                        <div class="timeline-grid">
                 `;
 
-                Object.keys(monthGroups).forEach(monthLabel => {
-                    html += `
-                        <div class="month-card">
-                            <div class="month-header">${monthLabel}</div>
-                            <div class="month-body">
-                    `;
-                    monthGroups[monthLabel].forEach(v => {
-                        const statusClass = v.status === 'overdue' ? 'overdue' : v.status === 'due_now' ? 'due' : '';
+                // Group cards into rows of 4 for proper page breaks
+                for (let i = 0; i < monthEntries.length; i += 4) {
+                    const rowItems = monthEntries.slice(i, i + 4);
+
+                    html += `<div class="timeline-row">`;
+
+                    rowItems.forEach(([monthLabel, vaccines]) => {
                         html += `
-                            <div class="vaccine-chip ${statusClass}">
-                                <strong>${v.vaccineName}</strong>
-                                ${v.recommendedDate ? `<br><small>${formatDate(v.recommendedDate)}</small>` : ''}
+                            <div class="month-card">
+                                <div class="month-header">${monthLabel}</div>
+                                <div class="month-body">
+                        `;
+                        vaccines.forEach(v => {
+                            const statusClass = v.status === 'overdue' ? 'overdue' : v.status === 'due_now' ? 'due' : '';
+                            html += `
+                                <div class="vaccine-chip ${statusClass}">
+                                    <strong>${v.vaccineName}</strong>
+                                    ${v.recommendedDate ? `<br><small>${formatDate(v.recommendedDate)}</small>` : ''}
+                                </div>
+                            `;
+                        });
+                        html += `
+                                </div>
                             </div>
                         `;
                     });
-                    html += `
-                            </div>
-                        </div>
-                    `;
-                });
+
+                    html += `</div>`;
+                }
 
                 html += `
-                        </div>
                     </div>
                 `;
             }

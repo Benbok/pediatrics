@@ -106,44 +106,56 @@ export const VaccinationTimeline: React.FC<VaccinationTimelineProps> = ({
                 </div>
             </div>
 
-            <div className="timeline-month-grid avoid-break">
-                {AGE_INTERVALS.map((interval) => {
-                    // Ищем прививки для этого возрастного интервала
-                    const vaccinesInInterval = plannedVaccinations.filter(v => {
-                        const age = v.ageInMonths || 0;
-                        if (interval.months === 0) return age === 0;
-                        if (interval.months === 0.1) return age > 0 && age < 1;
-                        return Math.abs(age - interval.months) < 0.3;
-                    });
+            {/* Group cards into rows of 4 for proper page break handling */}
+            {(() => {
+                // Filter out intervals with no vaccines
+                const cardsData = AGE_INTERVALS
+                    .map((interval) => {
+                        const vaccinesInInterval = plannedVaccinations.filter(v => {
+                            const age = v.ageInMonths || 0;
+                            if (interval.months === 0) return age === 0;
+                            if (interval.months === 0.1) return age > 0 && age < 1;
+                            return Math.abs(age - interval.months) < 0.3;
+                        });
+                        if (vaccinesInInterval.length === 0) return null;
+                        return { interval, vaccinesInInterval };
+                    })
+                    .filter(Boolean) as { interval: { label: string; months: number }; vaccinesInInterval: PlannedVaccination[] }[];
 
-                    // Если прививок нет, не показываем этот месяц (или показываем пустым, если нужно сохранить структуру)
-                    if (vaccinesInInterval.length === 0) return null;
+                // Split into rows of 4
+                const rows: typeof cardsData[] = [];
+                for (let i = 0; i < cardsData.length; i += 4) {
+                    rows.push(cardsData.slice(i, i + 4));
+                }
 
-                    return (
-                        <div key={interval.label} className="month-card avoid-break">
-                            <div className="month-card-header">
-                                <span className="month-label">{interval.label}</span>
-                            </div>
-                            <div className="month-card-body">
-                                {vaccinesInInterval.map((vac, idx) => (
-                                    <div
-                                        key={`${vac.vaccineId}-${idx}`}
-                                        className={`vaccine-chip ${getStatusClass(vac.status)}`}
-                                    >
-                                        <div className="chip-header">
-                                            <span className="chip-name">{vac.vaccineName}</span>
-                                            <span className="chip-icon">{getStatusIcon(vac.status)}</span>
+                return rows.map((row, rowIndex) => (
+                    <div key={`row-${rowIndex}`} className="timeline-row">
+                        {row.map(({ interval, vaccinesInInterval }) => (
+                            <div key={interval.label} className="month-card">
+                                <div className="month-card-header">
+                                    <span className="month-label">{interval.label}</span>
+                                </div>
+                                <div className="month-card-body">
+                                    {vaccinesInInterval.map((vac, idx) => (
+                                        <div
+                                            key={`${vac.vaccineId}-${idx}`}
+                                            className={`vaccine-chip ${getStatusClass(vac.status)}`}
+                                        >
+                                            <div className="chip-header">
+                                                <span className="chip-name">{vac.vaccineName}</span>
+                                                <span className="chip-icon">{getStatusIcon(vac.status)}</span>
+                                            </div>
+                                            <div className="chip-date">
+                                                {formatDate(vac.recommendedDate)}
+                                            </div>
                                         </div>
-                                        <div className="chip-date">
-                                            {formatDate(vac.recommendedDate)}
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        ))}
+                    </div>
+                ));
+            })()}
 
             <p className="sub-text" style={{ marginTop: '15px', textAlign: 'center' }}>
                 * Календарь сформирован автоматически на основе текущего профиля пациента.

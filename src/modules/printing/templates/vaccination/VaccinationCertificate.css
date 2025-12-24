@@ -11,6 +11,22 @@
   padding: 10px;
 }
 
+/* ===== Страницы и разрывы ===== */
+/* Критически важно: карточки месяцев НЕ должны разрываться между страницами */
+.avoid-break,
+.month-card {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+  -webkit-column-break-inside: avoid !important;
+  display: block !important;
+}
+
+.timeline-legend,
+.vaccine-chip {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
 /* ===== Страница сертификата ===== */
 .certificate-page {
   position: relative;
@@ -370,20 +386,26 @@
   border-left: 3px solid #dc2626;
 }
 
-/* ===== Month-Based Timeline Grid ===== */
-.timeline-month-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  /* 4 months per row in landscape */
+/* ===== Row-Based Timeline Layout ===== */
+/* Each row contains up to 4 month cards and stays together on one page */
+.timeline-row {
+  display: flex;
+  flex-wrap: nowrap;
   gap: 15px;
-  margin: 15px 0;
+  margin-bottom: 15px;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+  -webkit-column-break-inside: avoid !important;
 }
 
 .month-card {
+  flex: 1;
+  min-width: 0;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   overflow: hidden;
-  break-inside: avoid;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
   background: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   display: flex;
@@ -464,20 +486,54 @@
   font-weight: 500;
 }
 
-/* Print optimizations */
 @media print {
-  .timeline-month-grid {
-    grid-template-columns: repeat(4, 1fr);
+
+  /* Force landscape orientation */
+  @page {
+    size: A4 landscape;
+    margin: 15mm;
+  }
+
+  /* CRITICAL: Each row of 4 cards MUST stay together on one page */
+  .timeline-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 15px !important;
+    margin-bottom: 15px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+  }
+
+  /* Each month card within a row */
+  .month-card {
+    flex: 1 !important;
+    min-width: 0 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
   }
 
   .vaccine-chip {
     border: 1px solid #9ca3af;
     /* Higher contrast border for print */
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .page-break {
     display: block;
     page-break-before: always;
+  }
+
+  /* Ensure timeline section doesn't break awkwardly */
+  .vaccination-timeline {
+    break-inside: auto;
+  }
+
+  .timeline-legend {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
 

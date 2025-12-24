@@ -4,25 +4,158 @@ import { VaccineDefinition, ChildProfile, VaccinationProfile } from "../types";
 
 // Lazy initialization - only create when API key is available
 let ai: GoogleGenAI | null = null;
+let currentApiKey: string | null = null;
 
 const getAIClient = (): GoogleGenAI | null => {
-  if (ai) return ai;
+  // Priority 1: localStorage (user setting)
+  const storedKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
 
-  // Try to get API key from environment
-  const apiKey = import.meta.env.VITE_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+  // Priority 2: environment variable
+  const envKey = import.meta.env.VITE_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+
+  const apiKey = storedKey || envKey;
 
   if (!apiKey) {
     console.warn("Gemini API key not found. AI features will be disabled.");
     return null;
   }
 
-  try {
-    ai = new GoogleGenAI({ apiKey });
-    return ai;
-  } catch (error) {
-    console.error("Failed to initialize Gemini AI:", error);
-    return null;
+  // Re-initialize if key changed
+  if (ai && currentApiKey !== apiKey) {
+    ai = null;
   }
+
+  if (!ai) {
+    try {
+      const baseUrl = getCustomBaseUrl();
+      const options: any = { apiKey };
+      if (baseUrl) {
+        options.baseUrl = baseUrl.replace(/\/$/, '');
+        console.log(`[Gemini] Initializing with custom Base URL: ${options.baseUrl}`);
+      }
+
+      ai = new GoogleGenAI(options);
+      currentApiKey = apiKey;
+      console.log("[Gemini] AI client initialized");
+      return ai;
+    } catch (error) {
+      console.error("Failed to initialize Gemini AI:", error);
+      return null;
+    }
+  }
+
+  return ai;
+};
+
+/**
+ * Updates the API key in localStorage and reinitializes the client
+ */
+export const setApiKey = (key: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('gemini_api_key', key);
+    ai = null; // Force re-initialization
+    currentApiKey = null;
+    console.log("[Gemini] API key updated");
+  }
+};
+
+/**
+ * Validates the API key and auto-detects the best available model by probing
+ */
+export const validateApiKey = async (key: string, baseUrl?: string): Promise<{ valid: boolean; error?: string }> => {
+  try {
+    const options: any = { apiKey: key };
+    if (baseUrl) {
+      // Ensure clean URL provided by user
+      options.baseUrl = baseUrl.replace(/\/$/, '');
+    }
+
+    const testClient = new GoogleGenAI(options);
+
+    // Candidate models to probe, in order of preference
+    const candidates = [
+      'gemini-1.5-flash-001', // Stable version
+      'gemini-1.5-flash',     // Alias
+      'gemini-1.5-flash-8b',  // Fast 8b variant
+      'gemini-1.5-pro',       // Pro alias
+      'gemini-1.5-pro-001',   // Pro stable
+      'gemini-pro'            // 1.0 Pro
+    ];
+
+    console.log(`[Gemini] Probing models (BaseURL: ${baseUrl || 'default'})...`, candidates);
+
+    let workingModel = null;
+
+    for (const model of candidates) {
+      try {
+        console.log(`[Gemini] Testing model: ${model}...`);
+        await testClient.models.generateContent({
+          model: model,
+          contents: [{ role: 'user', parts: [{ text: 'Test' }] }],
+        });
+        console.log(`[Gemini] Success with model: ${model}`);
+        workingModel = model;
+        break; // Found one!
+      } catch (e: any) {
+        console.warn(`[Gemini] Model ${model} failed:`, e?.message?.split('.')[0]); // Concise log
+        // Continue to next candidate
+      }
+    }
+
+    if (!workingModel) {
+      throw new Error("No working Gemini model found for this key/region.");
+    }
+
+    // Save the working model and base URL
+    console.log(`[Gemini] Selected model: ${workingModel}`);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gemini_model', workingModel);
+      if (baseUrl) {
+        localStorage.setItem('gemini_base_url', baseUrl);
+      } else {
+        localStorage.removeItem('gemini_base_url');
+      }
+    }
+
+    return { valid: true };
+  } catch (error: any) {
+    console.error("[Gemini] API key validation failed:", error);
+
+    if (error?.message?.includes('API key')) {
+      return { valid: false, error: 'Неверный API ключ' };
+    }
+
+    if (error?.status === 403 || error?.message?.includes('permission')) {
+      return { valid: false, error: 'Нет доступа или неверный ключ' };
+    }
+
+    return { valid: false, error: error?.message || 'Ошибка проверки ключа' };
+  }
+};
+
+/**
+ * Gets the current API key (from localStorage or env)
+ */
+export const getCurrentApiKey = (): string | null => {
+  const storedKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
+  const envKey = import.meta.env.VITE_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+  return storedKey || envKey || null;
+};
+
+/**
+ * Gets the custom Base URL if set
+ */
+export const getCustomBaseUrl = (): string | null => {
+  return typeof window !== 'undefined' ? localStorage.getItem('gemini_base_url') : null;
+};
+
+// Helper to get the saved model or default
+const getModelName = (): string => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('gemini_model');
+    if (saved) return saved;
+  }
+  return 'gemini-1.5-flash-001'; // Fallback
 };
 
 
@@ -179,9 +312,12 @@ export const getVaccineAdvice = async (
       4. Есть ли особенности догоняющего графика, если мы опоздали?
     `;
 
+    const modelName = getModelName();
+    console.log(`[Gemini] Using model: ${modelName}`);
+
     const response = await client.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
+      model: modelName,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         systemInstruction: PEDIATRIC_SYSTEM_INSTRUCTION,
       }
@@ -217,9 +353,12 @@ export const getGeneralAdvice = async (
       Ответьте на вопрос, опираясь на российские медицинские стандарты и рекомендации ВОЗ.
     `;
 
+    const modelName = getModelName();
+    console.log(`[Gemini] Using model: ${modelName}`);
+
     const response = await client.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
+      model: modelName,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         systemInstruction: PEDIATRIC_SYSTEM_INSTRUCTION,
       }

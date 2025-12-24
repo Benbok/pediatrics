@@ -91,11 +91,22 @@ export const AppShell: React.FC = () => {
             {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
             {isSidebarOpen && <span className="font-medium">{isDarkMode ? 'Светлая тема' : 'Темная тема'}</span>}
           </button>
-          <button className="w-full flex items-center gap-3 p-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <NavLink
+            to="/settings"
+            className={({ isActive }) => clsx(
+              "w-full flex items-center gap-3 p-3 rounded-lg transition-colors",
+              isActive
+                ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            )}
+          >
             <Settings size={24} />
             {isSidebarOpen && <span className="font-medium">Настройки</span>}
-          </button>
-          <button className="w-full flex items-center gap-3 p-3 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+          </NavLink>
+          <button
+            onClick={() => window.electronAPI.closeApp()}
+            className="w-full flex items-center gap-3 p-3 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
             <LogOut size={24} />
             {isSidebarOpen && <span className="font-medium">Выход</span>}
           </button>
