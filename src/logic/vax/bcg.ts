@@ -2,9 +2,18 @@ import { VaccineStatus } from '../../types';
 import { VaxRule } from './rules';
 
 /**
+ * Вычисляет возраст ребенка в месяцах на конкретную дату
+ */
+function calculateAgeAtDate(birthDate: Date | string, targetDate: Date): number {
+    const birth = typeof birthDate === 'string' ? new Date(birthDate) : birthDate;
+    const diffTime = Math.abs(targetDate.getTime() - birth.getTime());
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24 * 30.44));
+}
+
+/**
  * BCG / BCG-M Rules
  * 1. Absolute weight contraindication (< 2000g)
- * 2. Rule of 2 months: requires Mantoux test if older
+ * 2. Rule of 2 months: requires Mantoux test if older (на момент прививки БЦЖ)
  * 3. Positive Mantoux: absolute contraindication
  * 4. 30-day interval isolation from ANY other vaccine
  */
@@ -23,16 +32,25 @@ export const bcgRules: VaxRule = (vaccine, context) => {
         };
     }
 
-    // 2. Rule of 2 months for Mantoux
-    if (ageInMonths >= 2 && !profile.mantouxDate) {
+    // Определяем дату прививки БЦЖ: если прививка уже сделана - используем completedDate,
+    // иначе используем dueDate (планируемая дата)
+    const vaccinationDate = record?.completedDate 
+        ? new Date(record.completedDate) 
+        : (dueDate || today);
+    
+    // Вычисляем возраст ребенка НА МОМЕНТ ПРИВИВКИ БЦЖ
+    const ageAtVaccination = calculateAgeAtDate(child.birthDate, vaccinationDate);
+
+    // 2. Rule of 2 months for Mantoux (проверяем возраст на момент прививки)
+    if (ageAtVaccination >= 2 && !profile.mantouxDate) {
         return {
             status: VaccineStatus.OVERDUE,
-            alertMessage: "Внимание: Требуется проба Манту перед вакцинацией (ребенку > 2 мес)."
+            alertMessage: "Внимание: Требуется проба Манту перед вакцинацией (ребенку > 2 мес на момент прививки)."
         };
     }
 
-    // 3. Positive Mantoux check
-    if (ageInMonths >= 2 && profile.mantouxResult === true) {
+    // 3. Positive Mantoux check (проверяем возраст на момент прививки)
+    if (ageAtVaccination >= 2 && profile.mantouxResult === true) {
         return {
             status: VaccineStatus.SKIPPED,
             alertMessage: "Вакцинация запрещена: Проба Манту положительная. Необходима консультация фтизиатра."

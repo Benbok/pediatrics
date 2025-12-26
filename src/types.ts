@@ -158,8 +158,9 @@ export interface UserVaccineRecord {
   notes?: string;
   dose?: string;
   series?: string;
-  expiryDate?: string;
-  manufacturer?: string;
+  expiryDate?: string | null;
+  manufacturer?: string | null;
+  ignoreValidation?: boolean;
 }
 
 export enum VaccineStatus {
@@ -197,6 +198,8 @@ declare global {
       print: () => void;
       exportPDF: (certificateData: any) => Promise<string>;
       closeApp: () => void;
+      openFile: (options?: any) => Promise<{ canceled: boolean; filePaths: string[] }>;
+      readTextFile: (filePath: string) => Promise<string>;
     }
   }
 }

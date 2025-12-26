@@ -425,7 +425,20 @@ export const VaccinationModule: React.FC = () => {
 
     const handleExportCSV = () => {
         if (!child) return;
-        const headers = ['Болезнь', 'Вакцина', 'Статус', 'План. дата', 'Дата выполнения', 'Препарат', 'Заметки'];
+        const headers = [
+            'ID',
+            'Болезнь',
+            'Вакцина',
+            'Статус',
+            'План. дата',
+            'Дата выполнения',
+            'Препарат',
+            'Дозировка',
+            'Серия',
+            'Срок годности',
+            'Производитель',
+            'Заметки'
+        ];
         const rows = augmentedSchedule.map(v => {
             const statusText =
                 v.status === VaccineStatus.COMPLETED ? 'Выполнено' :
@@ -433,7 +446,21 @@ export const VaccinationModule: React.FC = () => {
                         v.status === VaccineStatus.DUE_NOW ? 'Пора делать' :
                             v.status === VaccineStatus.MISSED ? 'Упущено' :
                                 v.status === VaccineStatus.SKIPPED ? 'Не требуется' : 'В плане';
-            return [`"${v.disease}"`, `"${v.name}"`, `"${statusText}"`, v.dueDate.toLocaleDateString('ru-RU'), v.userRecord?.completedDate ? new Date(v.userRecord.completedDate).toLocaleDateString('ru-RU') : '', `"${v.userRecord?.vaccineBrand || ''}"`, `"${v.userRecord?.notes || ''}"`].join(',');
+
+            return [
+                v.id,
+                `"${v.disease}"`,
+                `"${v.name}"`,
+                `"${statusText}"`,
+                v.dueDate.toLocaleDateString('ru-RU'),
+                v.userRecord?.completedDate || '',
+                `"${v.userRecord?.vaccineBrand || ''}"`,
+                `"${v.userRecord?.dose || ''}"`,
+                `"${v.userRecord?.series || ''}"`,
+                v.userRecord?.expiryDate || '',
+                `"${v.userRecord?.manufacturer || ''}"`,
+                `"${v.userRecord?.notes || ''}"`
+            ].join(',');
         });
         const csvContent = [headers.join(','), ...rows].join('\n');
         const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -445,6 +472,121 @@ export const VaccinationModule: React.FC = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const handleImportCSV = async () => {
+        if (!child || !childId) return;
+
+        try {
+            const result = await window.electronAPI.openFile({
+                title: 'Выберите файл для импорта',
+                buttonLabel: 'Импортировать',
+                filters: [{ name: 'CSV Files', extensions: ['csv'] }]
+            });
+
+            if (result.canceled || result.filePaths.length === 0) return;
+
+            const filePath = result.filePaths[0];
+            const content = await window.electronAPI.readTextFile(filePath);
+
+            // Basic CSV parsing (comma separated, handling quotes)
+            const lines = content.split('\n').filter(line => line.trim());
+            if (lines.length < 2) {
+                alert('Файл пуст или имеет неверный формат');
+                return;
+            }
+
+            // Headers are expected to match our export, but we need to be robust
+            const headers = lines[0].split(',').map(h => h.trim().replace(/^\ufeff/, ''));
+            const idIdx = headers.indexOf('ID');
+            const dateIdx = headers.indexOf('Дата выполнения');
+            const brandIdx = headers.indexOf('Препарат');
+            const doseIdx = headers.indexOf('Дозировка');
+            const seriesIdx = headers.indexOf('Серия');
+            const expiryIdx = headers.indexOf('Срок годности');
+            const manufacturerIdx = headers.indexOf('Производитель');
+            const notesIdx = headers.indexOf('Заметки');
+
+            if (idIdx === -1 || dateIdx === -1) {
+                alert('Некорректный формат CSV. Отсутствуют обязательные колонки (ID или Дата выполнения)');
+                return;
+            }
+
+            let importCount = 0;
+            let skippedCount = 0;
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+            const birthDate = new Date(child.birthDate);
+            birthDate.setHours(0, 0, 0, 0);
+
+            for (let i = 1; i < lines.length; i++) {
+                // Robust CSV splitting to handle quotes and empty cells
+                const cells: string[] = [];
+                let current = '';
+                let inQuotes = false;
+                const line = lines[i].trim();
+
+                for (let char of line) {
+                    if (char === '"') inQuotes = !inQuotes;
+                    else if (char === ',' && !inQuotes) {
+                        cells.push(current);
+                        current = '';
+                    } else current += char;
+                }
+                cells.push(current);
+
+                const clean = (str: string) => str ? str.replace(/^"|"$/g, '').trim() : '';
+
+                const vId = clean(cells[idIdx] || '');
+                const compDateStr = clean(cells[dateIdx] || '');
+
+                if (vId && compDateStr) {
+                    const compDate = new Date(compDateStr);
+
+                    // Safety Check: Date must be between birth and today
+                    if (isNaN(compDate.getTime()) || compDate < birthDate || compDate > today) {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    const record: UserVaccineRecord = {
+                        childId: Number(childId),
+                        vaccineId: vId,
+                        isCompleted: true,
+                        completedDate: compDateStr,
+                        vaccineBrand: clean(cells[brandIdx] || '') || null,
+                        dose: clean(cells[doseIdx] || '') || null,
+                        series: clean(cells[seriesIdx] || '') || null,
+                        expiryDate: clean(cells[expiryIdx] || '') || null,
+                        manufacturer: clean(cells[manufacturerIdx] || '') || null,
+                        notes: clean(cells[notesIdx] || '') || null,
+                        ignoreValidation: true, // Bypass strict BCG/Mantoux check for historic import
+                    };
+
+                    await window.electronAPI.saveRecord(record);
+                    importCount++;
+                }
+            }
+
+            if (importCount > 0) {
+                let msg = `Успешно импортировано записей: ${importCount}.`;
+                if (skippedCount > 0) {
+                    msg += `\nПропущено записей (некорректная дата или возраст): ${skippedCount}.`;
+                }
+                alert(msg);
+                // Refresh records
+                const recordsData = await window.electronAPI.getRecords(Number(childId));
+                setRecords(recordsData);
+            } else {
+                alert(skippedCount > 0
+                    ? `Все записи (${skippedCount}) были пропущены из-за некорректных дат.`
+                    : 'Не удалось найти подходящие записи для импорта');
+            }
+
+        } catch (error) {
+            console.error('Import failed:', error);
+            alert('Ошибка при импорте данных');
+        }
     };
 
     const getAgeLabel = (months: number) => {
@@ -518,6 +660,11 @@ export const VaccinationModule: React.FC = () => {
                     <button onClick={handleExportCSV} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Экспорт CSV">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
                     </button>
+                    <button onClick={handleImportCSV} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-emerald-600" title="Импорт CSV">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                    </button>
                     <button onClick={() => navigate('/patients')} className="text-xs text-slate-500 hover:text-red-500 p-2 font-medium transition-colors">Закрыть</button>
                 </div>
             </div>
@@ -554,7 +701,7 @@ export const VaccinationModule: React.FC = () => {
                 </div>
             </div>
 
-            {activeTab === 'all' && <VisualStats schedule={filteredVaccines} onVaccineClick={scrollToVaccine} />}
+            {activeTab === 'all' && <VisualStats schedule={filteredVaccines} onVaccineClick={scrollToVaccine} birthDate={child.birthDate} />}
 
             <section className="bg-indigo-50 dark:bg-slate-900 rounded-xl p-4 border dark:border-slate-800">
                 <h2 className="font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-2 mb-3"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>AI Педиатр</h2>

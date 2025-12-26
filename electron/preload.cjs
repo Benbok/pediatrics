@@ -13,7 +13,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateVaccinationProfile: (profile) => ipcRenderer.invoke('db:update-vaccination-profile', profile),
     getRecords: (childId) => ipcRenderer.invoke('db:get-records', childId),
     saveRecord: (record) => ipcRenderer.invoke('db:save-record', record),
+    deleteRecord: (childId, vaccineId) => ipcRenderer.invoke('db:delete-record', childId, vaccineId),
     print: () => ipcRenderer.send('print-window'),
     exportPDF: (certificateData) => ipcRenderer.invoke('export-pdf', certificateData),
     closeApp: () => ipcRenderer.send('app-close'),
+    openFile: (options) => ipcRenderer.invoke('dialog:open-file', options),
+    readTextFile: (filePath) => ipcRenderer.invoke('file:read-text', filePath),
 });

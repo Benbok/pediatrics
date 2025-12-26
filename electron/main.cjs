@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, dialog } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -135,6 +135,28 @@ app.whenReady().then(async () => {
         } catch (error) {
             console.error('[Main] Failed to export PDF:', error);
             return { success: false, error: error.message };
+        }
+    });
+
+    // File Dialog and Operations
+    ipcMain.handle('dialog:open-file', async (event, options = {}) => {
+        const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+            properties: ['openFile'],
+            filters: [
+                { name: 'CSV Files', extensions: ['csv'] },
+                { name: 'All Files', extensions: ['*'] }
+            ],
+            ...options
+        });
+        return result;
+    });
+
+    ipcMain.handle('file:read-text', async (_, filePath) => {
+        try {
+            return await fs.promises.readFile(filePath, 'utf8');
+        } catch (error) {
+            console.error('[Main] Failed to read file:', error);
+            throw error;
         }
     });
 

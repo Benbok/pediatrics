@@ -73,6 +73,11 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
   const getStatusColor = (status: VaccineStatus) => {
     // Special handling for emergency vaccines to make them look more "available" even if skipped
     const isEmergency = data.id.endsWith('-sos');
+    const isNonCalendar = data.isRecommended || data.isCustom;
+
+    if (status !== VaccineStatus.COMPLETED && isNonCalendar) {
+      return 'bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-900/40 dark:border-slate-800 dark:text-slate-500 opacity-80';
+    }
 
     switch (status) {
       case VaccineStatus.COMPLETED:
@@ -142,6 +147,19 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
           alert("Доза должна быть больше 0.");
           return;
         }
+      }
+
+      // Future Date Validation
+      const today = new Date().toISOString().split('T')[0];
+      if (selectedDate > today) {
+        alert("Дата прививки не может быть в будущем.");
+        return;
+      }
+
+      // Expiry Date Validation
+      if (expiryDate && selectedDate && expiryDate <= selectedDate) {
+        alert("Срок годности вакцины должен быть больше даты выполнения прививки.");
+        return;
       }
 
       onToggleComplete(data.id, selectedDate, selectedBrandName, userNotes, {

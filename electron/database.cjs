@@ -293,6 +293,16 @@ async function setupDatabaseHandlers() {
     return records;
   });
 
+  /**
+   * Вычисляет возраст ребенка в месяцах на конкретную дату
+   */
+  function calculateAgeAtDate(birthDateStr, targetDate) {
+    const birthDate = new Date(birthDateStr);
+    const target = new Date(targetDate);
+    const diffTime = Math.abs(target.getTime() - birthDate.getTime());
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24 * 30.44));
+  }
+
   ipcMain.handle('db:save-record', async (_, record) => {
     try {
       const {
@@ -305,15 +315,54 @@ async function setupDatabaseHandlers() {
         dose,
         series,
         expiryDate,
-        manufacturer
+        manufacturer,
+        ignoreValidation // New flag for import/bypass
       } = record;
 
       console.log(`[Database] Saving record for child ${childId}, vaccine ${vaccineId}:`, {
         isCompleted,
         dose,
         series,
-        expiryDate
+        expiryDate,
+        ignoreValidation
       });
+
+      // Валидация для БЦЖ: проверка требования Манту
+      if (vaccineId.startsWith('bcg') && isCompleted && completedDate && !ignoreValidation) {
+        // Получаем данные ребенка
+        const child = await prisma.child.findUnique({
+          where: { id: Number(childId) },
+        });
+
+        if (!child) {
+          throw new Error('Ребенок не найден');
+        }
+
+        // Вычисляем возраст на момент прививки БЦЖ
+        const ageAtVaccination = calculateAgeAtDate(child.birthDate, completedDate);
+
+        // Если ребенку >= 2 месяцев на момент прививки, требуется Манту
+        if (ageAtVaccination >= 2) {
+          // Получаем профиль вакцинации
+          const profile = await prisma.vaccinationProfile.findUnique({
+            where: { childId: Number(childId) },
+          });
+
+          if (!profile) {
+            throw new Error('Профиль вакцинации не найден');
+          }
+
+          // Проверяем наличие пробы Манту
+          if (!profile.mantouxDate) {
+            throw new Error('Внимание: Требуется проба Манту перед вакцинацией БЦЖ (ребенку > 2 мес на момент прививки).');
+          }
+
+          // Проверяем результат Манту (если положительная - запрещено)
+          if (profile.mantouxResult === true) {
+            throw new Error('Вакцинация запрещена: Проба Манту положительная. Необходима консультация фтизиатра.');
+          }
+        }
+      }
 
       await prisma.vaccinationRecord.upsert({
         where: {
@@ -348,6 +397,23 @@ async function setupDatabaseHandlers() {
       return true;
     } catch (error) {
       console.error('[Database] Failed to save vaccination record:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('db:delete-record', async (_, childId, vaccineId) => {
+    try {
+      await prisma.vaccinationRecord.delete({
+        where: {
+          childId_vaccineId: {
+            childId: Number(childId),
+            vaccineId: vaccineId,
+          },
+        },
+      });
+      return true;
+    } catch (error) {
+      console.error('[Database] Failed to delete vaccination record:', error);
       throw error;
     }
   });

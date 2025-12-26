@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "concurrently \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "npx prisma generate && npm run build && electron-builder"
+    "electron:build": "npx prisma generate && npm run build && electron-builder",
+    "test:vaccination": "node tests/vaccination-records.test.cjs",
+    "test:revaccination": "node tests/polio-hib-revaccination.test.cjs"
   },
   "build": {
     "appId": "com.vaxtrack.rf",
