@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { AugmentedVaccine, VaccineStatus, ChildProfile, VaccinationProfile } from '../types';
 import { getVaccineAdvice } from '../services/geminiService';
 import { DatePicker } from './DatePicker';
+import { UserVaccineRecordSchema } from '../validators/record.validator';
 
 interface Props {
   data: AugmentedVaccine;
@@ -124,41 +125,28 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
 
   const handleConfirm = () => {
     if (selectedDate) {
+      const recordData = {
+        childId: child.id,
+        vaccineId: data.id,
+        isCompleted: true,
+        completedDate: selectedDate,
+        vaccineBrand: selectedBrandName || null,
+        notes: userNotes || null,
+        dose: dose || null,
+        series: series || null,
+        expiryDate: expiryDate || null,
+        manufacturer: manufacturer || null,
+      };
+
+      const result = UserVaccineRecordSchema.safeParse(recordData);
+      if (!result.success) {
+        alert(result.error.issues.map(i => i.message).join('\n'));
+        return;
+      }
+
+      // Additional medical checks
       if (selectedDate < child.birthDate) {
         alert("Дата прививки не может быть раньше даты рождения ребенка.");
-        return;
-      }
-
-      // Dose Validation
-      if (dose.trim()) {
-        const numericDose = parseFloat(dose.replace(',', '.'));
-        const isATS = data.id === 'ats-sos';
-        const maxDose = isATS ? 5000 : 10; // ATS uses IU (250-3000), others use ml (max 10)
-
-        if (isNaN(numericDose)) {
-          alert("Пожалуйста, введите корректное числовое значение для дозы (например: 0.5 или 3000).");
-          return;
-        }
-        if (numericDose > maxDose) {
-          alert(`Внимание: Доза не может превышать ${maxDose} ${isATS ? 'МЕ' : 'мл'}. Пожалуйста, проверьте ввод.`);
-          return;
-        }
-        if (numericDose <= 0) {
-          alert("Доза должна быть больше 0.");
-          return;
-        }
-      }
-
-      // Future Date Validation
-      const today = new Date().toISOString().split('T')[0];
-      if (selectedDate > today) {
-        alert("Дата прививки не может быть в будущем.");
-        return;
-      }
-
-      // Expiry Date Validation
-      if (expiryDate && selectedDate && expiryDate <= selectedDate) {
-        alert("Срок годности вакцины должен быть больше даты выполнения прививки.");
         return;
       }
 

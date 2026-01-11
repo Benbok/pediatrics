@@ -1,8 +1,13 @@
+// Load environment variables from .env.local
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env.local') });
+
 const { app, BrowserWindow, ipcMain, session, shell, dialog } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const { setupDatabaseHandlers } = require('./database.cjs');
+const { setupAuthHandlers, ensureAuthenticated } = require('./auth.cjs');
+const { logger, logAudit } = require('./logger.cjs');
 const isDev = !app.isPackaged;
 
 function createWindow() {
@@ -42,36 +47,41 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-    console.log('[Main] ========== APP READY ==========');
-    console.log('[Main] Calling setupDatabaseHandlers...');
+    logger.info('[Main] ========== APP READY ==========');
+    logger.info('[Main] Calling setupDatabaseHandlers...');
     await setupDatabaseHandlers();
-    console.log('[Main] setupDatabaseHandlers completed');
-    console.log('[Main] Creating window...');
+    logger.info('[Main] setupDatabaseHandlers completed');
+    logger.info('[Main] Calling setupAuthHandlers...');
+    setupAuthHandlers();
+    logger.info('[Main] setupAuthHandlers completed');
+    logger.info('[Main] Creating window...');
     createWindow();
 
     ipcMain.on('print-window', (event) => {
-        console.log('[Main] Received print-window request');
+        logger.info('[Main] Received print-window request');
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win) {
-            console.log('[Main] Found window, initiating print...');
+            logger.info('[Main] Found window, initiating print...');
             // Удален параметр deviceName: '' который мог вызывать ошибки
             win.webContents.print({
                 silent: false,
                 printBackground: true
             }, (success, failureReason) => {
-                console.log(`[Main] Print finished. Success: ${success}, Reason: ${failureReason}`);
+                logger.info(`[Main] Print finished. Success: ${success}, Reason: ${failureReason}`);
             });
         }
     });
 
     ipcMain.on('app-close', () => {
-        console.log('[Main] Received app-close request, quitting...');
+        logger.info('[Main] Received app-close request, quitting...');
+        logAudit('APP_SHUTDOWN');
         app.quit();
     });
 
     // New clean PDF export using dedicated print window
-    ipcMain.handle('export-pdf', async (event, certificateData) => {
-        console.log('[Main] Received export-pdf request with data');
+    ipcMain.handle('export-pdf', ensureAuthenticated(async (event, certificateData) => {
+        logger.info('[Main] Received export-pdf request with data');
+        logAudit('EXPORT_PDF_ATTEMPT');
 
         try {
             // Create a hidden window for clean PDF rendering
@@ -123,23 +133,24 @@ app.whenReady().then(async () => {
             // Save to temp file
             const tempPath = path.join(os.tmpdir(), `vaccination-certificate-${Date.now()}.pdf`);
             await fs.promises.writeFile(tempPath, data);
-            console.log('[Main] PDF saved to:', tempPath);
+            logger.info('[Main] PDF saved to:', tempPath);
 
             // Close the print window
             printWin.close();
 
             // Open PDF in default viewer
             await shell.openPath(tempPath);
+            logAudit('EXPORT_PDF_SUCCESS', { path: tempPath });
             return { success: true, path: tempPath };
 
         } catch (error) {
-            console.error('[Main] Failed to export PDF:', error);
+            logger.error('[Main] Failed to export PDF:', error);
             return { success: false, error: error.message };
         }
-    });
+    }));
 
     // File Dialog and Operations
-    ipcMain.handle('dialog:open-file', async (event, options = {}) => {
+    ipcMain.handle('dialog:open-file', ensureAuthenticated(async (event, options = {}) => {
         const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
             properties: ['openFile'],
             filters: [
@@ -149,16 +160,16 @@ app.whenReady().then(async () => {
             ...options
         });
         return result;
-    });
+    }));
 
-    ipcMain.handle('file:read-text', async (_, filePath) => {
+    ipcMain.handle('file:read-text', ensureAuthenticated(async (_, filePath) => {
         try {
             return await fs.promises.readFile(filePath, 'utf8');
         } catch (error) {
             console.error('[Main] Failed to read file:', error);
             throw error;
         }
-    });
+    }));
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

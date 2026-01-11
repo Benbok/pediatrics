@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChildProfile } from '../../types';
+import { patientService } from '../../services/patient.service';
 
 export const PatientDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -25,7 +26,7 @@ export const PatientDetails: React.FC = () => {
 
     const loadChild = async (childId: number) => {
         try {
-            const data = await window.electronAPI.getChild(childId);
+            const data = await patientService.getChildById(childId);
             setChild(data);
         } catch (error) {
             console.error('Failed to load child:', error);
@@ -52,7 +53,7 @@ export const PatientDetails: React.FC = () => {
         if (!child || !child.id) return;
 
         try {
-            await window.electronAPI.updateChild(child.id, {
+            await patientService.updateChild(child.id, {
                 name: editForm.name,
                 surname: editForm.surname,
                 patronymic: editForm.patronymic,
@@ -62,8 +63,9 @@ export const PatientDetails: React.FC = () => {
             });
             setIsEditModalOpen(false);
             loadChild(child.id);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to update child:', error);
+            alert(error.message || 'Ошибка обновления профиля');
         }
     };
 
@@ -76,7 +78,7 @@ export const PatientDetails: React.FC = () => {
         if (!confirmed) return;
 
         try {
-            await window.electronAPI.deleteChild(child.id);
+            await patientService.deleteChild(child.id);
             navigate('/patients');
         } catch (error) {
             console.error('Failed to delete child:', error);
@@ -84,20 +86,8 @@ export const PatientDetails: React.FC = () => {
         }
     };
 
-    const getFullName = (child: ChildProfile) => {
-        return [child.surname, child.name, child.patronymic].filter(Boolean).join(' ');
-    };
-
-    const getAge = (birthDate: string) => {
-        const birth = new Date(birthDate);
-        const today = new Date();
-        const months = (today.getFullYear() - birth.getFullYear()) * 12 + today.getMonth() - birth.getMonth();
-
-        if (months < 12) return `${months} мес`;
-        const years = Math.floor(months / 12);
-        const remainingMonths = months % 12;
-        return remainingMonths > 0 ? `${years} г ${remainingMonths} мес` : `${years} лет`;
-    };
+    const getFullName = (child: ChildProfile) => patientService.getFullName(child);
+    const getAge = (birthDate: string) => patientService.getAgeLabel(birthDate);
 
     if (isLoading) {
         return <div className="flex items-center justify-center p-12 text-slate-500">Загрузка данных...</div>;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Check, X, AlertCircle, Loader } from 'lucide-react';
+import { Key, Check, X, AlertCircle, Loader, Shield, Database } from 'lucide-react';
 import { getCurrentApiKey, setApiKey, validateApiKey } from '../../services/geminiService';
 
 export const SettingsModule: React.FC = () => {
@@ -9,6 +9,10 @@ export const SettingsModule: React.FC = () => {
     const [verificationStatus, setVerificationStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
     const [isSaved, setIsSaved] = useState(false);
+
+    // Backup State
+    const [isBackingUp, setIsBackingUp] = useState(false);
+    const [backupResult, setBackupResult] = useState<{ success?: boolean; path?: string; error?: string } | null>(null);
 
     useEffect(() => {
         // Load current API key and base URL on mount
@@ -56,17 +60,11 @@ export const SettingsModule: React.FC = () => {
         }
 
         setApiKey(apiKey);
-        // Base URL is saved logic is now implicitly handled by validateApiKey if run, 
-        // but explicit save here is good practice if user skips verify
         if (baseUrl) {
             localStorage.setItem('gemini_base_url', baseUrl);
         } else {
             localStorage.removeItem('gemini_base_url');
         }
-
-        // Force re-init with new settings
-        // Ideally setApiKey should handle this, but for complete safety:
-        setApiKey(apiKey);
 
         setIsSaved(true);
         setVerificationStatus('success');
@@ -87,8 +85,24 @@ export const SettingsModule: React.FC = () => {
         setErrorMessage('');
     };
 
+    const handleCreateBackup = async () => {
+        setIsBackingUp(true);
+        setBackupResult(null);
+        try {
+            const result = await window.electronAPI.createBackup();
+            setBackupResult(result);
+            if (result.success) {
+                setTimeout(() => setBackupResult(null), 5000);
+            }
+        } catch (error: any) {
+            setBackupResult({ success: false, error: error.message });
+        } finally {
+            setIsBackingUp(false);
+        }
+    };
+
     return (
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto pb-12">
             <div className="mb-6">
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Настройки</h1>
                 <p className="text-slate-600 dark:text-slate-400">
@@ -154,9 +168,6 @@ export const SettingsModule: React.FC = () => {
                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
                        placeholder:text-slate-400"
                         />
-                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                            Если API заблокирован в вашем регионе, укажите адрес прокси (например, OpenAI-compatible endpoint).
-                        </p>
                     </div>
 
                     {/* Status Messages */}
@@ -208,14 +219,67 @@ export const SettingsModule: React.FC = () => {
                             {isSaved ? 'Сохранено' : 'Сохранить'}
                         </button>
                     </div>
+                </div>
+            </div>
 
-                    {/* Info Alert */}
-                    <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                        <AlertCircle className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size={18} />
-                        <div className="text-sm text-blue-700 dark:text-blue-300">
-                            <p className="font-medium mb-1">О безопасности:</p>
-                            <p>
-                                API ключ и URL прокси сохраняются локально в браузере.
+            {/* Database & Security Section */}
+            <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                        <Shield className="text-indigo-600 dark:text-indigo-400" size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Безопасность и Данные</h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Резервное копирование и защита персональных данных
+                        </p>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                        <div className="flex gap-3 items-start">
+                            <Database className="text-slate-400 mt-1" size={20} />
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Резервное копирование</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                    Система автоматически создает бэкапы ежедневно. <br />
+                                    Вы также можете создать копию вручную.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2 text-right">
+                            <button
+                                onClick={handleCreateBackup}
+                                disabled={isBackingUp}
+                                className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 
+                                     rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors
+                                     disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
+                            >
+                                {isBackingUp ? <Loader className="animate-spin" size={16} /> : <Database size={16} />}
+                                Создать копию сейчас
+                            </button>
+
+                            {backupResult?.success && (
+                                <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                    ✓ Копия создана успешно
+                                </span>
+                            )}
+                            {backupResult?.error && (
+                                <span className="text-xs text-red-600 dark:text-red-400 font-medium">
+                                    Ошибка: {backupResult.error}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                        <Shield className="text-indigo-600 dark:text-indigo-400 mt-1 flex-shrink-0" size={20} />
+                        <div>
+                            <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-300">Защита данных (152-ФЗ)</h3>
+                            <p className="text-xs text-indigo-700/80 dark:text-indigo-400/80 mt-1 leading-relaxed">
+                                Все персональные данные пациентов (ФИО, дата рождения) шифруются алгоритмом AES-256-GCM
+                                перед сохранением в базу данных. Доступ к данным возможен только после авторизации врача.
                             </p>
                         </div>
                     </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChildProfile } from '../../types';
 import { useChild } from '../../context/ChildContext';
+import { patientService } from '../../services/patient.service';
 
 /**
  * PATIENTS MODULE
@@ -33,6 +34,7 @@ export const PatientsModule: React.FC = () => {
         birthWeight: '',
         gender: 'male' as 'male' | 'female'
     });
+    const [error, setError] = useState<string | null>(null);
 
     const formatName = (val: string) => {
         // Remove spaces and numbers, keep only letters and hyphens
@@ -54,7 +56,7 @@ export const PatientsModule: React.FC = () => {
 
     const loadChildren = async () => {
         try {
-            const data = await window.electronAPI.getChildren();
+            const data = await patientService.getAllChildren();
             setChildren(data);
         } catch (error) {
             console.error('Failed to load children:', error);
@@ -70,18 +72,19 @@ export const PatientsModule: React.FC = () => {
 
     const handleAddChild = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setError(null);
 
-        const newChild: ChildProfile = {
+        const newChildData = {
             name: formData.name,
             surname: formData.surname,
-            patronymic: formData.patronymic,
+            patronymic: formData.patronymic || undefined,
             birthDate: formData.birthDate,
             birthWeight: parseInt(formData.birthWeight) || 0,
             gender: formData.gender,
         };
 
         try {
-            await window.electronAPI.createChild(newChild);
+            await patientService.createChild(newChildData);
             setIsAddModalOpen(false);
             setFormData({
                 surname: '',
@@ -92,27 +95,14 @@ export const PatientsModule: React.FC = () => {
                 gender: 'male'
             });
             loadChildren();
-        } catch (error) {
-            console.error('Failed to create child:', error);
+        } catch (err: any) {
+            console.error('Failed to create child:', err);
+            setError(err.message || 'Произошла непредвиденная ошибка');
         }
     };
 
-    const getFullName = (child: ChildProfile) => {
-        return [child.surname, child.name, child.patronymic].filter(Boolean).join(' ');
-    };
-
-    const getAge = (birthDate: string) => {
-        const birth = new Date(birthDate);
-        const today = new Date();
-        const months = (today.getFullYear() - birth.getFullYear()) * 12 + today.getMonth() - birth.getMonth();
-
-        if (months < 12) {
-            return `${months} мес`;
-        }
-        const years = Math.floor(months / 12);
-        const remainingMonths = months % 12;
-        return remainingMonths > 0 ? `${years} г ${remainingMonths} мес` : `${years} лет`;
-    };
+    const getFullName = (child: ChildProfile) => patientService.getFullName(child);
+    const getAge = (birthDate: string) => patientService.getAgeLabel(birthDate);
 
     if (isLoading) {
         return (
@@ -218,12 +208,18 @@ export const PatientsModule: React.FC = () => {
                                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Новый пациент</h2>
                                 <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Заполните базовые данные для картотеки</p>
                             </div>
-                            <button onClick={() => setIsAddModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+                            <button onClick={() => { setIsAddModalOpen(false); setError(null); }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
+
+                        {error && (
+                            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl text-red-600 dark:text-red-400 text-sm font-medium animate-in slide-in-from-top-2 duration-300">
+                                {error}
+                            </div>
+                        )}
 
                         <form onSubmit={handleAddChild} className="space-y-5">
                             <div className="space-y-2">

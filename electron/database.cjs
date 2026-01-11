@@ -1,5 +1,75 @@
-const path = require('path');
 const { app, ipcMain } = require('electron');
+const path = require('path');
+const { z } = require('zod');
+const { ensureAuthenticated } = require('./auth.cjs');
+const { encrypt, decrypt } = require('./crypto.cjs');
+const { logger, logAudit } = require('./logger.cjs');
+const { createBackup, shouldBackupToday } = require('./backup.cjs');
+
+// ============= VALIDATION SCHEMAS (Zod) =============
+// Re-defined here because database.cjs is CommonJS and doesn't run via Vite/TypeScript
+
+const ChildProfileSchema = z.object({
+  id: z.number().optional(),
+  name: z.string()
+    .min(2, 'Имя должно содержать минимум 2 символа')
+    .max(50, 'Имя должно содержать максимум 50 символов')
+    .regex(/^[а-яёА-ЯЁ\s-]+$/, 'Имя должно содержать только кириллицу, пробелы и дефисы'),
+  surname: z.string()
+    .min(2, 'Фамилия должна содержать минимум 2 символа')
+    .max(50, 'Фамилия должна содержать максимум 50 символов')
+    .regex(/^[а-яёА-ЯЁ\s-]+$/, 'Фамилия должна содержать только кириллицу, пробелы и дефисы'),
+  patronymic: z.string()
+    .max(50, 'Отчество должно содержать максимум 50 символов')
+    .regex(/^[а-яёА-ЯЁ\s-]*$/, 'Отчество должно содержать только кириллицу, пробелы и дефисы')
+    .optional()
+    .nullable(),
+  birthDate: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Неверный формат даты (ГГГГ-ММ-ДД)')
+    .refine((date) => {
+      const d = new Date(date);
+      return !isNaN(d.getTime()) && d <= new Date();
+    }, 'Дата рождения не может быть в будущем'),
+  birthWeight: z.number()
+    .min(500, 'Вес при рождении должен быть не менее 500 г')
+    .max(8000, 'Вес при рождении должен быть не более 8000 г'),
+  gender: z.enum(['male', 'female']),
+});
+
+const VaccinationProfileSchema = z.object({
+  id: z.number().optional(),
+  childId: z.number(),
+  hepBRiskFactors: z.array(z.string()).optional(),
+  pneumoRiskFactors: z.array(z.string()).optional(),
+  pertussisContraindications: z.array(z.string()).optional(),
+  polioRiskFactors: z.array(z.string()).optional(),
+  mmrContraindications: z.array(z.string()).optional(),
+  meningRiskFactors: z.array(z.string()).optional(),
+  varicellaRiskFactors: z.array(z.string()).optional(),
+  hepaRiskFactors: z.array(z.string()).optional(),
+  fluRiskFactors: z.array(z.string()).optional(),
+  hpvRiskFactors: z.array(z.string()).optional(),
+  tbeRiskFactors: z.array(z.string()).optional(),
+  rotaRiskFactors: z.array(z.string()).optional(),
+  mantouxDate: z.string().nullable().optional(),
+  mantouxResult: z.boolean().nullable().optional(),
+  customVaccines: z.array(z.any()).optional(),
+});
+
+const UserVaccineRecordSchema = z.object({
+  id: z.number().optional(),
+  childId: z.number().optional(),
+  vaccineId: z.string(),
+  isCompleted: z.boolean(),
+  completedDate: z.string().nullable().optional(),
+  vaccineBrand: z.string().max(100).optional().nullable(),
+  notes: z.string().max(500).optional().nullable(),
+  dose: z.string().max(50).optional().nullable(),
+  series: z.string().max(50).optional().nullable(),
+  expiryDate: z.string().nullable().optional(),
+  manufacturer: z.string().max(100).optional().nullable(),
+  ignoreValidation: z.boolean().optional(),
+});
 
 // Configure Prisma paths BEFORE importing Prisma Client
 const isDev = !app.isPackaged;
@@ -24,9 +94,9 @@ const dbPath = isDev
   ? path.join(__dirname, '../prisma/dev.db')
   : path.join(app.getPath('userData'), 'pediatrics.db');
 
-console.log(`[Database] Initializing with isDev=${isDev}`);
-console.log(`[Database] DB Path: ${dbPath}`);
-console.log(`[Database] __dirname: ${__dirname}`);
+logger.info(`[Database] Initializing with isDev=${isDev}`);
+logger.info(`[Database] DB Path: ${dbPath}`);
+logger.info(`[Database] __dirname: ${__dirname}`);
 
 const adapter = new PrismaBetterSqlite3({
   url: `file:${dbPath}`
@@ -38,18 +108,18 @@ const prisma = new PrismaClient({
 
 // Initialize Database (Schema synchronization)
 async function initDatabase() {
-  console.log('[Database] ========== INIT START ==========');
-  console.log('[Database] isDev:', isDev);
-  console.log('[Database] dbPath:', dbPath);
+  logger.info('[Database] ========== INIT START ==========');
+  logger.info('[Database] isDev:', isDev);
+  logger.info('[Database] dbPath:', dbPath);
 
   try {
-    console.log('[Database] Connecting to Prisma...');
+    logger.info('[Database] Connecting to Prisma...');
     await prisma.$connect();
-    console.log('[Database] Connected at:', dbPath);
+    logger.info('[Database] Connected at:', dbPath);
 
     // In production, check if schema exists and is correct
     if (!isDev) {
-      console.log('[Database] Production mode - checking schema...');
+      logger.info('[Database] Production mode - checking schema...');
       let schemaIsValid = false;
 
       try {
@@ -58,23 +128,23 @@ async function initDatabase() {
           `SELECT name FROM pragma_table_info('children') WHERE name = 'surname'`
         );
         schemaIsValid = Array.isArray(result) && result.length > 0;
-        console.log('[Database] Schema check result:', schemaIsValid ? 'VALID' : 'INVALID or MISSING');
+        logger.info('[Database] Schema check result:', schemaIsValid ? 'VALID' : 'INVALID or MISSING');
       } catch (error) {
-        console.log('[Database] Schema check error:', error.message);
+        logger.warn('[Database] Schema check error:', error.message);
         schemaIsValid = false;
       }
 
       if (!schemaIsValid) {
-        console.log('[Database] Dropping old tables and creating new schema...');
+        logger.warn('[Database] Dropping old tables and creating new schema...');
 
         // Drop existing tables (order matters due to foreign keys)
         try {
           await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS vaccination_records`);
           await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS vaccination_profiles`);
           await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS children`);
-          console.log('[Database] Old tables dropped');
+          logger.info('[Database] Old tables dropped');
         } catch (e) {
-          console.log('[Database] Drop error (ignoring):', e.message);
+          logger.warn('[Database] Drop error (ignoring):', e.message);
         }
 
         await prisma.$executeRawUnsafe(`
@@ -132,80 +202,144 @@ async function initDatabase() {
           );
         `);
 
-        console.log('[Database] Schema created successfully');
+        logger.info('[Database] Schema created successfully');
       }
     }
 
-    console.log('[Database] ========== INIT COMPLETE ==========');
+    logger.info('[Database] ========== INIT COMPLETE ==========');
   } catch (error) {
-    console.error('[Database] ========== INIT FAILED ==========');
-    console.error('[Database] Error details:', error);
-    console.error('[Database] Error stack:', error.stack);
+    logger.error('[Database] ========== INIT FAILED ==========');
+    logger.error('[Database] Error details:', error);
+    logger.error('[Database] Error stack:', error.stack);
   }
 }
 
-async function setupDatabaseHandlers() {
-  console.log('[Database] ========== SETUP START ==========');
-  console.log('[Database] Calling initDatabase...');
+const setupDatabaseHandlers = async () => {
+  logger.info('[Database] ========== SETUP START ==========');
+
+  // Automated backup on startup
+  try {
+    if (await shouldBackupToday()) {
+      logger.info('[Database] Starting daily automated backup...');
+      await createBackup(dbPath);
+      logAudit('DATABASE_BACKUP_SUCCESS');
+    }
+  } catch (error) {
+    logger.error('[Database] Automated backup failed:', error);
+    logAudit('DATABASE_BACKUP_FAILED', { error: error.message });
+  }
+
+  logger.info('[Database] Calling initDatabase...');
   await initDatabase();
-  console.log('[Database] initDatabase completed');
-  console.log('[Database] Registering IPC handlers...');
+  logger.info('[Database] initDatabase completed');
+  logger.info('[Database] Registering IPC handlers...');
 
   // ============= PATIENTS MODULE HANDLERS =============
-  ipcMain.handle('db:get-children', async () => {
-    return await prisma.child.findMany({
+  ipcMain.handle('db:get-children', ensureAuthenticated(async () => {
+    const children = await prisma.child.findMany({
       orderBy: { createdAt: 'desc' },
     });
-  });
 
-  ipcMain.handle('db:get-child', async (_, id) => {
-    return await prisma.child.findUnique({
+    // Decrypt sensitive fields
+    return children.map(child => ({
+      ...child,
+      name: decrypt(child.name),
+      surname: decrypt(child.surname),
+      patronymic: decrypt(child.patronymic),
+      birthDate: decrypt(child.birthDate),
+    }));
+  }));
+
+  ipcMain.handle('db:get-child', ensureAuthenticated(async (_, id) => {
+    const child = await prisma.child.findUnique({
       where: { id: Number(id) },
     });
-  });
 
-  ipcMain.handle('db:create-child', async (_, child) => {
-    const { name, surname, patronymic, birthDate, birthWeight, gender } = child;
-    return await prisma.child.create({
-      data: {
-        name,
-        surname,
-        patronymic,
-        birthDate: String(birthDate),
-        birthWeight: Number(birthWeight) || 0,
-        gender,
-        vaccinationProfile: {
-          create: {
-            hepBRiskFactors: JSON.stringify([]),
-            pneumoRiskFactors: JSON.stringify([]),
-            pertussisContraindications: JSON.stringify([]),
+    if (!child) return null;
+
+    return {
+      ...child,
+      name: decrypt(child.name),
+      surname: decrypt(child.surname),
+      patronymic: decrypt(child.patronymic),
+      birthDate: decrypt(child.birthDate),
+    };
+  }));
+
+  ipcMain.handle('db:create-child', ensureAuthenticated(async (_, child) => {
+    try {
+      const validatedChild = ChildProfileSchema.parse(child);
+      const { name, surname, patronymic, birthDate, birthWeight, gender } = validatedChild;
+
+      const newChild = await prisma.child.create({
+        data: {
+          name: encrypt(name),
+          surname: encrypt(surname),
+          patronymic: encrypt(patronymic),
+          birthDate: encrypt(String(birthDate)),
+          birthWeight: Number(birthWeight) || 0,
+          gender,
+          vaccinationProfile: {
+            create: {
+              hepBRiskFactors: JSON.stringify([]),
+              pneumoRiskFactors: JSON.stringify([]),
+              pertussisContraindications: JSON.stringify([]),
+            },
           },
         },
-      },
-      include: {
-        vaccinationProfile: true,
-      },
-    });
-  });
+        include: {
+          vaccinationProfile: true,
+        },
+      });
+      logAudit('PATIENT_CREATED', { childId: newChild.id, name, surname });
+      return newChild;
+    } catch (error) {
+      logger.error('[Database] Failed to create child:', error);
+      if (error instanceof z.ZodError) {
+        throw new Error(error.errors.map(e => e.message).join(', '));
+      }
+      throw error;
+    }
+  }));
 
-  ipcMain.handle('db:update-child', async (_, id, updates) => {
-    const { name, surname, patronymic, birthDate, gender, birthWeight } = updates;
-    await prisma.child.update({
-      where: { id: Number(id) },
-      data: { name, surname, patronymic, birthDate, gender, birthWeight },
-    });
-    return true;
-  });
+  ipcMain.handle('db:update-child', ensureAuthenticated(async (_, id, updates) => {
+    try {
+      const validatedUpdates = ChildProfileSchema.partial().parse(updates);
+      const { name, surname, patronymic, birthDate, gender, birthWeight } = validatedUpdates;
 
-  ipcMain.handle('db:delete-child', async (_, id) => {
+      const dataToUpdate = {};
+      if (name) dataToUpdate.name = encrypt(name);
+      if (surname) dataToUpdate.surname = encrypt(surname);
+      if (patronymic) dataToUpdate.patronymic = encrypt(patronymic);
+      if (birthDate) dataToUpdate.birthDate = encrypt(String(birthDate));
+      if (gender) dataToUpdate.gender = gender;
+      if (birthWeight !== undefined) dataToUpdate.birthWeight = birthWeight;
+
+      await prisma.child.update({
+        where: { id: Number(id) },
+        data: dataToUpdate,
+      });
+      logAudit('PATIENT_UPDATED', { childId: id, updates: Object.keys(dataToUpdate) });
+      return true;
+    } catch (error) {
+      logger.error('[Database] Failed to update child:', error);
+      if (error instanceof z.ZodError) {
+        throw new Error(error.errors.map(e => e.message).join(', '));
+      }
+      throw error;
+    }
+  }));
+
+  ipcMain.handle('db:delete-child', ensureAuthenticated(async (_, id) => {
     await prisma.child.delete({
       where: { id: Number(id) },
     });
+    logAudit('PATIENT_DELETED', { childId: id });
     return true;
-  });
+  }));
 
   // ============= VACCINATION MODULE HANDLERS =============
-  ipcMain.handle('db:get-vaccination-profile', async (_, childId) => {
+  ipcMain.handle('db:get-vaccination-profile', ensureAuthenticated(async (_, childId) => {
     let profile = await prisma.vaccinationProfile.findUnique({
       where: { childId: Number(childId) },
     });
@@ -250,48 +384,63 @@ async function setupDatabaseHandlers() {
       mantouxResult: profile.mantouxResult,
       createdAt: profile.createdAt,
     };
-  });
+  }));
 
-  ipcMain.handle('db:update-vaccination-profile', async (_, profile) => {
-    const {
-      childId,
-      hepBRiskFactors,
-      pneumoRiskFactors,
-      pertussisContraindications,
-      polioRiskFactors,
-      mantouxDate,
-      mantouxResult
-    } = profile;
-
-    await prisma.vaccinationProfile.update({
-      where: { childId: Number(childId) },
-      data: {
-        hepBRiskFactors: JSON.stringify(hepBRiskFactors || []),
-        pneumoRiskFactors: JSON.stringify(pneumoRiskFactors || []),
-        pertussisContraindications: JSON.stringify(pertussisContraindications || []),
-        polioRiskFactors: JSON.stringify(polioRiskFactors || []),
-        mmrContraindications: JSON.stringify(profile.mmrContraindications || []),
-        meningRiskFactors: JSON.stringify(profile.meningRiskFactors || []),
-        varicellaRiskFactors: JSON.stringify(profile.varicellaRiskFactors || []),
-        hepaRiskFactors: JSON.stringify(profile.hepaRiskFactors || []),
-        fluRiskFactors: JSON.stringify(profile.fluRiskFactors || []),
-        hpvRiskFactors: JSON.stringify(profile.hpvRiskFactors || []),
-        tbeRiskFactors: JSON.stringify(profile.tbeRiskFactors || []),
-        rotaRiskFactors: JSON.stringify(profile.rotaRiskFactors || []),
+  ipcMain.handle('db:update-vaccination-profile', ensureAuthenticated(async (_, profile) => {
+    try {
+      const validatedProfile = VaccinationProfileSchema.parse(profile);
+      const {
+        childId,
+        hepBRiskFactors,
+        pneumoRiskFactors,
+        pertussisContraindications,
+        polioRiskFactors,
         mantouxDate,
-        mantouxResult,
-        customVaccines: JSON.stringify(profile.customVaccines || []),
-      },
-    });
-    return true;
-  });
+        mantouxResult
+      } = validatedProfile;
 
-  ipcMain.handle('db:get-records', async (_, childId) => {
+      await prisma.vaccinationProfile.update({
+        where: { childId: Number(childId) },
+        data: {
+          hepBRiskFactors: JSON.stringify(hepBRiskFactors || []),
+          pneumoRiskFactors: JSON.stringify(pneumoRiskFactors || []),
+          pertussisContraindications: JSON.stringify(pertussisContraindications || []),
+          polioRiskFactors: JSON.stringify(polioRiskFactors || []),
+          mmrContraindications: JSON.stringify(validatedProfile.mmrContraindications || []),
+          meningRiskFactors: JSON.stringify(validatedProfile.meningRiskFactors || []),
+          varicellaRiskFactors: JSON.stringify(validatedProfile.varicellaRiskFactors || []),
+          hepaRiskFactors: JSON.stringify(validatedProfile.hepaRiskFactors || []),
+          fluRiskFactors: JSON.stringify(validatedProfile.fluRiskFactors || []),
+          hpvRiskFactors: JSON.stringify(validatedProfile.hpvRiskFactors || []),
+          tbeRiskFactors: JSON.stringify(validatedProfile.tbeRiskFactors || []),
+          rotaRiskFactors: JSON.stringify(validatedProfile.rotaRiskFactors || []),
+          mantouxDate,
+          mantouxResult,
+          customVaccines: JSON.stringify(validatedProfile.customVaccines || []),
+        },
+      });
+      logAudit('VACCINATION_PROFILE_UPDATED', { childId });
+      return true;
+    } catch (error) {
+      logger.error('[Database] Failed to update vaccination profile:', error);
+      if (error instanceof z.ZodError) {
+        throw new Error(error.errors.map(e => e.message).join(', '));
+      }
+      throw error;
+    }
+  }));
+
+  ipcMain.handle('db:get-records', ensureAuthenticated(async (_, childId) => {
     const records = await prisma.vaccinationRecord.findMany({
       where: { childId: Number(childId) },
     });
-    return records;
-  });
+
+    return records.map(record => ({
+      ...record,
+      vaccineBrand: decrypt(record.vaccineBrand),
+      notes: decrypt(record.notes),
+    }));
+  }));
 
   /**
    * Вычисляет возраст ребенка в месяцах на конкретную дату
@@ -303,8 +452,9 @@ async function setupDatabaseHandlers() {
     return Math.floor(diffTime / (1000 * 60 * 60 * 24 * 30.44));
   }
 
-  ipcMain.handle('db:save-record', async (_, record) => {
+  ipcMain.handle('db:save-record', ensureAuthenticated(async (_, record) => {
     try {
+      const validatedRecord = UserVaccineRecordSchema.parse(record);
       const {
         childId,
         vaccineId,
@@ -317,9 +467,9 @@ async function setupDatabaseHandlers() {
         expiryDate,
         manufacturer,
         ignoreValidation // New flag for import/bypass
-      } = record;
+      } = validatedRecord;
 
-      console.log(`[Database] Saving record for child ${childId}, vaccine ${vaccineId}:`, {
+      logger.info(`[Database] Saving record for child ${childId}, vaccine ${vaccineId}:`, {
         isCompleted,
         dose,
         series,
@@ -374,8 +524,8 @@ async function setupDatabaseHandlers() {
         update: {
           isCompleted,
           completedDate,
-          vaccineBrand,
-          notes,
+          vaccineBrand: encrypt(vaccineBrand),
+          notes: encrypt(notes),
           dose,
           series,
           expiryDate,
@@ -386,22 +536,26 @@ async function setupDatabaseHandlers() {
           vaccineId,
           isCompleted,
           completedDate,
-          vaccineBrand,
-          notes,
+          vaccineBrand: encrypt(vaccineBrand),
+          notes: encrypt(notes),
           dose,
           series,
           expiryDate,
           manufacturer
         },
       });
+      logAudit('VACCINATION_RECORD_SAVED', { childId, vaccineId, isCompleted });
       return true;
     } catch (error) {
-      console.error('[Database] Failed to save vaccination record:', error);
+      logger.error('[Database] Failed to save vaccination record:', error);
+      if (error instanceof z.ZodError) {
+        throw new Error(error.errors.map(e => e.message).join(', '));
+      }
       throw error;
     }
-  });
+  }));
 
-  ipcMain.handle('db:delete-record', async (_, childId, vaccineId) => {
+  ipcMain.handle('db:delete-record', ensureAuthenticated(async (_, childId, vaccineId) => {
     try {
       await prisma.vaccinationRecord.delete({
         where: {
@@ -411,12 +565,20 @@ async function setupDatabaseHandlers() {
           },
         },
       });
+      logAudit('VACCINATION_RECORD_DELETED', { childId, vaccineId });
       return true;
     } catch (error) {
-      console.error('[Database] Failed to delete vaccination record:', error);
+      logger.error('[Database] Failed to delete vaccination record:', error);
       throw error;
     }
-  });
+  }));
+
+  /**
+   * Manual backup trigger
+   */
+  ipcMain.handle('db:create-backup', ensureAuthenticated(async () => {
+    return await createBackup(dbPath);
+  }));
 }
 
 module.exports = { setupDatabaseHandlers };

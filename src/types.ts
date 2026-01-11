@@ -195,11 +195,18 @@ declare global {
       updateVaccinationProfile: (profile: VaccinationProfile) => Promise<boolean>;
       getRecords: (childId: number) => Promise<UserVaccineRecord[]>;
       saveRecord: (record: UserVaccineRecord) => Promise<boolean>;
+      deleteRecord: (childId: number, vaccineId: string) => Promise<boolean>;
       print: () => void;
       exportPDF: (certificateData: any) => Promise<string>;
       closeApp: () => void;
       openFile: (options?: any) => Promise<{ canceled: boolean; filePaths: string[] }>;
       readTextFile: (filePath: string) => Promise<string>;
+      createBackup: () => Promise<{ success: boolean; path?: string; error?: string }>;
+
+      // AUTH API
+      login: (credentials: { username?: string; password?: string }) => Promise<{ success: boolean; error?: string }>;
+      logout: () => Promise<void>;
+      checkSession: () => Promise<boolean>;
     }
   }
 }

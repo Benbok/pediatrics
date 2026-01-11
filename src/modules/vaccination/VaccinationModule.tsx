@@ -22,6 +22,8 @@ import { calculateVaccineSchedule } from '../../logic/vax';
 import { PneumoRiskFactor, PertussisContraindication, PolioRiskFactor, MMRContraindication, MeningoRiskFactor, VaricellaRiskFactor, HepARiskFactor, FluRiskFactor, HpvRiskFactor, TbeRiskFactor, RotavirusRiskFactor } from '../../types';
 import { printService } from '../printing';
 import { createVaccinationCertificateData } from './adapters/printingAdapter';
+import { patientService } from '../../services/patient.service';
+import { vaccinationService } from '../../services/vaccination.service';
 
 /**
  * VACCINATION MODULE
@@ -76,15 +78,15 @@ export const VaccinationModule: React.FC = () => {
     const loadAllData = async (id: number) => {
         setIsLoading(true);
         try {
-            // Load patient data independently
-            const childData = await window.electronAPI.getChild(id);
-            setChild(childData);
+            // Load data via services
+            const [childData, profileData, recordsData] = await Promise.all([
+                patientService.getChildById(id),
+                vaccinationService.getProfile(id),
+                vaccinationService.getRecords(id)
+            ]);
 
-            // Load vaccination-specific data
-            const profileData = await window.electronAPI.getVaccinationProfile(id);
+            if (childData) setChild(childData);
             setVaccinationProfile(profileData);
-
-            const recordsData = await window.electronAPI.getRecords(id);
             setRecords(recordsData);
         } catch (error) {
             console.error('Failed to load vaccination data:', error);
@@ -198,8 +200,8 @@ export const VaccinationModule: React.FC = () => {
         });
 
         try {
-            await window.electronAPI.updateVaccinationProfile({
-                childId: Number(childId),
+            const updatedProfile = {
+                ...vaccinationProfile,
                 hepBRiskFactors,
                 pneumoRiskFactors,
                 pertussisContraindications,
@@ -212,28 +214,16 @@ export const VaccinationModule: React.FC = () => {
                 hpvRiskFactors,
                 tbeRiskFactors,
                 rotaRiskFactors,
-                mantouxDate: vaccinationProfile.mantouxDate,
-                mantouxResult: vaccinationProfile.mantouxResult,
-                customVaccines: vaccinationProfile.customVaccines
-            });
-            setVaccinationProfile({
-                ...vaccinationProfile,
-                hepBRiskFactors,
-                pneumoRiskFactors,
-                pertussisContraindications,
-                polioRiskFactors,
-                mmrContraindications,
-                meningRiskFactors,
-                varicellaRiskFactors,
-                hepaRiskFactors,
-                fluRiskFactors,
-                hpvRiskFactors,
-                tbeRiskFactors,
-                rotaRiskFactors
-            });
+                mantouxDate: tempMantouxDate || vaccinationProfile.mantouxDate,
+                mantouxResult: formData.get('mantouxResult') === 'true'
+            };
+
+            await vaccinationService.updateProfile(updatedProfile);
+            setVaccinationProfile(updatedProfile);
             setIsRiskFactorsModalOpen(false);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to update risk factors:', error);
+            alert(error.message || 'Ошибка обновления профиля');
         }
     };
 
@@ -241,23 +231,25 @@ export const VaccinationModule: React.FC = () => {
         if (!childId || !vaccinationProfile) return;
 
         try {
-            await window.electronAPI.updateVaccinationProfile({
+            const updatedProfile = {
                 ...vaccinationProfile,
                 childId: Number(childId),
                 mantouxDate: date,
-                mantouxResult: result
-                // customVaccines is kept as is inside vaccinationProfile spread
-            });
-            setVaccinationProfile({ ...vaccinationProfile, mantouxDate: date, mantouxResult: result });
+                mantouxResult: result,
+                customVaccines: vaccinationProfile.customVaccines
+            };
+            await vaccinationService.updateProfile(updatedProfile);
+            setVaccinationProfile(updatedProfile);
             setTempMantouxDate('');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to update Mantoux data:', error);
+            alert(error.message || 'Ошибка обновления данных Манту');
         }
     };
 
-    const augmentedSchedule: AugmentedVaccine[] = useMemo(() => {
+    const augmentedSchedule = useMemo(() => {
         if (!child || !vaccinationProfile) return [];
-        return calculateVaccineSchedule(child, vaccinationProfile, records, [...VACCINE_SCHEDULE, ...customVaccines]);
+        return vaccinationService.calculateSchedule(child, vaccinationProfile, records, customVaccines);
     }, [child, vaccinationProfile, records, customVaccines]);
 
     const stats = useMemo(() => {
@@ -298,7 +290,7 @@ export const VaccinationModule: React.FC = () => {
     }, [groupedVaccines]);
 
     const handleToggleComplete = async (
-        id: string,
+        vaccineId: string,
         date: string | null,
         brand?: string,
         notes?: string,
@@ -306,30 +298,36 @@ export const VaccinationModule: React.FC = () => {
     ) => {
         if (!childId) return;
 
-        const record: UserVaccineRecord = {
-            childId: Number(childId),
-            vaccineId: id,
-            isCompleted: !!date,
-            completedDate: date,
-            vaccineBrand: brand || null,
-            notes: notes || null,
-            dose: extra?.dose || null,
-            series: extra?.series || null,
-            expiryDate: extra?.expiryDate || null,
-            manufacturer: extra?.manufacturer || null,
-        };
-
         try {
-            await window.electronAPI.saveRecord(record);
+            if (date === null) {
+                // Delete record if date is null (Undo complete)
+                await vaccinationService.deleteRecord(Number(childId), vaccineId);
+            } else {
+                // Save/Update record
+                const record: UserVaccineRecord = {
+                    childId: Number(childId),
+                    vaccineId,
+                    isCompleted: true,
+                    completedDate: date,
+                    vaccineBrand: brand || null,
+                    notes: notes || null,
+                    dose: extra?.dose || null,
+                    series: extra?.series || null,
+                    expiryDate: extra?.expiryDate || null,
+                    manufacturer: extra?.manufacturer || null,
+                };
+                await vaccinationService.saveRecord(record);
+            }
             // Reload records
-            const recordsData = await window.electronAPI.getRecords(Number(childId));
+            const recordsData = await vaccinationService.getRecords(Number(childId));
             setRecords(recordsData);
-        } catch (error) {
-            console.error('Failed to save record:', error);
+        } catch (error: any) {
+            console.error('Failed to toggle vaccination status:', error);
+            alert(error.message || 'Ошибка обновления статуса прививки');
         }
     };
 
-    const handleAddCustomVaccine = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleAddCustomVaccine = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
         const name = formData.get('name') as string;
@@ -350,36 +348,39 @@ export const VaccinationModule: React.FC = () => {
         setCustomVaccines(newCustoms);
 
         if (vaccinationProfile && childId) {
-            window.electronAPI.updateVaccinationProfile({
-                ...vaccinationProfile,
-                childId: Number(childId),
-                customVaccines: newCustoms
-            }).catch(console.error);
-
-            // Optimistic update of profile state
-            setVaccinationProfile({
-                ...vaccinationProfile,
-                customVaccines: newCustoms
-            });
+            try {
+                const updatedProfile = {
+                    ...vaccinationProfile,
+                    childId: Number(childId),
+                    customVaccines: newCustoms
+                };
+                await vaccinationService.updateProfile(updatedProfile);
+                setVaccinationProfile(updatedProfile);
+                setIsAddModalOpen(false);
+            } catch (error: any) {
+                console.error('Failed to add custom vaccine:', error);
+                alert(error.message || 'Ошибка обновления профиля');
+            }
         }
-        setIsAddModalOpen(false);
     };
 
-    const handleDeleteCustomVaccine = (id: string) => {
+    const handleDeleteCustomVaccine = async (id: string) => {
         const newCustoms = customVaccines.filter(v => v.id !== id);
         setCustomVaccines(newCustoms);
 
         if (vaccinationProfile && childId) {
-            window.electronAPI.updateVaccinationProfile({
-                ...vaccinationProfile,
-                childId: Number(childId),
-                customVaccines: newCustoms
-            }).catch(console.error);
-
-            setVaccinationProfile({
-                ...vaccinationProfile,
-                customVaccines: newCustoms
-            });
+            try {
+                const updatedProfile = {
+                    ...vaccinationProfile,
+                    childId: Number(childId),
+                    customVaccines: newCustoms
+                };
+                await vaccinationService.updateProfile(updatedProfile);
+                setVaccinationProfile(updatedProfile);
+            } catch (error: any) {
+                console.error('Failed to delete custom vaccine:', error);
+                alert(error.message || 'Ошибка обновления профиля');
+            }
         }
     };
 
@@ -468,7 +469,7 @@ export const VaccinationModule: React.FC = () => {
         const link = document.createElement('a');
         link.href = url;
         const fullName = [child.surname, child.name].filter(Boolean).join('_');
-        link.setAttribute('download', `VaxTrack_${fullName}.csv`);
+        link.setAttribute('download', `PediAssist_${fullName}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

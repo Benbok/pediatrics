@@ -19,4 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     closeApp: () => ipcRenderer.send('app-close'),
     openFile: (options) => ipcRenderer.invoke('dialog:open-file', options),
     readTextFile: (filePath) => ipcRenderer.invoke('file:read-text', filePath),
+
+    // AUTH API
+    login: (credentials) => ipcRenderer.invoke('auth:login', credentials),
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    checkSession: () => ipcRenderer.invoke('auth:check-session'),
 });

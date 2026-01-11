@@ -11,8 +11,10 @@ import {
   Moon
 } from 'lucide-react';
 import clsx from 'clsx';
+import { useAuth } from '../../context/AuthContext';
 
 export const AppShell: React.FC = () => {
+  const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
 
   // Theme State
@@ -54,7 +56,7 @@ export const AppShell: React.FC = () => {
         <div className="h-16 flex items-center justify-between px-4 border-b dark:border-slate-800">
           {isSidebarOpen && (
             <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              VaxTrack
+              PediAssist
             </span>
           )}
           <button
@@ -104,11 +106,18 @@ export const AppShell: React.FC = () => {
             {isSidebarOpen && <span className="font-medium">Настройки</span>}
           </NavLink>
           <button
-            onClick={() => window.electronAPI.closeApp()}
-            className="w-full flex items-center gap-3 p-3 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            onClick={logout}
+            className="w-full flex items-center gap-3 p-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <LogOut size={24} />
-            {isSidebarOpen && <span className="font-medium">Выход</span>}
+            {isSidebarOpen && <span className="font-medium">Выйти из системы</span>}
+          </button>
+          <button
+            onClick={() => window.electronAPI.closeApp()}
+            className="w-full flex items-center gap-3 p-3 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border-t dark:border-slate-800"
+          >
+            <X size={24} />
+            {isSidebarOpen && <span className="font-medium">Закрыть программу</span>}
           </button>
         </div>
       </aside>

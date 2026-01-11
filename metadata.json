@@ -1,5 +1,5 @@
 {
-  "name": "VaxTrack RF",
-  "description": "A pediatric vaccination tracking application based on the Russian National Vaccination Calendar. Tracks upcoming, overdue, and completed vaccines with AI-powered insights.",
+  "name": "PediAssist",
+  "description": "AI-powered pediatric assistant for comprehensive patient care. Features vaccination tracking (RF Order 1122n), patient examination history, diagnostic assistance, medication management, and medical document generation.",
   "requestFramePermissions": []
 }
