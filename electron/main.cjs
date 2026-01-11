@@ -7,6 +7,7 @@ const os = require('os');
 const fs = require('fs');
 const { setupDatabaseHandlers } = require('./database.cjs');
 const { setupAuthHandlers, ensureAuthenticated } = require('./auth.cjs');
+const { initializeDatabase } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const isDev = !app.isPackaged;
 
@@ -48,6 +49,12 @@ function createWindow() {
 
 app.whenReady().then(async () => {
     logger.info('[Main] ========== APP READY ==========');
+
+    // Initialize database (create first admin if needed)
+    logger.info('[Main] Initializing database...');
+    await initializeDatabase();
+    logger.info('[Main] Database initialization completed');
+
     logger.info('[Main] Calling setupDatabaseHandlers...');
     await setupDatabaseHandlers();
     logger.info('[Main] setupDatabaseHandlers completed');

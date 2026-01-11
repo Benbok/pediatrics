@@ -24,4 +24,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     login: (credentials) => ipcRenderer.invoke('auth:login', credentials),
     logout: () => ipcRenderer.invoke('auth:logout'),
     checkSession: () => ipcRenderer.invoke('auth:check-session'),
+
+    // USER MANAGEMENT API (Admin only)
+    registerUser: (data) => ipcRenderer.invoke('auth:register-user', data),
+    getAllUsers: () => ipcRenderer.invoke('auth:get-all-users'),
+    deactivateUser: (userId) => ipcRenderer.invoke('auth:deactivate-user', userId),
+    activateUser: (userId) => ipcRenderer.invoke('auth:activate-user', userId),
+    changePassword: (data) => ipcRenderer.invoke('auth:change-password', data),
+
+    // PATIENT SHARING API
+    sharePatient: (data) => ipcRenderer.invoke('db:share-patient', data),
+    unsharePatient: (data) => ipcRenderer.invoke('db:unshare-patient', data),
+
+    // BACKUP API
+    createBackup: () => ipcRenderer.invoke('create-backup'),
 });

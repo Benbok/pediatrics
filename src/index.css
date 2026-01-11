@@ -1,9 +1,41 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+
+  --color-teal-50: #f0f9ff;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+
+  --color-surface-white: #ffffff;
+  --color-surface-glass: rgba(255, 255, 255, 0.8);
+
+  --font-sans: "Inter", "system-ui", "sans-serif";
+
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+}
 
 @layer base {
   body {
-    @apply antialiased;
+    @apply antialiased bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50;
   }
 }

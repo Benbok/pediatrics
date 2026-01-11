@@ -6,6 +6,43 @@ datasource db {
   provider = "sqlite"
 }
 
+// ============= USER MANAGEMENT =============
+
+model User {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
+  passwordHash  String    @map("password_hash")
+  fullName      String    @map("full_name")
+  isAdmin       Boolean   @default(false) @map("is_admin")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  createdChildren       Child[]
+  createdRecords        VaccinationRecord[]
+  sharedPatientsAsOwner PatientShare[]      @relation("SharedByUser")
+  sharedPatientsAccess  PatientShare[]      @relation("SharedWithUser")
+  
+  @@map("users")
+}
+
+// Patient Sharing Mechanism (for collaboration)
+model PatientShare {
+  id          Int      @id @default(autoincrement())
+  childId     Int      @map("child_id")
+  sharedBy    Int      @map("shared_by")
+  sharedWith  Int      @map("shared_with")
+  canEdit     Boolean  @default(false) @map("can_edit") // true = can edit, false = read-only
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  child       Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  ownerUser   User     @relation("SharedByUser", fields: [sharedBy], references: [id])
+  sharedUser  User     @relation("SharedWithUser", fields: [sharedWith], references: [id])
+  
+  @@unique([childId, sharedWith])
+  @@map("patient_shares")
+}
+
 model Child {
   id                  Int                  @id @default(autoincrement())
   name                String
@@ -14,9 +51,14 @@ model Child {
   birthDate           String               @map("birth_date")
   birthWeight         Int                  @default(0) @map("birth_weight") // in grams
   gender              String
+  createdByUserId     Int                  @map("created_by_user_id")
   createdAt           DateTime             @default(now()) @map("created_at")
+  
+  // Relations
+  createdBy           User                 @relation(fields: [createdByUserId], references: [id])
   vaccinationProfile  VaccinationProfile?
   vaccinationRecords  VaccinationRecord[]
+  shares              PatientShare[]
 
   @@map("children")
 }
@@ -46,18 +88,21 @@ model VaccinationProfile {
 }
 
 model VaccinationRecord {
-  id            Int      @id @default(autoincrement())
-  child         Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
-  childId       Int      @map("child_id")
-  vaccineId     String   @map("vaccine_id")
-  isCompleted   Boolean  @default(false) @map("is_completed")
-  completedDate String?  @map("completed_date")
-  vaccineBrand  String?  @map("vaccine_brand")
-  notes         String?
-  dose          String?
-  series        String?
-  expiryDate    String?  @map("expiry_date")
-  manufacturer  String?
+  id              Int      @id @default(autoincrement())
+  child           Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId         Int      @map("child_id")
+  vaccineId       String   @map("vaccine_id")
+  isCompleted     Boolean  @default(false) @map("is_completed")
+  completedDate   String?  @map("completed_date")
+  vaccineBrand    String?  @map("vaccine_brand")
+  notes           String?
+  dose            String?
+  series          String?
+  expiryDate      String?  @map("expiry_date")
+  manufacturer    String?
+  createdByUserId Int?     @map("created_by_user_id")
+  
+  createdBy       User?    @relation(fields: [createdByUserId], references: [id])
   
   @@unique([childId, vaccineId])
   @@map("vaccination_records")

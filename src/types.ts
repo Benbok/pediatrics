@@ -179,6 +179,24 @@ export interface AugmentedVaccine extends VaccineDefinition {
   alertMessage?: string;
 }
 
+// ============= USER MANAGEMENT =============
+
+export interface User {
+  id: number;
+  username: string;
+  fullName: string;
+  isAdmin: boolean;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export interface AuthSession {
+  isAuthenticated: boolean;
+  user: User | null;
+}
+
+// ============= GLOBAL TYPES =============
+
 // Global window extension for Electron API
 declare global {
   interface Window {
@@ -204,9 +222,20 @@ declare global {
       createBackup: () => Promise<{ success: boolean; path?: string; error?: string }>;
 
       // AUTH API
-      login: (credentials: { username?: string; password?: string }) => Promise<{ success: boolean; error?: string }>;
-      logout: () => Promise<void>;
-      checkSession: () => Promise<boolean>;
+      login: (credentials: { username: string; password: string }) => Promise<{ success: boolean; user?: User; error?: string }>;
+      logout: () => Promise<{ success: boolean }>;
+      checkSession: () => Promise<AuthSession>;
+
+      // USER MANAGEMENT API (Admin only)
+      registerUser: (data: { username: string; password: string; fullName: string; isAdmin: boolean }) => Promise<{ success: boolean; user?: User; error?: string }>;
+      getAllUsers: () => Promise<User[]>;
+      deactivateUser: (userId: number) => Promise<{ success: boolean; error?: string }>;
+      activateUser: (userId: number) => Promise<{ success: boolean; error?: string }>;
+      changePassword: (data: { userId: number; oldPassword?: string; newPassword: string }) => Promise<{ success: boolean; error?: string }>;
+
+      // PATIENT SHARING API
+      sharePatient: (data: { childId: number; userId: number; canEdit: boolean }) => Promise<{ success: boolean; error?: string }>;
+      unsharePatient: (data: { childId: number; userId: number }) => Promise<{ success: boolean; error?: string }>;
     }
   }
 }

@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { Card } from '../../components/ui/Card';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { UserCircle, Lock, AlertCircle, Stethoscope, Eye, EyeOff } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
     const { login } = useAuth();
     const [loginInput, setLoginInput] = useState('admin');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -14,7 +19,7 @@ export const LoginPage: React.FC = () => {
         setIsSubmitting(true);
 
         try {
-            const result = await login(password, loginInput);
+            const result = await login(loginInput, password);
             if (!result.success) {
                 setError(result.error || 'Неверные учетные данные');
             }
@@ -27,78 +32,79 @@ export const LoginPage: React.FC = () => {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 transition-colors">
-            <div className="max-w-md w-full">
-                <div className="text-center mb-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-3xl shadow-xl shadow-blue-500/30 mb-6 group hover:scale-105 transition-transform">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-10 h-10 text-white">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                        </svg>
+            <div className="max-w-md w-full relative z-10">
+                <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-primary-600 rounded-2xl shadow-lg shadow-primary-600/30 mb-6 transform hover:scale-105 transition-transform duration-300">
+                        <Stethoscope className="w-10 h-10 !text-white" strokeWidth={3} />
                     </div>
-                    <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">PediAssist</h1>
-                    <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Медицинская информационная система</p>
+                    <h1 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">
+                        PediAssist
+                    </h1>
+                    <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">
+                        Медицинская информационная система
+                    </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl p-10 border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-700">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-8">Вход для специалистов</h2>
+                <Card className="shadow-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 animate-in fade-in zoom-in-95 duration-500">
+                    <h2 className="text-xl font-bold text-center text-slate-900 dark:text-white mb-8">
+                        Вход в систему
+                    </h2>
 
                     {error && (
-                        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl text-red-600 dark:text-red-400 text-sm font-medium animate-in shake duration-500">
-                            {error}
+                        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl flex items-start gap-3 animate-in shake duration-300">
+                            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                            <span className="text-sm text-red-600 dark:text-red-400 font-medium">
+                                {error}
+                            </span>
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Логин</label>
-                            <input
-                                type="text"
-                                value={loginInput}
-                                onChange={(e) => setLoginInput(e.target.value)}
-                                className="w-full p-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white font-medium"
-                                placeholder="Введите логин"
-                                required
-                            />
-                        </div>
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <Input
+                            label="Логин"
+                            type="text"
+                            value={loginInput}
+                            onChange={(e) => setLoginInput(e.target.value)}
+                            placeholder="Введите ваш логин"
+                            leftIcon={<UserCircle className="w-5 h-5" />}
+                            required
+                            autoComplete="username"
+                        />
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1">Пароль</label>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full p-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white font-medium"
-                                placeholder="••••••••"
-                                required
-                                autoFocus
-                            />
-                        </div>
+                        <Input
+                            label="Пароль"
+                            type={showPassword ? "text" : "password"}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••"
+                            leftIcon={<Lock className="w-5 h-5" />}
+                            rightIcon={showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            onRightIconClick={() => setShowPassword(!showPassword)}
+                            required
+                            autoComplete="current-password"
+                        />
 
-                        <button
+                        <Button
                             type="submit"
-                            disabled={isSubmitting}
-                            className={`w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                            variant="primary"
+                            size="lg"
+                            className="w-full mt-2 !bg-[#2563eb] !text-white hover:!bg-[#1d4ed8] !opacity-100"
+                            isLoading={isSubmitting}
                         >
-                            {isSubmitting ? (
-                                <>
-                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                    Вход...
-                                </>
-                            ) : (
-                                'Войти в систему'
-                            )}
-                        </button>
+                            <span className="!text-white">Войти</span>
+                        </Button>
                     </form>
 
-                    <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 text-center">
-                        <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-medium">
-                            Для получения доступа обратитесь к администратору.<br />
-                            Система соответствует требованиям 152-ФЗ.
+                    <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 text-center">
+                        <p className="text-xs text-slate-500 dark:text-slate-500 leading-relaxed font-medium">
+                            Доступ предоставляется администратором<br />
+                            Система защищена в соответствии с 152-ФЗ
                         </p>
                     </div>
-                </div>
+                </Card>
 
-                <p className="text-center mt-8 text-slate-400 dark:text-slate-600 text-sm font-medium">
-                    &copy; 2026 PediAssist. Все права защищены.
+                <p className="text-center mt-8 text-slate-400 dark:text-slate-600 text-xs font-semibold">
+                    &copy; 2026 PediAssist v2.0
                 </p>
             </div>
         </div>

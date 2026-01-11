@@ -6,6 +6,7 @@ import { PatientsModule } from './modules/patients/PatientsModule';
 import { PatientDetails } from './modules/patients/PatientDetails';
 import { VaccinationModule } from './modules/vaccination/VaccinationModule';
 import { SettingsModule } from './modules/settings/SettingsModule';
+import { UserManagementModule } from './modules/users/UserManagementModule';
 import { PrintPreviewManager } from './modules/printing/components/PrintPreviewManager';
 // Register vaccination certificate template
 import './modules/printing/templates/vaccination/register';
@@ -33,6 +34,10 @@ const router = createHashRouter([
             {
                 path: 'vaccination/:childId', // URL parameter for module isolation
                 element: <VaccinationModule />,
+            },
+            {
+                path: 'users',
+                element: <UserManagementModule />,
             },
             {
                 path: 'settings',

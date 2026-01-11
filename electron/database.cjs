@@ -1,7 +1,7 @@
 const { app, ipcMain } = require('electron');
 const path = require('path');
 const { z } = require('zod');
-const { ensureAuthenticated } = require('./auth.cjs');
+const { ensureAuthenticated, getSession } = require('./auth.cjs');
 const { encrypt, decrypt } = require('./crypto.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const { createBackup, shouldBackupToday } = require('./backup.cjs');
@@ -71,40 +71,12 @@ const UserVaccineRecordSchema = z.object({
   ignoreValidation: z.boolean().optional(),
 });
 
-// Configure Prisma paths BEFORE importing Prisma Client
-const isDev = !app.isPackaged;
-if (!isDev) {
-  // In production, Prisma files are in resources/app/node_modules
-  const appPath = app.getAppPath();
-  process.env.PRISMA_QUERY_ENGINE_LIBRARY = path.join(appPath, 'node_modules', '.prisma', 'client', 'libquery_engine-windows.dll.node');
-  process.env.PRISMA_SCHEMA_ENGINE_BINARY = path.join(appPath, 'node_modules', '.prisma', 'client', 'schema-engine-windows.exe');
-  console.log('[Database] Prisma paths set for production:');
-  console.log('  Engine:', process.env.PRISMA_QUERY_ENGINE_LIBRARY);
-  console.log('  App path:', appPath);
-}
-
-const { PrismaClient } = require('@prisma/client');
-
-const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
-const BetterSqlite3 = require('better-sqlite3');
-
-// Use the local Prisma DB in dev mode to stay in sync with CLI tools (Prisma Studio/Migrate)
-// Use the standard userData path in production
-const dbPath = isDev
-  ? path.join(__dirname, '../prisma/dev.db')
-  : path.join(app.getPath('userData'), 'pediatrics.db');
+// Import shared Prisma client
+const { prisma, dbPath, isDev } = require('./prisma-client.cjs');
 
 logger.info(`[Database] Initializing with isDev=${isDev}`);
 logger.info(`[Database] DB Path: ${dbPath}`);
 logger.info(`[Database] __dirname: ${__dirname}`);
-
-const adapter = new PrismaBetterSqlite3({
-  url: `file:${dbPath}`
-});
-const prisma = new PrismaClient({
-  adapter,
-  log: isDev ? ['query', 'info', 'warn', 'error'] : ['error']
-});
 
 // Initialize Database (Schema synchronization)
 async function initDatabase() {
@@ -236,7 +208,37 @@ const setupDatabaseHandlers = async () => {
 
   // ============= PATIENTS MODULE HANDLERS =============
   ipcMain.handle('db:get-children', ensureAuthenticated(async () => {
+    const session = getSession();
+    const userId = session.user.id;
+    const isAdmin = session.user.isAdmin;
+
+    // Build WHERE clause based on user permissions
+    const whereClause = isAdmin
+      ? {} // Admin sees all children
+      : {
+        OR: [
+          { createdByUserId: userId }, // Own children
+          {
+            shares: {
+              some: { sharedWith: userId } // Shared with this user
+            }
+          }
+        ]
+      };
+
     const children = await prisma.child.findMany({
+      where: whereClause,
+      include: {
+        shares: {
+          where: { sharedWith: userId },
+          select: {
+            canEdit: true,
+            ownerUser: {
+              select: { fullName: true }
+            }
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -247,6 +249,9 @@ const setupDatabaseHandlers = async () => {
       surname: decrypt(child.surname),
       patronymic: decrypt(child.patronymic),
       birthDate: decrypt(child.birthDate),
+      isShared: child.shares.length > 0, // Mark as shared
+      sharedBy: child.shares[0]?.ownerUser?.fullName || null,
+      canEdit: child.createdByUserId === userId || child.shares[0]?.canEdit || isAdmin
     }));
   }));
 
@@ -268,6 +273,9 @@ const setupDatabaseHandlers = async () => {
 
   ipcMain.handle('db:create-child', ensureAuthenticated(async (_, child) => {
     try {
+      const session = getSession();
+      const userId = session.user.id;
+
       const validatedChild = ChildProfileSchema.parse(child);
       const { name, surname, patronymic, birthDate, birthWeight, gender } = validatedChild;
 
@@ -279,6 +287,7 @@ const setupDatabaseHandlers = async () => {
           birthDate: encrypt(String(birthDate)),
           birthWeight: Number(birthWeight) || 0,
           gender,
+          createdByUserId: userId, // Auto-assign current user
           vaccinationProfile: {
             create: {
               hepBRiskFactors: JSON.stringify([]),
@@ -291,7 +300,14 @@ const setupDatabaseHandlers = async () => {
           vaccinationProfile: true,
         },
       });
-      logAudit('PATIENT_CREATED', { childId: newChild.id, name, surname });
+
+      logAudit('PATIENT_CREATED', {
+        childId: newChild.id,
+        name,
+        surname,
+        createdBy: userId
+      });
+
       return newChild;
     } catch (error) {
       logger.error('[Database] Failed to create child:', error);
@@ -336,6 +352,100 @@ const setupDatabaseHandlers = async () => {
     });
     logAudit('PATIENT_DELETED', { childId: id });
     return true;
+  }));
+
+  // Share Patient Handler (for collaboration)
+  ipcMain.handle('db:share-patient', ensureAuthenticated(async (_, data) => {
+    try {
+      const session = getSession();
+      const currentUserId = session.user.id;
+
+      const { childId, userId, canEdit } = data;
+
+      // Verify current user owns this patient
+      const child = await prisma.child.findUnique({
+        where: { id: Number(childId) }
+      });
+
+      if (!child) {
+        throw new Error('Пациент не найден');
+      }
+
+      if (child.createdByUserId !== currentUserId && !session.user.isAdmin) {
+        throw new Error('Вы можете делиться только своими пациентами');
+      }
+
+      // Cannot share with self
+      if (userId === currentUserId) {
+        throw new Error('Нельзя поделиться с самим собой');
+      }
+
+      // Create or update share
+      const share = await prisma.patientShare.upsert({
+        where: {
+          childId_sharedWith: {
+            childId: Number(childId),
+            sharedWith: Number(userId)
+          }
+        },
+        create: {
+          childId: Number(childId),
+          sharedBy: currentUserId,
+          sharedWith: Number(userId),
+          canEdit: Boolean(canEdit)
+        },
+        update: {
+          canEdit: Boolean(canEdit)
+        }
+      });
+
+      logAudit('PATIENT_SHARED', {
+        childId,
+        sharedBy: currentUserId,
+        sharedWith: userId,
+        canEdit
+      });
+
+      return { success: true, share };
+
+    } catch (error) {
+      logger.error('[Database] Share patient error:', error);
+      throw error;
+    }
+  }));
+
+  // Unshare Patient Handler
+  ipcMain.handle('db:unshare-patient', ensureAuthenticated(async (_, data) => {
+    try {
+      const session = getSession();
+      const { childId, userId } = data;
+
+      // Verify ownership
+      const child = await prisma.child.findUnique({
+        where: { id: Number(childId) }
+      });
+
+      if (child.createdByUserId !== session.user.id && !session.user.isAdmin) {
+        throw new Error('Недостаточно прав');
+      }
+
+      await prisma.patientShare.delete({
+        where: {
+          childId_sharedWith: {
+            childId: Number(childId),
+            sharedWith: Number(userId)
+          }
+        }
+      });
+
+      logAudit('PATIENT_UNSHARED', { childId, sharedWith: userId });
+
+      return { success: true };
+
+    } catch (error) {
+      logger.error('[Database] Unshare patient error:', error);
+      throw error;
+    }
   }));
 
   // ============= VACCINATION MODULE HANDLERS =============

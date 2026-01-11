@@ -21,14 +21,21 @@ PediAssist реализует медицинские стандарты защи
 - **PBKDF2** key derivation (100,000 iterations) для защиты от атак перебора
 - Данные нечитаемы даже при прямом доступе к файлу БД
 
-### 🔑 Authentication & Session Management
-- Централизованная система авторизации врача
-- Все IPC-вызовы защищены middleware `ensureAuthenticated`
-- Поддержка **bcrypt** хешей для паролей
+### 🔑 Multi-User Authentication & Role-Based Access Control
+
+**NEW in v2.0:** Полноценная система многопользовательского доступа для клиник
+- **Database-backed users**: Каждый врач имеет личную учетную запись (хранится в таблице `users`)
+- **Role-based permissions**: Admin (управление пользователями) и Doctor (ведение пациентов)
+- **Patient isolation**: Врачи видят только своих пациентов + расшаренных коллегами
+- **Patient sharing**: Механизм передачи доступа к пациенту коллеге (read-only или с правом редактирования)
+- **Session management**: Текущая сессия хранит полный User объект (ID, ФИО, роль)
+- **Password security**: bcrypt hashing (10 rounds) для паролей
+- **Auto-init**: Первый admin создается автоматически из `.env.local` при первом запуске
 
 ### 📝 Audit Trail
 - **Winston** логирование всех критических операций
-- Отдельный `audit.log` для security events (login, CRUD, export, backup)
+- Отдельный `audit.log` для security events (login, logout, user registration, patient CRUD, sharing)
+- **User tracking**: Каждая операция записывает userId инициатора
 - Timestamp + user context для каждой операции
 
 ### 💾 Automated Disaster Recovery
@@ -87,17 +94,37 @@ pediatrics/
 ├── electron/                   # Backend (Main Process)
 │   ├── main.cjs               # Lifecycle, Window management
 │   ├── database.cjs           # IPC handlers, Zod validation, encryption
-│   ├── auth.cjs               # Authentication service
+│   ├── auth.cjs               # Multi-user authentication (login, register, manage users)
+│   ├── init-db.cjs            # Database initialization (auto-create first admin)
+│   ├── prisma-client.cjs      # Shared Prisma Client instance
 │   ├── crypto.cjs             # AES-256-GCM encryption/decryption
 │   ├── logger.cjs             # Winston logging & audit trail
 │   ├── backup.cjs             # Automated backup service
 │   └── preload.cjs            # Secure IPC bridge
-│
+
 ├── src/
 │   ├── modules/               # Feature modules (pages + components)
 │   │   ├── vaccination/       # Vaccination tracking & ATS engine
 │   │   ├── patients/          # Patient management
+│   │   ├── users/             # **NEW** User management (admin panel)
 │   │   ├── dashboard/         # Analytics & overview
+│   │   ├── settings/          # App settings & backups
+│   │   ├── auth/              # Login page
+│   │   └── printing/          # Print templates & preview
+│   │
+│   ├── services/              # Business logic layer
+│   │   ├── patient.service.ts
+│   │   ├── vaccination.service.ts
+│   │   └── geminiService.ts   # AI integration (Gemini Pro 1.5)
+│   │
+│   ├── validators/            # Zod schemas
+│   ├── context/               # React contexts (Auth, Child)
+│   ├── components/            # Shared UI components
+│   └── types.ts               # TypeScript interfaces (User, AuthSession, etc.)
+
+├── prisma/
+│   ├── schema.prisma          # Database schema (User, Child, VaccinationProfile, PatientShare)
+│   └── migrations/            # Prisma migration history
 │   │   ├── settings/          # App configuration & security
 │   │   └── auth/              # Login page
 │   │
@@ -214,6 +241,36 @@ npm run test:vaccination  # Integration tests
 | `npm run electron:build` | Package app for distribution |
 | `npm test` | Run unit tests |
 | `npm run test:ui` | Interactive test dashboard |
+| `npx prisma studio` | Visual database browser |
+| `npx prisma migrate dev` | Create new migration |
+
+---
+
+## 👥 User Management Workflow
+
+### Создание нового врача (Admin only)
+
+1. Войдите под admin учетной записью
+2. Перейдите в раздел **"Пользователи"** (доступен только админам)
+3. Нажмите **"Добавить врача"**
+4. Заполните форму:
+   - **ФИО**: Полное имя врача
+   - **Логин**: Уникальный username для входа
+   - **Пароль**: Минимум 6 символов
+   - **Сделать администратором**: Опционально
+5. Новый врач может войти сразу после создания
+
+### Управление доступом
+
+**Активация/Деактивация:**
+- Admin может временно деактивировать учетную запись врача
+- Деактивированный пользователь не может войти в систему
+- Пациенты деактивированного врача остаются доступны другим врачам через sharing
+
+**Patient Sharing** (Coming Soon):
+- Владелец пациента может поделиться доступом с коллегой
+- Два режима: Read-Only или Full Edit
+- Shared пациенты отображаются в списке с пометкой
 
 ---
 
@@ -230,12 +287,22 @@ npm run test:vaccination  # Integration tests
 - Антропометрические данные
 - История осмотров и диагнозов
 - Field-level encryption для ПДн
+- **Multi-user access control**: врач видит только своих пациентов
 
-### 🤖 AI Diagnostic Assistant (Roadmap)
-- Анализ жалоб и симптомов
-- Дифференциальная диагностика
-- Рекомендации по обследованию
-- Интеграция с базой знаний
+### 👥 User Management (NEW v2.0)
+- **Admin Panel**: управление пользователями клиники
+- Регистрация новых врачей (только для администраторов)
+- Активация/деактивация учетных записей
+- Разделение доступа: каждый врач видит только своих пациентов
+- **Patient Sharing**: механизм передачи доступа к пациенту коллеге
+- Отображение текущего пользователя и роли в интерфейсе
+
+### 🤖 AI Diagnostic Assistant
+- ✅ Интеграция с Google Gemini Pro 1.5
+- ✅ Консультации по вакцинации
+- ✅ Ответы на вопросы родителей
+- 📋 Roadmap: Анализ жалоб и симптомов
+- 📋 Roadmap: Дифференциальная диагностика
 
 ### 💊 Medication Management (Roadmap)
 - Автоподбор препаратов по диагнозу
@@ -248,6 +315,65 @@ npm run test:vaccination  # Integration tests
 - Выписки из медицинской карты
 - Направления на обследование
 - Perfect PDF rendering
+
+---
+
+## 🗄️ Database Schema
+
+### Core Tables (Prisma + SQLite)
+
+#### `users` - Multi-User System
+```prisma
+model User {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
+  passwordHash  String    // bcrypt hash
+  fullName      String
+  isAdmin       Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  
+  // Relations
+  createdChildren       Child[]
+  createdRecords        VaccinationRecord[]
+  sharedPatientsAsOwner PatientShare[]
+  sharedPatientsAccess  PatientShare[]
+}
+```
+
+#### `children` - Patient Profiles
+```prisma
+model Child {
+  id                  Int       @id
+  name                String    // Encrypted
+  surname             String    // Encrypted
+  patronymic          String?   // Encrypted
+  birthDate           String    // Encrypted
+  birthWeight         Int
+  gender              String
+  createdByUserId     Int       // NEW: Owner tracking
+  createdAt           DateTime
+  
+  createdBy           User      // NEW: Multi-user relationship
+  shares              PatientShare[]  // NEW: Sharing mechanism
+}
+```
+
+#### `patient_shares` - Collaboration System (NEW v2.0)
+```prisma
+model PatientShare {
+  id          Int      @id
+  childId     Int
+  sharedBy    Int      // Owner user ID
+  sharedWith  Int      // Collaborator user ID
+  canEdit     Boolean  // Read-only vs Edit access
+  createdAt   DateTime
+}
+```
+
+**Access Control Logic:**
+- Врач видит: `WHERE createdByUserId = currentUser.id OR childId IN (SELECT childId FROM patient_shares WHERE sharedWith = currentUser.id)`
+- Admin видит: `WHERE 1=1` (все пациенты)
 
 ---
 
