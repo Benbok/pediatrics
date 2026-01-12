@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import clsx from 'clsx';
 import { ChildProfile } from '../../types';
 import { patientService } from '../../services/patient.service';
 
@@ -139,7 +140,12 @@ export const PatientDetails: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col md:flex-row gap-6 items-start">
-                    <div className="bg-gradient-to-br from-blue-500 to-blue-700 text-white w-24 h-24 rounded-3xl flex items-center justify-center font-bold text-4xl shadow-lg shadow-blue-500/20">
+                    <div className={clsx(
+                        "w-24 h-24 rounded-3xl flex items-center justify-center font-bold text-4xl shadow-lg transition-transform",
+                        child.gender === 'male'
+                            ? "bg-blue-600 text-white shadow-blue-500/20"
+                            : "bg-rose-500 text-white shadow-rose-500/20"
+                    )}>
                         {child.surname.charAt(0)}
                     </div>
 

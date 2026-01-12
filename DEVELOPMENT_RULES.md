@@ -152,19 +152,20 @@ function calculateAge(birthDate: Date, today: Date): number {
 
 ```typescript
 // ❌ ЗАПРЕЩЕНО: Дублирование кода (> 5 строк одинаковой логики)
-// In PatientCard.tsx
-const fullName = [child.surname, child.name, child.patronymic].filter(Boolean).join(' ');
-
-// In PatientList.tsx
-const fullName = [child.surname, child.name, child.patronymic].filter(Boolean).join(' ');
-
-// ✅ ПРАВИЛЬНО: Выносим в сервис/утилиту
 // patient.service.ts
 export const patientService = {
   getFullName: (child: ChildProfile) => 
     [child.surname, child.name, child.patronymic].filter(Boolean).join(' ')
 };
 ```
+
+#### 🎨 Дизайн и Доступность (Aesthetics & Accessibility)
+
+- ❌ **КРИТИЧЕСКИ ЗАПРЕЩЕНО**: Использование светлого текста на светлом фоне (например, белый текст на голубом кнопке без достаточной насыщенности).
+- ❌ **ЗАПРЕЩЕНО**: "Слепые" кнопки без четких границ или контрастного фона в активных состояниях.
+- ✅ **ОБЯЗАТЕЛЬНО**: Проверка контрастности по стандарту WCAG AA (минимум 4.5:1 для обычного текста).
+- ✅ **ОБЯЗАТЕЛЬНО**: Использование семантических токенов (`--color-primary-600`) вместо hardcoded HEX-кодов в компонентах.
+- ✅ **ОБЯЗАТЕЛЬНО**: Наличие визуального отклика (hover/active/focus) для всех интерактивных элементов.
 
 ---
 

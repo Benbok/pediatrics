@@ -3,6 +3,7 @@ import { createHashRouter, RouterProvider } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { PatientsModule } from './modules/patients/PatientsModule';
+import { CreatePatientPage } from './modules/patients/CreatePatientPage';
 import { PatientDetails } from './modules/patients/PatientDetails';
 import { VaccinationModule } from './modules/vaccination/VaccinationModule';
 import { SettingsModule } from './modules/settings/SettingsModule';
@@ -26,6 +27,10 @@ const router = createHashRouter([
             {
                 path: 'patients',
                 element: <PatientsModule />,
+            },
+            {
+                path: 'patients/new',
+                element: <CreatePatientPage />,
             },
             {
                 path: 'patients/:id',

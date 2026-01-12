@@ -8,16 +8,18 @@ function cn(...inputs: ClassValue[]) {
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
     noPadding?: boolean;
+    hoverable?: boolean;
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
-    ({ className, noPadding = false, children, ...props }, ref) => {
+    ({ className, noPadding = false, hoverable = false, children, ...props }, ref) => {
         return (
             <div
                 ref={ref}
                 className={cn(
-                    "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden",
+                    "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all duration-300",
                     !noPadding && "p-6",
+                    hoverable && "hover:shadow-xl hover:border-primary-500/50 cursor-pointer",
                     className
                 )}
                 {...props}

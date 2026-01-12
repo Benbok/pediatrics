@@ -38,13 +38,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
                         ref={ref}
                         id={inputId}
                         className={cn(
-                            "w-full h-10 bg-white dark:bg-slate-900 border rounded-lg text-sm transition-all duration-200 placeholder:text-slate-400",
-                            "focus:outline-none focus:ring-2 focus:ring-offset-0",
-                            leftIcon ? "pl-10" : "pl-3",
-                            rightIcon ? "pr-10" : "pr-3",
+                            "w-full h-12 bg-white dark:bg-slate-900 border rounded-xl text-sm transition-all duration-300 placeholder:text-slate-400",
+                            "focus:outline-none focus:ring-4 focus:ring-offset-0 shadow-sm",
+                            leftIcon ? "pl-11" : "pl-4",
+                            rightIcon ? "pr-11" : "pr-4",
                             error
-                                ? "border-red-300 text-red-900 focus:ring-red-500/20 focus:border-red-500"
-                                : "border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-primary-500/20 focus:border-primary-500",
+                                ? "border-red-300 text-red-900 focus:ring-red-500/10 focus:border-red-500"
+                                : "border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-primary-500/10 focus:border-primary-500",
                             props.disabled && "opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-800",
                             className
                         )}
