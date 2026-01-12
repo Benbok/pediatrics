@@ -128,7 +128,9 @@ async function initDatabase() {
             birth_date TEXT NOT NULL,
             birth_weight INTEGER NOT NULL DEFAULT 0,
             gender TEXT NOT NULL,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            created_by_user_id INTEGER,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (created_by_user_id) REFERENCES users(id)
           );
         `);
 
@@ -169,8 +171,99 @@ async function initDatabase() {
             series TEXT,
             expiry_date TEXT,
             manufacturer TEXT,
+            created_by_user_id INTEGER,
             FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE,
+            FOREIGN KEY (created_by_user_id) REFERENCES users(id),
             UNIQUE(child_id, vaccine_id)
+          );
+        `);
+
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS diseases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            icd10_code TEXT NOT NULL UNIQUE,
+            name_ru TEXT NOT NULL,
+            name_en TEXT,
+            description TEXT NOT NULL,
+            symptoms TEXT NOT NULL DEFAULT '[]',
+            symptoms_vector TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS clinical_guidelines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            disease_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            pdf_path TEXT,
+            content TEXT NOT NULL,
+            chunks TEXT NOT NULL,
+            source TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (disease_id) REFERENCES diseases(id) ON DELETE CASCADE
+          );
+        `);
+
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS medications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name_ru TEXT NOT NULL,
+            name_en TEXT,
+            active_substance TEXT NOT NULL,
+            atc_code TEXT,
+            manufacturer TEXT,
+            forms TEXT NOT NULL,
+            pediatric_dosing TEXT NOT NULL,
+            adult_dosing TEXT,
+            contraindications TEXT NOT NULL,
+            caution_conditions TEXT,
+            side_effects TEXT,
+            interactions TEXT,
+            pregnancy TEXT,
+            lactation TEXT,
+            indications TEXT NOT NULL,
+            registration_number TEXT,
+            vidal_url TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS disease_medications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            disease_id INTEGER NOT NULL,
+            medication_id INTEGER NOT NULL,
+            priority INTEGER NOT NULL DEFAULT 1,
+            dosing TEXT,
+            duration TEXT,
+            FOREIGN KEY (disease_id) REFERENCES diseases(id) ON DELETE CASCADE,
+            FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE,
+            UNIQUE(disease_id, medication_id)
+          );
+        `);
+
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS visits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            child_id INTEGER NOT NULL,
+            doctor_id INTEGER NOT NULL,
+            visit_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            complaints TEXT NOT NULL,
+            complaints_json TEXT,
+            physical_exam TEXT,
+            primary_diagnosis_id INTEGER,
+            complication_ids TEXT,
+            comorbidity_ids TEXT,
+            prescriptions TEXT NOT NULL DEFAULT '[]',
+            recommendations TEXT,
+            status TEXT NOT NULL DEFAULT 'draft',
+            notes TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE,
+            FOREIGN KEY (doctor_id) REFERENCES users(id),
+            FOREIGN KEY (primary_diagnosis_id) REFERENCES diseases(id)
           );
         `);
 

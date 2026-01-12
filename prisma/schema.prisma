@@ -22,6 +22,8 @@ model User {
   createdRecords        VaccinationRecord[]
   sharedPatientsAsOwner PatientShare[]      @relation("SharedByUser")
   sharedPatientsAccess  PatientShare[]      @relation("SharedWithUser")
+  visits                Visit[]
+  notes                 DiseaseNote[]       @relation("UserNotes")
   
   @@map("users")
 }
@@ -59,6 +61,7 @@ model Child {
   vaccinationProfile  VaccinationProfile?
   vaccinationRecords  VaccinationRecord[]
   shares              PatientShare[]
+  visits              Visit[]
 
   @@map("children")
 }
@@ -106,4 +109,147 @@ model VaccinationRecord {
   
   @@unique([childId, vaccineId])
   @@map("vaccination_records")
+}
+
+// ============= CDSS MODULE (Diseases, Medications, Visits) =============
+
+model Disease {
+  id              Int       @id @default(autoincrement())
+  icd10Code       String    @unique @map("icd10_code")
+  icd10Codes      String    @default("[]") @map("icd10_codes") // JSON array of all related codes
+  nameRu          String    @map("name_ru")
+  nameEn          String?   @map("name_en")
+  description     String
+  symptoms        String    @default("[]") // JSON array
+  symptomsVector  String?   @map("symptoms_vector") // Embeddings
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  guidelines      ClinicalGuideline[]
+  medications     DiseaseMedication[]
+  visits          Visit[]                  @relation("PrimaryDiagnosis")
+  notes           DiseaseNote[]
+  
+  @@map("diseases")
+}
+
+model DiseaseNote {
+  id          Int      @id @default(autoincrement())
+  diseaseId   Int      @map("disease_id")
+  authorId    Int      @map("author_id")
+  title       String
+  content     String   // Content in Markdown or plain text
+  tags        String   @default("[]") // JSON array of tags
+  isPinned    Boolean  @default(false) @map("is_pinned")
+  isShared    Boolean  @default(false) @map("is_shared")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  disease     Disease  @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+  author      User     @relation("UserNotes", fields: [authorId], references: [id])
+  
+  @@map("disease_notes")
+}
+
+model ClinicalGuideline {
+  id          Int      @id @default(autoincrement())
+  diseaseId   Int      @map("disease_id")
+  title       String
+  pdfPath     String?  @map("pdf_path")
+  content     String   // Full text or summary
+  chunks      String   // JSON: [{text, embedding, type}]
+  source      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Structured sections (JSON)
+  definition       String?  // 1.1 Определение
+  etiology         String?  // 1.2 Этиология и патогенез
+  epidemiology     String?  // 1.3 Эпидемиология
+  classification   String?  // 1.5 Классификация
+  clinicalPicture  String?  @map("clinical_picture") // 1.6 Клиническая картина
+  complaints       String?  // 2.1 Жалобы и анамнез
+  physicalExam     String?  @map("physical_exam") // 2.2 Физикальное обследование
+  labDiagnostics   String?  @map("lab_diagnostics") // 2.3 Лабораторные исследования
+  instrumental     String?  // 2.4 Инструментальные исследования
+  treatment        String?  // 3. Лечение
+  rehabilitation   String?  // 4. Медицинская реабилитация
+  prevention       String?  // 5. Профилактика
+  medications      String?  // Recommended medications (JSON array)
+  
+  disease     Disease  @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+  
+  @@map("clinical_guidelines")
+}
+
+model Medication {
+  id               Int      @id @default(autoincrement())
+  nameRu           String   @map("name_ru")
+  nameEn           String?  @map("name_en")
+  activeSubstance  String   @map("active_substance")
+  atcCode          String?  @map("atc_code")
+  manufacturer     String?
+  forms            String   // JSON with flavors, packaging, concentration
+  pediatricDosing  String   @map("pediatric_dosing") // JSON: age-based rules
+  adultDosing      String?  @map("adult_dosing") // JSON
+  contraindications String
+  cautionConditions String?  @map("caution_conditions")
+  sideEffects      String?  @map("side_effects")
+  interactions     String?
+  pregnancy        String?
+  lactation        String?
+  indications      String   // JSON: conditions + ICD codes
+  registrationNumber String? @map("registration_number")
+  vidalUrl         String?  @map("vidal_url")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  
+  diseases         DiseaseMedication[]
+  
+  @@map("medications")
+}
+
+model DiseaseMedication {
+  id             Int      @id @default(autoincrement())
+  diseaseId      Int      @map("disease_id")
+  medicationId   Int      @map("medication_id")
+  priority       Int      @default(1) // 1 = first-line
+  dosing         String?  // Specific dosing for this disease
+  duration       String?  // Suggested duration
+  
+  disease        Disease     @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+  medication     Medication  @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  
+  @@unique([diseaseId, medicationId])
+  @@map("disease_medications")
+}
+
+model Visit {
+  id              Int      @id @default(autoincrement())
+  childId         Int      @map("child_id")
+  doctorId        Int      @map("doctor_id")
+  visitDate       DateTime @default(now()) @map("visit_date")
+  
+  // Input
+  complaints      String
+  complaintsJson  String?  @map("complaints_json") // AI-parsed symptoms
+  physicalExam    String?  @map("physical_exam")
+  
+  // Diagnosis
+  primaryDiagnosisId Int?     @map("primary_diagnosis_id")
+  complicationIds    String?  @map("complication_ids") // JSON array of disease IDs
+  comorbidityIds     String?  @map("comorbidity_ids") // JSON array of disease IDs
+  
+  // Treatment
+  prescriptions      String   @default("[]") // JSON: selected medications with calculated doses
+  recommendations    String?  // AI-generated summary plan
+  
+  status          String   @default("draft") // draft, completed
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  
+  child           Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  doctor          User     @relation(fields: [doctorId], references: [id])
+  primaryDiagnosis Disease? @relation("PrimaryDiagnosis", fields: [primaryDiagnosisId], references: [id])
+  
+  @@map("visits")
 }

@@ -8,12 +8,20 @@ import { PatientDetails } from './modules/patients/PatientDetails';
 import { VaccinationModule } from './modules/vaccination/VaccinationModule';
 import { SettingsModule } from './modules/settings/SettingsModule';
 import { UserManagementModule } from './modules/users/UserManagementModule';
+import { DiseasesModule } from './modules/diseases/DiseasesModule';
+import { DiseaseFormPage } from './modules/diseases/DiseaseFormPage';
+import { DiseaseDetailPage } from './modules/diseases/DiseaseDetailPage';
+import { MedicationsModule } from './modules/medications/MedicationsModule';
+import { MedicationFormPage } from './modules/medications/MedicationFormPage';
+import { VisitsModule } from './modules/visits/VisitsModule';
+import { VisitFormPage } from './modules/visits/VisitFormPage';
 import { PrintPreviewManager } from './modules/printing/components/PrintPreviewManager';
 // Register vaccination certificate template
 import './modules/printing/templates/vaccination/register';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './modules/auth/LoginPage';
 import { ChildProvider } from './context/ChildContext';
+import { PdfViewerPage } from './pages/PdfViewerPage';
 
 const router = createHashRouter([
     {
@@ -45,10 +53,54 @@ const router = createHashRouter([
                 element: <UserManagementModule />,
             },
             {
+                path: 'diseases',
+                element: <DiseasesModule />,
+            },
+            {
+                path: 'diseases/new',
+                element: <DiseaseFormPage />,
+            },
+            {
+                path: 'diseases/:id',
+                element: <DiseaseDetailPage />,
+            },
+            {
+                path: 'diseases/edit/:id',
+                element: <DiseaseFormPage />,
+            },
+            {
+                path: 'medications',
+                element: <MedicationsModule />,
+            },
+            {
+                path: 'medications/new',
+                element: <MedicationFormPage />,
+            },
+            {
+                path: 'medications/:id',
+                element: <MedicationFormPage />,
+            },
+            {
+                path: 'patients/:childId/visits',
+                element: <VisitsModule />,
+            },
+            {
+                path: 'patients/:childId/visits/new',
+                element: <VisitFormPage />,
+            },
+            {
+                path: 'patients/:childId/visits/:id',
+                element: <VisitFormPage />,
+            },
+            {
                 path: 'settings',
                 element: <SettingsModule />,
             }
         ]
+    },
+    {
+        path: '/pdf-viewer',
+        element: <PdfViewerPage />,
     }
 ]);
 

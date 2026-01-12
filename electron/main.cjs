@@ -7,6 +7,9 @@ const os = require('os');
 const fs = require('fs');
 const { setupDatabaseHandlers } = require('./database.cjs');
 const { setupAuthHandlers, ensureAuthenticated } = require('./auth.cjs');
+const { setupDiseaseHandlers } = require('./modules/diseases/handlers.cjs');
+const { setupMedicationHandlers } = require('./modules/medications/handlers.cjs');
+const { setupVisitHandlers } = require('./modules/visits/handlers.cjs');
 const { initializeDatabase } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const isDev = !app.isPackaged;
@@ -61,6 +64,12 @@ app.whenReady().then(async () => {
     logger.info('[Main] Calling setupAuthHandlers...');
     setupAuthHandlers();
     logger.info('[Main] setupAuthHandlers completed');
+
+    logger.info('[Main] Setting up CDSS handlers...');
+    setupDiseaseHandlers();
+    setupMedicationHandlers();
+    setupVisitHandlers();
+
     logger.info('[Main] Creating window...');
     createWindow();
 
@@ -177,6 +186,60 @@ app.whenReady().then(async () => {
             throw error;
         }
     }));
+    ipcMain.handle('app:open-path', async (_, filePath) => {
+        try {
+            return await shell.openPath(filePath);
+        } catch (error) {
+            console.error('[Main] Failed to open path:', error);
+            throw error;
+        }
+    });
+
+    ipcMain.handle('app:open-pdf-at-page', async (_, filePath, page) => {
+        try {
+            logger.info(`[Main] Opening PDF viewer: ${filePath} at page ${page}`);
+
+            const pdfWin = new BrowserWindow({
+                width: 1200,
+                height: 900,
+                title: 'Просмотр клинических рекомендаций',
+                icon: path.join(__dirname, 'icon.png'),
+                webPreferences: {
+                    preload: path.join(__dirname, 'preload.cjs'),
+                    nodeIntegration: false,
+                    contextIsolation: true,
+                }
+            });
+
+            pdfWin.setMenu(null);
+
+            const encodedPath = encodeURIComponent(filePath);
+            const url = isDev
+                ? `http://localhost:5173/#/pdf-viewer?file=${encodedPath}&page=${page}`
+                : `file://${path.join(__dirname, '../dist/index.html')}#/pdf-viewer?file=${encodedPath}&page=${page}`;
+
+            logger.info(`[Main] Loading PDF viewer URL: ${url}`);
+            await pdfWin.loadURL(url);
+
+            return { success: true };
+        } catch (error) {
+            logger.error('[Main] Failed to open PDF viewer:', error);
+            throw error;
+        }
+    });
+
+    ipcMain.handle('app:read-pdf-file', async (_, filePath) => {
+        try {
+            logger.info(`[Main] Reading PDF file: ${filePath}`);
+            // Read as binary buffer
+            const buffer = await fs.promises.readFile(filePath);
+            // Convert to Uint8Array for pdfjs
+            return new Uint8Array(buffer);
+        } catch (error) {
+            logger.error('[Main] Failed to read PDF file:', error);
+            throw error;
+        }
+    });
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

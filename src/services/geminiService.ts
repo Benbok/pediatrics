@@ -11,9 +11,10 @@ const getAIClient = (): GoogleGenAI | null => {
   const storedKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
 
   // Priority 2: environment variable
-  const envKey = import.meta.env.VITE_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-  const apiKey = storedKey || envKey;
+  // Use env key as source if localStorage is empty
+  const apiKey = (typeof window !== 'undefined' && localStorage.getItem('gemini_api_key')) || envKey;
 
   if (!apiKey) {
     console.warn("Gemini API key not found. AI features will be disabled.");
@@ -30,8 +31,10 @@ const getAIClient = (): GoogleGenAI | null => {
       const baseUrl = getCustomBaseUrl();
       const options: any = { apiKey };
       if (baseUrl) {
-        options.baseUrl = baseUrl.replace(/\/$/, '');
-        console.log(`[Gemini] Initializing with custom Base URL: ${options.baseUrl}`);
+        options.baseUrl = baseUrl
+          .replace(/\/v1(beta)?\/?$/, '')
+          .replace(/\/$/, '');
+        console.log(`[Gemini] Initializing with custom Base URL (cleaned): ${options.baseUrl}`);
       }
 
       ai = new GoogleGenAI(options);
@@ -66,44 +69,37 @@ export const validateApiKey = async (key: string, baseUrl?: string): Promise<{ v
   try {
     const options: any = { apiKey: key };
     if (baseUrl) {
-      // Ensure clean URL provided by user
-      options.baseUrl = baseUrl.replace(/\/$/, '');
+      // Google SDK appends /v1 or /v1beta itself. 
+      // Many users provide URL with /v1, which causes double path like /v1/v1/models.
+      // We strip /v1, /v1beta and trailing slashes.
+      options.baseUrl = baseUrl
+        .replace(/\/v1(beta)?\/?$/, '')
+        .replace(/\/$/, '');
+      console.log(`[Gemini] Using custom Base URL (cleaned): ${options.baseUrl}`);
     }
 
     const testClient = new GoogleGenAI(options);
 
-    // Candidate models to probe, in order of preference
-    const candidates = [
-      'gemini-1.5-flash-001', // Stable version
-      'gemini-1.5-flash',     // Alias
-      'gemini-1.5-flash-8b',  // Fast 8b variant
-      'gemini-1.5-pro',       // Pro alias
-      'gemini-1.5-pro-001',   // Pro stable
-      'gemini-pro'            // 1.0 Pro
-    ];
+    // Use strictly the model from environment or settings
+    const modelToTest = import.meta.env.VITE_GEMINI_MODEL || 'gemini-1.5-flash';
 
-    console.log(`[Gemini] Probing models (BaseURL: ${baseUrl || 'default'})...`, candidates);
+    console.log(`[Gemini] Validating with model: ${modelToTest} (BaseURL: ${baseUrl || 'default'})`);
 
     let workingModel = null;
-
-    for (const model of candidates) {
-      try {
-        console.log(`[Gemini] Testing model: ${model}...`);
-        await testClient.models.generateContent({
-          model: model,
-          contents: [{ role: 'user', parts: [{ text: 'Test' }] }],
-        });
-        console.log(`[Gemini] Success with model: ${model}`);
-        workingModel = model;
-        break; // Found one!
-      } catch (e: any) {
-        console.warn(`[Gemini] Model ${model} failed:`, e?.message?.split('.')[0]); // Concise log
-        // Continue to next candidate
-      }
+    try {
+      await testClient.models.generateContent({
+        model: modelToTest,
+        contents: [{ role: 'user', parts: [{ text: 'Test' }] }],
+      });
+      console.log(`[Gemini] Success with model: ${modelToTest}`);
+      workingModel = modelToTest;
+    } catch (e: any) {
+      console.warn(`[Gemini] Model ${modelToTest} validation failed:`, e?.message?.split('.')[0]);
+      throw e;
     }
 
     if (!workingModel) {
-      throw new Error("No working Gemini model found for this key/region.");
+      throw new Error("Не найдено доступных моделей Gemini. Проверьте ключ, доступность региона или настройки прокси.");
     }
 
     // Save the working model and base URL
@@ -138,7 +134,7 @@ export const validateApiKey = async (key: string, baseUrl?: string): Promise<{ v
  */
 export const getCurrentApiKey = (): string | null => {
   const storedKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
-  const envKey = import.meta.env.VITE_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
   return storedKey || envKey || null;
 };
 
@@ -151,11 +147,12 @@ export const getCustomBaseUrl = (): string | null => {
 
 // Helper to get the saved model or default
 const getModelName = (): string => {
+  const envModel = import.meta.env.VITE_GEMINI_MODEL;
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('gemini_model');
     if (saved) return saved;
   }
-  return 'gemini-1.5-flash-001'; // Fallback
+  return envModel || 'gemini-2.5-flash';
 };
 
 

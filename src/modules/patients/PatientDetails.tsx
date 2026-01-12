@@ -210,6 +210,27 @@ export const PatientDetails: React.FC = () => {
                         </p>
                     </div>
 
+                    {/* Visits / CDSS Card */}
+                    <div
+                        onClick={() => navigate(`/patients/${child.id}/visits`)}
+                        className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 cursor-pointer group hover:shadow-xl hover:border-primary-500 transition-all relative overflow-hidden"
+                    >
+                        <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-primary-500">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                            </svg>
+                        </div>
+                        <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 text-primary-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">CDSS Приемы</h3>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+                            Интеллектуальная поддержка: анализ жалоб, подбор диагноза и расчет терапии.
+                        </p>
+                    </div>
+
                     {/* Placeholder for future modules */}
                     <div className="bg-slate-50 dark:bg-slate-800/20 p-6 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800/50 flex flex-col items-center justify-center text-center opacity-75">
                         <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-2xl flex items-center justify-center mb-4">

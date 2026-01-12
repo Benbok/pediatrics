@@ -179,6 +179,101 @@ export interface AugmentedVaccine extends VaccineDefinition {
   alertMessage?: string;
 }
 
+// ============= CDSS MODULE TYPES =============
+
+export interface Disease {
+  id: number;
+  icd10Code: string; // Primary code
+  icd10Codes: string[]; // All related codes
+  nameRu: string;
+  nameEn?: string | null;
+  description: string;
+  symptoms: string[];
+  createdAt: Date;
+  guidelines?: ClinicalGuideline[];
+}
+
+export interface ClinicalGuideline {
+  id: number;
+  diseaseId: number;
+  title: string;
+  pdfPath?: string | null;
+  content: string;
+  chunks: string; // JSON string
+  source?: string | null;
+  createdAt: string;
+
+  // Structured Sections
+  definition?: string | null;
+  etiology?: string | null;
+  epidemiology?: string | null;
+  classification?: string | null;
+  clinicalPicture?: string | null;
+  complaints?: string | null;
+  physicalExam?: string | null;
+  labDiagnostics?: string | null;
+  instrumental?: string | null;
+  treatment?: string | null;
+  rehabilitation?: string | null;
+  prevention?: string | null;
+  medications?: string | null; // JSON string array of medications
+}
+
+export interface Medication {
+  id?: number;
+  nameRu: string;
+  nameEn?: string | null;
+  activeSubstance: string;
+  atcCode?: string | null;
+  manufacturer?: string | null;
+  forms: any[]; // Parsed JSON
+  pediatricDosing: any[]; // Parsed JSON
+  adultDosing?: any | null;
+  contraindications: string;
+  cautionConditions?: string | null;
+  sideEffects?: string | null;
+  interactions?: string | null;
+  pregnancy?: string | null;
+  lactation?: string | null;
+  indications: any[]; // Parsed JSON
+  registrationNumber?: string | null;
+  vidalUrl?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Visit {
+  id?: number;
+  childId: number;
+  doctorId: number;
+  visitDate: string;
+  complaints: string;
+  complaintsJson?: any | null;
+  physicalExam?: string | null;
+  primaryDiagnosisId?: number | null;
+  complicationIds?: number[] | null;
+  comorbidityIds?: number[] | null;
+  prescriptions: any[];
+  recommendations?: string | null;
+  status: 'draft' | 'completed';
+  notes?: string | null;
+  createdAt?: string;
+}
+
+export interface DiseaseNote {
+  id: number;
+  diseaseId: number;
+  authorId: number;
+  title: string;
+  content: string; // Markdown or plain text
+  tags: string[]; // Parsed from JSON string
+  isPinned: boolean;
+  isShared: boolean;
+  createdAt: string;
+  updatedAt: string;
+  author?: User;
+}
+
 // ============= USER MANAGEMENT =============
 
 export interface User {
@@ -221,6 +316,10 @@ declare global {
       readTextFile: (filePath: string) => Promise<string>;
       createBackup: () => Promise<{ success: boolean; path?: string; error?: string }>;
 
+      // SYSTEM API
+      openExternalPath: (path: string) => Promise<string>;
+      openPdfAtPage: (path: string, page: number) => Promise<string>;
+
       // AUTH API
       login: (credentials: { username: string; password: string }) => Promise<{ success: boolean; user?: User; error?: string }>;
       logout: () => Promise<{ success: boolean }>;
@@ -236,6 +335,47 @@ declare global {
       // PATIENT SHARING API
       sharePatient: (data: { childId: number; userId: number; canEdit: boolean }) => Promise<{ success: boolean; error?: string }>;
       unsharePatient: (data: { childId: number; userId: number }) => Promise<{ success: boolean; error?: string }>;
+
+      // DISEASES MODULE API
+      getDiseases: () => Promise<Disease[]>;
+      getDisease: (id: number) => Promise<Disease & { guidelines: ClinicalGuideline[] }>;
+      upsertDisease: (data: Disease) => Promise<Disease>;
+      deleteDisease: (id: number) => Promise<boolean>;
+      uploadGuideline: (diseaseId: number, pdfPath: string) => Promise<ClinicalGuideline>;
+      searchDiseases: (symptoms: string[]) => Promise<Disease[]>;
+
+      // Disease Notes (Personal or Shared)
+      getDiseaseNotes: (diseaseId: number) => Promise<DiseaseNote[]>;
+      createDiseaseNote: (data: Partial<DiseaseNote>) => Promise<DiseaseNote>;
+      updateDiseaseNote: (id: number, data: Partial<DiseaseNote>) => Promise<DiseaseNote>;
+      deleteDiseaseNote: (id: number) => Promise<boolean>;
+
+      // PDF parsing
+      parsePdfOnly: (pdfPath: string) => Promise<{
+        icd10Code: string;
+        allIcd10Codes: string[];
+        nameRu: string;
+        description: string;
+        symptoms: string[];
+        medications: any[];
+        aiUsed: boolean;
+        aiWarning: string | null;
+        pdfPath: string;
+      }>;
+
+      // MEDICATIONS MODULE API
+      getMedications: () => Promise<Medication[]>;
+      getMedication: (id: number) => Promise<Medication & { diseases: any[] }>;
+      deleteMedication: (id: number) => Promise<boolean>;
+      linkMedicationToDisease: (data: { diseaseId: number; medicationId: number; priority?: number; dosing?: string; duration?: string }) => Promise<any>;
+      calculateDose: (params: { medicationId: number; weight: number; ageMonths: number }) => Promise<any>;
+
+      // VISITS MODULE API
+      getVisits: (childId: number) => Promise<Visit[]>;
+      getVisit: (id: number) => Promise<Visit>;
+      upsertVisit: (data: Visit) => Promise<Visit>;
+      deleteVisit: (id: number) => Promise<boolean>;
+      analyzeVisit: (visitId: number) => Promise<any[]>;
     }
   }
 }

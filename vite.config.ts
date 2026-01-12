@@ -22,6 +22,13 @@ export default defineConfig(({ mode }) => {
         // Expose env variables to the app
         define: {
             'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
+            'import.meta.env.VITE_GEMINI_MODEL': JSON.stringify(env.GEMINI_MODEL || 'gemini-2.5-flash'),
         },
+        optimizeDeps: {
+            exclude: ['pdfjs-dist']
+        },
+        worker: {
+            format: 'es'
+        }
     };
 });
