@@ -191,6 +191,7 @@ export interface Disease {
   symptoms: string[];
   createdAt: Date;
   guidelines?: ClinicalGuideline[];
+  relatedMedications?: Medication[];
 }
 
 export interface ClinicalGuideline {
@@ -225,6 +226,8 @@ export interface Medication {
   nameEn?: string | null;
   activeSubstance: string;
   atcCode?: string | null;
+  icd10Codes: string[];
+  packageDescription?: string | null;
   manufacturer?: string | null;
   forms: any[]; // Parsed JSON
   pediatricDosing: any[]; // Parsed JSON
@@ -362,13 +365,16 @@ declare global {
         aiWarning: string | null;
         pdfPath: string;
       }>;
+      readPdfFile: (path: string) => Promise<Uint8Array>;
 
       // MEDICATIONS MODULE API
       getMedications: () => Promise<Medication[]>;
       getMedication: (id: number) => Promise<Medication & { diseases: any[] }>;
+      upsertMedication: (data: Medication) => Promise<Medication>;
       deleteMedication: (id: number) => Promise<boolean>;
       linkMedicationToDisease: (data: { diseaseId: number; medicationId: number; priority?: number; dosing?: string; duration?: string }) => Promise<any>;
       calculateDose: (params: { medicationId: number; weight: number; ageMonths: number }) => Promise<any>;
+      getMedicationsByDisease: (diseaseId: number) => Promise<Medication[]>;
 
       // VISITS MODULE API
       getVisits: (childId: number) => Promise<Visit[]>;

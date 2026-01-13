@@ -71,5 +71,17 @@ export const medicationService = {
             console.error('[MedicationService] Linking to disease failed:', error);
             throw error;
         }
+    },
+
+    /**
+     * Get medications for a specific disease by ICD-10 matching
+     */
+    async getMedicationsByDisease(diseaseId: number): Promise<Medication[]> {
+        try {
+            return await window.electronAPI.getMedicationsByDisease(diseaseId);
+        } catch (error) {
+            console.error('[MedicationService] Failed to fetch medications for disease:', error);
+            throw error;
+        }
     }
 };

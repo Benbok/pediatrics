@@ -645,15 +645,8 @@ const setupDatabaseHandlers = async () => {
     }));
   }));
 
-  /**
-   * Вычисляет возраст ребенка в месяцах на конкретную дату
-   */
-  function calculateAgeAtDate(birthDateStr, targetDate) {
-    const birthDate = new Date(birthDateStr);
-    const target = new Date(targetDate);
-    const diffTime = Math.abs(target.getTime() - birthDate.getTime());
-    return Math.floor(diffTime / (1000 * 60 * 60 * 24 * 30.44));
-  }
+  // Импортируем утилиты для расчета возраста
+  const { calculateAgeInMonths } = require('./utils/ageUtils.cjs');
 
   ipcMain.handle('db:save-record', ensureAuthenticated(async (_, record) => {
     try {
@@ -692,7 +685,7 @@ const setupDatabaseHandlers = async () => {
         }
 
         // Вычисляем возраст на момент прививки БЦЖ
-        const ageAtVaccination = calculateAgeAtDate(child.birthDate, completedDate);
+        const ageAtVaccination = calculateAgeInMonths(child.birthDate, completedDate);
 
         // Если ребенку >= 2 месяцев на момент прививки, требуется Манту
         if (ageAtVaccination >= 2) {

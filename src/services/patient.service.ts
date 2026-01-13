@@ -1,5 +1,6 @@
 import { ChildProfile } from '../types';
 import { ChildProfileSchema } from '../validators/child.validator';
+import { getFormattedAge } from '../utils/ageUtils';
 
 /**
  * PATIENT SERVICE
@@ -91,24 +92,11 @@ export const patientService = {
 
     /**
      * Calculate age label helper
+     * 
+     * @param birthDate - Дата рождения
+     * @returns Отформатированная строка возраста
      */
     getAgeLabel(birthDate: string): string {
-        const birth = new Date(birthDate);
-        const today = new Date();
-        const months = (today.getFullYear() - birth.getFullYear()) * 12 + today.getMonth() - birth.getMonth();
-
-        if (months < 12) {
-            return `${months} мес`;
-        }
-        const years = Math.floor(months / 12);
-        const remainingMonths = months % 12;
-
-        let yearStr = 'лет';
-        const lastDigit = years % 10;
-        const lastTwo = years % 100;
-        if (lastDigit === 1 && lastTwo !== 11) yearStr = 'год';
-        else if ([2, 3, 4].includes(lastDigit) && ![12, 13, 14].includes(lastTwo)) yearStr = 'года';
-
-        return remainingMonths > 0 ? `${years} ${yearStr} ${remainingMonths} мес` : `${years} ${yearStr}`;
+        return getFormattedAge(birthDate, new Date(), 'short');
     }
 };

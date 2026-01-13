@@ -1,14 +1,6 @@
 import { VaccineStatus } from '../../types';
 import { VaxRule } from './rules';
-
-/**
- * Вычисляет возраст ребенка в месяцах на конкретную дату
- */
-function calculateAgeAtDate(birthDate: Date | string, targetDate: Date): number {
-    const birth = typeof birthDate === 'string' ? new Date(birthDate) : birthDate;
-    const diffTime = Math.abs(targetDate.getTime() - birth.getTime());
-    return Math.floor(diffTime / (1000 * 60 * 60 * 24 * 30.44));
-}
+import { calculateAgeInMonths } from '../../utils/ageUtils';
 
 /**
  * BCG / BCG-M Rules
@@ -39,7 +31,7 @@ export const bcgRules: VaxRule = (vaccine, context) => {
         : (dueDate || today);
     
     // Вычисляем возраст ребенка НА МОМЕНТ ПРИВИВКИ БЦЖ
-    const ageAtVaccination = calculateAgeAtDate(child.birthDate, vaccinationDate);
+    const ageAtVaccination = calculateAgeInMonths(child.birthDate, vaccinationDate);
 
     // 2. Rule of 2 months for Mantoux (проверяем возраст на момент прививки)
     if (ageAtVaccination >= 2 && !profile.mantouxDate) {

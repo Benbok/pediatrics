@@ -187,6 +187,8 @@ model Medication {
   nameEn           String?  @map("name_en")
   activeSubstance  String   @map("active_substance")
   atcCode          String?  @map("atc_code")
+  icd10Codes       String   @default("[]") @map("icd10_codes") // JSON array of codes
+  packageDescription String? @map("package_description") // Full text description of forms and packaging
   manufacturer     String?
   forms            String   // JSON with flavors, packaging, concentration
   pediatricDosing  String   @map("pediatric_dosing") // JSON: age-based rules

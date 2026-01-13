@@ -39,6 +39,22 @@ const DiseaseService = {
                 guidelines: true,
             },
         });
+
+        if (!disease) return null;
+
+        // Parse ICD codes from disease
+        const diseaseIcd10Codes = JSON.parse(disease.icd10Codes || '[]');
+        const allCodes = [disease.icd10Code, ...diseaseIcd10Codes];
+
+        // Find medications matching these ICD codes
+        const { MedicationService } = require('../medications/service.cjs');
+        const relatedMedications = await MedicationService.getByIcd10Codes(allCodes);
+
+        return {
+            ...disease,
+            icd10Codes: diseaseIcd10Codes,
+            relatedMedications
+        };
     },
 
     /**

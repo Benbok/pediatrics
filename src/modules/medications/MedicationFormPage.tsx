@@ -34,6 +34,8 @@ export const MedicationFormPage: React.FC = () => {
         manufacturer: '',
         forms: [],
         pediatricDosing: [],
+        icd10Codes: [],
+        packageDescription: '',
         contraindications: '',
         indications: [],
     });
@@ -170,6 +172,31 @@ export const MedicationFormPage: React.FC = () => {
                                 onChange={e => setFormData({ ...formData, registrationNumber: e.target.value })}
                                 placeholder="П N013012/01"
                                 className="h-14 rounded-2xl"
+                            />
+                        </div>
+                        <div className="md:col-span-3">
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                Описание формы выпуска и упаковки
+                            </label>
+                            <textarea
+                                value={formData.packageDescription || ''}
+                                onChange={e => setFormData({ ...formData, packageDescription: e.target.value })}
+                                placeholder="Раствор для приема внутрь (вишневый...) 24 мг/1 мл: фл. 50 мл..."
+                                className="w-full min-h-[80px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm"
+                            />
+                        </div>
+                        <div className="md:col-span-3">
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                Коды МКБ-10 (через запятую)
+                            </label>
+                            <Input
+                                value={(formData.icd10Codes || []).join(', ')}
+                                onChange={e => setFormData({
+                                    ...formData,
+                                    icd10Codes: e.target.value.split(',').map(c => c.trim().toUpperCase()).filter(Boolean)
+                                })}
+                                placeholder="J00, J20.9, R50"
+                                className="h-14 rounded-2xl font-mono"
                             />
                         </div>
                     </div>

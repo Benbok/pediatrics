@@ -1,3 +1,5 @@
+import { calculateAgeInCalendarMonths, formatAgeLabel } from '../../../utils/ageUtils';
+
 /**
  * Форматирует дату в строку для отображения в документах
  * 
@@ -90,6 +92,8 @@ export function formatWeight(grams: number): string {
 /**
  * Вычисляет возраст на основе даты рождения
  * 
+ * Использует общие функции из ageUtils для расчета и форматирования.
+ * 
  * @param birthDate - Дата рождения
  * @param format - Формат ('years' | 'months' | 'full')
  * @returns Возраст в указанном формате
@@ -98,60 +102,23 @@ export function calculateAge(
     birthDate: Date | string,
     format: 'years' | 'months' | 'full' = 'full'
 ): string {
-    const birth = typeof birthDate === 'string' ? new Date(birthDate) : birthDate;
     const now = new Date();
+    const ageInMonths = calculateAgeInCalendarMonths(birthDate, now);
 
-    const ageInMonths = (now.getFullYear() - birth.getFullYear()) * 12 +
-        (now.getMonth() - birth.getMonth());
-
+    // Используем formatAgeLabel для форматирования
+    if (format === 'full') {
+        return formatAgeLabel(ageInMonths, 'full');
+    }
+    
+    if (format === 'months') {
+        return formatAgeLabel(ageInMonths, 'short');
+    }
+    
+    // Для 'years' форматируем отдельно
     const years = Math.floor(ageInMonths / 12);
-    const months = ageInMonths % 12;
-
-    switch (format) {
-        case 'years':
-            return `${years} ${getYearWord(years)}`;
-
-        case 'months':
-            return `${ageInMonths} ${getMonthWord(ageInMonths)}`;
-
-        case 'full':
-            if (years === 0) {
-                return `${months} ${getMonthWord(months)}`;
-            }
-            if (months === 0) {
-                return `${years} ${getYearWord(years)}`;
-            }
-            return `${years} ${getYearWord(years)} ${months} ${getMonthWord(months)}`;
-
-        default:
-            return `${years}`;
-    }
-}
-
-/**
- * Получает правильное склонение слова "год"
- */
-function getYearWord(years: number): string {
-    if (years % 10 === 1 && years % 100 !== 11) {
-        return 'год';
-    }
-    if ([2, 3, 4].includes(years % 10) && ![12, 13, 14].includes(years % 100)) {
-        return 'года';
-    }
-    return 'лет';
-}
-
-/**
- * Получает правильное склонение слова "месяц"
- */
-function getMonthWord(months: number): string {
-    if (months % 10 === 1 && months % 100 !== 11) {
-        return 'месяц';
-    }
-    if ([2, 3, 4].includes(months % 10) && ![12, 13, 14].includes(months % 100)) {
-        return 'месяца';
-    }
-    return 'месяцев';
+    const yearWord = years % 10 === 1 && years % 100 !== 11 ? 'год' :
+                     [2, 3, 4].includes(years % 10) && ![12, 13, 14].includes(years % 100) ? 'года' : 'лет';
+    return `${years} ${yearWord}`;
 }
 
 /**

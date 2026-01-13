@@ -18,6 +18,7 @@ import {
     MessageSquare
 } from 'lucide-react';
 import { DiseaseNotesList } from './DiseaseNotesList';
+import { DiseaseMedicationsTab } from './DiseaseMedicationsTab';
 import { clsx } from 'clsx';
 
 interface DiseaseKnowledgeViewProps {
@@ -72,6 +73,9 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
             ]
         },
         {
+            id: 'medications', label: 'Препараты', icon: Pill
+        },
+        {
             id: 'notes', label: 'Заметки', icon: FileText
         }
     ];
@@ -117,15 +121,19 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
 
             <Card className="rounded-[32px] border-slate-200 overflow-hidden shadow-2xl bg-white dark:bg-slate-900 border-none">
                 <Tabs defaultValue="search" className="w-full">
-                    <div className="px-8 pt-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
-                        <TabsList className="bg-transparent space-x-8 h-14">
+                    <div className="px-8 py-5 border-b border-slate-100 dark:border-slate-800">
+                        <TabsList className="bg-slate-100/80 dark:bg-slate-800/40 p-1.5 rounded-[22px] inline-flex h-auto border border-slate-200/50 dark:border-slate-700/50">
                             {sections.map(s => (
                                 <TabsTrigger
                                     key={s.id}
                                     value={s.id}
-                                    className="px-0 py-4 font-bold text-slate-500 data-[state=active]:text-primary-600 data-[state=active]:border-b-2 data-[state=active]:border-primary-600 rounded-none transition-all flex items-center gap-2"
+                                    className={clsx(
+                                        "px-6 py-2.5 rounded-2xl font-black text-[12px] uppercase tracking-widest transition-all duration-300 flex items-center gap-2.5 border-none",
+                                        "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+                                        "data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary-600 data-[state=active]:shadow-xl data-[state=active]:shadow-primary-500/10"
+                                    )}
                                 >
-                                    <s.icon className="w-5 h-5" />
+                                    <s.icon className="w-4 h-4 stroke-[2.5]" />
                                     {s.label}
                                 </TabsTrigger>
                             ))}
@@ -212,13 +220,22 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                                         </div>
                                     ))}
                                     {s.content?.filter(c => c.text).length === 0 && (
-                                        <div className="col-span-2 py-12 text-center text-slate-400 italic">
-                                            Для новых записей используйте вкладку "Поиск в PDF" для быстрого доступа к информации.
+                                        <div className="col-span-2 py-20 text-center bg-slate-50/50 dark:bg-slate-800/20 rounded-[32px] border-2 border-dashed border-slate-100 dark:border-slate-800/50">
+                                            <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-lg flex items-center justify-center mx-auto mb-4 text-slate-300 dark:text-slate-600">
+                                                <BookOpen className="w-8 h-8" />
+                                            </div>
+                                            <p className="text-slate-400 font-medium max-w-xs mx-auto italic">
+                                                Для получения подробной информации по этому разделу используйте вкладку <span className="text-primary-500 font-bold not-italic">"Поиск в PDF"</span>
+                                            </p>
                                         </div>
                                     )}
                                 </div>
                             </TabsContent>
                         ))}
+
+                        <TabsContent value="medications" className="mt-0 focus-visible:outline-none">
+                            <DiseaseMedicationsTab diseaseId={disease.id} diseaseName={disease.nameRu} />
+                        </TabsContent>
 
                         <TabsContent value="notes" className="mt-0 focus-visible:outline-none">
                             <DiseaseNotesList diseaseId={disease.id} />

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { GoogleGenAI } from "@google/genai";
 import { VaccineDefinition, ChildProfile, VaccinationProfile } from "../types";
+import { calculateAgeInMonths } from "../utils/ageUtils";
 
 // Lazy initialization - only create when API key is available
 let ai: GoogleGenAI | null = null;
@@ -279,11 +280,7 @@ export const getVaccineAdvice = async (
       return "AI функции отключены. Пожалуйста, настройте API ключ Gemini в настройках.";
     }
 
-    const birthDate = new Date(child.birthDate);
-    const ageInMonths = Math.floor(
-      (new Date().getTime() - birthDate.getTime()) /
-      (1000 * 60 * 60 * 24 * 30.44)
-    );
+    const ageInMonths = calculateAgeInMonths(child.birthDate, new Date());
 
     const prompt = `
       Ребенок: ${child.surname} ${child.name}, возраст ${ageInMonths} мес.

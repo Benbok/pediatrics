@@ -135,6 +135,20 @@ Standardized component for all date-related entities.
   - Text: `text-slate-600`
   - Hover: `hover:bg-slate-100`
 
+### Tabs (Navigation Pills)
+Avoid rectangular standard tabs. Use the **Pill/Track** style for premium feel.
+- **Track (TabsList):**
+  - Bg: `bg-slate-100/80` (Light) / `bg-slate-800/40` (Dark).
+  - Radius: `rounded-[22px]`.
+  - Padding: `p-1.5`.
+  - Layout: `h-auto inline-flex`.
+- **Trigger (TabsTrigger):**
+  - Radius: `rounded-2xl`.
+  - Typography: `font-black text-[11px] uppercase tracking-[0.15em]`.
+  - Icons: High-contrast `stroke-[2.5]` icons for a clinical look.
+  - Active State: `bg-white` (Light) / `bg-slate-900` (Dark), `text-primary-600`, `shadow-xl shadow-primary-500/10`.
+  - Transition: `duration-300` on state change.
+
 ### Avatars (User Profiles)
 - **Base:**
   - Size: `w-16 h-16` (List) or `w-24 h-24` (Profile).

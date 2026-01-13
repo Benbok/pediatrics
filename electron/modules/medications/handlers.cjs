@@ -51,6 +51,18 @@ const setupMedicationHandlers = () => {
     ipcMain.handle('medications:calculate-dose', ensureAuthenticated(async (_, { medicationId, weight, ageMonths }) => {
         return await MedicationService.calculateDose(medicationId, weight, ageMonths);
     }));
+
+    ipcMain.handle('medications:get-by-disease', ensureAuthenticated(async (_, diseaseId) => {
+        const { DiseaseService } = require('../diseases/service.cjs');
+        const disease = await DiseaseService.getById(diseaseId);
+
+        if (!disease) return [];
+
+        const icd10Codes = JSON.parse(disease.icd10Codes || '[]');
+        const allCodes = [disease.icd10Code, ...icd10Codes];
+
+        return await MedicationService.getByIcd10Codes(allCodes);
+    }));
 };
 
 module.exports = { setupMedicationHandlers };

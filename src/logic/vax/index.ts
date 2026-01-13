@@ -34,6 +34,8 @@ const RULES = [
     atsRules
 ];
 
+import { calculateAgeInMonths, calculateAgeInWeeks } from '../../utils/ageUtils';
+
 export const calculateVaccineSchedule = (
     child: ChildProfile,
     profile: VaccinationProfile,
@@ -42,9 +44,8 @@ export const calculateVaccineSchedule = (
 ): AugmentedVaccine[] => {
     const birthDate = new Date(child.birthDate);
     const today = new Date();
-    const diffTime = Math.abs(today.getTime() - birthDate.getTime());
-    const ageInWeeks = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 7));
-    const ageInMonths = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 30.44));
+    const ageInWeeks = calculateAgeInWeeks(child.birthDate, today);
+    const ageInMonths = calculateAgeInMonths(child.birthDate, today);
 
     const isHepBRiskGroup = profile.hepBRiskFactors && profile.hepBRiskFactors.length > 0;
 

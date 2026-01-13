@@ -9,6 +9,8 @@ const MedicationSchema = z.object({
     nameEn: z.string().optional().nullable(),
     activeSubstance: z.string().min(2),
     atcCode: z.string().optional().nullable(),
+    icd10Codes: z.array(z.string()).default([]),
+    packageDescription: z.string().optional().nullable(),
     manufacturer: z.string().optional().nullable(),
     forms: z.array(z.any()).default([]), // Expected to be serialized JSON
     pediatricDosing: z.any(), // JSON structure for age/weight rules
@@ -29,16 +31,35 @@ const MedicationService = {
      * Get all medications
      */
     async list() {
-        return await prisma.medication.findMany({
+        const medications = await prisma.medication.findMany({
             orderBy: { nameRu: 'asc' },
         });
+        return medications.map(med => ({
+            ...med,
+            icd10Codes: JSON.parse(med.icd10Codes || '[]')
+        }));
+    },
+
+    /**
+     * Get medications that match any of the provided ICD-10 codes
+     */
+    async getByIcd10Codes(icd10Codes) {
+        const medications = await prisma.medication.findMany();
+
+        return medications.filter(med => {
+            const medCodes = JSON.parse(med.icd10Codes || '[]');
+            return medCodes.some(code => icd10Codes.includes(code));
+        }).map(med => ({
+            ...med,
+            icd10Codes: JSON.parse(med.icd10Codes || '[]')
+        }));
     },
 
     /**
      * Get medication by ID
      */
     async getById(id) {
-        return await prisma.medication.findUnique({
+        const medication = await prisma.medication.findUnique({
             where: { id: Number(id) },
             include: {
                 diseases: {
@@ -48,6 +69,17 @@ const MedicationService = {
                 }
             }
         });
+
+        if (!medication) return null;
+
+        return {
+            ...medication,
+            forms: JSON.parse(medication.forms || '[]'),
+            pediatricDosing: JSON.parse(medication.pediatricDosing || '[]'),
+            adultDosing: medication.adultDosing ? JSON.parse(medication.adultDosing) : null,
+            indications: JSON.parse(medication.indications || '[]'),
+            icd10Codes: JSON.parse(medication.icd10Codes || '[]'),
+        };
     },
 
     /**
@@ -59,6 +91,7 @@ const MedicationService = {
 
         const dbData = {
             ...rest,
+            icd10Codes: JSON.stringify(rest.icd10Codes),
             forms: JSON.stringify(rest.forms),
             pediatricDosing: JSON.stringify(rest.pediatricDosing),
             adultDosing: rest.adultDosing ? JSON.stringify(rest.adultDosing) : null,
