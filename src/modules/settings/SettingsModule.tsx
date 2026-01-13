@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Check, X, AlertCircle, Loader, Shield, Database } from 'lucide-react';
+import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw } from 'lucide-react';
 import { getCurrentApiKey, setApiKey, validateApiKey } from '../../services/geminiService';
+import { apiKeyService, PoolStatus } from '../../services/apiKeyService';
 
 export const SettingsModule: React.FC = () => {
     const [apiKey, setLocalApiKey] = useState('');
@@ -14,6 +15,12 @@ export const SettingsModule: React.FC = () => {
     const [isBackingUp, setIsBackingUp] = useState(false);
     const [backupResult, setBackupResult] = useState<{ success?: boolean; path?: string; error?: string } | null>(null);
 
+    // API Key Pool State
+    const [poolStatus, setPoolStatus] = useState<PoolStatus | null>(null);
+    const [isLoadingPool, setIsLoadingPool] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
+    const [isReloading, setIsReloading] = useState(false);
+
     useEffect(() => {
         // Load current API key and base URL on mount
         const currentKey = getCurrentApiKey();
@@ -26,7 +33,57 @@ export const SettingsModule: React.FC = () => {
         if (currentBaseUrl) {
             setBaseUrl(currentBaseUrl);
         }
+
+        // Load pool status
+        loadPoolStatus();
     }, []);
+
+    const loadPoolStatus = async () => {
+        setIsLoadingPool(true);
+        try {
+            const status = await apiKeyService.getPoolStatus();
+            setPoolStatus(status);
+        } catch (error: any) {
+            console.error('Failed to load pool status:', error);
+        } finally {
+            setIsLoadingPool(false);
+        }
+    };
+
+    const handleResetKey = async (keyIndex: number) => {
+        try {
+            await apiKeyService.resetKey(keyIndex);
+            await loadPoolStatus();
+        } catch (error: any) {
+            console.error('Failed to reset key:', error);
+        }
+    };
+
+    const handleResetAll = async () => {
+        setIsResetting(true);
+        try {
+            await apiKeyService.resetAllKeys();
+            await loadPoolStatus();
+        } catch (error: any) {
+            console.error('Failed to reset all keys:', error);
+        } finally {
+            setIsResetting(false);
+        }
+    };
+
+    const handleReloadFromEnv = async () => {
+        setIsReloading(true);
+        try {
+            const result = await apiKeyService.reloadKeysFromEnv();
+            if (result.success) {
+                await loadPoolStatus();
+            }
+        } catch (error: any) {
+            console.error('Failed to reload keys:', error);
+        } finally {
+            setIsReloading(false);
+        }
+    };
 
     const handleVerify = async () => {
         if (!apiKey.trim()) {
@@ -220,6 +277,178 @@ export const SettingsModule: React.FC = () => {
                         </button>
                     </div>
                 </div>
+            </div>
+
+            {/* API Key Pool Status Section */}
+            <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                        <Key className="text-green-600 dark:text-green-400" size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Статус пула API ключей</h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Мониторинг и управление пулом ключей Gemini
+                        </p>
+                    </div>
+                </div>
+
+                {isLoadingPool ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader className="animate-spin text-slate-400" size={24} />
+                    </div>
+                ) : poolStatus ? (
+                    <div className="space-y-4">
+                        {/* Health Indicator */}
+                        <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                            <div className={`px-3 py-1 rounded-lg text-sm font-semibold ${
+                                poolStatus.active >= 5 
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                    : poolStatus.active >= 2
+                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            }`}>
+                                {poolStatus.active >= 5 ? '🟢 Отлично' : poolStatus.active >= 2 ? '🟡 Внимание' : '🔴 Критично'}
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-slate-900 dark:text-white">
+                                    Здоровье пула: {poolStatus.active >= 5 ? 'Отлично' : poolStatus.active >= 2 ? 'Внимание' : 'Критично'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Statistics */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-700">
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Всего ключей</p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">{poolStatus.total}</p>
+                            </div>
+                            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-100 dark:border-green-800">
+                                <p className="text-xs text-green-600 dark:text-green-400 mb-1">Рабочих</p>
+                                <p className="text-2xl font-bold text-green-700 dark:text-green-400">{poolStatus.active}</p>
+                            </div>
+                            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-800">
+                                <p className="text-xs text-red-600 dark:text-red-400 mb-1">Провалившихся</p>
+                                <p className="text-2xl font-bold text-red-700 dark:text-red-400">{poolStatus.failed}</p>
+                            </div>
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                                <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">Текущий</p>
+                                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">#{poolStatus.currentKeyIndex}</p>
+                            </div>
+                        </div>
+
+                        {/* Warning if low */}
+                        {poolStatus.needsAttention && (
+                            <div className="flex items-start gap-2 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                <AlertCircle className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" size={20} />
+                                <div>
+                                    <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
+                                        ⚠️ КРИТИЧНО: Осталось {poolStatus.active} рабочих ключей!
+                                    </p>
+                                    <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                                        Проверьте .env.local файл и добавьте новые ключи (переменная GEMINI_API_KEYS).
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Keys List */}
+                        <div>
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Ключи:</p>
+                            <div className="flex flex-wrap gap-2">
+                                {poolStatus.keys.map((key) => (
+                                    <div
+                                        key={key.index}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border flex items-center gap-2 ${
+                                            key.index === poolStatus.currentKeyIndex
+                                                ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                                                : key.status === 'active'
+                                                ? 'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
+                                                : 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300'
+                                        }`}
+                                    >
+                                        <span>[{key.index}]</span>
+                                        {key.index === poolStatus.currentKeyIndex && <span>✓</span>}
+                                        {key.status === 'active' ? '🟢' : '🔴'}
+                                        {key.status === 'failed' && (
+                                            <button
+                                                onClick={() => handleResetKey(key.index)}
+                                                className="ml-1 text-xs hover:underline"
+                                                title="Сбросить статус"
+                                            >
+                                                <RotateCcw size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                                🔴 = Failed | 🟢 = Active | ✓ = Current
+                            </p>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                onClick={handleResetAll}
+                                disabled={isResetting}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 
+                                    rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors
+                                    disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                            >
+                                {isResetting ? (
+                                    <>
+                                        <Loader className="animate-spin" size={16} />
+                                        Сброс...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RotateCcw size={16} />
+                                        Сбросить все
+                                    </>
+                                )}
+                            </button>
+                            <button
+                                onClick={handleReloadFromEnv}
+                                disabled={isReloading}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 
+                                    rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors
+                                    disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                            >
+                                {isReloading ? (
+                                    <>
+                                        <Loader className="animate-spin" size={16} />
+                                        Загрузка...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw size={16} />
+                                        Перезагрузить из .env
+                                    </>
+                                )}
+                            </button>
+                            <button
+                                onClick={loadPoolStatus}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 
+                                    rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm"
+                            >
+                                <RefreshCw size={16} />
+                                Обновить
+                            </button>
+                        </div>
+
+                        {/* Info */}
+                        <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <p className="text-xs text-slate-600 dark:text-slate-400">
+                                ⚠️ Для добавления ключей отредактируйте файл <code className="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">.env.local</code> (переменная <code className="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">GEMINI_API_KEYS</code>)
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                        Не удалось загрузить статус пула
+                    </div>
+                )}
             </div>
 
             {/* Database & Security Section */}

@@ -134,24 +134,36 @@ export const DiseaseFormPage: React.FC = () => {
     const handleFileUpload = async () => {
         try {
             const result = await window.electronAPI.openFile({
-                filters: [{ name: 'PDF Documents', extensions: ['pdf'] }]
+                filters: [{ name: 'PDF Documents', extensions: ['pdf'] }],
+                properties: ['openFile', 'multiSelections'] // Разрешаем выбор нескольких файлов
             });
 
             if (!result.canceled && result.filePaths.length > 0) {
-                setIsSaving(true);
-                const path = result.filePaths[0];
                 if (!isEdit) {
                     setError('Пожалуйста, сначала сохраните основную информацию о заболевании');
-                    setIsSaving(false);
                     return;
                 }
 
-                await diseaseService.uploadGuideline(Number(id), path);
+                setIsSaving(true);
+                setError(null);
+
+                // Если выбран один файл - используем старый метод, если несколько - batch
+                if (result.filePaths.length === 1) {
+                    await diseaseService.uploadGuideline(Number(id), result.filePaths[0]);
+                    setSuccess(true);
+                } else {
+                    const batchResult = await diseaseService.uploadGuidelinesBatch(Number(id), result.filePaths);
+                    if (batchResult.errors && batchResult.errors.length > 0) {
+                        setError(`Загружено ${batchResult.success.length} из ${result.filePaths.length} файлов. Ошибки: ${batchResult.errors.map(e => e.path).join(', ')}`);
+                    } else {
+                        setSuccess(true);
+                    }
+                }
+
                 loadDisease();
-                setSuccess(true);
             }
-        } catch (err) {
-            setError('Ошибка при загрузке или обработке PDF');
+        } catch (err: any) {
+            setError(err.message || 'Ошибка при загрузке или обработке PDF');
         } finally {
             setIsSaving(false);
         }

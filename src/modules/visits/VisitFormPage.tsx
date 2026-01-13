@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { visitService } from './services/visitService';
 import { medicationService } from '../medications/services/medicationService';
 import { diseaseService } from '../diseases/services/diseaseService';
-import { Visit, ChildProfile, Disease, Medication } from '../../types';
+import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion } from '../../types';
+import { MedicationBrowser } from './components/MedicationBrowser';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -21,8 +22,10 @@ import {
     CheckCircle2,
     Trash2,
     Plus,
-    Scale
+    Scale,
+    TrendingUp
 } from 'lucide-react';
+import { calculateBMI, calculateBSA, getBMICategory, getBMICategoryLabel, formatBMI, formatBSA, validateAnthropometry } from '../../utils/anthropometry';
 
 export const VisitFormPage: React.FC = () => {
     const { childId, id } = useParams<{ childId: string; id?: string }>();
@@ -42,11 +45,17 @@ export const VisitFormPage: React.FC = () => {
         status: 'draft',
     });
 
-    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [suggestions, setSuggestions] = useState<DiagnosisSuggestion[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [calculatedBMI, setCalculatedBMI] = useState<number | null>(null);
+    const [calculatedBSA, setCalculatedBSA] = useState<number | null>(null);
+    const [medicationRecommendations, setMedicationRecommendations] = useState<any[]>([]);
+    const [isLoadingMedications, setIsLoadingMedications] = useState(false);
+    const [isMedicationBrowserOpen, setIsMedicationBrowserOpen] = useState(false);
+    const [analysisTimeout, setAnalysisTimeout] = useState<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         loadData();
@@ -60,9 +69,62 @@ export const VisitFormPage: React.FC = () => {
             if (isEdit) {
                 const visitData = await visitService.getVisit(Number(id));
                 setFormData(visitData);
+                if (visitData.currentWeight && visitData.currentHeight) {
+                    setCalculatedBMI(visitData.bmi || calculateBMI(visitData.currentWeight, visitData.currentHeight));
+                    setCalculatedBSA(visitData.bsa || calculateBSA(visitData.currentWeight, visitData.currentHeight));
+                }
             }
         } catch (err) {
             setError('Ошибка загрузки данных');
+        }
+    };
+
+    const loadLastAnthropometry = async () => {
+        try {
+            const visits = await visitService.getVisits(Number(childId));
+            const lastVisit = visits.find(v => v.currentWeight && v.currentHeight);
+            if (lastVisit) {
+                setFormData({
+                    ...formData,
+                    currentWeight: lastVisit.currentWeight,
+                    currentHeight: lastVisit.currentHeight
+                });
+                if (lastVisit.currentWeight && lastVisit.currentHeight) {
+                    setCalculatedBMI(calculateBMI(lastVisit.currentWeight, lastVisit.currentHeight));
+                    setCalculatedBSA(calculateBSA(lastVisit.currentWeight, lastVisit.currentHeight));
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load last anthropometry', err);
+        }
+    };
+
+    const handleAnthropometryChange = (field: 'currentWeight' | 'currentHeight', value: string) => {
+        const numValue = value === '' ? null : parseFloat(value);
+        const newData = { ...formData, [field]: numValue };
+        setFormData(newData);
+
+        // Автоматический расчет BMI и BSA
+        const weight = field === 'currentWeight' ? numValue : formData.currentWeight;
+        const height = field === 'currentHeight' ? numValue : formData.currentHeight;
+
+        if (weight && height) {
+            const validation = validateAnthropometry(weight, height);
+            if (validation.valid) {
+                try {
+                    setCalculatedBMI(calculateBMI(weight, height));
+                    setCalculatedBSA(calculateBSA(weight, height));
+                } catch (err) {
+                    setCalculatedBMI(null);
+                    setCalculatedBSA(null);
+                }
+            } else {
+                setCalculatedBMI(null);
+                setCalculatedBSA(null);
+            }
+        } else {
+            setCalculatedBMI(null);
+            setCalculatedBSA(null);
         }
     };
 
@@ -82,30 +144,115 @@ export const VisitFormPage: React.FC = () => {
     };
 
     const runAnalysis = async () => {
-        if (!formData.complaints) return;
-        setIsAnalyzing(true);
-        try {
-            const results = await window.electronAPI.searchDiseases(formData.complaints.split(', '));
-            setSuggestions(results.map(d => ({ disease: d, score: 0.8 })));
-        } catch (err) {
-            console.error('Analysis failed', err);
-        } finally {
-            setIsAnalyzing(false);
+        if (!formData.complaints || !childId) return;
+        
+        // Отменяем предыдущий таймер, если есть
+        if (analysisTimeout) {
+            clearTimeout(analysisTimeout);
         }
+
+        // Debounce: ждем 1 секунду перед выполнением
+        const timeout = setTimeout(async () => {
+            setIsAnalyzing(true);
+            setError(null);
+            const startTime = Date.now();
+            
+            try {
+                // Сначала сохраняем визит как черновик (если еще не сохранен)
+                let visitId = formData.id;
+                if (!visitId) {
+                    const savedVisit = await visitService.upsertVisit({
+                        ...formData,
+                        status: 'draft'
+                    } as Visit);
+                    visitId = savedVisit.id!;
+                    setFormData({ ...formData, id: visitId });
+                } else {
+                    // Обновляем жалобы перед анализом
+                    await visitService.upsertVisit({
+                        ...formData,
+                        complaints: formData.complaints
+                    } as Visit);
+                }
+
+                // Выполняем AI-анализ
+                const results = await visitService.analyzeVisit(visitId!);
+                setSuggestions(results);
+                
+                const duration = Date.now() - startTime;
+                console.log(`[VisitFormPage] Analysis completed in ${duration}ms`);
+                
+                if (duration > 5000) {
+                    console.warn(`[VisitFormPage] Analysis took longer than expected: ${duration}ms`);
+                }
+            } catch (err: any) {
+                console.error('Analysis failed', err);
+                setError(err.message || 'Ошибка анализа. Попробуйте еще раз.');
+            } finally {
+                setIsAnalyzing(false);
+            }
+        }, 1000);
+
+        setAnalysisTimeout(timeout);
     };
 
-    const selectDiagnosis = (disease: Disease) => {
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (analysisTimeout) {
+                clearTimeout(analysisTimeout);
+            }
+        };
+    }, [analysisTimeout]);
+
+    const selectDiagnosis = async (disease: Disease) => {
         setFormData({
             ...formData,
             primaryDiagnosisId: disease.id,
-            prescriptions: (disease as any).medications?.map((dm: any) => ({
-                medicationId: dm.medicationId,
-                name: dm.medication.nameRu,
-                dosing: dm.dosing || '',
-                duration: dm.duration || ''
-            })) || []
         });
         setSuggestions([]);
+
+        // Загружаем препараты для выбранного диагноза
+        if (disease.id && childId) {
+            setIsLoadingMedications(true);
+            try {
+                const recommendations = await visitService.getMedicationsForDiagnosis(disease.id, Number(childId));
+                setMedicationRecommendations(recommendations);
+            } catch (err: any) {
+                console.error('Failed to load medications:', err);
+                setError('Не удалось загрузить препараты для диагноза');
+            } finally {
+                setIsLoadingMedications(false);
+            }
+        }
+    };
+
+    const toggleMedicationSelection = (medicationId: number) => {
+        const currentPrescriptions = formData.prescriptions || [];
+        const isSelected = currentPrescriptions.some((p: any) => p.medicationId === medicationId);
+
+        if (isSelected) {
+            setFormData({
+                ...formData,
+                prescriptions: currentPrescriptions.filter((p: any) => p.medicationId !== medicationId)
+            });
+        } else {
+            const recommendation = medicationRecommendations.find(r => r.medication.id === medicationId);
+            if (recommendation && recommendation.recommendedDose) {
+                const newPrescription = {
+                    medicationId: medicationId,
+                    name: recommendation.medication.nameRu,
+                    dosing: recommendation.recommendedDose.instruction || '',
+                    duration: recommendation.duration || '5-7 дней',
+                    singleDoseMg: recommendation.recommendedDose.singleDoseMg,
+                    timesPerDay: recommendation.recommendedDose.timesPerDay
+                };
+                setFormData({
+                    ...formData,
+                    prescriptions: [...currentPrescriptions, newPrescription]
+                });
+            }
+        }
     };
 
     const addPrescription = async (med: Medication) => {
@@ -114,11 +261,16 @@ export const VisitFormPage: React.FC = () => {
         const birthDate = new Date(child.birthDate);
         const ageMonths = (new Date().getFullYear() - birthDate.getFullYear()) * 12 + (new Date().getMonth() - birthDate.getMonth());
 
+        // Используем текущий вес из формы, если есть, иначе вес при рождении
+        const currentWeight = formData.currentWeight || (child.birthWeight / 1000);
+        const currentHeight = formData.currentHeight || null;
+
         try {
             const doseInfo = await window.electronAPI.calculateDose({
                 medicationId: med.id!,
-                weight: child.birthWeight / 1000,
-                ageMonths
+                weight: currentWeight,
+                ageMonths,
+                height: currentHeight
             });
 
             setFormData({
@@ -171,6 +323,94 @@ export const VisitFormPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Main Form Area */}
                 <div className="lg:col-span-2 space-y-6">
+                    {/* Антропометрия */}
+                    <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl overflow-hidden">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <Scale className="w-5 h-5 text-blue-500" />
+                                Антропометрия
+                            </h2>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={loadLastAnthropometry}
+                                className="rounded-full text-xs"
+                            >
+                                <TrendingUp className="w-3 h-3 mr-1" />
+                                Взять последние значения
+                            </Button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">
+                                    Вес (кг)
+                                </label>
+                                <Input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.5"
+                                    max="200"
+                                    value={formData.currentWeight || ''}
+                                    onChange={(e) => handleAnthropometryChange('currentWeight', e.target.value)}
+                                    placeholder="0.0"
+                                    className="rounded-xl"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">
+                                    Рост (см)
+                                </label>
+                                <Input
+                                    type="number"
+                                    step="1"
+                                    min="30"
+                                    max="250"
+                                    value={formData.currentHeight || ''}
+                                    onChange={(e) => handleAnthropometryChange('currentHeight', e.target.value)}
+                                    placeholder="0"
+                                    className="rounded-xl"
+                                />
+                            </div>
+                        </div>
+
+                        {(calculatedBMI || calculatedBSA) && (
+                            <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                {calculatedBMI && (
+                                    <div>
+                                        <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                                            ИМТ
+                                        </div>
+                                        <div className="text-lg font-bold text-slate-900 dark:text-white">
+                                            {formatBMI(calculatedBMI)}
+                                        </div>
+                                        {child && (
+                                            <div className="text-xs text-slate-500 mt-1">
+                                                {getBMICategoryLabel(getBMICategory(calculatedBMI, 
+                                                    (new Date().getFullYear() - new Date(child.birthDate).getFullYear()) * 12 + 
+                                                    (new Date().getMonth() - new Date(child.birthDate).getMonth())
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {calculatedBSA && (
+                                    <div>
+                                        <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                                            ППТ (площадь тела)
+                                        </div>
+                                        <div className="text-lg font-bold text-slate-900 dark:text-white">
+                                            {formatBSA(calculatedBSA)}
+                                        </div>
+                                        <div className="text-xs text-slate-500 mt-1">
+                                            Формула Мостеллера
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </Card>
+
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl overflow-hidden">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -211,10 +451,96 @@ export const VisitFormPage: React.FC = () => {
                         </div>
                     </Card>
 
+                    {/* Рекомендованные препараты */}
+                    {formData.primaryDiagnosisId && (
+                        <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                <Pill className="w-5 h-5 text-teal-500" />
+                                Препараты для лечения
+                            </h2>
+
+                            {isLoadingMedications ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+                                </div>
+                            ) : medicationRecommendations.length > 0 ? (
+                                <div className="space-y-3 mb-4">
+                                    {medicationRecommendations.map((rec) => {
+                                        const isSelected = formData.prescriptions?.some((p: any) => p.medicationId === rec.medication.id);
+                                        return (
+                                            <div
+                                                key={rec.medication.id}
+                                                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                                                    isSelected
+                                                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20'
+                                                        : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-primary-300'
+                                                }`}
+                                                onClick={() => toggleMedicationSelection(rec.medication.id)}
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={() => toggleMedicationSelection(rec.medication.id)}
+                                                        className="mt-1 w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <div className="font-bold text-slate-800 dark:text-white mb-1">
+                                                            {rec.medication.nameRu}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 mb-2">
+                                                            {rec.medication.activeSubstance}
+                                                        </div>
+                                                        {rec.recommendedDose && rec.canUse && (
+                                                            <div className="text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg">
+                                                                <div className="font-semibold">Дозировка:</div>
+                                                                <div>{rec.recommendedDose.instruction}</div>
+                                                                {rec.recommendedDose.singleDoseMg && (
+                                                                    <div className="text-xs text-slate-500 mt-1">
+                                                                        Разовая доза: {rec.recommendedDose.singleDoseMg} мг
+                                                                        {rec.recommendedDose.timesPerDay && ` × ${rec.recommendedDose.timesPerDay} раз в день`}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {rec.warnings && rec.warnings.length > 0 && (
+                                                            <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                                                                ⚠️ {rec.warnings.join(', ')}
+                                                            </div>
+                                                        )}
+                                                        {!rec.canUse && (
+                                                            <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                                                                ⚠️ {rec.recommendedDose?.message || 'Препарат не рекомендуется'}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-slate-400">
+                                    <Pill className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                    <p>Препараты не найдены для данного диагноза</p>
+                                </div>
+                            )}
+
+                            <Button 
+                                variant="secondary" 
+                                className="w-full h-12 rounded-xl group border-dashed" 
+                                onClick={() => setIsMedicationBrowserOpen(true)}
+                            >
+                                <Plus className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
+                                Выбрать другой препарат из справочника
+                            </Button>
+                        </Card>
+                    )}
+
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                         <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                             <Pill className="w-5 h-5 text-teal-500" />
-                            Назначения
+                            Выбранные назначения
                         </h2>
 
                         <div className="space-y-3">
@@ -240,10 +566,11 @@ export const VisitFormPage: React.FC = () => {
                                     </Button>
                                 </div>
                             ))}
-                            <Button variant="secondary" className="w-full h-12 rounded-xl group border-dashed" onClick={() => navigate('/medications')}>
-                                <Plus className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
-                                Выбрать препарат из справочника
-                            </Button>
+                            {(!formData.prescriptions || formData.prescriptions.length === 0) && (
+                                <div className="text-center py-8 text-slate-400 italic">
+                                    Выберите препараты из рекомендованных выше или добавьте вручную
+                                </div>
+                            )}
                         </div>
                     </Card>
                 </div>
@@ -257,23 +584,51 @@ export const VisitFormPage: React.FC = () => {
 
                         {suggestions.length > 0 ? (
                             <div className="space-y-3">
-                                {suggestions.map((s, idx) => (
-                                    <div
-                                        key={idx}
-                                        onClick={() => selectDiagnosis(s.disease)}
-                                        className="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 cursor-pointer hover:border-primary-500 transition-all shadow-sm group"
-                                    >
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <Badge variant="primary" size="sm" className="font-mono text-[10px]">
-                                                {s.disease.icd10Code}
-                                            </Badge>
-                                            <div className="text-[10px] font-black text-slate-400 ml-auto">MATCH {Math.round(s.score * 100)}%</div>
+                                {suggestions.map((s, idx) => {
+                                    const confidencePercent = Math.round(s.confidence * 100);
+                                    const confidenceColor = s.confidence > 0.7 ? 'text-green-600' : s.confidence > 0.4 ? 'text-yellow-600' : 'text-red-600';
+                                    const confidenceBg = s.confidence > 0.7 ? 'bg-green-50 dark:bg-green-950/20' : s.confidence > 0.4 ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'bg-red-50 dark:bg-red-950/20';
+                                    
+                                    return (
+                                        <div
+                                            key={idx}
+                                            onClick={() => selectDiagnosis(s.disease)}
+                                            className="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 cursor-pointer hover:border-primary-500 transition-all shadow-sm group"
+                                        >
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Badge variant="primary" size="sm" className="font-mono text-[10px]">
+                                                    {s.disease.icd10Code}
+                                                </Badge>
+                                                <div className={`text-[10px] font-black ${confidenceColor} ml-auto flex items-center gap-1`}>
+                                                    <Sparkles className="w-3 h-3" />
+                                                    {confidencePercent}%
+                                                </div>
+                                            </div>
+                                            <div className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-primary-600 transition-colors mb-1">
+                                                {s.disease.nameRu}
+                                            </div>
+                                            {s.matchedSymptoms && s.matchedSymptoms.length > 0 && (
+                                                <div className="text-xs text-slate-500 mb-2">
+                                                    Совпало: {s.matchedSymptoms.join(', ')}
+                                                </div>
+                                            )}
+                                            <div className={`text-xs p-2 rounded-lg ${confidenceBg} border border-slate-100 dark:border-slate-700`}>
+                                                <div className="font-semibold text-slate-700 dark:text-slate-300 mb-1">Обоснование:</div>
+                                                <div className="text-slate-600 dark:text-slate-400 italic">{s.reasoning}</div>
+                                            </div>
+                                            <div className="mt-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
+                                                <div 
+                                                    className={`h-1.5 rounded-full transition-all ${
+                                                        s.confidence > 0.7 ? 'bg-green-500' : 
+                                                        s.confidence > 0.4 ? 'bg-yellow-500' : 
+                                                        'bg-red-500'
+                                                    }`}
+                                                    style={{ width: `${confidencePercent}%` }}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-primary-600 transition-colors">
-                                            {s.disease.nameRu}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="text-center py-6">
@@ -311,6 +666,20 @@ export const VisitFormPage: React.FC = () => {
                     <p className="font-bold">Прием успешно сохранен!</p>
                 </div>
             )}
+
+            {/* Medication Browser Modal */}
+            <MedicationBrowser
+                isOpen={isMedicationBrowserOpen}
+                onClose={() => setIsMedicationBrowserOpen(false)}
+                onSelect={async (medication) => {
+                    await addPrescription(medication);
+                }}
+                currentIcd10Codes={
+                    formData.primaryDiagnosisId
+                        ? (suggestions.find(s => s.disease.id === formData.primaryDiagnosisId)?.disease.icd10Codes || [])
+                        : []
+                }
+            />
         </div>
     );
 };

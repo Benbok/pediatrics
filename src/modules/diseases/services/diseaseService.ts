@@ -62,6 +62,30 @@ export const diseaseService = {
     },
 
     /**
+     * Upload multiple guidelines at once
+     */
+    async uploadGuidelinesBatch(diseaseId: number, pdfPaths: string[]): Promise<{ success: ClinicalGuideline[]; errors: Array<{ path: string; error: string }> | null }> {
+        try {
+            return await window.electronAPI.uploadGuidelinesBatch(diseaseId, pdfPaths);
+        } catch (error) {
+            console.error('[DiseaseService] Failed to upload guidelines batch:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Delete a guideline
+     */
+    async deleteGuideline(guidelineId: number): Promise<boolean> {
+        try {
+            return await window.electronAPI.deleteGuideline(guidelineId);
+        } catch (error) {
+            console.error('[DiseaseService] Failed to delete guideline:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Search for diseases based on symptoms
      */
     async searchBySymptoms(symptoms: string[]): Promise<Disease[]> {

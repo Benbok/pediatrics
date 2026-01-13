@@ -121,7 +121,7 @@ model Disease {
   nameEn          String?   @map("name_en")
   description     String
   symptoms        String    @default("[]") // JSON array
-  symptomsVector  String?   @map("symptoms_vector") // Embeddings
+  symptomsEmbedding String? @map("symptoms_embedding") // JSON array of numbers (embedding vector)
   createdAt       DateTime  @default(now()) @map("created_at")
   
   // Relations
@@ -191,7 +191,7 @@ model Medication {
   packageDescription String? @map("package_description") // Full text description of forms and packaging
   manufacturer     String?
   forms            String   // JSON with flavors, packaging, concentration
-  pediatricDosing  String   @map("pediatric_dosing") // JSON: age-based rules
+  pediatricDosing  String   @map("pediatric_dosing") // JSON: age-based rules (новая структура Vidal)
   adultDosing      String?  @map("adult_dosing") // JSON
   contraindications String
   cautionConditions String?  @map("caution_conditions")
@@ -202,6 +202,13 @@ model Medication {
   indications      String   // JSON: conditions + ICD codes
   registrationNumber String? @map("registration_number")
   vidalUrl         String?  @map("vidal_url")
+  
+  // Новые поля для ограничений дозирования (Vidal структура)
+  minInterval      Int?     @map("min_interval") // Мин интервал между дозами (часы)
+  maxDosesPerDay   Int?     @map("max_doses_per_day") // Макс доз в сутки
+  maxDurationDays  Int?     @map("max_duration_days") // Макс длительность (дни)
+  routeOfAdmin     String?  @map("route_of_admin") // Путь введения: oral, rectal, iv, im
+  
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
   
@@ -230,6 +237,12 @@ model Visit {
   childId         Int      @map("child_id")
   doctorId        Int      @map("doctor_id")
   visitDate       DateTime @default(now()) @map("visit_date")
+  
+  // Anthropometry
+  currentWeight   Float?   @map("current_weight") // в кг
+  currentHeight   Float?   @map("current_height") // в см
+  bmi             Float?   // Body Mass Index (автоматически рассчитывается)
+  bsa             Float?   // Body Surface Area (площадь тела, м²)
   
   // Input
   complaints      String

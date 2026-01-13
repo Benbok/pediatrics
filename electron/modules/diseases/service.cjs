@@ -7,6 +7,7 @@ const fs = require('fs');
 const { app } = require('electron');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const { generateEmbedding, cosineSimilarity, getCachedSearch, cacheSearch } = require('../../services/embeddingService.cjs');
 
 // Disease Validation Schema
 const DiseaseSchema = z.object({
@@ -33,7 +34,7 @@ const DiseaseService = {
      * Get disease by ID with its guidelines
      */
     async getById(id) {
-        return await prisma.disease.findUnique({
+        const disease = await prisma.disease.findUnique({
             where: { id: Number(id) },
             include: {
                 guidelines: true,
@@ -42,13 +43,30 @@ const DiseaseService = {
 
         if (!disease) return null;
 
-        // Parse ICD codes from disease
-        const diseaseIcd10Codes = JSON.parse(disease.icd10Codes || '[]');
-        const allCodes = [disease.icd10Code, ...diseaseIcd10Codes];
+        // Безопасный парсинг ICD кодов
+        function safeJsonParse(value, defaultValue = []) {
+            if (!value || value === null) return defaultValue;
+            if (typeof value !== 'string') return defaultValue;
+            if (value.trim() === '') return defaultValue;
+            
+            try {
+                return JSON.parse(value);
+            } catch (error) {
+                logger.warn('[DiseaseService] Failed to parse ICD codes, using default:', error.message);
+                return defaultValue;
+            }
+        }
+
+        const diseaseIcd10Codes = safeJsonParse(disease.icd10Codes, []);
+        // Фильтруем null/undefined и пустые строки
+        const allCodes = [disease.icd10Code, ...diseaseIcd10Codes]
+            .filter(c => c && typeof c === 'string' && c.trim() !== '');
 
         // Find medications matching these ICD codes
         const { MedicationService } = require('../medications/service.cjs');
-        const relatedMedications = await MedicationService.getByIcd10Codes(allCodes);
+        const relatedMedications = allCodes.length > 0 
+            ? await MedicationService.getByIcd10Codes(allCodes)
+            : [];
 
         return {
             ...disease,
@@ -64,23 +82,35 @@ const DiseaseService = {
         const validated = DiseaseSchema.parse(data);
         const { id, ...rest } = validated;
 
+        // Генерируем embedding для симптомов
+        let symptomsEmbedding = null;
+        if (rest.symptoms && Array.isArray(rest.symptoms) && rest.symptoms.length > 0) {
+            try {
+                const symptomsText = rest.symptoms.join(', ');
+                symptomsEmbedding = await generateEmbedding(symptomsText);
+                logger.info(`[DiseaseService] Generated embedding for disease: ${rest.nameRu}`);
+            } catch (error) {
+                logger.warn('[DiseaseService] Failed to generate embedding, continuing without it:', error.message);
+                // Продолжаем без embedding - это не критично
+            }
+        }
+
+        const dbData = {
+            ...rest,
+            icd10Codes: JSON.stringify(rest.icd10Codes),
+            symptoms: JSON.stringify(rest.symptoms),
+            symptomsEmbedding: symptomsEmbedding ? JSON.stringify(symptomsEmbedding) : null,
+        };
+
         if (id) {
             return await prisma.disease.update({
                 where: { id },
-                data: {
-                    ...rest,
-                    icd10Codes: JSON.stringify(rest.icd10Codes),
-                    symptoms: JSON.stringify(rest.symptoms),
-                },
+                data: dbData,
             });
         }
 
         return await prisma.disease.create({
-            data: {
-                ...rest,
-                icd10Codes: JSON.stringify(rest.icd10Codes),
-                symptoms: JSON.stringify(rest.symptoms),
-            },
+            data: dbData,
         });
     },
 
@@ -91,6 +121,64 @@ const DiseaseService = {
         return await prisma.disease.delete({
             where: { id: Number(id) },
         });
+    },
+
+    /**
+     * Delete a guideline (file)
+     */
+    async deleteGuideline(guidelineId) {
+        const guideline = await prisma.clinicalGuideline.findUnique({
+            where: { id: Number(guidelineId) }
+        });
+
+        if (!guideline) {
+            throw new Error('Файл не найден');
+        }
+
+        // Удаляем физический файл
+        if (guideline.pdfPath && fs.existsSync(guideline.pdfPath)) {
+            try {
+                fs.unlinkSync(guideline.pdfPath);
+                logger.info(`[DiseaseService] Deleted file: ${guideline.pdfPath}`);
+            } catch (error) {
+                logger.warn(`[DiseaseService] Failed to delete file ${guideline.pdfPath}:`, error);
+                // Продолжаем удаление записи из БД даже если файл не удален
+            }
+        }
+
+        // Удаляем запись из БД
+        return await prisma.clinicalGuideline.delete({
+            where: { id: Number(guidelineId) }
+        });
+    },
+
+    /**
+     * Batch upload multiple guidelines
+     */
+    async uploadGuidelinesBatch(diseaseId, pdfPaths) {
+        if (!Array.isArray(pdfPaths) || pdfPaths.length === 0) {
+            throw new Error('Необходимо указать хотя бы один файл');
+        }
+
+        const results = [];
+        const errors = [];
+
+        for (let i = 0; i < pdfPaths.length; i++) {
+            const pdfPath = pdfPaths[i];
+            try {
+                logger.info(`[DiseaseService] Processing file ${i + 1}/${pdfPaths.length}: ${pdfPath}`);
+                const guideline = await this.uploadGuideline(diseaseId, pdfPath);
+                results.push(guideline);
+            } catch (error) {
+                logger.error(`[DiseaseService] Failed to process ${pdfPath}:`, error);
+                errors.push({ path: pdfPath, error: error.message });
+            }
+        }
+
+        return {
+            success: results,
+            errors: errors.length > 0 ? errors : null
+        };
     },
 
     /**
@@ -190,15 +278,119 @@ const DiseaseService = {
     },
 
     /**
-     * Semantic search (placeholder for now, will integrate Gemini later)
+     * Semantic search по симптомам с использованием embeddings
+     * @param {string[]} symptoms - Массив симптомов для поиска
+     * @returns {Promise<Array>} Массив заболеваний, отсортированных по релевантности
      */
     async searchBySymptoms(symptoms) {
-        // Basic keyword matching as fallback
+        if (!symptoms || !Array.isArray(symptoms) || symptoms.length === 0) {
+            return [];
+        }
+
+        // Объединяем симптомы в один текст
+        const symptomsText = symptoms.join(', ');
+
+        // Проверяем кэш
+        const cached = getCachedSearch(symptomsText);
+        if (cached) {
+            logger.debug('[DiseaseService] Using cached search results');
+            return cached;
+        }
+
+        const startTime = Date.now();
+        try {
+            // Генерируем embedding для запроса
+            const queryEmbedding = await generateEmbedding(symptomsText);
+            logger.debug('[DiseaseService] Generated query embedding for symptoms:', symptomsText.substring(0, 50));
+
+            // Получаем все заболевания с embeddings
+            const diseases = await prisma.disease.findMany({
+                where: {
+                    symptomsEmbedding: {
+                        not: null
+                    }
+                }
+            });
+
+            if (diseases.length === 0) {
+                logger.warn('[DiseaseService] No diseases with embeddings found, falling back to keyword matching');
+                return this._fallbackKeywordSearch(symptoms);
+            }
+
+            // Вычисляем similarity для каждого заболевания
+            const results = diseases
+                .map(disease => {
+                    try {
+                        const diseaseEmbedding = JSON.parse(disease.symptomsEmbedding || '[]');
+                        if (!Array.isArray(diseaseEmbedding) || diseaseEmbedding.length === 0) {
+                            return null;
+                        }
+
+                        const similarity = cosineSimilarity(queryEmbedding, diseaseEmbedding);
+                        return {
+                            disease: {
+                                ...disease,
+                                symptoms: JSON.parse(disease.symptoms || '[]'),
+                                icd10Codes: JSON.parse(disease.icd10Codes || '[]')
+                            },
+                            similarity
+                        };
+                    } catch (error) {
+                        logger.warn(`[DiseaseService] Failed to parse embedding for disease ${disease.id}:`, error.message);
+                        return null;
+                    }
+                })
+                .filter(r => r !== null)
+                .sort((a, b) => b.similarity - a.similarity)
+                .slice(0, 10); // Топ-10 результатов
+
+            const finalResults = results.map(r => r.disease);
+            
+            // Сохраняем в кэш
+            cacheSearch(symptomsText, finalResults);
+            
+            const duration = Date.now() - startTime;
+            logger.info(`[DiseaseService] Semantic search found ${finalResults.length} results in ${duration}ms`);
+            
+            if (duration > 3000) {
+                logger.warn(`[DiseaseService] Search took longer than expected: ${duration}ms`);
+            }
+            
+            return finalResults;
+
+        } catch (error) {
+            logger.error('[DiseaseService] Semantic search failed, falling back to keyword matching:', error);
+            return this._fallbackKeywordSearch(symptoms);
+        }
+    },
+
+    /**
+     * Fallback метод для поиска по ключевым словам (если embeddings недоступны)
+     * @private
+     */
+    async _fallbackKeywordSearch(symptoms) {
         const diseases = await prisma.disease.findMany();
-        return diseases.filter(d => {
-            const dSymptoms = JSON.parse(d.symptoms || '[]');
-            return symptoms.some(s => dSymptoms.includes(s.toLowerCase()));
-        });
+        const results = diseases
+            .map(d => {
+                const dSymptoms = JSON.parse(d.symptoms || '[]');
+                const matches = symptoms.filter(s => 
+                    dSymptoms.some(ds => ds.toLowerCase().includes(s.toLowerCase())) ||
+                    d.nameRu.toLowerCase().includes(s.toLowerCase())
+                );
+                return {
+                    disease: {
+                        ...d,
+                        symptoms: dSymptoms,
+                        icd10Codes: JSON.parse(d.icd10Codes || '[]')
+                    },
+                    score: matches.length / Math.max(symptoms.length, 1)
+                };
+            })
+            .filter(r => r.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10);
+
+        return results.map(r => r.disease);
     },
 
     // ============= DISEASE NOTES =============

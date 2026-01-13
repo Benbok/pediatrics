@@ -47,6 +47,10 @@ const setupVisitHandlers = () => {
     ipcMain.handle('visits:analyze', ensureAuthenticated(async (_, visitId) => {
         return await VisitService.analyzeVisit(visitId);
     }));
+
+    ipcMain.handle('visits:get-medications-for-diagnosis', ensureAuthenticated(async (_, { diseaseId, childId }) => {
+        return await VisitService.getMedicationsForDiagnosis(diseaseId, childId);
+    }));
 };
 
 module.exports = { setupVisitHandlers };

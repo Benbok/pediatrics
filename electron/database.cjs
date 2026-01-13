@@ -186,7 +186,7 @@ async function initDatabase() {
             name_en TEXT,
             description TEXT NOT NULL,
             symptoms TEXT NOT NULL DEFAULT '[]',
-            symptoms_vector TEXT,
+            symptoms_embedding TEXT,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
           );
         `);

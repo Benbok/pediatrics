@@ -52,9 +52,9 @@ export const medicationService = {
     /**
      * Calculate dosage for child
      */
-    async calculateDose(medicationId: number, weight: number, ageMonths: number): Promise<any> {
+    async calculateDose(medicationId: number, weight: number, ageMonths: number, height?: number | null): Promise<any> {
         try {
-            return await window.electronAPI.calculateDose({ medicationId, weight, ageMonths });
+            return await window.electronAPI.calculateDose({ medicationId, weight, ageMonths, height: height || null });
         } catch (error) {
             console.error('[MedicationService] Dose calculation failed:', error);
             throw error;

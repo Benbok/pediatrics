@@ -70,6 +70,17 @@ app.whenReady().then(async () => {
     setupMedicationHandlers();
     setupVisitHandlers();
 
+    // Initialize API Key Manager
+    logger.info('[Main] Initializing API Key Manager...');
+    const { apiKeyManager } = require('./services/apiKeyManager.cjs');
+    await apiKeyManager.initialize();
+    logger.info('[Main] API Key Manager initialized');
+
+    // Setup API Key handlers
+    const { setupApiKeyHandlers } = require('./modules/apiKeys/handlers.cjs');
+    setupApiKeyHandlers();
+    logger.info('[Main] API Key handlers registered');
+
     logger.info('[Main] Creating window...');
     createWindow();
 

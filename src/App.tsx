@@ -22,6 +22,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './modules/auth/LoginPage';
 import { ChildProvider } from './context/ChildContext';
 import { PdfViewerPage } from './pages/PdfViewerPage';
+import { ApiKeyWarningToast } from './components/ApiKeyWarningToast';
 
 const router = createHashRouter([
     {
@@ -126,6 +127,7 @@ const AppContent: React.FC = () => {
         <ChildProvider>
             <RouterProvider router={router} />
             <PrintPreviewManager />
+            <ApiKeyWarningToast />
         </ChildProvider>
     );
 };

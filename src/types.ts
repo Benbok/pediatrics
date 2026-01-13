@@ -229,9 +229,9 @@ export interface Medication {
   icd10Codes: string[];
   packageDescription?: string | null;
   manufacturer?: string | null;
-  forms: any[]; // Parsed JSON
-  pediatricDosing: any[]; // Parsed JSON
-  adultDosing?: any | null;
+  forms: any[]; // Parsed JSON (MedicationForm[])
+  pediatricDosing: any[]; // Parsed JSON (PediatricDosingRule[])
+  adultDosing?: any | null; // Parsed JSON (AdultDosingRule[])
   contraindications: string;
   cautionConditions?: string | null;
   sideEffects?: string | null;
@@ -241,6 +241,11 @@ export interface Medication {
   indications: any[]; // Parsed JSON
   registrationNumber?: string | null;
   vidalUrl?: string | null;
+  // Новые поля для ограничений дозирования (Vidal структура)
+  minInterval?: number | null; // Мин интервал между дозами (часы)
+  maxDosesPerDay?: number | null; // Макс доз в сутки
+  maxDurationDays?: number | null; // Макс длительность (дни)
+  routeOfAdmin?: 'oral' | 'rectal' | 'iv' | 'im' | 'sublingual' | 'topical' | 'inhalation' | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -250,6 +255,10 @@ export interface Visit {
   childId: number;
   doctorId: number;
   visitDate: string;
+  currentWeight?: number | null; // в кг
+  currentHeight?: number | null; // в см
+  bmi?: number | null; // Body Mass Index
+  bsa?: number | null; // Body Surface Area (м²)
   complaints: string;
   complaintsJson?: any | null;
   physicalExam?: string | null;
@@ -261,6 +270,23 @@ export interface Visit {
   status: 'draft' | 'completed';
   notes?: string | null;
   createdAt?: string;
+}
+
+export interface DiagnosisSuggestion {
+  disease: Disease;
+  confidence: number; // 0.0 - 1.0
+  reasoning: string;
+  matchedSymptoms: string[];
+}
+
+export interface MedicationRecommendation {
+  medication: Medication;
+  recommendedDose: any; // DoseCalculationResult
+  canUse: boolean;
+  warnings: string[];
+  priority?: number;
+  specificDosing?: string | null;
+  duration?: string | null;
 }
 
 export interface DiseaseNote {
@@ -345,6 +371,8 @@ declare global {
       upsertDisease: (data: Disease) => Promise<Disease>;
       deleteDisease: (id: number) => Promise<boolean>;
       uploadGuideline: (diseaseId: number, pdfPath: string) => Promise<ClinicalGuideline>;
+      uploadGuidelinesBatch: (diseaseId: number, pdfPaths: string[]) => Promise<{ success: ClinicalGuideline[]; errors: Array<{ path: string; error: string }> | null }>;
+      deleteGuideline: (guidelineId: number) => Promise<boolean>;
       searchDiseases: (symptoms: string[]) => Promise<Disease[]>;
 
       // Disease Notes (Personal or Shared)
@@ -373,7 +401,7 @@ declare global {
       upsertMedication: (data: Medication) => Promise<Medication>;
       deleteMedication: (id: number) => Promise<boolean>;
       linkMedicationToDisease: (data: { diseaseId: number; medicationId: number; priority?: number; dosing?: string; duration?: string }) => Promise<any>;
-      calculateDose: (params: { medicationId: number; weight: number; ageMonths: number }) => Promise<any>;
+      calculateDose: (params: { medicationId: number; weight: number; ageMonths: number; height?: number | null }) => Promise<any>;
       getMedicationsByDisease: (diseaseId: number) => Promise<Medication[]>;
 
       // VISITS MODULE API
@@ -381,7 +409,28 @@ declare global {
       getVisit: (id: number) => Promise<Visit>;
       upsertVisit: (data: Visit) => Promise<Visit>;
       deleteVisit: (id: number) => Promise<boolean>;
-      analyzeVisit: (visitId: number) => Promise<any[]>;
+      analyzeVisit: (visitId: number) => Promise<DiagnosisSuggestion[]>;
+      getMedicationsForDiagnosis: (params: { diseaseId: number; childId: number }) => Promise<MedicationRecommendation[]>;
+
+      // API KEYS POOL MANAGEMENT API
+      getApiKeysPoolStatus: () => Promise<{
+        total: number;
+        active: number;
+        failed: number;
+        currentKeyIndex: number;
+        needsAttention: boolean;
+        keys: Array<{
+          index: number;
+          status: 'active' | 'failed';
+          errorCount: number;
+          lastUsed: string | null;
+          lastError: string | null;
+        }>;
+      }>;
+      resetApiKey: (keyIndex: number) => Promise<boolean>;
+      resetAllApiKeys: () => Promise<boolean>;
+      reloadApiKeysFromEnv: () => Promise<{ success: boolean; keysCount: number }>;
+      onApiKeysLowWarning: (callback: (event: any, data: { remaining: number; total: number }) => void) => void;
     }
   }
 }

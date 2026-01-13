@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     upsertDisease: (data) => ipcRenderer.invoke('diseases:upsert', data),
     deleteDisease: (id) => ipcRenderer.invoke('diseases:delete', id),
     uploadGuideline: (diseaseId, pdfPath) => ipcRenderer.invoke('diseases:upload-guideline', { diseaseId, pdfPath }),
+    uploadGuidelinesBatch: (diseaseId, pdfPaths) => ipcRenderer.invoke('diseases:upload-guidelines-batch', { diseaseId, pdfPaths }),
+    deleteGuideline: (guidelineId) => ipcRenderer.invoke('diseases:delete-guideline', guidelineId),
     searchDiseases: (symptoms) => ipcRenderer.invoke('diseases:search', symptoms),
     parsePdfOnly: (pdfPath) => ipcRenderer.invoke('diseases:parse-pdf-only', pdfPath),
 
@@ -58,6 +60,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteMedication: (id) => ipcRenderer.invoke('medications:delete', id),
     linkMedicationToDisease: (data) => ipcRenderer.invoke('medications:link-disease', data),
     calculateDose: (params) => ipcRenderer.invoke('medications:calculate-dose', params),
+    getMedicationsByDisease: (diseaseId) => ipcRenderer.invoke('medications:get-by-disease', diseaseId),
 
     // VISITS MODULE API
     getVisits: (childId) => ipcRenderer.invoke('visits:list-for-child', childId),
@@ -65,6 +68,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     upsertVisit: (data) => ipcRenderer.invoke('visits:upsert', data),
     deleteVisit: (id) => ipcRenderer.invoke('visits:delete', id),
     analyzeVisit: (visitId) => ipcRenderer.invoke('visits:analyze', visitId),
+    getMedicationsForDiagnosis: ({ diseaseId, childId }) => ipcRenderer.invoke('visits:get-medications-for-diagnosis', { diseaseId, childId }),
+
+    // API KEYS POOL MANAGEMENT API
+    getApiKeysPoolStatus: () => ipcRenderer.invoke('api-keys:get-pool-status'),
+    resetApiKey: (keyIndex) => ipcRenderer.invoke('api-keys:reset-key', keyIndex),
+    resetAllApiKeys: () => ipcRenderer.invoke('api-keys:reset-all'),
+    reloadApiKeysFromEnv: () => ipcRenderer.invoke('api-keys:reload-from-env'),
+    onApiKeysLowWarning: (callback) => {
+        ipcRenderer.on('api-keys:low-warning', callback);
+        // Return cleanup function
+        return () => ipcRenderer.removeListener('api-keys:low-warning', callback);
+    },
 
     // BACKUP API
     createBackup: () => ipcRenderer.invoke('create-backup'),

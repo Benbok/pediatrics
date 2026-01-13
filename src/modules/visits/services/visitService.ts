@@ -1,4 +1,4 @@
-import { Visit } from '../../../types';
+import { Visit, DiagnosisSuggestion, MedicationRecommendation } from '../../../types';
 
 export const visitService = {
     /**
@@ -52,11 +52,23 @@ export const visitService = {
     /**
      * Analyze visit complaints for CDSS suggestions
      */
-    async analyzeVisit(visitId: number): Promise<any[]> {
+    async analyzeVisit(visitId: number): Promise<DiagnosisSuggestion[]> {
         try {
             return await window.electronAPI.analyzeVisit(visitId);
         } catch (error) {
             console.error('[VisitService] Visit analysis failed:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Get medications for a specific diagnosis with calculated doses
+     */
+    async getMedicationsForDiagnosis(diseaseId: number, childId: number): Promise<MedicationRecommendation[]> {
+        try {
+            return await window.electronAPI.getMedicationsForDiagnosis({ diseaseId, childId });
+        } catch (error) {
+            console.error('[VisitService] Failed to get medications for diagnosis:', error);
             throw error;
         }
     }

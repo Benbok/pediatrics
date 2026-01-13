@@ -46,6 +46,18 @@ const setupDiseaseHandlers = () => {
         return guideline;
     }));
 
+    ipcMain.handle('diseases:upload-guidelines-batch', ensureAuthenticated(async (_, { diseaseId, pdfPaths }) => {
+        const result = await DiseaseService.uploadGuidelinesBatch(diseaseId, pdfPaths);
+        logAudit('GUIDELINES_BATCH_UPLOADED', { diseaseId, count: result.success.length });
+        return result;
+    }));
+
+    ipcMain.handle('diseases:delete-guideline', ensureAuthenticated(async (_, guidelineId) => {
+        await DiseaseService.deleteGuideline(guidelineId);
+        logAudit('GUIDELINE_DELETED', { guidelineId });
+        return true;
+    }));
+
     ipcMain.handle('diseases:search', ensureAuthenticated(async (_, symptoms) => {
         return await DiseaseService.searchBySymptoms(symptoms);
     }));
