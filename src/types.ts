@@ -181,6 +181,31 @@ export interface AugmentedVaccine extends VaccineDefinition {
 
 // ============= CDSS MODULE TYPES =============
 
+// ============= ICD CODES MODULE TYPES =============
+
+export interface IcdCode {
+  uid: string;
+  code: string; // "D32.0"
+  name: string; // "Доброкачественное новообразование..."
+  uniqueId?: number | null;
+  parentId?: number | null;
+  sortField?: string | null;
+}
+
+export interface IcdCodeSearchParams {
+  query?: string; // Поиск по коду или названию
+  category?: string; // Фильтр по категории (A-Z)
+  limit?: number; // Лимит результатов
+  offset?: number; // Пагинация
+}
+
+export interface IcdCodeSearchResult {
+  results: IcdCode[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface Disease {
   id: number;
   icd10Code: string; // Primary code
@@ -345,6 +370,22 @@ declare global {
       readTextFile: (filePath: string) => Promise<string>;
       createBackup: () => Promise<{ success: boolean; path?: string; error?: string }>;
 
+      // CACHE MANAGEMENT API
+      getCacheStats: () => Promise<{
+        namespaces: Record<string, { size: number; expired: number; ttl: number }>;
+        totalSize: number;
+        maxSize: number;
+        stats: {
+          hits: number;
+          misses: number;
+          sets: number;
+          invalidations: number;
+          hitRate: string;
+        };
+      }>;
+      clearAllCache: () => Promise<{ success: boolean }>;
+      clearCacheNamespace: (namespace: string) => Promise<{ success: boolean }>;
+
       // SYSTEM API
       openExternalPath: (path: string) => Promise<string>;
       openPdfAtPage: (path: string, page: number) => Promise<string>;
@@ -411,6 +452,14 @@ declare global {
       deleteVisit: (id: number) => Promise<boolean>;
       analyzeVisit: (visitId: number) => Promise<DiagnosisSuggestion[]>;
       getMedicationsForDiagnosis: (params: { diseaseId: number; childId: number }) => Promise<MedicationRecommendation[]>;
+
+      // ICD CODES MODULE API
+      loadIcdCodes: () => Promise<{ success: boolean; count: number }>;
+      getIcdCodeByCode: (code: string) => Promise<IcdCode | null>;
+      searchIcdCodes: (params: IcdCodeSearchParams) => Promise<IcdCodeSearchResult>;
+      getIcdCodesByCategory: (params: { category: string; limit?: number; offset?: number }) => Promise<IcdCodeSearchResult>;
+      getAllIcdCodes: (params: { limit?: number; offset?: number }) => Promise<IcdCodeSearchResult>;
+      getIcdCategories: () => Promise<string[]>;
 
       // API KEYS POOL MANAGEMENT API
       getApiKeysPoolStatus: () => Promise<{

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { medicationService } from './services/medicationService';
 import { Medication } from '../../types';
 import { Card } from '../../components/ui/Card';
@@ -24,7 +24,12 @@ import {
 export const MedicationFormPage: React.FC = () => {
     const { id } = useParams<{ id?: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const isEdit = !!id;
+    
+    // Определяем источник навигации
+    const fromDisease = searchParams.get('from') === 'disease';
+    const diseaseId = searchParams.get('diseaseId');
 
     const [formData, setFormData] = useState<Partial<Medication>>({
         nameRu: '',
@@ -98,10 +103,20 @@ export const MedicationFormPage: React.FC = () => {
         });
     };
 
+    const handleBack = () => {
+        if (fromDisease && diseaseId) {
+            // Если открыто из базы знаний - вернуться к заболеванию
+            navigate(`/diseases/${diseaseId}`);
+        } else {
+            // Если открыто из модуля препаратов - вернуться к списку препаратов
+            navigate('/medications');
+        }
+    };
+
     return (
         <div className="p-6 max-w-5xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
-                <Button variant="ghost" onClick={() => navigate('/medications')} className="rounded-xl">
+                <Button variant="ghost" onClick={handleBack} className="rounded-xl">
                     <ChevronLeft className="w-5 h-5 mr-1" />
                     Назад
                 </Button>
@@ -353,7 +368,7 @@ export const MedicationFormPage: React.FC = () => {
                     <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => navigate('/medications')}
+                        onClick={handleBack}
                         className="h-14 px-8 rounded-2xl"
                     >
                         Отмена

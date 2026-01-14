@@ -11,6 +11,7 @@ import { UserManagementModule } from './modules/users/UserManagementModule';
 import { DiseasesModule } from './modules/diseases/DiseasesModule';
 import { DiseaseFormPage } from './modules/diseases/DiseaseFormPage';
 import { DiseaseDetailPage } from './modules/diseases/DiseaseDetailPage';
+import { IcdCodesModule } from './modules/icd-codes/IcdCodesModule';
 import { MedicationsModule } from './modules/medications/MedicationsModule';
 import { MedicationFormPage } from './modules/medications/MedicationFormPage';
 import { VisitsModule } from './modules/visits/VisitsModule';
@@ -21,6 +22,7 @@ import './modules/printing/templates/vaccination/register';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './modules/auth/LoginPage';
 import { ChildProvider } from './context/ChildContext';
+import { DataCacheProvider } from './context/DataCacheContext';
 import { PdfViewerPage } from './pages/PdfViewerPage';
 import { ApiKeyWarningToast } from './components/ApiKeyWarningToast';
 
@@ -68,6 +70,10 @@ const router = createHashRouter([
             {
                 path: 'diseases/edit/:id',
                 element: <DiseaseFormPage />,
+            },
+            {
+                path: 'icd-codes',
+                element: <IcdCodesModule />,
             },
             {
                 path: 'medications',
@@ -124,11 +130,13 @@ const AppContent: React.FC = () => {
     }
 
     return (
-        <ChildProvider>
-            <RouterProvider router={router} />
-            <PrintPreviewManager />
-            <ApiKeyWarningToast />
-        </ChildProvider>
+        <DataCacheProvider>
+            <ChildProvider>
+                <RouterProvider router={router} />
+                <PrintPreviewManager />
+                <ApiKeyWarningToast />
+            </ChildProvider>
+        </DataCacheProvider>
     );
 };
 

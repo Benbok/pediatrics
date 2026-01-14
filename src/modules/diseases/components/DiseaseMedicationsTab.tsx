@@ -80,7 +80,7 @@ export const DiseaseMedicationsTab: React.FC<DiseaseMedicationsTabProps> = ({ di
                     <MedicationCard
                         key={med.id}
                         medication={med}
-                        onSelect={(id) => navigate(`/medications/${id}`)}
+                        onSelect={(id) => navigate(`/medications/${id}?from=disease&diseaseId=${diseaseId}`)}
                     />
                 ))}
             </div>

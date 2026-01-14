@@ -70,6 +70,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     analyzeVisit: (visitId) => ipcRenderer.invoke('visits:analyze', visitId),
     getMedicationsForDiagnosis: ({ diseaseId, childId }) => ipcRenderer.invoke('visits:get-medications-for-diagnosis', { diseaseId, childId }),
 
+    // ICD CODES MODULE API
+    loadIcdCodes: () => ipcRenderer.invoke('icd-codes:load'),
+    getIcdCodeByCode: (code) => ipcRenderer.invoke('icd-codes:get-by-code', code),
+    searchIcdCodes: (params) => ipcRenderer.invoke('icd-codes:search', params),
+    getIcdCodesByCategory: (params) => ipcRenderer.invoke('icd-codes:get-by-category', params),
+    getAllIcdCodes: (params) => ipcRenderer.invoke('icd-codes:get-all', params),
+    getIcdCategories: () => ipcRenderer.invoke('icd-codes:get-categories'),
+
     // API KEYS POOL MANAGEMENT API
     getApiKeysPoolStatus: () => ipcRenderer.invoke('api-keys:get-pool-status'),
     resetApiKey: (keyIndex) => ipcRenderer.invoke('api-keys:reset-key', keyIndex),
@@ -83,6 +91,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // BACKUP API
     createBackup: () => ipcRenderer.invoke('create-backup'),
+
+    // CACHE MANAGEMENT API
+    getCacheStats: () => ipcRenderer.invoke('cache:get-stats'),
+    clearAllCache: () => ipcRenderer.invoke('cache:clear-all'),
+    clearCacheNamespace: (namespace) => ipcRenderer.invoke('cache:clear-namespace', namespace),
 
     // SYSTEM API
     openExternalPath: (path) => ipcRenderer.invoke('app:open-path', path),

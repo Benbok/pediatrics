@@ -89,6 +89,10 @@ Almost all content lives in cards.
   - Hover: `hover:bg-primary-700`
   - Shadow: `shadow-md shadow-primary-500/20`
   - Radius: `rounded-lg`
+- **Colored Buttons (Custom Backgrounds):**
+  - **CRITICAL RULE:** Any button with a colored background (e.g., `bg-indigo-600`, `bg-teal-600`, `bg-purple-600`, etc.) MUST use `!text-white` (with `!` important modifier) to ensure text visibility.
+  - Example: `className="bg-indigo-600 hover:bg-indigo-700 !text-white font-bold"`
+  - This prevents text from blending with the background in Electron themes and dark mode.
 - **Secondary/Outline:**
   - Bg: `bg-white`
   - Border: `border border-slate-300`
@@ -196,10 +200,11 @@ The visual language is defined via Tailwind **v4 CSS Tokens**.
 ### 8.4. Accessibility & Contrast Standards
 To avoid "blind" elements and unreadable text:
 1. **Never** use light text on light backgrounds (e.g., White on Primary-100).
-2. **Standard Buttons**: Primary buttons MUST use high-contrast text (`text-white` on `bg-blue-600`).
-3. **Contrast Validation**: Always check contrast using tools or WCAG standards during development.
-4. **Visual Hierarchy**: Active states must be clearly distinguishable from inactive states through color contrast or borders.
-5. **Icon Visibility**: Icons must maintain a minimum contrast of 3:1 against their background.
+2. **Standard Buttons**: Primary buttons MUST use high-contrast text (`!text-white` on `bg-blue-600`). Always use the `!` important modifier for text color on colored button backgrounds.
+3. **Colored Button Text Rule**: ALL buttons with colored backgrounds (indigo, teal, purple, etc.) MUST use `!text-white` to prevent text from blending with the background. This is especially critical in Electron environments where theme cascading can cause visibility issues.
+4. **Contrast Validation**: Always check contrast using tools or WCAG standards during development.
+5. **Visual Hierarchy**: Active states must be clearly distinguishable from inactive states through color contrast or borders.
+6. **Icon Visibility**: Icons must maintain a minimum contrast of 3:1 against their background.
 
 ### 8.2. Atomic Component Layer (Level 1)
 Located in `src/components/ui/`.

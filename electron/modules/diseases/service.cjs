@@ -146,10 +146,16 @@ const DiseaseService = {
             }
         }
 
+        // Сохраняем diseaseId перед удалением
+        const diseaseId = guideline.diseaseId;
+
         // Удаляем запись из БД
-        return await prisma.clinicalGuideline.delete({
+        await prisma.clinicalGuideline.delete({
             where: { id: Number(guidelineId) }
         });
+
+        // Возвращаем объект с diseaseId для инвалидации кеша
+        return { diseaseId };
     },
 
     /**
@@ -261,10 +267,32 @@ const DiseaseService = {
 
             const parsedData = JSON.parse(stdout);
 
+            // Получаем первый код МКБ
+            const firstCode = parsedData.icd10_codes?.[0];
+            
+            let nameRu = path.basename(pdfPath, path.extname(pdfPath)); // Fallback
+
+            // Если есть код - ищем название в справочнике МКБ
+            if (firstCode) {
+                try {
+                    const { IcdCodeService } = require('../icd-codes/service.cjs');
+                    const icdCode = await IcdCodeService.getByCode(firstCode);
+                    if (icdCode && icdCode.name) {
+                        nameRu = icdCode.name;
+                        logger.info(`[DiseaseService] Found ICD name for ${firstCode}: ${nameRu}`);
+                    } else {
+                        logger.warn(`[DiseaseService] ICD code ${firstCode} not found in reference`);
+                    }
+                } catch (error) {
+                    logger.warn(`[DiseaseService] Failed to get ICD name for ${firstCode}:`, error.message);
+                    // Fallback to filename
+                }
+            }
+
             return {
-                icd10Code: parsedData.icd10_codes?.[0] || '',
+                icd10Code: firstCode || '',
                 allIcd10Codes: parsedData.icd10_codes || [],
-                nameRu: parsedData.title || path.basename(pdfPath, path.extname(pdfPath)),
+                nameRu, // Теперь из справочника МКБ
                 description: 'Извлечено из клинических рекомендаций',
                 symptoms: [], // User will enter symptoms manually
                 aiUsed: !aiWarning,

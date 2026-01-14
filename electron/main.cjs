@@ -10,6 +10,7 @@ const { setupAuthHandlers, ensureAuthenticated } = require('./auth.cjs');
 const { setupDiseaseHandlers } = require('./modules/diseases/handlers.cjs');
 const { setupMedicationHandlers } = require('./modules/medications/handlers.cjs');
 const { setupVisitHandlers } = require('./modules/visits/handlers.cjs');
+const { setupIcdCodeHandlers } = require('./modules/icd-codes/handlers.cjs');
 const { initializeDatabase } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const isDev = !app.isPackaged;
@@ -69,6 +70,25 @@ app.whenReady().then(async () => {
     setupDiseaseHandlers();
     setupMedicationHandlers();
     setupVisitHandlers();
+    setupIcdCodeHandlers();
+    
+    // Cache Service handlers
+    const { CacheService } = require('./services/cacheService.cjs');
+    ipcMain.handle('cache:get-stats', ensureAuthenticated(async () => {
+        return CacheService.getStats();
+    }));
+    
+    ipcMain.handle('cache:clear-all', ensureAuthenticated(async () => {
+        CacheService.invalidateAll();
+        return { success: true };
+    }));
+    
+    ipcMain.handle('cache:clear-namespace', ensureAuthenticated(async (_, namespace) => {
+        CacheService.invalidate(namespace);
+        return { success: true };
+    }));
+    
+    logger.info('[Main] Cache service handlers registered');
 
     // Initialize API Key Manager
     logger.info('[Main] Initializing API Key Manager...');

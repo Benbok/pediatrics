@@ -54,69 +54,12 @@ def fix_mojibake(text: str) -> str:
 
 def extract_metadata_locally(text: str) -> dict:
     """
-    Извлекает название заболевания и коды МКБ-10 из клинических рекомендаций.
+    Извлекает коды МКБ-10 из клинических рекомендаций.
     
     Структура клинических рекомендаций МЗ РФ:
-    - Раздел 1.1: Определение заболевания (содержит название)
     - Раздел 1.4: Особенности кодирования (содержит коды МКБ-10)
     """
-    metadata = {"title": None, "icd10_codes": []}
-    
-    # ================== ИЗВЛЕЧЕНИЕ НАЗВАНИЯ ==================
-    # Ищем раздел 1.1 "Определение заболевания"
-    # Название - это первое предложение после заголовка раздела
-    
-    section_11_patterns = [
-        r'1\.1\s+Определение\s+заболевания[^\n]*\n+(.+?)(?:\n\n|\n1\.2)',
-        r'Определение\s+заболевания[^\n]*\n+(.+?)(?:\n\n|\n\d+\.\d)',
-    ]
-    
-    for pattern in section_11_patterns:
-        match = re.search(pattern, text, re.DOTALL | re.I)
-        if match:
-            definition_text = match.group(1).strip()
-            # Берем первое предложение (до первого тире или точки)
-            # Пример: "Респираторно-синцитиальная вирусная инфекция (РСВИ) – острое..."
-            # Нам нужно: "Респираторно-синцитиальная вирусная инфекция (РСВИ)"
-            
-            # Ищем название до длинного тире или точки
-            title_match = re.match(r'^([^–—.]+(?:\([^)]+\))?)', definition_text)
-            if title_match:
-                title = title_match.group(1).strip()
-                # Очищаем от лишних пробелов и переносов
-                title = re.sub(r'\s+', ' ', title).strip()
-                if len(title) > 10:
-                    metadata["title"] = title
-                    log(f"Found title in section 1.1: {title[:60]}...")
-                    break
-    
-    # Fallback: ищем строку с названием болезни по ключевым словам
-    if not metadata["title"]:
-        disease_indicators = [
-            "инфекция", "синдром", "болезнь", "заболевание", "патология",
-            "недостаточность", "расстройство", "нарушение", "пневмония",
-            "бронхит", "ларингит", "фарингит", "трахеит", "менингит"
-        ]
-        
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        for line in lines:
-            # Пропускаем технические строки
-            if re.search(r'\.{4,}', line): continue
-            if re.match(r'^\d+[\.\d]*\s', line): continue
-            if re.match(r'^[А-ЯЁ]{2,6}\s*[-–—]\s', line): continue
-            if len(line) < 20 or len(line) > 150: continue
-            
-            # Ищем строки с медицинскими терминами
-            if any(ind in line.lower() for ind in disease_indicators):
-                # Исключаем определения ("заболевание – это...")
-                if "–" in line and line.index("–") < 50:
-                    title = line.split("–")[0].strip()
-                    if len(title) > 15:
-                        metadata["title"] = title
-                        break
-                elif len(line) < 80:
-                    metadata["title"] = line
-                    break
+    metadata = {"icd10_codes": []}
     
     # ================== ИЗВЛЕЧЕНИЕ КОДОВ МКБ-10 ==================
     # Ищем раздел 1.4 "Особенности кодирования" 
@@ -150,10 +93,6 @@ def extract_metadata_locally(text: str) -> dict:
             filtered = [c for c in all_codes if re.match(r'^[A-Z]\d{2}', c)]
             metadata["icd10_codes"] = list(set(filtered))
     
-    # Ensure title is set
-    if not metadata["title"]:
-        metadata["title"] = "Не определено"
-    
     return metadata
 
 def parse_with_gemini(pdf_path: str, extracted_text: str, local_meta: dict) -> dict:
@@ -177,13 +116,11 @@ def parse_with_gemini(pdf_path: str, extracted_text: str, local_meta: dict) -> d
 
 СТРУКТУРА JSON:
 {
-  "title": "Полное название заболевания (на русском языке)",
   "icd10_codes": ["СПИСОК КОДОВ МКБ-10"]
 }
 
 ПРАВИЛА ИЗВЛЕЧЕНИЯ:
-1. "title": Найди официальное название заболевания. Игнорируй технические заголовки типа "Список сокращений", "Оглавление".
-2. "icd10_codes": Найди все коды МКБ-10, указанные в документе (например, J04.1, J21.0).
+1. "icd10_codes": Найди все коды МКБ-10, указанные в документе (например, J04.1, J21.0).
 
 ВАЖНО: Верни ТОЛЬКО JSON без каких-либо пояснений и markdown-разметки!
 """
@@ -223,13 +160,8 @@ def parse_with_gemini(pdf_path: str, extracted_text: str, local_meta: dict) -> d
         
         ai_data = json.loads(text)
         
-        # Сливаем AI данные с локальными
-        final_title = ai_data.get("title")
-        if not final_title or len(final_title) < 5 or any(tech in final_title.lower() for tech in ["сокращений", "оглавление", "информация", "классификация"]):
-            final_title = local_meta.get("title")
-            
+        # Сливаем AI данные с локальными (только коды МКБ)
         final_data = {
-            "title": final_title or "Не определено",
             "icd10_codes": list(set(ai_data.get("icd10_codes", []) + local_meta.get("icd10_codes", [])))
         }
         return final_data
@@ -237,8 +169,6 @@ def parse_with_gemini(pdf_path: str, extracted_text: str, local_meta: dict) -> d
     except Exception as e:
         log_error(f"Gemini error: {e}. Using local metadata.")
         # Фолбек на локальные данные
-        if not local_meta.get("title"):
-            local_meta["title"] = "Не определено"
         if not local_meta.get("icd10_codes"):
             local_meta["icd10_codes"] = []
         return local_meta
@@ -266,7 +196,6 @@ if __name__ == "__main__":
     
     # Гарантируем наличие полей для фронтенда
     final_result = {
-        "title": result.get("title", "Не определено"),
         "icd10_codes": result.get("icd10_codes", [])
     }
     

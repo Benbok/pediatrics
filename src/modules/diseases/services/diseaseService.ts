@@ -1,5 +1,10 @@
 import { Disease, ClinicalGuideline } from '../../../types';
 
+/**
+ * Сервис для работы с заболеваниями
+ * Использует backend кеширование через IPC
+ * Frontend кеширование через DataCacheContext (используется в компонентах)
+ */
 export const diseaseService = {
     /**
      * Fetch all diseases

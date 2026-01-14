@@ -1,0 +1,279 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { icdCodeService } from '../../services/icdCode.service';
+import { diseaseService } from '../diseases/services/diseaseService';
+import { IcdCode } from '../../types';
+import { IcdCodeCard } from './components/IcdCodeCard';
+import { IcdCodeCategoryFilter } from './components/IcdCodeCategoryFilter';
+import { Input } from '../../components/ui/Input';
+import { Search, FileText, AlertCircle, Loader2 } from 'lucide-react';
+import { useDebounce } from '../../hooks/useDebounce';
+
+const ITEMS_PER_PAGE = 50;
+
+export const IcdCodesModule: React.FC = () => {
+    const navigate = useNavigate();
+    const [codes, setCodes] = useState<IcdCode[]>([]);
+    const [categories, setCategories] = useState<string[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSearching, setIsSearching] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(0);
+    const [total, setTotal] = useState(0);
+
+    const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+    useEffect(() => {
+        loadInitialData();
+    }, []);
+
+    useEffect(() => {
+        performSearch();
+    }, [debouncedSearchQuery, selectedCategory]);
+
+    const loadInitialData = async () => {
+        setIsLoading(true);
+        try {
+            // Загружаем данные и категории параллельно
+            const [loadResult, categoriesList] = await Promise.all([
+                icdCodeService.loadCodes(),
+                icdCodeService.getCategories()
+            ]);
+            
+            setCategories(categoriesList);
+            setError(null);
+        } catch (err: any) {
+            setError('Не удалось загрузить справочник МКБ');
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const performSearch = async () => {
+        setIsSearching(true);
+        setCurrentPage(0);
+        
+        try {
+            let result;
+            
+            if (selectedCategory) {
+                // Фильтр по категории
+                result = await icdCodeService.getCodesByCategory(
+                    selectedCategory,
+                    ITEMS_PER_PAGE,
+                    0
+                );
+            } else if (debouncedSearchQuery.trim()) {
+                // Поиск по запросу
+                result = await icdCodeService.searchCodes({
+                    query: debouncedSearchQuery,
+                    limit: ITEMS_PER_PAGE,
+                    offset: 0
+                });
+            } else {
+                // Все коды
+                result = await icdCodeService.getAllCodes(ITEMS_PER_PAGE, 0);
+            }
+            
+            setCodes(result.results);
+            setTotal(result.total);
+            setError(null);
+        } catch (err: any) {
+            setError('Ошибка при поиске кодов МКБ');
+            console.error(err);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const loadMore = async () => {
+        if (isSearching || codes.length >= total) return;
+        
+        setIsSearching(true);
+        try {
+            const nextPage = currentPage + 1;
+            let result;
+            
+            if (selectedCategory) {
+                result = await icdCodeService.getCodesByCategory(
+                    selectedCategory,
+                    ITEMS_PER_PAGE,
+                    nextPage * ITEMS_PER_PAGE
+                );
+            } else if (debouncedSearchQuery.trim()) {
+                result = await icdCodeService.searchCodes({
+                    query: debouncedSearchQuery,
+                    limit: ITEMS_PER_PAGE,
+                    offset: nextPage * ITEMS_PER_PAGE
+                });
+            } else {
+                result = await icdCodeService.getAllCodes(
+                    ITEMS_PER_PAGE,
+                    nextPage * ITEMS_PER_PAGE
+                );
+            }
+            
+            setCodes(prev => [...prev, ...result.results]);
+            setCurrentPage(nextPage);
+        } catch (err: any) {
+            setError('Ошибка при загрузке кодов');
+            console.error(err);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleCategorySelect = (category: string | null) => {
+        setSelectedCategory(category);
+        setSearchQuery(''); // Очищаем поиск при выборе категории
+    };
+
+    const handleCodeClick = async (code: IcdCode) => {
+        try {
+            // Ищем заболевание с таким кодом МКБ
+            const diseases = await diseaseService.getDiseases();
+            const normalizedCode = code.code.toUpperCase().trim();
+            
+            // Ищем заболевание по основному коду или в списке дополнительных кодов
+            const matchingDisease = diseases.find(disease => {
+                // Проверяем основной код
+                if (disease.icd10Code?.toUpperCase().trim() === normalizedCode) {
+                    return true;
+                }
+                
+                // Проверяем дополнительные коды
+                let additionalCodes: string[] = [];
+                if (Array.isArray(disease.icd10Codes)) {
+                    additionalCodes = disease.icd10Codes;
+                } else if (typeof disease.icd10Codes === 'string') {
+                    try {
+                        additionalCodes = JSON.parse(disease.icd10Codes || '[]');
+                    } catch (e) {
+                        // Если не JSON, игнорируем
+                    }
+                }
+                
+                return additionalCodes.some((c: string) => 
+                    c?.toUpperCase().trim() === normalizedCode
+                );
+            });
+
+            if (matchingDisease?.id) {
+                // Найдено заболевание - переходим на его страницу
+                navigate(`/diseases/${matchingDisease.id}`);
+            } else {
+                // Заболевание не найдено - ничего не делаем
+                // В будущем можно показать уведомление или предложить создать заболевание
+                console.info(`[IcdCodesModule] No disease found for code ${code.code}`);
+            }
+        } catch (err) {
+            console.error('[IcdCodesModule] Failed to search for disease:', err);
+        }
+    };
+
+    return (
+        <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900/50 p-6 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-primary-100 dark:bg-primary-900/40 rounded-2xl">
+                        <FileText className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                            Справочник МКБ-10
+                        </h1>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium">
+                            Международная классификация болезней 10-го пересмотра
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Search */}
+            <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
+                <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Поиск по коду МКБ или названию..."
+                    className="pl-12 h-14 rounded-2xl bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800"
+                />
+            </div>
+
+            {/* Category Filter */}
+            {!isLoading && categories.length > 0 && (
+                <IcdCodeCategoryFilter
+                    categories={categories}
+                    selectedCategory={selectedCategory}
+                    onCategorySelect={handleCategorySelect}
+                />
+            )}
+
+            {/* Error */}
+            {error && (
+                <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-2xl text-red-600 dark:text-red-400">
+                    <AlertCircle className="w-5 h-5" />
+                    <p className="font-medium">{error}</p>
+                </div>
+            )}
+
+            {/* Loading */}
+            {isLoading && (
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
+                </div>
+            )}
+
+            {/* Results */}
+            {!isLoading && (
+                <>
+                    <div className="flex items-center justify-between mb-4">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Найдено: <span className="font-semibold text-slate-700 dark:text-slate-300">{total}</span> кодов
+                        </p>
+                    </div>
+
+                    {codes.length === 0 ? (
+                        <div className="text-center py-12">
+                            <p className="text-slate-500 dark:text-slate-400">Коды не найдены</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-4">
+                            {codes.map((code) => (
+                                <IcdCodeCard 
+                                    key={code.uid} 
+                                    code={code}
+                                    onClick={() => handleCodeClick(code)}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Load More */}
+                    {codes.length < total && (
+                        <div className="flex justify-center pt-4">
+                            <button
+                                onClick={loadMore}
+                                disabled={isSearching}
+                                className="px-6 py-3 bg-primary-600 text-white rounded-xl font-semibold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {isSearching ? (
+                                    <span className="flex items-center gap-2">
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Загрузка...
+                                    </span>
+                                ) : (
+                                    'Загрузить еще'
+                                )}
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
+};

@@ -12,7 +12,8 @@ import {
   Users,
   UserCircle,
   BookOpen,
-  Pill
+  Pill,
+  FileText
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../context/AuthContext';
@@ -48,6 +49,7 @@ export const AppShell: React.FC = () => {
     { to: '/', icon: LayoutDashboard, label: 'Главная' },
     { to: '/patients', icon: Baby, label: 'Пациенты' },
     { to: '/diseases', icon: BookOpen, label: 'База знаний' },
+    { to: '/icd-codes', icon: FileText, label: 'Коды МКБ' },
     { to: '/medications', icon: Pill, label: 'Препараты' },
     ...(currentUser?.isAdmin ? [{ to: '/users', icon: Users, label: 'Пользователи' }] : []),
   ];

@@ -119,7 +119,7 @@ export const DiseaseNotesList: React.FC<DiseaseNotesListProps> = ({ diseaseId })
                             setEditingNote(null);
                             setIsEditing(true);
                         }}
-                        className="rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20 px-6 h-12 font-bold"
+                        className="rounded-2xl bg-indigo-600 hover:bg-indigo-700 !text-white shadow-lg shadow-indigo-500/20 px-6 h-12 font-bold"
                     >
                         <Plus className="w-5 h-5 mr-2" />
                         Добавить заметку

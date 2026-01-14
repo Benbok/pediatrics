@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { medicationService } from './services/medicationService';
+import { useDataCache } from '../../context/DataCacheContext';
 import { Medication } from '../../types';
 import { MedicationCard } from './components/MedicationCard';
 import { Input } from '../../components/ui/Input';
@@ -9,29 +10,39 @@ import { Card } from '../../components/ui/Card';
 import { Search, Plus, Filter, Pill, AlertCircle, Beaker } from 'lucide-react';
 
 export const MedicationsModule: React.FC = () => {
+    const navigate = useNavigate();
+    const { medications: cachedMedications, loadMedications, invalidate, isLoadingMedications } = useDataCache();
     const [medications, setMedications] = useState<Medication[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const navigate = useNavigate();
 
     useEffect(() => {
-        loadMedications();
-    }, []);
+        // Загружаем данные из кеша или делаем запрос
+        const initializeData = async () => {
+            try {
+                const data = await loadMedications();
+                setMedications(data);
+                setError(null);
+            } catch (err) {
+                setError('Не удалось загрузить базу препаратов');
+                console.error(err);
+            }
+        };
 
-    const loadMedications = async () => {
-        setIsLoading(true);
-        try {
-            const data = await medicationService.getMedications();
-            setMedications(data);
-            setError(null);
-        } catch (err) {
-            setError('Не удалось загрузить базу препаратов');
-            console.error(err);
-        } finally {
-            setIsLoading(false);
+        // Если данные уже в кеше - используем их, иначе загружаем
+        if (cachedMedications) {
+            setMedications(cachedMedications);
+        } else {
+            initializeData();
         }
-    };
+    }, [cachedMedications, loadMedications]);
+
+    // Синхронизируем локальное состояние с кешем
+    useEffect(() => {
+        if (cachedMedications) {
+            setMedications(cachedMedications);
+        }
+    }, [cachedMedications]);
 
     const filteredMeds = medications.filter(m =>
         m.nameRu.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -110,7 +121,7 @@ export const MedicationsModule: React.FC = () => {
             </div>
 
             {/* Medications Grid */}
-            {isLoading ? (
+            {isLoadingMedications && medications.length === 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[1, 2, 3, 4, 5, 6].map(i => (
                         <div key={i} className="h-44 bg-slate-100 dark:bg-slate-800/50 animate-pulse rounded-2xl" />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw } from 'lucide-react';
+import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2 } from 'lucide-react';
 import { getCurrentApiKey, setApiKey, validateApiKey } from '../../services/geminiService';
 import { apiKeyService, PoolStatus } from '../../services/apiKeyService';
 
@@ -21,6 +21,11 @@ export const SettingsModule: React.FC = () => {
     const [isResetting, setIsResetting] = useState(false);
     const [isReloading, setIsReloading] = useState(false);
 
+    // Cache State
+    const [cacheStats, setCacheStats] = useState<any>(null);
+    const [isLoadingCache, setIsLoadingCache] = useState(false);
+    const [isClearingCache, setIsClearingCache] = useState(false);
+
     useEffect(() => {
         // Load current API key and base URL on mount
         const currentKey = getCurrentApiKey();
@@ -36,6 +41,9 @@ export const SettingsModule: React.FC = () => {
 
         // Load pool status
         loadPoolStatus();
+        
+        // Load cache stats
+        loadCacheStats();
     }, []);
 
     const loadPoolStatus = async () => {
@@ -82,6 +90,46 @@ export const SettingsModule: React.FC = () => {
             console.error('Failed to reload keys:', error);
         } finally {
             setIsReloading(false);
+        }
+    };
+
+    const loadCacheStats = async () => {
+        setIsLoadingCache(true);
+        try {
+            const stats = await window.electronAPI.getCacheStats();
+            setCacheStats(stats);
+        } catch (error: any) {
+            console.error('Failed to load cache stats:', error);
+        } finally {
+            setIsLoadingCache(false);
+        }
+    };
+
+    const handleClearAllCache = async () => {
+        if (!window.confirm('Вы уверены, что хотите очистить весь кеш? Это может временно замедлить работу приложения.')) {
+            return;
+        }
+
+        setIsClearingCache(true);
+        try {
+            await window.electronAPI.clearAllCache();
+            await loadCacheStats();
+        } catch (error: any) {
+            console.error('Failed to clear cache:', error);
+        } finally {
+            setIsClearingCache(false);
+        }
+    };
+
+    const handleClearNamespace = async (namespace: string) => {
+        setIsClearingCache(true);
+        try {
+            await window.electronAPI.clearCacheNamespace(namespace);
+            await loadCacheStats();
+        } catch (error: any) {
+            console.error('Failed to clear cache namespace:', error);
+        } finally {
+            setIsClearingCache(false);
         }
     };
 
@@ -447,6 +495,123 @@ export const SettingsModule: React.FC = () => {
                 ) : (
                     <div className="text-center py-8 text-slate-500 dark:text-slate-400">
                         Не удалось загрузить статус пула
+                    </div>
+                )}
+            </div>
+
+            {/* Cache Performance Section */}
+            <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                            <Zap className="text-purple-600 dark:text-purple-400" size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Производительность кеша</h2>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                Мониторинг и управление системой кеширования
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={loadCacheStats}
+                        disabled={isLoadingCache}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 
+                            rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm
+                            disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <RefreshCw size={16} className={isLoadingCache ? 'animate-spin' : ''} />
+                        Обновить
+                    </button>
+                </div>
+
+                {isLoadingCache && !cacheStats ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader className="animate-spin text-slate-400" size={24} />
+                    </div>
+                ) : cacheStats ? (
+                    <div className="space-y-4">
+                        {/* Overall Statistics */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-700">
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Hit Rate</p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">{cacheStats.stats.hitRate}</p>
+                            </div>
+                            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-100 dark:border-green-800">
+                                <p className="text-xs text-green-600 dark:text-green-400 mb-1">Hits</p>
+                                <p className="text-2xl font-bold text-green-700 dark:text-green-400">{cacheStats.stats.hits.toLocaleString()}</p>
+                            </div>
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                                <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">Misses</p>
+                                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{cacheStats.stats.misses.toLocaleString()}</p>
+                            </div>
+                            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800">
+                                <p className="text-xs text-purple-600 dark:text-purple-400 mb-1">Размер</p>
+                                <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">{cacheStats.totalSize.toLocaleString()}</p>
+                                <p className="text-xs text-purple-500 dark:text-purple-500 mt-1">/ {cacheStats.maxSize.toLocaleString()}</p>
+                            </div>
+                        </div>
+
+                        {/* Namespace Details */}
+                        <div className="space-y-2">
+                            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Детали по namespace:</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {Object.entries(cacheStats.namespaces).map(([namespace, stats]: [string, any]) => (
+                                    <div key={namespace} className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-semibold text-slate-900 dark:text-white capitalize">
+                                                {namespace}
+                                            </span>
+                                            <button
+                                                onClick={() => handleClearNamespace(namespace)}
+                                                disabled={isClearingCache}
+                                                className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
+                                                title="Очистить namespace"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-slate-500 dark:text-slate-400">Записей: {stats.size}</span>
+                                            {stats.expired > 0 && (
+                                                <span className="text-yellow-600 dark:text-yellow-400">Устаревших: {stats.expired}</span>
+                                            )}
+                                        </div>
+                                        <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                                            TTL: {Math.round(stats.ttl / 1000)}с
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Очистка кеша</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    Очистка кеша заставит приложение перезагрузить данные из базы данных
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleClearAllCache}
+                                disabled={isClearingCache}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 
+                                    rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-sm font-medium
+                                    disabled:opacity-50 disabled:cursor-not-allowed border border-red-200 dark:border-red-800"
+                            >
+                                {isClearingCache ? (
+                                    <Loader className="animate-spin" size={16} />
+                                ) : (
+                                    <Trash2 size={16} />
+                                )}
+                                Очистить весь кеш
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                        Не удалось загрузить статистику кеша
                     </div>
                 )}
             </div>

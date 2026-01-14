@@ -1,36 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { diseaseService } from './services/diseaseService';
+import { useDataCache } from '../../context/DataCacheContext';
 import { Disease } from '../../types';
 import { DiseaseCard } from './components/DiseaseCard';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import { Search, Plus, Filter, BookOpen, AlertCircle } from 'lucide-react';
+import { Search, Plus, Filter, BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 
 export const DiseasesModule: React.FC = () => {
+    const navigate = useNavigate();
+    const { diseases: cachedDiseases, loadDiseases, invalidate, isLoadingDiseases } = useDataCache();
     const [diseases, setDiseases] = useState<Disease[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const navigate = useNavigate();
 
     useEffect(() => {
-        loadDiseases();
-    }, []);
+        // Загружаем данные из кеша или делаем запрос
+        const initializeData = async () => {
+            try {
+                const data = await loadDiseases();
+                setDiseases(data);
+                setError(null);
+            } catch (err) {
+                setError('Не удалось загрузить базу заболеваний');
+                console.error(err);
+            }
+        };
 
-    const loadDiseases = async () => {
-        setIsLoading(true);
-        try {
-            const data = await diseaseService.getDiseases();
-            setDiseases(data);
-            setError(null);
-        } catch (err) {
-            setError('Не удалось загрузить базу заболеваний');
-            console.error(err);
-        } finally {
-            setIsLoading(false);
+        // Если данные уже в кеше - используем их, иначе загружаем
+        if (cachedDiseases) {
+            setDiseases(cachedDiseases);
+        } else {
+            initializeData();
         }
-    };
+    }, [cachedDiseases, loadDiseases]);
+
+    // Синхронизируем локальное состояние с кешем
+    useEffect(() => {
+        if (cachedDiseases) {
+            setDiseases(cachedDiseases);
+        }
+    }, [cachedDiseases]);
 
     const handleDeleteDisease = async (id: number) => {
         const disease = diseases.find(d => d.id === id);
@@ -42,15 +53,26 @@ export const DiseasesModule: React.FC = () => {
 
         if (!confirmed) return;
 
+        // Оптимистичное обновление - удаляем из UI сразу
+        const originalDiseases = [...diseases];
+        setDiseases(prev => prev.filter(d => d.id !== id));
+
         try {
             const success = await diseaseService.deleteDisease(id);
             if (success) {
-                // Optimistic update
-                setDiseases(prev => prev.filter(d => d.id !== id));
+                // Инвалидируем кеш для обновления данных
+                invalidate('diseases');
+                // Перезагружаем данные из кеша (backend уже инвалидировал кеш)
+                const freshData = await loadDiseases(true);
+                setDiseases(freshData);
             } else {
+                // Откат при ошибке
+                setDiseases(originalDiseases);
                 setError('Не удалось удалить заболевание');
             }
         } catch (err: any) {
+            // Откат при ошибке
+            setDiseases(originalDiseases);
             setError(err.message || 'Ошибка при удалении');
             console.error(err);
         }
@@ -121,7 +143,7 @@ export const DiseasesModule: React.FC = () => {
             )}
 
             {/* Diseases Grid */}
-            {isLoading ? (
+            {isLoadingDiseases && diseases.length === 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[1, 2, 3, 4, 5, 6].map(i => (
                         <div key={i} className="h-44 bg-slate-100 dark:bg-slate-800/50 animate-pulse rounded-2xl" />

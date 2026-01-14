@@ -5,6 +5,7 @@ const { ensureAuthenticated, getSession } = require('./auth.cjs');
 const { encrypt, decrypt } = require('./crypto.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const { createBackup, shouldBackupToday } = require('./backup.cjs');
+const { CacheService } = require('./services/cacheService.cjs');
 
 // ============= VALIDATION SCHEMAS (Zod) =============
 // Re-defined here because database.cjs is CommonJS and doesn't run via Vite/TypeScript
@@ -305,6 +306,16 @@ const setupDatabaseHandlers = async () => {
     const userId = session.user.id;
     const isAdmin = session.user.isAdmin;
 
+    // Ключ кеша зависит от пользователя
+    const cacheKey = `user_${userId}_admin_${isAdmin}`;
+    
+    // Проверяем кеш
+    const cached = CacheService.get('children', cacheKey);
+    if (cached) {
+      logger.debug('[DB] Cache hit for children list');
+      return cached;
+    }
+
     // Build WHERE clause based on user permissions
     const whereClause = isAdmin
       ? {} // Admin sees all children
@@ -336,7 +347,7 @@ const setupDatabaseHandlers = async () => {
     });
 
     // Decrypt sensitive fields
-    return children.map(child => ({
+    const decrypted = children.map(child => ({
       ...child,
       name: decrypt(child.name),
       surname: decrypt(child.surname),
@@ -346,22 +357,41 @@ const setupDatabaseHandlers = async () => {
       sharedBy: child.shares[0]?.ownerUser?.fullName || null,
       canEdit: child.createdByUserId === userId || child.shares[0]?.canEdit || isAdmin
     }));
+
+    // Сохраняем в кеш
+    CacheService.set('children', cacheKey, decrypted);
+    
+    return decrypted;
   }));
 
   ipcMain.handle('db:get-child', ensureAuthenticated(async (_, id) => {
+    const cacheKey = `child_${id}`;
+    
+    // Проверяем кеш
+    const cached = CacheService.get('children', cacheKey);
+    if (cached) {
+      logger.debug(`[DB] Cache hit for child ${id}`);
+      return cached;
+    }
+
     const child = await prisma.child.findUnique({
       where: { id: Number(id) },
     });
 
     if (!child) return null;
 
-    return {
+    const decrypted = {
       ...child,
       name: decrypt(child.name),
       surname: decrypt(child.surname),
       patronymic: decrypt(child.patronymic),
       birthDate: decrypt(child.birthDate),
     };
+
+    // Сохраняем в кеш
+    CacheService.set('children', cacheKey, decrypted);
+    
+    return decrypted;
   }));
 
   ipcMain.handle('db:create-child', ensureAuthenticated(async (_, child) => {
@@ -401,6 +431,16 @@ const setupDatabaseHandlers = async () => {
         createdBy: userId
       });
 
+      // Инвалидируем кеш пациентов для текущего пользователя и админов
+      CacheService.invalidate('children', `user_${userId}_admin_false`);
+      CacheService.invalidate('children', `user_${userId}_admin_true`);
+      // Также инвалидируем все списки админов (если текущий пользователь админ)
+      if (session.user.isAdmin) {
+        // Нужно инвалидировать все кеши для админов - делаем через invalidate namespace для admin
+        // Но проще всего - инвалидировать все кеши детей, так как админы видят всех
+        CacheService.invalidate('children');
+      }
+
       return newChild;
     } catch (error) {
       logger.error('[Database] Failed to create child:', error);
@@ -429,6 +469,16 @@ const setupDatabaseHandlers = async () => {
         data: dataToUpdate,
       });
       logAudit('PATIENT_UPDATED', { childId: id, updates: Object.keys(dataToUpdate) });
+      
+      // Инвалидируем кеш
+      const session = getSession();
+      CacheService.invalidate('children', `child_${id}`);
+      CacheService.invalidate('children', `user_${session.user.id}_admin_false`);
+      CacheService.invalidate('children', `user_${session.user.id}_admin_true`);
+      if (session.user.isAdmin) {
+        CacheService.invalidate('children');
+      }
+      
       return true;
     } catch (error) {
       logger.error('[Database] Failed to update child:', error);
@@ -440,10 +490,23 @@ const setupDatabaseHandlers = async () => {
   }));
 
   ipcMain.handle('db:delete-child', ensureAuthenticated(async (_, id) => {
+    const session = getSession();
+    
     await prisma.child.delete({
       where: { id: Number(id) },
     });
     logAudit('PATIENT_DELETED', { childId: id });
+    
+    // Инвалидируем кеш
+    CacheService.invalidate('children', `child_${id}`);
+    CacheService.invalidate('children', `user_${session.user.id}_admin_false`);
+    CacheService.invalidate('children', `user_${session.user.id}_admin_true`);
+    CacheService.invalidate('profiles', `child_${id}`);
+    CacheService.invalidate('records', `child_${id}`);
+    if (session.user.isAdmin) {
+      CacheService.invalidate('children');
+    }
+    
     return true;
   }));
 
@@ -499,6 +562,13 @@ const setupDatabaseHandlers = async () => {
         canEdit
       });
 
+      // Инвалидируем кеш списка пациентов для обоих пользователей
+      CacheService.invalidate('children', `user_${currentUserId}_admin_false`);
+      CacheService.invalidate('children', `user_${userId}_admin_false`);
+      if (session.user.isAdmin) {
+        CacheService.invalidate('children');
+      }
+
       return { success: true, share };
 
     } catch (error) {
@@ -533,6 +603,13 @@ const setupDatabaseHandlers = async () => {
 
       logAudit('PATIENT_UNSHARED', { childId, sharedWith: userId });
 
+      // Инвалидируем кеш списка пациентов
+      CacheService.invalidate('children', `user_${session.user.id}_admin_false`);
+      CacheService.invalidate('children', `user_${userId}_admin_false`);
+      if (session.user.isAdmin) {
+        CacheService.invalidate('children');
+      }
+
       return { success: true };
 
     } catch (error) {
@@ -543,6 +620,15 @@ const setupDatabaseHandlers = async () => {
 
   // ============= VACCINATION MODULE HANDLERS =============
   ipcMain.handle('db:get-vaccination-profile', ensureAuthenticated(async (_, childId) => {
+    const cacheKey = `child_${childId}`;
+    
+    // Проверяем кеш
+    const cached = CacheService.get('profiles', cacheKey);
+    if (cached) {
+      logger.debug(`[DB] Cache hit for vaccination profile ${childId}`);
+      return cached;
+    }
+
     let profile = await prisma.vaccinationProfile.findUnique({
       where: { childId: Number(childId) },
     });
@@ -567,7 +653,7 @@ const setupDatabaseHandlers = async () => {
       });
     }
 
-    return {
+    const parsed = {
       id: profile.id,
       childId: profile.childId,
       hepBRiskFactors: JSON.parse(profile.hepBRiskFactors || '[]'),
@@ -587,6 +673,11 @@ const setupDatabaseHandlers = async () => {
       mantouxResult: profile.mantouxResult,
       createdAt: profile.createdAt,
     };
+
+    // Сохраняем в кеш
+    CacheService.set('profiles', cacheKey, parsed);
+    
+    return parsed;
   }));
 
   ipcMain.handle('db:update-vaccination-profile', ensureAuthenticated(async (_, profile) => {
@@ -623,6 +714,10 @@ const setupDatabaseHandlers = async () => {
         },
       });
       logAudit('VACCINATION_PROFILE_UPDATED', { childId });
+      
+      // Инвалидируем кеш профиля
+      CacheService.invalidate('profiles', `child_${childId}`);
+      
       return true;
     } catch (error) {
       logger.error('[Database] Failed to update vaccination profile:', error);
@@ -634,15 +729,29 @@ const setupDatabaseHandlers = async () => {
   }));
 
   ipcMain.handle('db:get-records', ensureAuthenticated(async (_, childId) => {
+    const cacheKey = `child_${childId}`;
+    
+    // Проверяем кеш
+    const cached = CacheService.get('records', cacheKey);
+    if (cached) {
+      logger.debug(`[DB] Cache hit for vaccination records ${childId}`);
+      return cached;
+    }
+
     const records = await prisma.vaccinationRecord.findMany({
       where: { childId: Number(childId) },
     });
 
-    return records.map(record => ({
+    const decrypted = records.map(record => ({
       ...record,
       vaccineBrand: decrypt(record.vaccineBrand),
       notes: decrypt(record.notes),
     }));
+
+    // Сохраняем в кеш
+    CacheService.set('records', cacheKey, decrypted);
+    
+    return decrypted;
   }));
 
   // Импортируем утилиты для расчета возраста
@@ -741,6 +850,10 @@ const setupDatabaseHandlers = async () => {
         },
       });
       logAudit('VACCINATION_RECORD_SAVED', { childId, vaccineId, isCompleted });
+      
+      // Инвалидируем кеш записей для данного ребенка
+      CacheService.invalidate('records', `child_${childId}`);
+      
       return true;
     } catch (error) {
       logger.error('[Database] Failed to save vaccination record:', error);
@@ -762,6 +875,10 @@ const setupDatabaseHandlers = async () => {
         },
       });
       logAudit('VACCINATION_RECORD_DELETED', { childId, vaccineId });
+      
+      // Инвалидируем кеш записей
+      CacheService.invalidate('records', `child_${childId}`);
+      
       return true;
     } catch (error) {
       logger.error('[Database] Failed to delete vaccination record:', error);

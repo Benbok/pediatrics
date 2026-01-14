@@ -213,10 +213,11 @@ export const DiseaseNoteEditor: React.FC<DiseaseNoteEditorProps> = ({
                     <Button
                         type="submit"
                         isLoading={isSaving}
-                        className="h-12 px-8 rounded-2xl bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-500/20"
+                        variant="primary"
+                        className="h-12 px-8 rounded-2xl !text-white shadow-lg shadow-primary-500/20"
                     >
-                        <Save className="w-4 h-4 mr-2 text-white" />
-                        <span className="text-white font-bold">{note ? 'Обновить заметку' : 'Сохранить заметку'}</span>
+                        <Save className="w-4 h-4 mr-2" />
+                        <span className="font-bold">{note ? 'Обновить заметку' : 'Сохранить заметку'}</span>
                     </Button>
                 </div>
             </form>

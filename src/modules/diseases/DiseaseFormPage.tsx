@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { diseaseService } from './services/diseaseService';
+import { icdCodeService } from '../../services/icdCode.service';
 import { Disease } from '../../types';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -220,6 +221,48 @@ export const DiseaseFormPage: React.FC = () => {
         }
     };
 
+    const handleCodeSelect = async (code: string) => {
+        // Обновляем код МКБ
+        setFormData({ ...formData, icd10Code: code });
+
+        // Пытаемся получить название из справочника МКБ
+        try {
+            const icdCode = await icdCodeService.getByCode(code);
+            if (icdCode && icdCode.name) {
+                setFormData(prev => ({
+                    ...prev,
+                    icd10Code: code,
+                    nameRu: icdCode.name
+                }));
+            }
+        } catch (err) {
+            // Если не удалось найти код в справочнике - просто обновляем код, название не трогаем
+            console.warn(`[DiseaseForm] Failed to get ICD name for ${code}:`, err);
+        }
+    };
+
+    const handleIcdCodeBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+        const code = e.target.value.trim().toUpperCase();
+        if (code && code.length >= 3) {
+            // Обновляем название только если поле названия пустое
+            // Это позволяет пользователю вручную ввести свое название, если нужно
+            if (!formData.nameRu || formData.nameRu.trim() === '') {
+                try {
+                    const icdCode = await icdCodeService.getByCode(code);
+                    if (icdCode && icdCode.name) {
+                        setFormData(prev => ({
+                            ...prev,
+                            nameRu: icdCode.name
+                        }));
+                    }
+                } catch (err) {
+                    // Игнорируем ошибки - пользователь может ввести название вручную
+                    console.warn(`[DiseaseForm] Failed to get ICD name for ${code}:`, err);
+                }
+            }
+        }
+    };
+
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
@@ -279,6 +322,7 @@ export const DiseaseFormPage: React.FC = () => {
                             <Input
                                 value={formData.icd10Code}
                                 onChange={e => setFormData({ ...formData, icd10Code: e.target.value.toUpperCase() })}
+                                onBlur={handleIcdCodeBlur}
                                 placeholder="Например: J04.0"
                                 required
                                 className="h-14 rounded-2xl font-mono"
@@ -290,8 +334,8 @@ export const DiseaseFormPage: React.FC = () => {
                                             key={code}
                                             variant={code === formData.icd10Code ? "primary" : "outline"}
                                             size="sm"
-                                            className="cursor-pointer"
-                                            onClick={() => setFormData({ ...formData, icd10Code: code })}
+                                            className="cursor-pointer transition-all hover:scale-105"
+                                            onClick={() => handleCodeSelect(code)}
                                         >
                                             {code}
                                         </Badge>
