@@ -338,9 +338,19 @@ function getSession() {
     return currentSession;
 }
 
+/**
+ * Get current user from event or session
+ */
+function getCurrentUser(event) {
+    // In Electron, we can get user from session
+    // Event is passed but we use session for simplicity
+    return currentSession.user;
+}
+
 module.exports = {
     setupAuthHandlers,
     ensureAuthenticated,
     ensureAdmin,
-    getSession
+    getSession,
+    getCurrentUser
 };

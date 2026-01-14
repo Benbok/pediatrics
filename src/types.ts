@@ -245,6 +245,21 @@ export interface ClinicalGuideline {
   medications?: string | null; // JSON string array of medications
 }
 
+// Расширяем enum для путей введения
+export type RouteOfAdmin = 
+  | 'oral'           // Перорально
+  | 'rectal'         // Ректально
+  | 'iv_bolus'       // В/В болюсно
+  | 'iv_infusion'    // В/В капельно
+  | 'iv_slow'        // В/В медленно
+  | 'im'             // В/М
+  | 'sc'             // П/К (подкожно)
+  | 'sublingual'     // Сублингвально
+  | 'topical'        // Наружно
+  | 'inhalation'     // Ингаляционно
+  | 'intranasal'     // Интраназально
+  | 'transdermal';   // Трансдермально
+
 export interface Medication {
   id?: number;
   nameRu: string;
@@ -264,13 +279,20 @@ export interface Medication {
   pregnancy?: string | null;
   lactation?: string | null;
   indications: any[]; // Parsed JSON
-  registrationNumber?: string | null;
   vidalUrl?: string | null;
+  // Клинико-фармакологические группы
+  clinicalPharmGroup?: string | null; // "Анальгетик-антипиретик"
+  pharmTherapyGroup?: string | null;  // "Анальгетики; другие анальгетики и антипиретики"
   // Новые поля для ограничений дозирования (Vidal структура)
   minInterval?: number | null; // Мин интервал между дозами (часы)
   maxDosesPerDay?: number | null; // Макс доз в сутки
   maxDurationDays?: number | null; // Макс длительность (дни)
-  routeOfAdmin?: 'oral' | 'rectal' | 'iv' | 'im' | 'sublingual' | 'topical' | 'inhalation' | null;
+  routeOfAdmin?: RouteOfAdmin | null;
+  // Избранное и теги
+  isFavorite?: boolean;
+  userTags?: string[] | null;
+  usageCount?: number;
+  lastUsedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -444,6 +466,39 @@ declare global {
       linkMedicationToDisease: (data: { diseaseId: number; medicationId: number; priority?: number; dosing?: string; duration?: string }) => Promise<any>;
       calculateDose: (params: { medicationId: number; weight: number; ageMonths: number; height?: number | null }) => Promise<any>;
       getMedicationsByDisease: (diseaseId: number) => Promise<Medication[]>;
+      checkDuplicateMedication: (nameRu: string, excludeId?: number) => Promise<{
+        success: boolean;
+        hasDuplicate: boolean;
+        duplicate?: Medication | null;
+        error?: string;
+      }>;
+      importFromVidal: (url: string) => Promise<{ 
+        success: boolean; 
+        data?: Medication; 
+        validation?: {
+          isValid: boolean;
+          errors: any[];
+          warnings: any[];
+          needsReview: boolean;
+        };
+        error?: string 
+      }>;
+      importFromJson: (jsonString: string) => Promise<{
+        success: boolean;
+        data?: Medication;
+        validation?: {
+          isValid: boolean;
+          errors: any[];
+          warnings: any[];
+          needsReview: boolean;
+        };
+        error?: string;
+      }>;
+      getPharmacologicalGroups: () => Promise<string[]>;
+      searchMedicationsByGroup: (groupName: string) => Promise<Medication[]>;
+      toggleMedicationFavorite: (medicationId: number) => Promise<boolean>;
+      addMedicationTag: (medicationId: number, tag: string) => Promise<boolean>;
+      getMedicationChangeHistory: (medicationId: number) => Promise<any[]>;
 
       // VISITS MODULE API
       getVisits: (childId: number) => Promise<Visit[]>;

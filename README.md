@@ -104,6 +104,14 @@ pediatrics/
 │   │   ├── cacheService.cjs   # ⚡ Centralized caching service (TTL, namespaces)
 │   │   ├── embeddingService.cjs # AI embeddings with LRU cache
 │   │   └── cdssService.cjs    # Clinical Decision Support
+│   ├── modules/
+│   │   ├── medications/
+│   │   │   ├── service.cjs    # Medication business logic
+│   │   │   ├── handlers.cjs    # IPC handlers
+│   │   │   ├── vidalParser.cjs # AI parser for Vidal.ru pages
+│   │   │   ├── validator.cjs  # Data validation for safety
+│   │   │   └── dilutionCalculator.cjs # Infusion calculator
+│   │   └── ...
 │   └── preload.cjs            # Secure IPC bridge
 
 ├── src/
@@ -111,6 +119,16 @@ pediatrics/
 │   │   ├── vaccination/       # Vaccination tracking & ATS engine
 │   │   ├── patients/          # Patient management
 │   │   ├── users/             # **NEW** User management (admin panel)
+│   │   ├── medications/       # Medication database & dosage calculator
+│   │   │   ├── MedicationFormPage.tsx
+│   │   │   ├── MedicationsModule.tsx
+│   │   │   ├── components/
+│   │   │   │   ├── ImportPreviewModal.tsx
+│   │   │   │   ├── DilutionCalculator.tsx
+│   │   │   │   ├── PharmGroupFilter.tsx
+│   │   │   │   └── ChangeHistoryPanel.tsx
+│   │   │   └── services/
+│   │   │       └── medicationService.ts
 │   │   ├── dashboard/         # Analytics & overview
 │   │   ├── settings/          # App settings & backups
 │   │   ├── auth/              # Login page
@@ -122,9 +140,9 @@ pediatrics/
 │   │   └── geminiService.ts   # AI integration (Gemini Pro 1.5)
 │   │
 │   ├── validators/            # Zod schemas
-│   ├── context/               # React contexts (Auth, Child, DataCache)
-│   ├── components/            # Shared UI components
-│   └── types.ts               # TypeScript interfaces (User, AuthSession, etc.)
+│   ├── context/              # React contexts (Auth, Child, DataCache)
+│   ├── components/           # Shared UI components
+│   └── types.ts              # TypeScript interfaces (User, AuthSession, Medication, etc.)
 
 ├── prisma/
 │   ├── schema.prisma          # Database schema (User, Child, VaccinationProfile, PatientShare)
@@ -162,7 +180,8 @@ pediatrics/
 │
 ├── tests/                     # Integration tests
 │   ├── vaccination-records.test.cjs
-│   └── polio-hib-revaccination.test.cjs
+│   ├── polio-hib-revaccination.test.cjs
+│   └── vidal-parser-test.cjs  # Test Vidal parser
 │
 └── vitest.config.ts           # Unit test configuration
 ```
@@ -182,6 +201,10 @@ npm install
 ```env
 # Google Gemini API (для AI ассистента)
 VITE_GEMINI_API_KEY=your_api_key_here
+GEMINI_MODEL=gemini-1.5-pro  # или gemini-2.5-flash, gemini-3-flash
+
+# Или используйте пул ключей для ротации (до 20 ключей через запятую)
+GEMINI_API_KEYS=key1,key2,key3,...
 
 # КРИТИЧНО: Генерируйте уникальный ключ для каждой инсталляции
 DB_ENCRYPTION_KEY=your_random_32+_char_string
@@ -208,6 +231,7 @@ npm run electron:dev  # Electron + Vite dev server
 npm test              # Run all unit tests
 npm run test:ui       # Interactive test UI
 npm run test:vaccination  # Integration tests
+npm run test:vidal    # Test Vidal parser (dry run)
 ```
 
 ---
@@ -305,8 +329,9 @@ npm run test:vaccination  # Integration tests
 - ✅ Интеграция с Google Gemini Pro 1.5
 - ✅ Консультации по вакцинации
 - ✅ Ответы на вопросы родителей
-- 📋 Roadmap: Анализ жалоб и симптомов
-- 📋 Roadmap: Дифференциальная диагностика
+- ✅ **Анализ жалоб и симптомов** - парсинг жалоб в структурированные симптомы
+- ✅ **Дифференциальная диагностика** - ранжирование диагнозов с confidence scores
+- ✅ **AI-парсинг Видаль** - автоматическое извлечение данных о препаратах
 
 ### ⚡ Система кеширования (Performance Optimization)
 - ✅ Трехслойная архитектура кеширования (Backend → IPC → Frontend)
@@ -318,11 +343,17 @@ npm run test:vaccination  # Integration tests
 - ✅ Снижение нагрузки на БД до 70%
 - ✅ Ускорение загрузки данных в 20-50 раз (с 200ms до 5-10ms)
 
-### 💊 Medication Management (Roadmap)
-- Автоподбор препаратов по диагнозу
-- Расчет детских дозировок (по весу/возрасту)
-- Проверка лекарственных взаимодействий
-- Формуляр препаратов РФ
+### 💊 Medication Management
+- ✅ **Автоподбор препаратов по диагнозу** (по кодам МКБ-10)
+- ✅ **Расчет детских дозировок** (по весу, возрасту, площади тела)
+- ✅ **Импорт из Видаль** - автоматический парсинг данных о препаратах через AI
+- ✅ **Расширенное дозирование** - поддержка инфузионных форм (в/в, в/м, п/к)
+- ✅ **Валидация данных** - проверка безопасности AI-парсинга
+- ✅ **Избранное и теги** - организация часто используемых препаратов
+- ✅ **Поиск по группам** - фильтрация по клинико-фармакологическим группам
+- ✅ **История изменений** - полный audit trail всех модификаций
+- ✅ **Калькулятор разведения** - расчет параметров инфузий
+- 📋 Roadmap: Проверка лекарственных взаимодействий
 
 ### 📄 Document Generation
 - Медицинские сертификаты (форма 63)

@@ -1,12 +1,14 @@
 import { ChildProfile } from '../types';
 import { ChildProfileSchema } from '../validators/child.validator';
 import { getFormattedAge } from '../utils/ageUtils';
+import { dataEvents } from './dataEvents';
 
 /**
  * PATIENT SERVICE
  * 
  * Centralized logic for patient management.
  * Interfaces with electronAPI and handles validation.
+ * Автоматическая инвалидация кеша через dataEvents.
  */
 export const patientService = {
     /**
@@ -45,7 +47,10 @@ export const patientService = {
         }
 
         try {
-            return await window.electronAPI.createChild(validation.data as ChildProfile);
+            const result = await window.electronAPI.createChild(validation.data as ChildProfile);
+            // Уведомляем о создании для инвалидации кеша
+            dataEvents.notifyCreated('patients', result.id);
+            return result;
         } catch (error: any) {
             console.error('Service error: Failed to create child', error);
             throw new Error(error.message || 'Ошибка при сохранении данных пациента');
@@ -64,7 +69,10 @@ export const patientService = {
         }
 
         try {
-            return await window.electronAPI.updateChild(id, validation.data);
+            const result = await window.electronAPI.updateChild(id, validation.data);
+            // Уведомляем об обновлении для инвалидации кеша
+            dataEvents.notifyUpdated('patients', id);
+            return result;
         } catch (error: any) {
             console.error(`Service error: Failed to update child ${id}`, error);
             throw new Error(error.message || 'Ошибка при обновлении данных пациента');
@@ -76,7 +84,10 @@ export const patientService = {
      */
     async deleteChild(id: number): Promise<boolean> {
         try {
-            return await window.electronAPI.deleteChild(id);
+            const result = await window.electronAPI.deleteChild(id);
+            // Уведомляем об удалении для инвалидации кеша
+            dataEvents.notifyDeleted('patients', id);
+            return result;
         } catch (error) {
             console.error(`Service error: Failed to delete child ${id}`, error);
             throw error;

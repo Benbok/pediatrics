@@ -1,8 +1,11 @@
 const { ipcMain } = require('electron');
 const { MedicationService } = require('./service.cjs');
-const { ensureAuthenticated } = require('../../auth.cjs');
+const { ensureAuthenticated, getCurrentUser } = require('../../auth.cjs');
 const { logAudit, logger } = require('../../logger.cjs');
 const { CacheService } = require('../../services/cacheService.cjs');
+const { parseVidalWithAI } = require('./vidalParser.cjs');
+const { MedicationValidator } = require('./validator.cjs');
+const https = require('https');
 
 /**
  * Безопасный парсинг JSON полей
@@ -35,7 +38,8 @@ const setupMedicationHandlers = () => {
             ...m,
             forms: safeJsonParse(m.forms, []),
             pediatricDosing: safeJsonParse(m.pediatricDosing, []),
-            indications: safeJsonParse(m.indications, [])
+            indications: safeJsonParse(m.indications, []),
+            userTags: safeJsonParse(m.userTags, [])
         }));
 
         // Сохраняем в кеш
@@ -60,7 +64,8 @@ const setupMedicationHandlers = () => {
             ...med,
             forms: safeJsonParse(med.forms, []),
             pediatricDosing: safeJsonParse(med.pediatricDosing, []),
-            indications: safeJsonParse(med.indications, [])
+            indications: safeJsonParse(med.indications, []),
+            userTags: safeJsonParse(med.userTags, [])
         };
 
         // Сохраняем в кеш
@@ -69,9 +74,12 @@ const setupMedicationHandlers = () => {
         return parsed;
     }));
 
-    ipcMain.handle('medications:upsert', ensureAuthenticated(async (_, data) => {
+    ipcMain.handle('medications:upsert', ensureAuthenticated(async (event, data, source = 'manual') => {
         try {
-            const result = await MedicationService.upsert(data);
+            const user = getCurrentUser(event);
+            const userId = user ? user.id : null;
+            
+            const result = await MedicationService.upsert(data, userId, source);
             logAudit(data.id ? 'MEDICATION_UPDATED' : 'MEDICATION_CREATED', { name: result.nameRu });
             
             // Инвалидируем кеш препаратов
@@ -154,6 +162,152 @@ const setupMedicationHandlers = () => {
         CacheService.set('medications', cacheKey, medications);
         
         return medications;
+    }));
+
+    // Проверка дубликата препарата
+    ipcMain.handle('medications:checkDuplicate', ensureAuthenticated(async (_, nameRu, excludeId) => {
+        try {
+            logger.info(`[Medications] Checking duplicate for: ${nameRu}`);
+            const duplicate = await MedicationService.checkDuplicate(nameRu, excludeId);
+            
+            return {
+                success: true,
+                hasDuplicate: !!duplicate,
+                duplicate: duplicate || null
+            };
+        } catch (error) {
+            logger.error(`[Medications] Failed to check duplicate:`, error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }));
+
+    // Импорт из Видаль
+    ipcMain.handle('medications:importFromVidal', ensureAuthenticated(async (event, url) => {
+        try {
+            logger.info(`[Medications] Importing from Vidal: ${url}`);
+            
+            // Загрузить HTML
+            const html = await new Promise((resolve, reject) => {
+                https.get(url, (res) => {
+                    let data = '';
+                    res.on('data', chunk => data += chunk);
+                    res.on('end', () => resolve(data));
+                }).on('error', reject);
+            });
+            
+            // Парсить с помощью AI
+            const medicationData = await parseVidalWithAI(html);
+            medicationData.vidalUrl = url;
+            
+            // ВАЛИДАЦИЯ ДАННЫХ
+            const validator = new MedicationValidator();
+            const validation = validator.validate(medicationData);
+            
+            logger.info(`[Medications] Validation results:`, {
+                isValid: validation.isValid,
+                errorsCount: validation.errors.length,
+                warningsCount: validation.warnings.length
+            });
+            
+            return {
+                success: true,
+                data: medicationData,
+                validation: {
+                    isValid: validation.isValid,
+                    errors: validation.errors,
+                    warnings: validation.warnings,
+                    needsReview: validation.needsReview
+                }
+            };
+        } catch (error) {
+            logger.error(`[Medications] Failed to import from Vidal:`, error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }));
+
+    // Импорт из JSON
+    ipcMain.handle('medications:importFromJson', ensureAuthenticated(async (event, jsonString) => {
+        try {
+            logger.info(`[Medications] Importing from JSON (length: ${jsonString.length})`);
+            
+            // Парсинг JSON
+            let medicationData;
+            try {
+                medicationData = JSON.parse(jsonString);
+            } catch (parseError) {
+                logger.error(`[Medications] JSON parse error:`, parseError);
+                return {
+                    success: false,
+                    error: parseError.message.includes('JSON') 
+                        ? 'Неверный формат JSON. Проверьте синтаксис.'
+                        : `Ошибка парсинга JSON: ${parseError.message}`
+                };
+            }
+            
+            // Валидация через MedicationValidator
+            const validator = new MedicationValidator();
+            const validation = validator.validate(medicationData);
+            
+            logger.info(`[Medications] Validation results:`, {
+                isValid: validation.isValid,
+                errorsCount: validation.errors.length,
+                warningsCount: validation.warnings.length
+            });
+            
+            return {
+                success: true,
+                data: medicationData,
+                validation: {
+                    isValid: validation.isValid,
+                    errors: validation.errors,
+                    warnings: validation.warnings,
+                    needsReview: validation.needsReview
+                }
+            };
+        } catch (error) {
+            logger.error(`[Medications] Failed to import from JSON:`, error);
+            return {
+                success: false,
+                error: error.message || 'Неизвестная ошибка при импорте JSON'
+            };
+        }
+    }));
+
+    // Получить фармакологические группы
+    ipcMain.handle('medications:getPharmacologicalGroups', ensureAuthenticated(async () => {
+        return await MedicationService.getPharmacologicalGroups();
+    }));
+
+    // Поиск по группе
+    ipcMain.handle('medications:searchByGroup', ensureAuthenticated(async (_, groupName) => {
+        return await MedicationService.searchByGroup(groupName);
+    }));
+
+    // Избранное
+    ipcMain.handle('medications:toggleFavorite', ensureAuthenticated(async (_, medicationId) => {
+        await MedicationService.toggleFavorite(medicationId);
+        CacheService.invalidate('medications', 'all');
+        CacheService.invalidate('medications', `id_${medicationId}`);
+        return true;
+    }));
+
+    // Добавить тег
+    ipcMain.handle('medications:addTag', ensureAuthenticated(async (_, medicationId, tag) => {
+        await MedicationService.addTag(medicationId, tag);
+        CacheService.invalidate('medications', 'all');
+        CacheService.invalidate('medications', `id_${medicationId}`);
+        return true;
+    }));
+
+    // История изменений
+    ipcMain.handle('medications:getChangeHistory', ensureAuthenticated(async (_, medicationId) => {
+        return await MedicationService.getChangeHistory(medicationId);
     }));
 };
 

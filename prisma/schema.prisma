@@ -24,6 +24,7 @@ model User {
   sharedPatientsAccess  PatientShare[]      @relation("SharedWithUser")
   visits                Visit[]
   notes                 DiseaseNote[]       @relation("UserNotes")
+  medicationChanges     MedicationChangeLog[]
   
   @@map("users")
 }
@@ -200,8 +201,11 @@ model Medication {
   pregnancy        String?
   lactation        String?
   indications      String   // JSON: conditions + ICD codes
-  registrationNumber String? @map("registration_number")
   vidalUrl         String?  @map("vidal_url")
+  
+  // Клинико-фармакологические группы
+  clinicalPharmGroup  String?  @map("clinical_pharm_group")
+  pharmTherapyGroup   String?  @map("pharm_therapy_group")
   
   // Новые поля для ограничений дозирования (Vidal структура)
   minInterval      Int?     @map("min_interval") // Мин интервал между дозами (часы)
@@ -209,10 +213,17 @@ model Medication {
   maxDurationDays  Int?     @map("max_duration_days") // Макс длительность (дни)
   routeOfAdmin     String?  @map("route_of_admin") // Путь введения: oral, rectal, iv, im
   
+  // Избранное и теги
+  isFavorite     Boolean  @default(false) @map("is_favorite")
+  userTags       String?  @map("user_tags") // JSON array
+  usageCount     Int      @default(0) @map("usage_count") // Счетчик использования
+  lastUsedAt     DateTime? @map("last_used_at")
+  
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
   
   diseases         DiseaseMedication[]
+  changeLogs       MedicationChangeLog[]
   
   @@map("medications")
 }
@@ -267,4 +278,19 @@ model Visit {
   primaryDiagnosis Disease? @relation("PrimaryDiagnosis", fields: [primaryDiagnosisId], references: [id])
   
   @@map("visits")
+}
+
+model MedicationChangeLog {
+  id             Int      @id @default(autoincrement())
+  medicationId   Int      @map("medication_id")
+  userId         Int      @map("user_id")
+  changedAt      DateTime @default(now()) @map("changed_at")
+  changeType     String   @map("change_type") // 'create', 'update', 'delete'
+  changes        String   // JSON: [{field, oldValue, newValue}]
+  source         String   @default("manual") // 'manual', 'vidal_import', 'system'
+  
+  medication     Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  user           User       @relation(fields: [userId], references: [id])
+  
+  @@map("medication_change_logs")
 }

@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { Disease, Medication, User } from '../types';
+import { dataEvents } from '../services/dataEvents';
 
 interface DataCacheContextType {
     // Кешированные данные
@@ -100,6 +101,23 @@ export const DataCacheProvider: React.FC<{ children: ReactNode }> = ({ children 
             setUsers(null);
         }
     }, []);
+
+    // Подписка на события изменения данных для автоматической инвалидации кеша
+    useEffect(() => {
+        const unsubscribe = dataEvents.subscribe((event) => {
+            // Инвалидируем кеш при любом изменении данных
+            const supportedTypes = ['diseases', 'medications', 'users', 'all'] as const;
+            
+            if (event.dataType === 'all') {
+                invalidate('all');
+            } else if (supportedTypes.includes(event.dataType as any)) {
+                invalidate(event.dataType as 'diseases' | 'medications' | 'users');
+            }
+            // Остальные типы (patients и др.) игнорируем - они не кешируются в DataCacheContext
+        });
+
+        return unsubscribe;
+    }, [invalidate]);
 
     return (
         <DataCacheContext.Provider

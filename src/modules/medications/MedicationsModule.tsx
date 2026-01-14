@@ -7,7 +7,8 @@ import { MedicationCard } from './components/MedicationCard';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { Search, Plus, Filter, Pill, AlertCircle, Beaker } from 'lucide-react';
+import { Search, Plus, Filter, Pill, AlertCircle, Beaker, Star } from 'lucide-react';
+import { PharmGroupFilter } from './components/PharmGroupFilter';
 
 export const MedicationsModule: React.FC = () => {
     const navigate = useNavigate();
@@ -15,6 +16,8 @@ export const MedicationsModule: React.FC = () => {
     const [medications, setMedications] = useState<Medication[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+    const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
     useEffect(() => {
         // Загружаем данные из кеша или делаем запрос
@@ -37,18 +40,36 @@ export const MedicationsModule: React.FC = () => {
         }
     }, [cachedMedications, loadMedications]);
 
-    // Синхронизируем локальное состояние с кешем
+    // Синхронизируем локальное состояние с кешем (автоматическое обновление при изменении кеша)
     useEffect(() => {
         if (cachedMedications) {
             setMedications(cachedMedications);
+        } else if (medications.length > 0) {
+            // Кеш был инвалидирован - перезагружаем данные
+            loadMedications(true).then(data => setMedications(data)).catch(err => {
+                console.error('Failed to reload medications:', err);
+            });
         }
-    }, [cachedMedications]);
+    }, [cachedMedications, loadMedications, medications.length]);
 
-    const filteredMeds = medications.filter(m =>
-        m.nameRu.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        m.activeSubstance.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (m.atcCode || '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Обновление при изменении избранного (кеш инвалидируется автоматически через dataEvents)
+    const handleFavoriteToggle = async () => {
+        // Данные обновятся автоматически через useEffect при изменении cachedMedications
+    };
+
+    const filteredMeds = medications.filter(m => {
+        const matchesSearch = m.nameRu.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             m.activeSubstance.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             (m.atcCode || '').toLowerCase().includes(searchQuery.toLowerCase());
+        
+        const matchesFavorite = !showFavoritesOnly || m.isFavorite;
+        
+        const matchesGroup = !selectedGroup || 
+                           m.clinicalPharmGroup === selectedGroup ||
+                           m.pharmTherapyGroup === selectedGroup;
+        
+        return matchesSearch && matchesFavorite && matchesGroup;
+    });
 
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -93,13 +114,19 @@ export const MedicationsModule: React.FC = () => {
                     </div>
                 </div>
                 <Button
-                    variant="secondary"
+                    variant={showFavoritesOnly ? 'primary' : 'secondary'}
+                    onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
                     className="h-14 rounded-2xl font-bold border-slate-200 dark:border-slate-800"
                 >
-                    <Filter className="w-5 h-5 mr-2" />
-                    Фильтры
+                    <Star className={`w-5 h-5 mr-2 ${showFavoritesOnly ? 'fill-yellow-400' : ''}`} />
+                    Избранное
                 </Button>
             </div>
+
+            {/* Фильтр по группам */}
+            {medications.length > 0 && (
+                <PharmGroupFilter onGroupSelect={setSelectedGroup} />
+            )}
 
             {error && (
                 <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-2xl text-red-600 dark:text-red-400">
@@ -134,6 +161,7 @@ export const MedicationsModule: React.FC = () => {
                             key={med.id}
                             medication={med}
                             onSelect={(id) => navigate(`/medications/${id}`)}
+                            onFavoriteToggle={handleFavoriteToggle}
                         />
                     ))}
                 </div>

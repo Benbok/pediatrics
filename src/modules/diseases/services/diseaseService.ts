@@ -1,9 +1,11 @@
 import { Disease, ClinicalGuideline } from '../../../types';
+import { dataEvents } from '../../../services/dataEvents';
 
 /**
  * Сервис для работы с заболеваниями
  * Использует backend кеширование через IPC
  * Frontend кеширование через DataCacheContext (используется в компонентах)
+ * Автоматическая инвалидация кеша через dataEvents
  */
 export const diseaseService = {
     /**
@@ -35,7 +37,10 @@ export const diseaseService = {
      */
     async upsertDisease(data: Disease): Promise<Disease> {
         try {
-            return await window.electronAPI.upsertDisease(data);
+            const result = await window.electronAPI.upsertDisease(data);
+            // Уведомляем об изменении для инвалидации кеша
+            dataEvents.notifyUpdated('diseases', result.id);
+            return result;
         } catch (error) {
             console.error('[DiseaseService] Failed to save disease:', error);
             throw error;
@@ -47,7 +52,10 @@ export const diseaseService = {
      */
     async deleteDisease(id: number): Promise<boolean> {
         try {
-            return await window.electronAPI.deleteDisease(id);
+            const result = await window.electronAPI.deleteDisease(id);
+            // Уведомляем об удалении для инвалидации кеша
+            dataEvents.notifyDeleted('diseases', id);
+            return result;
         } catch (error) {
             console.error('[DiseaseService] Failed to delete disease:', error);
             throw error;
@@ -83,7 +91,10 @@ export const diseaseService = {
      */
     async deleteGuideline(guidelineId: number): Promise<boolean> {
         try {
-            return await window.electronAPI.deleteGuideline(guidelineId);
+            const result = await window.electronAPI.deleteGuideline(guidelineId);
+            // Уведомляем об изменении для инвалидации кеша diseases (guideline - часть disease)
+            dataEvents.notifyUpdated('diseases');
+            return result;
         } catch (error) {
             console.error('[DiseaseService] Failed to delete guideline:', error);
             throw error;

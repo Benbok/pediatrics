@@ -1,0 +1,143 @@
+{
+  "nameRu": "Парацетамол",
+  "nameEn": "Paracetamol",
+  "activeSubstance": "Парацетамол",
+  "atcCode": "N02BE01",
+  "manufacturer": "ООО Фармстандарт",
+  "clinicalPharmGroup": "Анальгетик-антипиретик",
+  "pharmTherapyGroup": "Анальгетики; другие анальгетики и антипиретики",
+  "packageDescription": "Таблетки 500 мг, 20 шт",
+  "forms": [
+    {
+      "type": "tablet",
+      "concentration": "500 мг",
+      "description": "Таблетки белого цвета, круглые, плоские"
+    },
+    {
+      "type": "solution",
+      "concentration": "24 мг/мл",
+      "description": "Сироп для приема внутрь, 100 мл"
+    }
+  ],
+  "pediatricDosing": [
+    {
+      "minAgeMonths": 0,
+      "maxAgeMonths": 3,
+      "minWeightKg": null,
+      "maxWeightKg": null,
+      "dosing": {
+        "type": "weight_based",
+        "mgPerKg": 10,
+        "maxMgPerKg": 15
+      },
+      "routeOfAdmin": "oral",
+      "timesPerDay": 4,
+      "intervalHours": 4,
+      "maxSingleDose": 60,
+      "maxDailyDose": 240,
+      "instruction": "Внутрь, после еды. Детям до 3 месяцев: 10 мг/кг массы тела, но не более 60 мг на прием"
+    },
+    {
+      "minAgeMonths": 3,
+      "maxAgeMonths": 12,
+      "minWeightKg": null,
+      "maxWeightKg": null,
+      "dosing": {
+        "type": "weight_based",
+        "mgPerKg": 10,
+        "maxMgPerKg": 15
+      },
+      "routeOfAdmin": "oral",
+      "timesPerDay": 4,
+      "intervalHours": 4,
+      "maxSingleDose": 120,
+      "maxDailyDose": 480,
+      "instruction": "Внутрь, после еды. Детям 3-12 месяцев: 10-15 мг/кг массы тела, но не более 120 мг на прием"
+    },
+    {
+      "minAgeMonths": 12,
+      "maxAgeMonths": 36,
+      "minWeightKg": null,
+      "maxWeightKg": null,
+      "dosing": {
+        "type": "fixed",
+        "fixedDose": {
+          "min": 120,
+          "max": 250,
+          "unit": "mg"
+        }
+      },
+      "routeOfAdmin": "oral",
+      "timesPerDay": 4,
+      "intervalHours": 4,
+      "maxSingleDose": 250,
+      "maxDailyDose": 1000,
+      "instruction": "Внутрь, после еды. Детям 1-3 лет: 120-250 мг на прием, до 4 раз в сутки"
+    },
+    {
+      "minAgeMonths": 36,
+      "maxAgeMonths": 72,
+      "minWeightKg": null,
+      "maxWeightKg": null,
+      "dosing": {
+        "type": "fixed",
+        "fixedDose": {
+          "min": 250,
+          "max": 500,
+          "unit": "mg"
+        }
+      },
+      "routeOfAdmin": "oral",
+      "timesPerDay": 4,
+      "intervalHours": 4,
+      "maxSingleDose": 500,
+      "maxDailyDose": 2000,
+      "instruction": "Внутрь, после еды. Детям 3-6 лет: 250-500 мг на прием, до 4 раз в сутки"
+    }
+  ],
+  "adultDosing": [
+    {
+      "minWeightKg": 60,
+      "dosing": {
+        "type": "fixed",
+        "fixedDose": {
+          "min": 500,
+          "max": 500,
+          "unit": "mg"
+        }
+      },
+      "routeOfAdmin": "oral",
+      "timesPerDay": 4,
+      "maxSingleDose": 1000,
+      "maxDailyDose": 4000,
+      "instruction": "Внутрь, после еды. Взрослым и подросткам с массой тела более 60 кг: 500 мг до 4 раз/сут. Максимальная продолжительность лечения - 5-7 дней"
+    }
+  ],
+  "indications": [
+    "Лихорадка при инфекционно-воспалительных заболеваниях",
+    "Болевой синдром слабой и умеренной интенсивности различного генеза",
+    "Головная боль",
+    "Зубная боль",
+    "Миалгия",
+    "Невралгия",
+    "Альгодисменорея"
+  ],
+  "contraindications": "Гиперчувствительность к парацетамолу или другим компонентам препарата, тяжелые нарушения функции печени, тяжелые нарушения функции почек, дефицит глюкозо-6-фосфатдегидрогеназы, детский возраст до 3 месяцев",
+  "sideEffects": "Аллергические реакции (кожная сыпь, зуд, крапивница, отек Квинке), тошнота, боль в эпигастральной области, повышение активности печеночных трансаминаз, редко - гепатотоксическое действие, тромбоцитопения, анемия, агранулоцитоз",
+  "pregnancy": "Применение возможно по показаниям. Парацетамол проникает через плацентарный барьер. До настоящего времени не отмечено тератогенного действия парацетамола",
+  "lactation": "Парацетамол проникает в грудное молоко. При применении в терапевтических дозах не оказывает отрицательного влияния на ребенка",
+  "cautionConditions": "Нарушения функции печени и почек, доброкачественные гипербилирубинемии, дефицит глутатиона, хронический алкоголизм, истощение, обезвоживание",
+  "interactions": "Совместим с большинством препаратов. При одновременном применении с барбитуратами, противосудорожными препаратами, рифампицином, зидовудином возможно усиление гепатотоксического действия. При одновременном применении с метоклопрамидом возможно увеличение скорости всасывания парацетамола",
+  "minInterval": 4,
+  "maxDosesPerDay": 4,
+  "maxDurationDays": 7,
+  "icd10Codes": [
+    "R50",
+    "R51",
+    "R52",
+    "M79.3",
+    "G44",
+    "K08.8",
+    "N94.6"
+  ]
+}

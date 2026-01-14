@@ -56,11 +56,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // MEDICATIONS MODULE API
     getMedications: () => ipcRenderer.invoke('medications:list'),
     getMedication: (id) => ipcRenderer.invoke('medications:get-by-id', id),
-    upsertMedication: (data) => ipcRenderer.invoke('medications:upsert', data),
+    upsertMedication: (data, source) => ipcRenderer.invoke('medications:upsert', data, source),
     deleteMedication: (id) => ipcRenderer.invoke('medications:delete', id),
     linkMedicationToDisease: (data) => ipcRenderer.invoke('medications:link-disease', data),
     calculateDose: (params) => ipcRenderer.invoke('medications:calculate-dose', params),
     getMedicationsByDisease: (diseaseId) => ipcRenderer.invoke('medications:get-by-disease', diseaseId),
+    checkDuplicateMedication: (nameRu, excludeId) => ipcRenderer.invoke('medications:checkDuplicate', nameRu, excludeId),
+    importFromVidal: (url) => ipcRenderer.invoke('medications:importFromVidal', url),
+    importFromJson: (jsonString) => ipcRenderer.invoke('medications:importFromJson', jsonString),
+    getPharmacologicalGroups: () => ipcRenderer.invoke('medications:getPharmacologicalGroups'),
+    searchMedicationsByGroup: (groupName) => ipcRenderer.invoke('medications:searchByGroup', groupName),
+    toggleMedicationFavorite: (medicationId) => ipcRenderer.invoke('medications:toggleFavorite', medicationId),
+    addMedicationTag: (medicationId, tag) => ipcRenderer.invoke('medications:addTag', medicationId, tag),
+    getMedicationChangeHistory: (medicationId) => ipcRenderer.invoke('medications:getChangeHistory', medicationId),
 
     // VISITS MODULE API
     getVisits: (childId) => ipcRenderer.invoke('visits:list-for-child', childId),
