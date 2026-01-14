@@ -1,9 +1,7 @@
 import React from 'react';
 import { Card } from '../../../components/ui/Card';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
 import { Medication } from '../../../types';
-import { ChevronRight, Pill, Factory, Beaker, Star } from 'lucide-react';
+import { Pill, Beaker, Star } from 'lucide-react';
 import { medicationService } from '../services/medicationService';
 
 interface MedicationCardProps {
@@ -13,10 +11,6 @@ interface MedicationCardProps {
 }
 
 export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSelect, onFavoriteToggle }) => {
-    const indicationsSummary = Array.isArray(medication.indications)
-        ? medication.indications.join(', ')
-        : String(medication.indications || '');
-
     const handleToggleFavorite = async (e: React.MouseEvent) => {
         e.stopPropagation();
         if (medication.id) {
@@ -30,6 +24,34 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
             }
         }
     };
+
+    // Формируем строку с формами выпуска
+    const formsDisplay = React.useMemo(() => {
+        if (!medication.forms || !Array.isArray(medication.forms) || medication.forms.length === 0) {
+            return 'Формы выпуска не указаны';
+        }
+        
+        return medication.forms
+            .slice(0, 3) // Показываем максимум 3 формы
+            .map(form => {
+                const typeMap: Record<string, string> = {
+                    tablet: 'Таблетки',
+                    solution: 'Раствор',
+                    syrup: 'Сироп',
+                    suspension: 'Суспензия',
+                    injection: 'Инъекция',
+                    capsule: 'Капсулы',
+                    suppository: 'Свечи',
+                    powder: 'Порошок',
+                    drops: 'Капли'
+                };
+                
+                const typeName = typeMap[form.type] || form.type || 'Форма';
+                const concentration = form.concentration ? ` ${form.concentration}` : '';
+                return `${typeName}${concentration}`;
+            })
+            .join(', ') + (medication.forms.length > 3 ? '...' : '');
+    }, [medication.forms]);
 
     return (
         <Card
@@ -45,11 +67,6 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
                         {medication.isFavorite && (
                             <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                         )}
-                        {medication.atcCode && (
-                            <Badge variant="default" className="text-[10px] font-mono uppercase">
-                                {medication.atcCode}
-                            </Badge>
-                        )}
                     </div>
 
                     {medication.clinicalPharmGroup && (
@@ -63,15 +80,8 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
                         <span className="font-medium">{medication.activeSubstance}</span>
                     </div>
 
-                    <p className="text-xs text-slate-400 line-clamp-1 mb-3 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                        {indicationsSummary || 'Показания не указаны'}
-                    </p>
-
-                    <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
-                        <div className="flex items-center gap-1">
-                            <Factory className="w-3 h-3 text-slate-400" />
-                            <span>{medication.manufacturer || 'Не указан'}</span>
-                        </div>
+                    <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+                        {formsDisplay}
                     </div>
                 </div>
 
@@ -89,9 +99,6 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
                     <div className="p-2.5 bg-secondary-50 dark:bg-secondary-900/20 rounded-xl">
                         <Pill className="w-6 h-6 text-secondary-600 dark:text-secondary-400" />
                     </div>
-                    <Button variant="ghost" size="sm" className="rounded-full p-2 h-8 w-8">
-                        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-primary-500 transition-colors" />
-                    </Button>
                 </div>
             </div>
         </Card>

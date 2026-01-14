@@ -392,15 +392,13 @@ const MedicationService = {
     async getPharmacologicalGroups() {
         const medications = await prisma.medication.findMany({
             select: {
-                clinicalPharmGroup: true,
-                pharmTherapyGroup: true
+                clinicalPharmGroup: true
             }
         });
         
         const groups = new Set();
         medications.forEach(med => {
             if (med.clinicalPharmGroup) groups.add(med.clinicalPharmGroup);
-            if (med.pharmTherapyGroup) groups.add(med.pharmTherapyGroup);
         });
         
         return Array.from(groups).sort();
@@ -412,10 +410,7 @@ const MedicationService = {
     async searchByGroup(groupName) {
         const medications = await prisma.medication.findMany({
             where: {
-                OR: [
-                    { clinicalPharmGroup: { contains: groupName } },
-                    { pharmTherapyGroup: { contains: groupName } }
-                ]
+                clinicalPharmGroup: { contains: groupName }
             },
             orderBy: { nameRu: 'asc' }
         });

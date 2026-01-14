@@ -64,9 +64,7 @@ export const MedicationsModule: React.FC = () => {
         
         const matchesFavorite = !showFavoritesOnly || m.isFavorite;
         
-        const matchesGroup = !selectedGroup || 
-                           m.clinicalPharmGroup === selectedGroup ||
-                           m.pharmTherapyGroup === selectedGroup;
+        const matchesGroup = !selectedGroup || m.clinicalPharmGroup === selectedGroup;
         
         return matchesSearch && matchesFavorite && matchesGroup;
     });

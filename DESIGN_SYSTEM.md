@@ -153,6 +153,25 @@ Avoid rectangular standard tabs. Use the **Pill/Track** style for premium feel.
   - Active State: `bg-white` (Light) / `bg-slate-900` (Dark), `text-primary-600`, `shadow-xl shadow-primary-500/10`.
   - Transition: `duration-300` on state change.
 
+### Filter Pills/Tags
+Used for filtering content by categories (e.g., pharmacological groups, status filters).
+- **Selected State (CRITICAL):**
+  - Bg: `bg-primary-600` (Light) / `bg-primary-500` (Dark).
+  - **Text: MUST use `!text-white` (with important modifier)** to ensure visibility in all Electron themes and prevent text color cascade issues.
+  - Shadow: `shadow-md` for depth.
+  - Hover: `hover:bg-primary-700`.
+  - Example: `bg-primary-600 !text-white shadow-md hover:bg-primary-700 dark:bg-primary-500 dark:!text-white`
+  - Focus: add `ring-2 ring-primary-400/40` (or similar) to keep outline visible in high contrast themes.
+- **Unselected State:**
+  - Bg: `bg-slate-100` (Light) / `bg-slate-800` (Dark).
+  - Text: `text-slate-800` (Light) / `text-slate-200` (Dark) for high contrast.
+  - Border: `border border-slate-300` (Light) / `border-slate-700` (Dark) for definition.
+  - Hover: `hover:bg-slate-200` (Light) / `hover:bg-slate-700` (Dark).
+- **Common Issues & Solutions:**
+  - **Problem:** Selected filter text becomes invisible due to color cascade conflicts.
+  - **Solution:** Always use `!text-white` (with `!` important) on selected filter buttons with colored backgrounds.
+  - **Rationale:** Electron's theme system and CSS cascade can override text colors, making white text invisible on light backgrounds. The `!` modifier ensures text remains visible.
+
 ### Avatars (User Profiles)
 - **Base:**
   - Size: `w-16 h-16` (List) or `w-24 h-24` (Profile).
@@ -202,9 +221,10 @@ To avoid "blind" elements and unreadable text:
 1. **Never** use light text on light backgrounds (e.g., White on Primary-100).
 2. **Standard Buttons**: Primary buttons MUST use high-contrast text (`!text-white` on `bg-blue-600`). Always use the `!` important modifier for text color on colored button backgrounds.
 3. **Colored Button Text Rule**: ALL buttons with colored backgrounds (indigo, teal, purple, etc.) MUST use `!text-white` to prevent text from blending with the background. This is especially critical in Electron environments where theme cascading can cause visibility issues.
-4. **Contrast Validation**: Always check contrast using tools or WCAG standards during development.
-5. **Visual Hierarchy**: Active states must be clearly distinguishable from inactive states through color contrast or borders.
-6. **Icon Visibility**: Icons must maintain a minimum contrast of 3:1 against their background.
+4. **Filter Pills/Tags Rule**: Selected filter buttons with colored backgrounds (e.g., `bg-primary-600`) MUST use `!text-white` to ensure text visibility. This prevents the common issue where selected filter text becomes invisible due to CSS cascade conflicts in Electron themes.
+5. **Contrast Validation**: Always check contrast using tools or WCAG standards during development.
+6. **Visual Hierarchy**: Active states must be clearly distinguishable from inactive states through color contrast or borders.
+7. **Icon Visibility**: Icons must maintain a minimum contrast of 3:1 against their background.
 
 ### 8.2. Atomic Component Layer (Level 1)
 Located in `src/components/ui/`.

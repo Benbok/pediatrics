@@ -31,7 +31,7 @@ export const PharmGroupFilter: React.FC<{
         <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
                 <Filter className="w-4 h-4" />
-                Фармакологические группы
+                Клинико-фармакологические группы
             </div>
             
             <div className="flex flex-wrap gap-2">
@@ -39,10 +39,10 @@ export const PharmGroupFilter: React.FC<{
                     <button
                         key={group}
                         onClick={() => handleSelect(group)}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
+                        className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors border ${
                             selectedGroup === group
-                                ? 'bg-primary-500 text-white'
-                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                                ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700'
                         }`}
                     >
                         {group}
