@@ -36,6 +36,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     sharePatient: (data) => ipcRenderer.invoke('db:share-patient', data),
     unsharePatient: (data) => ipcRenderer.invoke('db:unshare-patient', data),
 
+    // PATIENT ALLERGIES API
+    getPatientAllergies: (childId) => ipcRenderer.invoke('allergies:list-by-child', childId),
+    createPatientAllergy: (data) => ipcRenderer.invoke('allergies:create', data),
+    updatePatientAllergy: (id, data) => ipcRenderer.invoke('allergies:update', { id, data }),
+    deletePatientAllergy: (id) => ipcRenderer.invoke('allergies:delete', id),
+
     // DISEASES MODULE API
     getDiseases: () => ipcRenderer.invoke('diseases:list'),
     getDisease: (id) => ipcRenderer.invoke('diseases:get-by-id', id),
@@ -47,6 +53,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     searchDiseases: (symptoms) => ipcRenderer.invoke('diseases:search', symptoms),
     parsePdfOnly: (pdfPath) => ipcRenderer.invoke('diseases:parse-pdf-only', pdfPath),
     importDiseaseFromJson: (jsonString) => ipcRenderer.invoke('diseases:importFromJson', jsonString),
+    getGuidelinePlan: (diseaseId) => ipcRenderer.invoke('diseases:get-guideline-plan', diseaseId),
 
     // Disease Notes
     getDiseaseNotes: (diseaseId) => ipcRenderer.invoke('diseases:notes-list', diseaseId),

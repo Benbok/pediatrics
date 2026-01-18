@@ -76,6 +76,40 @@ await prisma.$transaction(async (tx) => {
 });
 ```
 
+### Data Parsing & JSON Fields
+
+```javascript
+// ❌ NEVER: Double-parse JSON data
+// Service already returns parsed arrays
+const disease = await DiseaseService.getById(id);
+const parsed = {
+  ...disease,
+  diagnosticPlan: JSON.parse(disease.diagnosticPlan), // ← WRONG! Already parsed!
+};
+
+// ✅ ALWAYS: Parse once at data boundary
+// Service.cjs - parse when reading from DB
+const disease = await prisma.disease.findUnique({ where: { id } });
+return {
+  ...disease,
+  diagnosticPlan: JSON.parse(disease.diagnosticPlan || '[]'), // ← Parse here
+};
+
+// IPC Handler - NO parsing, just pass through
+const disease = await DiseaseService.getById(id);
+return disease; // ← Already parsed, just return
+
+// Frontend - NO parsing, data is ready
+const data = await diseaseService.getDisease(id);
+setFormData(data.diagnosticPlan); // ← Already array
+```
+
+**RULE**: Parse JSON strings at the **DATA BOUNDARY** (where you read from DB), never in handlers or components!
+
+---
+
+```
+
 ---
 
 ## 📋 MANDATORY PATTERNS

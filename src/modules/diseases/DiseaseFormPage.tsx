@@ -38,10 +38,16 @@ export const DiseaseFormPage: React.FC = () => {
         icd10Codes: [],
         description: '',
         symptoms: [],
+        diagnosticPlan: [],
+        treatmentPlan: [],
+        differentialDiagnosis: [],
+        redFlags: [],
     });
     const [importedPdfPath, setImportedPdfPath] = useState<string | null>(null);
 
     const [newSymptom, setNewSymptom] = useState('');
+    const [newDifferential, setNewDifferential] = useState('');
+    const [newRedFlag, setNewRedFlag] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [isParsing, setIsParsing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -71,13 +77,25 @@ export const DiseaseFormPage: React.FC = () => {
     const loadDisease = async () => {
         try {
             const data = await diseaseService.getDisease(Number(id));
+            console.log('[DiseaseFormPage] Raw data from backend:', data);
 
             // Parse JSON strings from SQLite
             const parsed = {
                 ...data,
                 symptoms: typeof data.symptoms === 'string' ? JSON.parse(data.symptoms) : (data.symptoms || []),
                 icd10Codes: typeof data.icd10Codes === 'string' ? JSON.parse(data.icd10Codes) : (data.icd10Codes || []),
+                diagnosticPlan: typeof data.diagnosticPlan === 'string' ? JSON.parse(data.diagnosticPlan) : (data.diagnosticPlan || []),
+                treatmentPlan: typeof data.treatmentPlan === 'string' ? JSON.parse(data.treatmentPlan) : (data.treatmentPlan || []),
+                differentialDiagnosis: typeof data.differentialDiagnosis === 'string' ? JSON.parse(data.differentialDiagnosis) : (data.differentialDiagnosis || []),
+                redFlags: typeof data.redFlags === 'string' ? JSON.parse(data.redFlags) : (data.redFlags || []),
             };
+
+            console.log('[DiseaseFormPage] Parsed formData:', {
+                diagnosticPlan: parsed.diagnosticPlan?.length || 0,
+                treatmentPlan: parsed.treatmentPlan?.length || 0,
+                differentialDiagnosis: parsed.differentialDiagnosis?.length || 0,
+                redFlags: parsed.redFlags?.length || 0,
+            });
 
             setFormData(parsed);
         } catch (err) {
@@ -129,6 +147,84 @@ export const DiseaseFormPage: React.FC = () => {
         setFormData({
             ...formData,
             symptoms: formData.symptoms?.filter(s => s !== symptom)
+        });
+    };
+
+    const addDiagnosticPlanItem = () => {
+        setFormData({
+            ...formData,
+            diagnosticPlan: [
+                ...(formData.diagnosticPlan || []),
+                { type: 'lab', test: '', priority: 'medium', rationale: '' }
+            ]
+        });
+    };
+
+    const updateDiagnosticPlanItem = (index: number, updates: any) => {
+        const items = [...(formData.diagnosticPlan || [])];
+        items[index] = { ...items[index], ...updates };
+        setFormData({ ...formData, diagnosticPlan: items });
+    };
+
+    const removeDiagnosticPlanItem = (index: number) => {
+        setFormData({
+            ...formData,
+            diagnosticPlan: (formData.diagnosticPlan || []).filter((_, i) => i !== index)
+        });
+    };
+
+    const addTreatmentPlanItem = () => {
+        setFormData({
+            ...formData,
+            treatmentPlan: [
+                ...(formData.treatmentPlan || []),
+                { category: 'symptomatic', description: '', priority: 'medium' }
+            ]
+        });
+    };
+
+    const updateTreatmentPlanItem = (index: number, updates: any) => {
+        const items = [...(formData.treatmentPlan || [])];
+        items[index] = { ...items[index], ...updates };
+        setFormData({ ...formData, treatmentPlan: items });
+    };
+
+    const removeTreatmentPlanItem = (index: number) => {
+        setFormData({
+            ...formData,
+            treatmentPlan: (formData.treatmentPlan || []).filter((_, i) => i !== index)
+        });
+    };
+
+    const addDifferentialDiagnosis = () => {
+        if (!newDifferential.trim()) return;
+        setFormData({
+            ...formData,
+            differentialDiagnosis: [...(formData.differentialDiagnosis || []), newDifferential.trim()]
+        });
+        setNewDifferential('');
+    };
+
+    const removeDifferentialDiagnosis = (value: string) => {
+        setFormData({
+            ...formData,
+            differentialDiagnosis: (formData.differentialDiagnosis || []).filter(item => item !== value)
+        });
+    };
+
+    const addRedFlag = () => {
+        if (!newRedFlag.trim()) return;
+        setFormData({
+            ...formData,
+            redFlags: [...(formData.redFlags || []), newRedFlag.trim()]
+        });
+        setNewRedFlag('');
+    };
+
+    const removeRedFlag = (value: string) => {
+        setFormData({
+            ...formData,
+            redFlags: (formData.redFlags || []).filter(item => item !== value)
         });
     };
 
@@ -202,14 +298,15 @@ export const DiseaseFormPage: React.FC = () => {
 
                 const parsedData = await window.electronAPI.parsePdfOnly(pdfPath);
 
-                // Autofill form with metadata
-                setFormData({
+                // Autofill form with metadata (merge instead of replace to preserve existing fields)
+                setFormData(prev => ({
+                    ...prev, // Сохраняем все существующие поля (diagnosticPlan, treatmentPlan, etc.)
                     nameRu: parsedData.nameRu,
                     icd10Code: parsedData.icd10Code,
                     icd10Codes: parsedData.allIcd10Codes,
                     description: parsedData.description,
                     symptoms: parsedData.symptoms,
-                });
+                }));
                 setImportedPdfPath(pdfPath);
 
                 // Show AI warning if fallback was used
@@ -311,24 +408,24 @@ export const DiseaseFormPage: React.FC = () => {
             setError('Вставьте JSON данные');
             return;
         }
-        
+
         if (jsonError) {
             setError('Исправьте ошибки в JSON перед импортом');
             return;
         }
-        
+
         setIsImporting(true);
         setError(null);
-        
+
         try {
             const result = await diseaseService.importFromJson(jsonText);
-            
+
             if (result.success && result.data) {
                 // Сохранить результаты валидации
                 if (result.validation) {
                     setValidationResult(result.validation);
                 }
-                
+
                 // Показать предпросмотр
                 setPreviewData(result.data);
                 setShowPreview(true);
@@ -354,7 +451,7 @@ export const DiseaseFormPage: React.FC = () => {
             }
             return;
         }
-        
+
         if (previewData) {
             setFormData({
                 ...formData,
@@ -515,6 +612,217 @@ export const DiseaseFormPage: React.FC = () => {
                     </div>
                 </Card>
 
+                {/* Diagnostic Plan Section */}
+                <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <FileText className="w-6 h-6 text-blue-500" />
+                            План диагностики
+                        </h2>
+                        <Button type="button" variant="secondary" onClick={addDiagnosticPlanItem} className="rounded-xl">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Добавить
+                        </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                        {(formData.diagnosticPlan || []).map((item: any, idx: number) => (
+                            <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 relative">
+                                <button
+                                    type="button"
+                                    onClick={() => removeDiagnosticPlanItem(idx)}
+                                    className="absolute top-3 right-3 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Тип</label>
+                                        <select
+                                            value={item.type || 'lab'}
+                                            onChange={e => updateDiagnosticPlanItem(idx, { type: e.target.value })}
+                                            className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                                        >
+                                            <option value="lab">Лабораторное</option>
+                                            <option value="instrumental">Инструментальное</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-2 md:col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Исследование</label>
+                                        <Input
+                                            value={item.test || ''}
+                                            onChange={e => updateDiagnosticPlanItem(idx, { test: e.target.value })}
+                                            placeholder="Например: ОАК"
+                                            className="h-10"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Приоритет</label>
+                                        <select
+                                            value={item.priority || 'medium'}
+                                            onChange={e => updateDiagnosticPlanItem(idx, { priority: e.target.value })}
+                                            className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                                        >
+                                            <option value="low">Низкий</option>
+                                            <option value="medium">Средний</option>
+                                            <option value="high">Высокий</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-2 md:col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Обоснование</label>
+                                        <Input
+                                            value={item.rationale || ''}
+                                            onChange={e => updateDiagnosticPlanItem(idx, { rationale: e.target.value })}
+                                            placeholder="Почему необходимо"
+                                            className="h-10"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {(formData.diagnosticPlan || []).length === 0 && (
+                            <p className="text-sm text-slate-400 italic">План диагностики не заполнен</p>
+                        )}
+                    </div>
+                </Card>
+
+                {/* Treatment Plan Section */}
+                <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <CheckCircle2 className="w-6 h-6 text-green-500" />
+                            План лечения
+                        </h2>
+                        <Button type="button" variant="secondary" onClick={addTreatmentPlanItem} className="rounded-xl">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Добавить
+                        </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                        {(formData.treatmentPlan || []).map((item: any, idx: number) => (
+                            <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 relative">
+                                <button
+                                    type="button"
+                                    onClick={() => removeTreatmentPlanItem(idx)}
+                                    className="absolute top-3 right-3 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Категория</label>
+                                        <select
+                                            value={item.category || 'symptomatic'}
+                                            onChange={e => updateTreatmentPlanItem(idx, { category: e.target.value })}
+                                            className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                                        >
+                                            <option value="symptomatic">Симптоматическое</option>
+                                            <option value="etiologic">Этиотропное</option>
+                                            <option value="supportive">Поддерживающее</option>
+                                            <option value="other">Другое</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-2 md:col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Описание</label>
+                                        <Input
+                                            value={item.description || ''}
+                                            onChange={e => updateTreatmentPlanItem(idx, { description: e.target.value })}
+                                            placeholder="Описание этапа лечения"
+                                            className="h-10"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Приоритет</label>
+                                        <select
+                                            value={item.priority || 'medium'}
+                                            onChange={e => updateTreatmentPlanItem(idx, { priority: e.target.value })}
+                                            className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                                        >
+                                            <option value="low">Низкий</option>
+                                            <option value="medium">Средний</option>
+                                            <option value="high">Высокий</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {(formData.treatmentPlan || []).length === 0 && (
+                            <p className="text-sm text-slate-400 italic">План лечения не заполнен</p>
+                        )}
+                    </div>
+                </Card>
+
+                {/* Differential Diagnosis & Red Flags */}
+                <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Дифференциальная диагностика</h2>
+                            <div className="flex gap-2 mb-4">
+                                <Input
+                                    value={newDifferential}
+                                    onChange={e => setNewDifferential(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addDifferentialDiagnosis())}
+                                    placeholder="Добавить диагноз..."
+                                    className="h-12 rounded-xl"
+                                />
+                                <Button type="button" onClick={addDifferentialDiagnosis} variant="secondary" className="h-12 w-12 rounded-xl p-0">
+                                    <Plus className="w-6 h-6" />
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {(formData.differentialDiagnosis || []).map((item: string, idx: number) => (
+                                    <Badge key={idx} variant="outline" className="pl-3 pr-1 py-1.5 rounded-xl flex items-center gap-2">
+                                        <span>{item}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeDifferentialDiagnosis(item)}
+                                            className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    </Badge>
+                                ))}
+                                {(formData.differentialDiagnosis || []).length === 0 && (
+                                    <p className="text-sm text-slate-400 italic">Нет списка</p>
+                                )}
+                            </div>
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Красные флаги</h2>
+                            <div className="flex gap-2 mb-4">
+                                <Input
+                                    value={newRedFlag}
+                                    onChange={e => setNewRedFlag(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addRedFlag())}
+                                    placeholder="Добавить красный флаг..."
+                                    className="h-12 rounded-xl"
+                                />
+                                <Button type="button" onClick={addRedFlag} variant="secondary" className="h-12 w-12 rounded-xl p-0">
+                                    <Plus className="w-6 h-6" />
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {(formData.redFlags || []).map((item: string, idx: number) => (
+                                    <Badge key={idx} variant="outline" className="pl-3 pr-1 py-1.5 rounded-xl flex items-center gap-2">
+                                        <span>{item}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeRedFlag(item)}
+                                            className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    </Badge>
+                                ))}
+                                {(formData.redFlags || []).length === 0 && (
+                                    <p className="text-sm text-slate-400 italic">Нет списка</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+
                 {/* Clinical Guideline List (ReadOnly in Form) */}
                 {isEdit && (
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
@@ -622,7 +930,7 @@ export const DiseaseFormPage: React.FC = () => {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <Card className="p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
                         <h2 className="text-xl font-bold mb-4">Импорт заболевания из JSON</h2>
-                        
+
                         <div className="flex gap-2 mb-2">
                             <Button
                                 type="button"
@@ -646,20 +954,19 @@ export const DiseaseFormPage: React.FC = () => {
                                 Очистить
                             </Button>
                         </div>
-                        
+
                         <textarea
                             value={jsonText}
                             onChange={e => setJsonText(e.target.value)}
                             placeholder="Вставьте JSON данные заболевания здесь..."
-                            className={`w-full h-64 p-3 rounded-xl border-2 font-mono text-sm ${
-                                jsonError
-                                    ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
-                                    : jsonText && !jsonError
+                            className={`w-full h-64 p-3 rounded-xl border-2 font-mono text-sm ${jsonError
+                                ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
+                                : jsonText && !jsonError
                                     ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
                                     : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
-                            }`}
+                                }`}
                         />
-                        
+
                         {jsonError && (
                             <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                                 <p className="text-xs text-red-600 dark:text-red-400 font-bold">
@@ -667,7 +974,7 @@ export const DiseaseFormPage: React.FC = () => {
                                 </p>
                             </div>
                         )}
-                        
+
                         {jsonText && !jsonError && (
                             <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                                 <p className="text-xs text-green-600 dark:text-green-400 font-bold">
@@ -675,11 +982,11 @@ export const DiseaseFormPage: React.FC = () => {
                                 </p>
                             </div>
                         )}
-                        
+
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-4">
                             Вставьте JSON данные заболевания. Используйте кнопку "Скопировать шаблон" для получения примера структуры.
                         </p>
-                        
+
                         <div className="flex gap-3 mt-6">
                             <Button
                                 variant="primary"
@@ -792,16 +1099,15 @@ export const DiseaseFormPage: React.FC = () => {
                                     </h4>
                                     <ul className="space-y-1">
                                         {validationResult.warnings.map((warn, idx) => (
-                                            <li key={idx} className={`text-sm ${
-                                                warn.severity === 'high' ? 'text-orange-700' : 'text-orange-600'
-                                            } dark:text-orange-400`}>
+                                            <li key={idx} className={`text-sm ${warn.severity === 'high' ? 'text-orange-700' : 'text-orange-600'
+                                                } dark:text-orange-400`}>
                                                 <strong>{warn.field}:</strong> {warn.message}
                                             </li>
                                         ))}
                                     </ul>
                                 </div>
                             )}
-                            
+
                             <div className="mt-4 p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
                                 <p className="text-sm text-orange-800 dark:text-orange-200">
                                     💡 <strong>Внимание:</strong> Обязательно проверьте все значения перед сохранением!

@@ -12,5 +12,39 @@
     "Повышение температуры тела до 37-38°C",
     "Общая слабость",
     "Головная боль"
+  ],
+  "diagnosticPlan": [
+    {
+      "type": "lab",
+      "test": "ОАК",
+      "priority": "medium",
+      "rationale": "Оценка выраженности воспаления"
+    },
+    {
+      "type": "instrumental",
+      "test": "Ларингоскопия",
+      "priority": "high",
+      "rationale": "Подтверждение воспаления гортани"
+    }
+  ],
+  "treatmentPlan": [
+    {
+      "category": "symptomatic",
+      "description": "Увлажнение воздуха, голосовой покой",
+      "priority": "high"
+    },
+    {
+      "category": "etiologic",
+      "description": "Лечение по показаниям при бактериальной инфекции",
+      "priority": "low"
+    }
+  ],
+  "differentialDiagnosis": [
+    "Эпиглоттит",
+    "Стенозирующий ларинготрахеит"
+  ],
+  "redFlags": [
+    "Стридор в покое",
+    "Цианоз"
   ]
 }

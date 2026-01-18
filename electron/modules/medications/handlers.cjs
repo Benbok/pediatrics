@@ -5,6 +5,7 @@ const { logAudit, logger } = require('../../logger.cjs');
 const { CacheService } = require('../../services/cacheService.cjs');
 const { parseVidalWithAI } = require('./vidalParser.cjs');
 const { MedicationValidator } = require('./validator.cjs');
+const { normalizeMedicationRoutes } = require('../../utils/routeOfAdmin.cjs');
 const https = require('https');
 
 /**
@@ -194,8 +195,9 @@ const setupMedicationHandlers = () => {
             });
             
             // Парсить с помощью AI
-            const medicationData = await parseVidalWithAI(html);
+            let medicationData = await parseVidalWithAI(html);
             medicationData.vidalUrl = url;
+            medicationData = normalizeMedicationRoutes(medicationData);
             
             // ВАЛИДАЦИЯ ДАННЫХ
             const validator = new MedicationValidator();
@@ -245,6 +247,8 @@ const setupMedicationHandlers = () => {
                 };
             }
             
+            medicationData = normalizeMedicationRoutes(medicationData);
+
             // Валидация через MedicationValidator
             const validator = new MedicationValidator();
             const validation = validator.validate(medicationData);

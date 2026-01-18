@@ -1,4 +1,4 @@
-import { Disease, ClinicalGuideline } from '../../../types';
+import { Disease, ClinicalGuideline, GuidelinePlan } from '../../../types';
 import { dataEvents } from '../../../services/dataEvents';
 
 /**
@@ -7,13 +7,39 @@ import { dataEvents } from '../../../services/dataEvents';
  * Frontend кеширование через DataCacheContext (используется в компонентах)
  * Автоматическая инвалидация кеша через dataEvents
  */
+const safeJsonParse = <T>(value: any, fallback: T): T => {
+    if (value === null || value === undefined) return fallback;
+    if (Array.isArray(value)) return value as T;
+    if (typeof value !== 'string') return fallback;
+    if (value.trim() === '') return fallback;
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        return fallback;
+    }
+};
+
+const normalizeDisease = <T extends Disease>(data: T): T => {
+    return {
+        ...data,
+        // Backend already returns parsed arrays, so only parse if it's still a string
+        icd10Codes: Array.isArray(data.icd10Codes) ? data.icd10Codes : safeJsonParse<string[]>(data.icd10Codes, []),
+        symptoms: Array.isArray(data.symptoms) ? data.symptoms : safeJsonParse<string[]>(data.symptoms, []),
+        diagnosticPlan: Array.isArray(data.diagnosticPlan) ? data.diagnosticPlan : safeJsonParse<any[]>(data.diagnosticPlan as any, []),
+        treatmentPlan: Array.isArray(data.treatmentPlan) ? data.treatmentPlan : safeJsonParse<any[]>(data.treatmentPlan as any, []),
+        differentialDiagnosis: Array.isArray(data.differentialDiagnosis) ? data.differentialDiagnosis : safeJsonParse<string[]>(data.differentialDiagnosis as any, []),
+        redFlags: Array.isArray(data.redFlags) ? data.redFlags : safeJsonParse<string[]>(data.redFlags as any, [])
+    };
+};
+
 export const diseaseService = {
     /**
      * Fetch all diseases
      */
     async getDiseases(): Promise<Disease[]> {
         try {
-            return await window.electronAPI.getDiseases();
+            const data = await window.electronAPI.getDiseases();
+            return data.map(disease => normalizeDisease(disease));
         } catch (error) {
             console.error('[DiseaseService] Failed to fetch diseases:', error);
             throw error;
@@ -25,7 +51,8 @@ export const diseaseService = {
      */
     async getDisease(id: number): Promise<Disease & { guidelines: ClinicalGuideline[] }> {
         try {
-            return await window.electronAPI.getDisease(id);
+            const data = await window.electronAPI.getDisease(id);
+            return data ? normalizeDisease(data) : data;
         } catch (error) {
             console.error('[DiseaseService] Failed to fetch disease details:', error);
             throw error;
@@ -114,6 +141,18 @@ export const diseaseService = {
     },
 
     /**
+     * Get normalized guideline plan for a disease
+     */
+    async getGuidelinePlan(diseaseId: number): Promise<GuidelinePlan> {
+        try {
+            return await window.electronAPI.getGuidelinePlan(diseaseId);
+        } catch (error) {
+            console.error('[DiseaseService] Failed to fetch guideline plan:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Import disease from JSON string
      */
     async importFromJson(jsonString: string): Promise<{
@@ -128,7 +167,11 @@ export const diseaseService = {
         error?: string;
     }> {
         try {
-            return await window.electronAPI.importDiseaseFromJson(jsonString);
+            const result = await window.electronAPI.importDiseaseFromJson(jsonString);
+            if (result?.data) {
+                result.data = normalizeDisease(result.data);
+            }
+            return result;
         } catch (error: any) {
             console.error('[DiseaseService] Failed to import from JSON', { error });
             return {

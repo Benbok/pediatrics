@@ -673,10 +673,11 @@ export const MedicationFormPage: React.FC = () => {
                                         <div className="flex flex-col gap-2">
                                             <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Путь введения</label>
                                             <select
-                                                value={rule.routeOfAdmin || 'oral'}
-                                                onChange={e => updateDosingRule(idx, { routeOfAdmin: e.target.value })}
+                                                value={rule.routeOfAdmin || ''}
+                                                onChange={e => updateDosingRule(idx, { routeOfAdmin: e.target.value || null })}
                                                 className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                                             >
+                                                <option value="">Не указано</option>
                                                 <option value="oral">Перорально</option>
                                                 <option value="rectal">Ректально</option>
                                                 <option value="iv_bolus">В/В болюсно</option>

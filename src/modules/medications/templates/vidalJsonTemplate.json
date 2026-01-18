@@ -9,13 +9,20 @@
   "packageDescription": "Таблетки 500 мг, 20 шт",
   "forms": [
     {
+      "id": "tablet_500mg",
       "type": "tablet",
       "concentration": "500 мг",
+      "unit": "mg",
+      "strengthMg": 500,
       "description": "Таблетки белого цвета, круглые, плоские"
     },
     {
+      "id": "syrup_24mg_ml",
       "type": "solution",
       "concentration": "24 мг/мл",
+      "unit": "ml",
+      "mgPerMl": 24,
+      "volumeMl": 100,
       "description": "Сироп для приема внутрь, 100 мл"
     }
   ],
@@ -25,6 +32,8 @@
       "maxAgeMonths": 3,
       "minWeightKg": null,
       "maxWeightKg": null,
+      "formId": "syrup_24mg_ml",
+      "unit": "mg",
       "dosing": {
         "type": "weight_based",
         "mgPerKg": 10,
@@ -34,7 +43,9 @@
       "timesPerDay": 4,
       "intervalHours": 4,
       "maxSingleDose": 60,
+      "maxSingleDosePerKg": null,
       "maxDailyDose": 240,
+      "maxDailyDosePerKg": null,
       "instruction": "Внутрь, после еды. Детям до 3 месяцев: 10 мг/кг массы тела, но не более 60 мг на прием"
     },
     {
@@ -42,6 +53,8 @@
       "maxAgeMonths": 12,
       "minWeightKg": null,
       "maxWeightKg": null,
+      "formId": "syrup_24mg_ml",
+      "unit": "mg",
       "dosing": {
         "type": "weight_based",
         "mgPerKg": 10,
@@ -51,7 +64,9 @@
       "timesPerDay": 4,
       "intervalHours": 4,
       "maxSingleDose": 120,
+      "maxSingleDosePerKg": null,
       "maxDailyDose": 480,
+      "maxDailyDosePerKg": null,
       "instruction": "Внутрь, после еды. Детям 3-12 месяцев: 10-15 мг/кг массы тела, но не более 120 мг на прием"
     },
     {
@@ -59,6 +74,8 @@
       "maxAgeMonths": 36,
       "minWeightKg": null,
       "maxWeightKg": null,
+      "formId": "syrup_24mg_ml",
+      "unit": "mg",
       "dosing": {
         "type": "fixed",
         "fixedDose": {
@@ -71,7 +88,9 @@
       "timesPerDay": 4,
       "intervalHours": 4,
       "maxSingleDose": 250,
+      "maxSingleDosePerKg": null,
       "maxDailyDose": 1000,
+      "maxDailyDosePerKg": null,
       "instruction": "Внутрь, после еды. Детям 1-3 лет: 120-250 мг на прием, до 4 раз в сутки"
     },
     {
@@ -79,6 +98,8 @@
       "maxAgeMonths": 72,
       "minWeightKg": null,
       "maxWeightKg": null,
+      "formId": "tablet_500mg",
+      "unit": "mg",
       "dosing": {
         "type": "fixed",
         "fixedDose": {
@@ -91,13 +112,17 @@
       "timesPerDay": 4,
       "intervalHours": 4,
       "maxSingleDose": 500,
+      "maxSingleDosePerKg": null,
       "maxDailyDose": 2000,
+      "maxDailyDosePerKg": null,
       "instruction": "Внутрь, после еды. Детям 3-6 лет: 250-500 мг на прием, до 4 раз в сутки"
     }
   ],
   "adultDosing": [
     {
       "minWeightKg": 60,
+      "formId": "tablet_500mg",
+      "unit": "mg",
       "dosing": {
         "type": "fixed",
         "fixedDose": {
@@ -109,7 +134,9 @@
       "routeOfAdmin": "oral",
       "timesPerDay": 4,
       "maxSingleDose": 1000,
+      "maxSingleDosePerKg": null,
       "maxDailyDose": 4000,
+      "maxDailyDosePerKg": null,
       "instruction": "Внутрь, после еды. Взрослым и подросткам с массой тела более 60 кг: 500 мг до 4 раз/сут. Максимальная продолжительность лечения - 5-7 дней"
     }
   ],

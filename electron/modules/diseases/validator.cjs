@@ -1,4 +1,5 @@
 const { logger } = require('../../logger.cjs');
+const { getCanonicalSet, normalizeText } = require('../../utils/cdssVocabulary.cjs');
 
 /**
  * Валидатор данных заболеваний с проверкой на типичные ошибки AI
@@ -19,6 +20,10 @@ class DiseaseValidator {
         this.validateRequiredFields(diseaseData);
         this.validateIcd10Codes(diseaseData);
         this.validateSymptoms(diseaseData);
+        this.validateDiagnosticPlan(diseaseData);
+        this.validateTreatmentPlan(diseaseData);
+        this.validateStringList(diseaseData, 'differentialDiagnosis');
+        this.validateStringList(diseaseData, 'redFlags');
         this.validateTextFields(diseaseData);
         this.validateConsistency(diseaseData);
 
@@ -157,6 +162,8 @@ class DiseaseValidator {
                 });
             }
 
+            const canonicalSymptoms = getCanonicalSet('symptoms');
+
             // Проверка каждого симптома
             data.symptoms.forEach((symptom, idx) => {
                 if (typeof symptom !== 'string') {
@@ -175,6 +182,12 @@ class DiseaseValidator {
                         message: `Симптом слишком короткий: "${symptom}"`,
                         severity: 'low'
                     });
+                } else if (canonicalSymptoms.size > 0 && !canonicalSymptoms.has(normalizeText(symptom))) {
+                    this.warnings.push({
+                        field: `symptoms[${idx}]`,
+                        message: `Симптом не найден в словаре (будет сохранен как есть): "${symptom}"`,
+                        severity: 'low'
+                    });
                 }
             });
 
@@ -188,6 +201,100 @@ class DiseaseValidator {
                 });
             }
         }
+    }
+
+    /**
+     * Проверка диагностического плана
+     */
+    validateDiagnosticPlan(data) {
+        if (data.diagnosticPlan === undefined || data.diagnosticPlan === null) return;
+        if (!Array.isArray(data.diagnosticPlan)) {
+            this.errors.push({
+                field: 'diagnosticPlan',
+                message: 'Поле diagnosticPlan должно быть массивом объектов'
+            });
+            return;
+        }
+
+        data.diagnosticPlan.forEach((item, idx) => {
+            if (!item || typeof item !== 'object') {
+                this.errors.push({
+                    field: `diagnosticPlan[${idx}]`,
+                    message: 'Элемент diagnosticPlan должен быть объектом'
+                });
+                return;
+            }
+            if (!item.type || !['lab', 'instrumental'].includes(item.type)) {
+                this.errors.push({
+                    field: `diagnosticPlan[${idx}].type`,
+                    message: 'type должен быть "lab" или "instrumental"'
+                });
+            }
+            if (!item.test || typeof item.test !== 'string' || item.test.trim() === '') {
+                this.errors.push({
+                    field: `diagnosticPlan[${idx}].test`,
+                    message: 'test обязателен'
+                });
+            }
+        });
+    }
+
+    /**
+     * Проверка плана лечения
+     */
+    validateTreatmentPlan(data) {
+        if (data.treatmentPlan === undefined || data.treatmentPlan === null) return;
+        if (!Array.isArray(data.treatmentPlan)) {
+            this.errors.push({
+                field: 'treatmentPlan',
+                message: 'Поле treatmentPlan должно быть массивом объектов'
+            });
+            return;
+        }
+
+        data.treatmentPlan.forEach((item, idx) => {
+            if (!item || typeof item !== 'object') {
+                this.errors.push({
+                    field: `treatmentPlan[${idx}]`,
+                    message: 'Элемент treatmentPlan должен быть объектом'
+                });
+                return;
+            }
+            if (!item.category || !['symptomatic', 'etiologic', 'supportive', 'other'].includes(item.category)) {
+                this.errors.push({
+                    field: `treatmentPlan[${idx}].category`,
+                    message: 'category должен быть "symptomatic", "etiologic", "supportive" или "other"'
+                });
+            }
+            if (!item.description || typeof item.description !== 'string' || item.description.trim() === '') {
+                this.errors.push({
+                    field: `treatmentPlan[${idx}].description`,
+                    message: 'description обязателен'
+                });
+            }
+        });
+    }
+
+    /**
+     * Проверка массива строк (например, redFlags)
+     */
+    validateStringList(data, fieldName) {
+        if (data[fieldName] === undefined || data[fieldName] === null) return;
+        if (!Array.isArray(data[fieldName])) {
+            this.errors.push({
+                field: fieldName,
+                message: `Поле ${fieldName} должно быть массивом строк`
+            });
+            return;
+        }
+        data[fieldName].forEach((item, idx) => {
+            if (typeof item !== 'string' || item.trim() === '') {
+                this.errors.push({
+                    field: `${fieldName}[${idx}]`,
+                    message: 'Элемент должен быть непустой строкой'
+                });
+            }
+        });
     }
 
     /**

@@ -2,6 +2,8 @@ const { prisma } = require('../../prisma-client.cjs');
 const { logger } = require('../../logger.cjs');
 const { z } = require('zod');
 const { CacheService } = require('../../services/cacheService.cjs');
+const { normalizeContraindicationsText } = require('../../utils/cdssVocabulary.cjs');
+const { normalizeMedicationRoutes } = require('../../utils/routeOfAdmin.cjs');
 
 /**
  * Безопасный парсинг JSON полей
@@ -29,9 +31,49 @@ const MedicationSchema = z.object({
     icd10Codes: z.array(z.string()).default([]),
     packageDescription: z.string().optional().nullable(),
     manufacturer: z.string().optional().nullable(),
-    forms: z.array(z.any()).default([]), // Expected to be serialized JSON
-    pediatricDosing: z.any(), // JSON structure for age/weight rules (Vidal format)
-    adultDosing: z.any().optional().nullable(),
+    forms: z.array(z.object({
+        id: z.string().min(1),
+        type: z.string().min(1),
+        concentration: z.string().optional().nullable(),
+        unit: z.string().optional().nullable(),
+        strengthMg: z.number().optional().nullable(),
+        mgPerMl: z.number().optional().nullable(),
+        volumeMl: z.number().optional().nullable(),
+        description: z.string().optional().nullable(),
+    })).default([]),
+    pediatricDosing: z.array(z.object({
+        minAgeMonths: z.number().optional().nullable(),
+        maxAgeMonths: z.number().optional().nullable(),
+        minWeightKg: z.number().optional().nullable(),
+        maxWeightKg: z.number().optional().nullable(),
+        formId: z.string().optional().nullable(),
+        unit: z.string().optional().nullable(),
+        dosing: z.object({
+            type: z.enum(['weight_based', 'bsa_based', 'fixed', 'age_based']),
+            mgPerKg: z.number().optional().nullable(),
+            maxMgPerKg: z.number().optional().nullable(),
+            mgPerM2: z.number().optional().nullable(),
+            fixedDose: z.object({
+                min: z.number().optional().nullable(),
+                max: z.number().optional().nullable(),
+                unit: z.string().optional().nullable(),
+            }).optional().nullable(),
+            ageBasedDose: z.object({
+                dose: z.number(),
+                unit: z.string().optional().nullable(),
+            }).optional().nullable(),
+        }).optional().nullable(),
+        routeOfAdmin: z.string().optional().nullable(),
+        timesPerDay: z.number().optional().nullable(),
+        intervalHours: z.number().optional().nullable(),
+        maxSingleDose: z.number().optional().nullable(),
+        maxSingleDosePerKg: z.number().optional().nullable(),
+        maxDailyDose: z.number().optional().nullable(),
+        maxDailyDosePerKg: z.number().optional().nullable(),
+        instruction: z.string().optional().nullable(),
+        infusion: z.any().optional().nullable(),
+    })).default([]),
+    adultDosing: z.array(z.any()).optional().nullable(),
     contraindications: z.string(),
     cautionConditions: z.string().optional().nullable(),
     sideEffects: z.string().optional().nullable(),
@@ -134,7 +176,8 @@ const MedicationService = {
      * Upsert medication
      */
     async upsert(data, userId = null, source = 'manual') {
-        const validated = MedicationSchema.parse(data);
+        const normalizedInput = normalizeMedicationRoutes(data);
+        const validated = MedicationSchema.parse(normalizedInput);
         const { id, ...rest } = validated;
 
         // Получить старые данные для сравнения
@@ -171,6 +214,8 @@ const MedicationService = {
             logger.info(`[MedicationService] Preserving existing icd10Codes for medication ${id}:`, icd10CodesToSave);
         }
 
+        const normalizedContraindications = normalizeContraindicationsText(rest.contraindications);
+
         const dbData = {
             ...rest,
             icd10Codes: JSON.stringify(normalizeArray(icd10CodesToSave)),
@@ -178,7 +223,7 @@ const MedicationService = {
             pediatricDosing: JSON.stringify(normalizeArray(rest.pediatricDosing)),
             adultDosing: rest.adultDosing ? JSON.stringify(normalizeArray(rest.adultDosing)) : null,
             indications: normalizeString(rest.indications),
-            contraindications: normalizeString(rest.contraindications),
+            contraindications: normalizeString(normalizedContraindications),
             cautionConditions: Array.isArray(rest.cautionConditions) ? JSON.stringify(rest.cautionConditions) : (rest.cautionConditions || null),
             userTags: rest.userTags ? JSON.stringify(normalizeArray(rest.userTags)) : null,
             routeOfAdmin: Array.isArray(rest.routeOfAdmin) ? rest.routeOfAdmin[0] : rest.routeOfAdmin,
@@ -256,7 +301,12 @@ const MedicationService = {
         const medication = await this.getById(medicationId);
         if (!medication) throw new Error('Препарат не найден');
 
-        const dosingRules = JSON.parse(medication.pediatricDosing || '[]');
+        const dosingRules = Array.isArray(medication.pediatricDosing)
+            ? medication.pediatricDosing
+            : safeJsonParse(medication.pediatricDosing, []);
+        const forms = Array.isArray(medication.forms)
+            ? medication.forms
+            : safeJsonParse(medication.forms, []);
 
         // Find matching rule by age and weight
         const rule = dosingRules.find(r => {
@@ -288,9 +338,15 @@ const MedicationService = {
         let singleDoseMg = null;
         let dailyDoseMg = null;
         let instruction = '';
+        let singleDoseMl = null;
+        let selectedForm = null;
 
         if (rule.dosing) {
             const dosing = rule.dosing;
+
+            if (rule.formId) {
+                selectedForm = forms.find(form => form.id === rule.formId) || null;
+            }
             
             if (dosing.type === 'weight_based' && dosing.mgPerKg) {
                 // Дозирование по весу (мг/кг)
@@ -303,11 +359,13 @@ const MedicationService = {
                 singleDoseMg = bsa * dosing.mgPerM2;
             } else if (dosing.type === 'fixed' && dosing.fixedDose) {
                 // Фиксированная доза
-                singleDoseMg = dosing.fixedDose.min || dosing.fixedDose.max || 0;
-                if (dosing.fixedDose.unit === 'ml' && rule.form) {
-                    // Для растворов нужно конвертировать мл в мг
-                    // Это требует информации о концентрации формы выпуска
-                    // Пока возвращаем базовую дозу
+                if (dosing.fixedDose.unit === 'ml') {
+                    singleDoseMl = dosing.fixedDose.min || dosing.fixedDose.max || 0;
+                    if (selectedForm?.mgPerMl) {
+                        singleDoseMg = singleDoseMl * selectedForm.mgPerMl;
+                    }
+                } else {
+                    singleDoseMg = dosing.fixedDose.min || dosing.fixedDose.max || 0;
                 }
             } else if (dosing.type === 'age_based' && dosing.ageBasedDose) {
                 // Дозирование только по возрасту
@@ -322,11 +380,13 @@ const MedicationService = {
             dailyDoseMg = singleDoseMg * (rule.timesPerDay || 1);
             
             // Проверка ограничений
-            if (rule.maxSingleDose) {
-                singleDoseMg = Math.min(singleDoseMg, rule.maxSingleDose);
+            const maxSingleDoseLimit = rule.maxSingleDose ?? (rule.maxSingleDosePerKg ? rule.maxSingleDosePerKg * childWeight : null);
+            const maxDailyDoseLimit = rule.maxDailyDose ?? (rule.maxDailyDosePerKg ? rule.maxDailyDosePerKg * childWeight : null);
+            if (maxSingleDoseLimit) {
+                singleDoseMg = Math.min(singleDoseMg, maxSingleDoseLimit);
             }
-            if (rule.maxDailyDose) {
-                dailyDoseMg = Math.min(dailyDoseMg, rule.maxDailyDose);
+            if (maxDailyDoseLimit) {
+                dailyDoseMg = Math.min(dailyDoseMg, maxDailyDoseLimit);
             }
 
             instruction = rule.instruction || 
@@ -335,12 +395,18 @@ const MedicationService = {
             instruction = rule.instruction || 'См. инструкцию';
         }
 
-        const warnings = [];
-        if (rule.maxSingleDose && singleDoseMg && singleDoseMg > rule.maxSingleDose) {
-            warnings.push(`Превышена максимальная разовая доза (${rule.maxSingleDose}мг)`);
+        if (!singleDoseMl && selectedForm?.mgPerMl && singleDoseMg) {
+            singleDoseMl = singleDoseMg / selectedForm.mgPerMl;
         }
-        if (rule.maxDailyDose && dailyDoseMg && dailyDoseMg > rule.maxDailyDose) {
-            warnings.push(`Превышена максимальная суточная доза (${rule.maxDailyDose}мг)`);
+
+        const warnings = [];
+        const maxSingleDoseWarn = rule.maxSingleDose ?? (rule.maxSingleDosePerKg ? rule.maxSingleDosePerKg * childWeight : null);
+        const maxDailyDoseWarn = rule.maxDailyDose ?? (rule.maxDailyDosePerKg ? rule.maxDailyDosePerKg * childWeight : null);
+        if (maxSingleDoseWarn && singleDoseMg && singleDoseMg > maxSingleDoseWarn) {
+            warnings.push(`Превышена максимальная разовая доза (${Math.round(maxSingleDoseWarn)}мг)`);
+        }
+        if (maxDailyDoseWarn && dailyDoseMg && dailyDoseMg > maxDailyDoseWarn) {
+            warnings.push(`Превышена максимальная суточная доза (${Math.round(maxDailyDoseWarn)}мг)`);
         }
 
         // Добавить информацию об инфузии
@@ -359,14 +425,16 @@ const MedicationService = {
         return {
             canUse: true,
             singleDoseMg: singleDoseMg ? Math.round(singleDoseMg * 10) / 10 : null,
+            singleDoseMl: singleDoseMl ? Math.round(singleDoseMl * 100) / 100 : null,
             dailyDoseMg: dailyDoseMg ? Math.round(dailyDoseMg * 10) / 10 : null,
             timesPerDay: rule.timesPerDay || 1,
             intervalHours: rule.intervalHours || null,
-            maxSingleDose: rule.maxSingleDose || null,
-            maxDailyDose: rule.maxDailyDose || null,
+            maxSingleDose: maxSingleDoseWarn || null,
+            maxDailyDose: maxDailyDoseWarn || null,
             minInterval: medication.minInterval || null,
             maxDosesPerDay: medication.maxDosesPerDay || null,
             routeOfAdmin: rule.routeOfAdmin || medication.routeOfAdmin || null,
+            form: selectedForm,
             infusion: infusionDetails,
             instruction,
             warnings: warnings.length > 0 ? warnings : null,

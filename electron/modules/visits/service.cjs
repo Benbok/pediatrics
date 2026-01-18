@@ -2,6 +2,7 @@ const { prisma } = require('../../prisma-client.cjs');
 const { logger } = require('../../logger.cjs');
 const { z } = require('zod');
 const { calculateBMI, calculateBSA, validateAnthropometry } = require('../../utils/anthropometry.cjs');
+const { normalizeText, normalizeContraindicationsText } = require('../../utils/cdssVocabulary.cjs');
 const { parseComplaints, rankDiagnoses } = require('../../services/cdssService.cjs');
 const { DiseaseService } = require('../diseases/service.cjs');
 
@@ -19,6 +20,28 @@ function safeJsonParse(value, defaultValue = []) {
         logger.warn('[VisitService] Failed to parse JSON, using default:', error.message);
         return defaultValue;
     }
+}
+
+function getAllergyWarnings(medication, allergies) {
+    if (!allergies || allergies.length === 0) return [];
+
+    const activeSubstance = normalizeText(medication.activeSubstance);
+    const contraindications = normalizeText(normalizeContraindicationsText(medication.contraindications));
+
+    return allergies
+        .filter(allergy => {
+            const substance = normalizeText(allergy.substance);
+            if (!substance) return false;
+            return activeSubstance.includes(substance) || contraindications.includes(substance);
+        })
+        .map(allergy => {
+            const details = [
+                allergy.substance,
+                allergy.reaction ? `реакция: ${allergy.reaction}` : null,
+                allergy.severity ? `тяжесть: ${allergy.severity}` : null
+            ].filter(Boolean).join(', ');
+            return `Аллергия: ${details}`;
+        });
 }
 
 const VisitSchema = z.object({
@@ -277,6 +300,10 @@ const VisitService = {
             throw new Error('Ребенок не найден');
         }
 
+        const allergies = await prisma.patientAllergy.findMany({
+            where: { childId: Number(childId) }
+        });
+
         // Рассчитываем возраст
         const birthDate = new Date(child.birthDate);
         const now = new Date();
@@ -309,11 +336,17 @@ const VisitService = {
                         height
                     );
 
+                    const allergyWarnings = getAllergyWarnings(medication, allergies);
+                    const combinedWarnings = [
+                        ...(doseInfo.warnings || []),
+                        ...allergyWarnings
+                    ];
+
                     return {
                         medication,
                         recommendedDose: doseInfo,
-                        canUse: doseInfo.canUse !== false,
-                        warnings: doseInfo.warnings || []
+                        canUse: doseInfo.canUse !== false && allergyWarnings.length === 0,
+                        warnings: combinedWarnings.length > 0 ? combinedWarnings : []
                     };
                 } catch (error) {
                     logger.warn(`[VisitService] Failed to calculate dose for medication ${medication.id}:`, error);

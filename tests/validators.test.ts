@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { VisitSchema, AnalyzeVisitSchema } from '../src/validators/visit.validator';
 import { MedicationSchema, CalculateDoseSchema, LinkMedicationToDiseaseSchema } from '../src/validators/medication.validator';
 import { PdfNoteSchema, PdfNoteUpdateSchema } from '../src/validators/pdfNote.validator';
+import { PatientAllergySchema } from '../src/validators/patientAllergy.validator';
 
 describe('Visit Validators', () => {
     describe('VisitSchema', () => {
@@ -217,6 +218,41 @@ describe('Medication Validators', () => {
             const result = LinkMedicationToDiseaseSchema.safeParse(invalidLink);
             expect(result.success).toBe(false);
         });
+    });
+});
+
+describe('Patient Allergy Validators', () => {
+    it('should validate a valid allergy', () => {
+        const validAllergy = {
+            childId: 1,
+            substance: 'Пенициллин',
+            reaction: 'Крапивница',
+            severity: 'moderate',
+        };
+
+        const result = PatientAllergySchema.safeParse(validAllergy);
+        expect(result.success).toBe(true);
+    });
+
+    it('should reject allergy without substance', () => {
+        const invalidAllergy = {
+            childId: 1,
+            substance: '',
+        };
+
+        const result = PatientAllergySchema.safeParse(invalidAllergy);
+        expect(result.success).toBe(false);
+    });
+
+    it('should reject allergy with invalid severity', () => {
+        const invalidAllergy = {
+            childId: 1,
+            substance: 'Пенициллин',
+            severity: 'critical',
+        };
+
+        const result = PatientAllergySchema.safeParse(invalidAllergy);
+        expect(result.success).toBe(false);
     });
 });
 

@@ -17,6 +17,8 @@ class MedicationValidator {
         this.errors = [];
 
         this.validateDosing(medicationData.pediatricDosing || []);
+        this.validateForms(medicationData);
+        this.validateFormLinks(medicationData);
         this.validateNumericFields(medicationData);
         this.validateTextFields(medicationData);
         this.validateConsistency(medicationData);
@@ -60,7 +62,7 @@ class MedicationValidator {
             }
 
             // КРИТИЧНО: Проверка наличия максимальных доз
-            if (!rule.maxSingleDose) {
+            if (!rule.maxSingleDose && !rule.maxSingleDosePerKg) {
                 this.warnings.push({
                     field: `pediatricDosing[${idx}].maxSingleDose`,
                     message: 'Не указана максимальная разовая доза (важно для безопасности!)',
@@ -68,7 +70,7 @@ class MedicationValidator {
                 });
             }
 
-            if (!rule.maxDailyDose) {
+            if (!rule.maxDailyDose && !rule.maxDailyDosePerKg) {
                 this.warnings.push({
                     field: `pediatricDosing[${idx}].maxDailyDose`,
                     message: 'Не указана максимальная суточная доза (важно для безопасности!)',
@@ -121,12 +123,86 @@ class MedicationValidator {
                 });
             }
 
+            if (rule.maxSingleDosePerKg && rule.maxSingleDosePerKg > 200) {
+                this.warnings.push({
+                    field: `pediatricDosing[${idx}].maxSingleDosePerKg`,
+                    message: `Очень большая максимальная разовая доза: ${rule.maxSingleDosePerKg} мг/кг. Возможно ошибка в единицах?`,
+                    severity: 'high'
+                });
+            }
+
             // Проверка: максимальная суточная не должна быть аномально большой
             if (rule.maxDailyDose && rule.maxDailyDose > 20000) {
                 this.warnings.push({
                     field: `pediatricDosing[${idx}].maxDailyDose`,
                     message: `Очень большая максимальная суточная доза: ${rule.maxDailyDose} мг. Возможно ошибка в единицах измерения?`,
                     severity: 'high'
+                });
+            }
+
+            if (rule.maxDailyDosePerKg && rule.maxDailyDosePerKg > 400) {
+                this.warnings.push({
+                    field: `pediatricDosing[${idx}].maxDailyDosePerKg`,
+                    message: `Очень большая максимальная суточная доза: ${rule.maxDailyDosePerKg} мг/кг. Возможно ошибка в единицах?`,
+                    severity: 'high'
+                });
+            }
+        });
+    }
+
+    /**
+     * Проверка форм выпуска
+     */
+    validateForms(data) {
+        if (!data.forms) return;
+        if (!Array.isArray(data.forms)) {
+            this.errors.push({
+                field: 'forms',
+                message: 'Поле forms должно быть массивом объектов'
+            });
+            return;
+        }
+
+        const ids = new Set();
+        data.forms.forEach((form, idx) => {
+            if (!form || typeof form !== 'object') {
+                this.errors.push({
+                    field: `forms[${idx}]`,
+                    message: 'Элемент forms должен быть объектом'
+                });
+                return;
+            }
+            if (!form.id || typeof form.id !== 'string') {
+                this.errors.push({
+                    field: `forms[${idx}].id`,
+                    message: 'id формы обязателен'
+                });
+            } else if (ids.has(form.id)) {
+                this.warnings.push({
+                    field: `forms[${idx}].id`,
+                    message: `Дублирующийся id формы: ${form.id}`,
+                    severity: 'medium'
+                });
+            } else {
+                ids.add(form.id);
+            }
+        });
+    }
+
+    /**
+     * Проверка связей formId в дозировках
+     */
+    validateFormLinks(data) {
+        if (!data.pediatricDosing || !Array.isArray(data.pediatricDosing)) return;
+        const forms = Array.isArray(data.forms) ? data.forms : [];
+        const formIds = new Set(forms.map(f => f?.id).filter(Boolean));
+
+        data.pediatricDosing.forEach((rule, idx) => {
+            if (rule.formId && !formIds.has(rule.formId)) {
+                this.warnings.push({
+                    field: `pediatricDosing[${idx}].formId`,
+                    message: `formId не найден среди forms: ${rule.formId}`,
+                    severity: 'medium'
                 });
             }
         });

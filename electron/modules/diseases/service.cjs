@@ -8,6 +8,129 @@ const { app } = require('electron');
 const util = require('util');
 const execPromise = util.promisify(exec);
 const { generateEmbedding, cosineSimilarity, getCachedSearch, cacheSearch } = require('../../services/embeddingService.cjs');
+const { normalizeSymptoms } = require('../../utils/cdssVocabulary.cjs');
+const { normalizeDiseaseData } = require('../../utils/diseaseNormalization.cjs');
+
+function safeJsonParse(value, defaultValue = []) {
+    if (!value || value === null) return defaultValue;
+    if (typeof value !== 'string') return defaultValue;
+    if (value.trim() === '') return defaultValue;
+
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        logger.warn('[DiseaseService] Failed to parse JSON, using default:', error.message);
+        return defaultValue;
+    }
+}
+
+const DiagnosticPlanItemSchema = z.object({
+    type: z.enum(['lab', 'instrumental']),
+    test: z.string().min(1),
+    priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+    rationale: z.string().optional().nullable(),
+});
+
+const TreatmentPlanItemSchema = z.object({
+    category: z.enum(['symptomatic', 'etiologic', 'supportive', 'other']),
+    description: z.string().min(1),
+    priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+});
+
+function getGuidelineText(value) {
+    if (!value || typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildGuidelinePlan(disease, guideline) {
+    const diagnosticPlan = safeJsonParse(disease.diagnosticPlan, []);
+    const treatmentPlan = safeJsonParse(disease.treatmentPlan, []);
+    const differentialDiagnosis = safeJsonParse(disease.differentialDiagnosis, []);
+    const redFlags = safeJsonParse(disease.redFlags, []);
+
+    const hasStructured = diagnosticPlan.length > 0 || treatmentPlan.length > 0 || differentialDiagnosis.length > 0 || redFlags.length > 0;
+    if (hasStructured) {
+        return {
+            diseaseId: disease.id,
+            diagnosticPlan,
+            treatmentPlan,
+            differentialDiagnosis,
+            redFlags,
+            source: 'disease_structured',
+            needsReview: false,
+            raw: null
+        };
+    }
+
+    if (!guideline) {
+        return {
+            diseaseId: disease.id,
+            diagnosticPlan: [],
+            treatmentPlan: [],
+            differentialDiagnosis: [],
+            redFlags: [],
+            source: 'none',
+            needsReview: true,
+            raw: null
+        };
+    }
+
+    const rawLab = getGuidelineText(guideline.labDiagnostics);
+    const rawInstrumental = getGuidelineText(guideline.instrumental);
+    const rawTreatment = getGuidelineText(guideline.treatment);
+    const rawMedications = getGuidelineText(guideline.medications);
+
+    const fallbackDiagnosticPlan = [];
+    if (rawLab) {
+        fallbackDiagnosticPlan.push({
+            type: 'lab',
+            test: rawLab,
+            priority: 'medium',
+            rationale: 'Из клинических рекомендаций'
+        });
+    }
+    if (rawInstrumental) {
+        fallbackDiagnosticPlan.push({
+            type: 'instrumental',
+            test: rawInstrumental,
+            priority: 'medium',
+            rationale: 'Из клинических рекомендаций'
+        });
+    }
+
+    const fallbackTreatmentPlan = [];
+    if (rawTreatment) {
+        fallbackTreatmentPlan.push({
+            category: 'other',
+            description: rawTreatment,
+            priority: 'medium'
+        });
+    }
+    if (rawMedications) {
+        fallbackTreatmentPlan.push({
+            category: 'other',
+            description: `Препараты: ${rawMedications}`,
+            priority: 'medium'
+        });
+    }
+
+    return {
+        diseaseId: disease.id,
+        diagnosticPlan: fallbackDiagnosticPlan,
+        treatmentPlan: fallbackTreatmentPlan,
+        differentialDiagnosis: [],
+        redFlags: [],
+        source: 'guideline_raw',
+        needsReview: true,
+        raw: {
+            labDiagnostics: rawLab,
+            instrumental: rawInstrumental,
+            treatment: rawTreatment,
+            medications: rawMedications
+        }
+    };
+}
 
 // Disease Validation Schema
 const DiseaseSchema = z.object({
@@ -18,6 +141,10 @@ const DiseaseSchema = z.object({
     nameEn: z.string().optional().nullable(),
     description: z.string(),
     symptoms: z.array(z.string()).default([]),
+    diagnosticPlan: z.array(DiagnosticPlanItemSchema).optional().default([]),
+    treatmentPlan: z.array(TreatmentPlanItemSchema).optional().default([]),
+    differentialDiagnosis: z.array(z.string()).optional().default([]),
+    redFlags: z.array(z.string()).optional().default([]),
 });
 
 const DiseaseService = {
@@ -43,34 +170,56 @@ const DiseaseService = {
 
         if (!disease) return null;
 
-        // Безопасный парсинг ICD кодов
-        function safeJsonParse(value, defaultValue = []) {
-            if (!value || value === null) return defaultValue;
-            if (typeof value !== 'string') return defaultValue;
-            if (value.trim() === '') return defaultValue;
-            
-            try {
-                return JSON.parse(value);
-            } catch (error) {
-                logger.warn('[DiseaseService] Failed to parse ICD codes, using default:', error.message);
-                return defaultValue;
-            }
-        }
+        // DEBUG: Log raw database values
+        logger.info(`[DiseaseService] Raw DB values for disease ${id}:`, {
+            diagnosticPlan: typeof disease.diagnosticPlan + ' -> ' + (disease.diagnosticPlan?.substring(0, 100) || 'null'),
+            treatmentPlan: typeof disease.treatmentPlan + ' -> ' + (disease.treatmentPlan?.substring(0, 100) || 'null'),
+            differentialDiagnosis: typeof disease.differentialDiagnosis + ' -> ' + (disease.differentialDiagnosis?.substring(0, 100) || 'null'),
+            redFlags: typeof disease.redFlags + ' -> ' + (disease.redFlags?.substring(0, 100) || 'null')
+        });
 
         const diseaseIcd10Codes = safeJsonParse(disease.icd10Codes, []);
+        const parsedDiagnosticPlan = safeJsonParse(disease.diagnosticPlan, []);
+        const parsedTreatmentPlan = safeJsonParse(disease.treatmentPlan, []);
+        const parsedDifferentialDiagnosis = safeJsonParse(disease.differentialDiagnosis, []);
+        const parsedRedFlags = safeJsonParse(disease.redFlags, []);
+
+        // DEBUG: Log parsed values
+        logger.info(`[DiseaseService] Parsed values:`, {
+            diagnosticPlan: parsedDiagnosticPlan.length,
+            treatmentPlan: parsedTreatmentPlan.length,
+            differentialDiagnosis: parsedDifferentialDiagnosis.length,
+            redFlags: parsedRedFlags.length
+        });
+
         // Фильтруем null/undefined и пустые строки
         const allCodes = [disease.icd10Code, ...diseaseIcd10Codes]
             .filter(c => c && typeof c === 'string' && c.trim() !== '');
 
         // Find medications matching these ICD codes
         const { MedicationService } = require('../medications/service.cjs');
-        const relatedMedications = allCodes.length > 0 
+        const relatedMedications = allCodes.length > 0
             ? await MedicationService.getByIcd10Codes(allCodes)
             : [];
 
+        // Destructure to exclude fields that need parsing
+        const {
+            icd10Codes: _,
+            diagnosticPlan: __,
+            treatmentPlan: ___,
+            differentialDiagnosis: ____,
+            redFlags: _____,
+            symptomsEmbedding: ______,
+            ...diseaseWithoutJsonFields
+        } = disease;
+
         return {
-            ...disease,
+            ...diseaseWithoutJsonFields,
             icd10Codes: diseaseIcd10Codes,
+            diagnosticPlan: parsedDiagnosticPlan,
+            treatmentPlan: parsedTreatmentPlan,
+            differentialDiagnosis: parsedDifferentialDiagnosis,
+            redFlags: parsedRedFlags,
             relatedMedications
         };
     },
@@ -79,8 +228,12 @@ const DiseaseService = {
      * Create or update disease
      */
     async upsert(data) {
-        const validated = DiseaseSchema.parse(data);
+        const normalizedInput = normalizeDiseaseData(data);
+        const validated = DiseaseSchema.parse(normalizedInput);
         const { id, ...rest } = validated;
+
+        const normalizedSymptoms = normalizeSymptoms(rest.symptoms || []);
+        rest.symptoms = normalizedSymptoms;
 
         // Генерируем embedding для симптомов
         let symptomsEmbedding = null;
@@ -99,8 +252,19 @@ const DiseaseService = {
             ...rest,
             icd10Codes: JSON.stringify(rest.icd10Codes),
             symptoms: JSON.stringify(rest.symptoms),
+            diagnosticPlan: JSON.stringify(rest.diagnosticPlan || []),
+            treatmentPlan: JSON.stringify(rest.treatmentPlan || []),
+            differentialDiagnosis: JSON.stringify(rest.differentialDiagnosis || []),
+            redFlags: JSON.stringify(rest.redFlags || []),
             symptomsEmbedding: symptomsEmbedding ? JSON.stringify(symptomsEmbedding) : null,
         };
+
+        logger.debug(`[DiseaseService] Saving disease with plans:`, {
+            diagnosticPlan: (rest.diagnosticPlan || []).length,
+            treatmentPlan: (rest.treatmentPlan || []).length,
+            differentialDiagnosis: (rest.differentialDiagnosis || []).length,
+            redFlags: (rest.redFlags || []).length
+        });
 
         if (id) {
             return await prisma.disease.update({
@@ -121,6 +285,26 @@ const DiseaseService = {
         return await prisma.disease.delete({
             where: { id: Number(id) },
         });
+    },
+
+    /**
+     * Get normalized guideline plan for a disease
+     */
+    async getGuidelinePlan(diseaseId) {
+        const disease = await prisma.disease.findUnique({
+            where: { id: Number(diseaseId) }
+        });
+
+        if (!disease) {
+            throw new Error('Заболевание не найдено');
+        }
+
+        const guideline = await prisma.clinicalGuideline.findFirst({
+            where: { diseaseId: Number(diseaseId) },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        return buildGuidelinePlan(disease, guideline);
     },
 
     /**
@@ -227,26 +411,59 @@ const DiseaseService = {
                 },
             });
 
-            // Update disease metadata if found
-            const updateData = {};
-            if (metadata.symptoms && metadata.symptoms.length > 0) {
-                updateData.symptoms = JSON.stringify(metadata.symptoms);
-            }
-            if (metadata.icd10_codes && metadata.icd10_codes.length > 0) {
-                updateData.icd10Codes = JSON.stringify(metadata.icd10_codes);
-            }
-
-            if (Object.keys(updateData).length > 0) {
-                await prisma.disease.update({
-                    where: { id: Number(diseaseId) },
-                    data: updateData
-                });
-            }
+            // Update disease metadata ONLY if fields are empty (prevent overwriting existing data)
+            await this._updateDiseaseMetadataIfEmpty(diseaseId, metadata);
 
             return guideline;
         } catch (error) {
             logger.error('[DiseaseService] Failed to process/upload guideline:', error);
             throw error;
+        }
+    },
+
+    /**
+     * Update disease metadata from PDF only if fields are empty
+     * @private
+     */
+    async _updateDiseaseMetadataIfEmpty(diseaseId, metadata) {
+        const disease = await prisma.disease.findUnique({
+            where: { id: Number(diseaseId) }
+        });
+
+        if (!disease) {
+            logger.warn(`[DiseaseService] Disease ${diseaseId} not found for metadata update`);
+            return;
+        }
+
+        const updateData = {};
+
+        // Обновляем симптомы ТОЛЬКО если поле пустое
+        const existingSymptoms = safeJsonParse(disease.symptoms, []);
+        if (existingSymptoms.length === 0 && metadata.symptoms && metadata.symptoms.length > 0) {
+            updateData.symptoms = JSON.stringify(metadata.symptoms);
+            logger.info(`[DiseaseService] Adding ${metadata.symptoms.length} symptoms from PDF (field was empty)`);
+        } else if (existingSymptoms.length > 0) {
+            logger.debug(`[DiseaseService] Skipping symptoms update - field already has ${existingSymptoms.length} items`);
+        }
+
+        // Обновляем коды МКБ ТОЛЬКО если поле пустое
+        const existingIcdCodes = safeJsonParse(disease.icd10Codes, []);
+        if (existingIcdCodes.length === 0 && metadata.icd10_codes && metadata.icd10_codes.length > 0) {
+            updateData.icd10Codes = JSON.stringify(metadata.icd10_codes);
+            logger.info(`[DiseaseService] Adding ${metadata.icd10_codes.length} ICD codes from PDF (field was empty)`);
+        } else if (existingIcdCodes.length > 0) {
+            logger.debug(`[DiseaseService] Skipping ICD codes update - field already has ${existingIcdCodes.length} items`);
+        }
+
+        // Обновляем только если есть что обновлять И поля были пустыми
+        if (Object.keys(updateData).length > 0) {
+            await prisma.disease.update({
+                where: { id: Number(diseaseId) },
+                data: updateData
+            });
+            logger.info(`[DiseaseService] Updated disease ${diseaseId} metadata from PDF`);
+        } else {
+            logger.debug(`[DiseaseService] No metadata updates needed for disease ${diseaseId}`);
         }
     },
 
@@ -269,7 +486,7 @@ const DiseaseService = {
 
             // Получаем первый код МКБ
             const firstCode = parsedData.icd10_codes?.[0];
-            
+
             let nameRu = path.basename(pdfPath, path.extname(pdfPath)); // Fallback
 
             // Если есть код - ищем название в справочнике МКБ
@@ -373,17 +590,17 @@ const DiseaseService = {
                 .slice(0, 10); // Топ-10 результатов
 
             const finalResults = results.map(r => r.disease);
-            
+
             // Сохраняем в кэш
             cacheSearch(symptomsText, finalResults);
-            
+
             const duration = Date.now() - startTime;
             logger.info(`[DiseaseService] Semantic search found ${finalResults.length} results in ${duration}ms`);
-            
+
             if (duration > 3000) {
                 logger.warn(`[DiseaseService] Search took longer than expected: ${duration}ms`);
             }
-            
+
             return finalResults;
 
         } catch (error) {
@@ -401,7 +618,7 @@ const DiseaseService = {
         const results = diseases
             .map(d => {
                 const dSymptoms = JSON.parse(d.symptoms || '[]');
-                const matches = symptoms.filter(s => 
+                const matches = symptoms.filter(s =>
                     dSymptoms.some(ds => ds.toLowerCase().includes(s.toLowerCase())) ||
                     d.nameRu.toLowerCase().includes(s.toLowerCase())
                 );

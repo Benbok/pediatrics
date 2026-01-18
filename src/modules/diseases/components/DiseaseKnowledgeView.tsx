@@ -14,6 +14,7 @@ import {
     Download,
     Info,
     AlertTriangle,
+    AlertCircle,
     CheckCircle,
     MessageSquare
 } from 'lucide-react';
@@ -67,7 +68,7 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
         try {
             // Поиск по всем файлам, если выбрано несколько
             let allMatches: any[] = [];
-            
+
             if (selectedGuideline) {
                 // Поиск только в выбранном файле
                 const chunks = JSON.parse(selectedGuideline.chunks || '[]');
@@ -112,6 +113,8 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
         }
     };
 
+    const hasRedFlags = disease.redFlags && disease.redFlags.length > 0;
+
     const sections = [
         {
             id: 'files', label: 'Файлы', icon: FileText, isFiles: true
@@ -135,11 +138,12 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                 { title: 'Профилактика', text: selectedGuideline.prevention },
             ] : []
         },
+        ...(hasRedFlags ? [{ id: 'red-flags', label: 'Красные флаги', icon: AlertTriangle }] : []),
         {
             id: 'medications', label: 'Препараты', icon: Pill
         },
         {
-            id: 'notes', label: 'Заметки', icon: FileText
+            id: 'notes', label: 'Заметки', icon: MessageSquare
         }
     ];
 
@@ -303,40 +307,167 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
 
                         {sections.filter(s => !s.isSearch && !s.isFiles && s.content).map(s => (
                             <TabsContent key={s.id} value={s.id} className="mt-0 focus-visible:outline-none">
-                                {!selectedGuideline ? (
-                                    <div className="text-center py-12 text-slate-400">
-                                        <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                                        <p>Выберите файл для просмотра информации</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        {s.content?.filter(c => c.text).map((item, idx) => (
-                                        <div key={idx} className="space-y-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-1.5 h-6 bg-primary-500 rounded-full" />
-                                                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 italic">
-                                                    {item.title}
-                                                </h3>
-                                            </div>
-                                            <div className="text-slate-600 dark:text-slate-400 leading-relaxed text-[15px] p-5 rounded-[24px] bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 whitespace-pre-wrap">
-                                                {item.text}
-                                            </div>
-                                        </div>
-                                    ))}
-                                        {s.content?.filter(c => c.text).length === 0 && (
-                                            <div className="col-span-2 py-20 text-center bg-slate-50/50 dark:bg-slate-800/20 rounded-[32px] border-2 border-dashed border-slate-100 dark:border-slate-800/50">
-                                                <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-lg flex items-center justify-center mx-auto mb-4 text-slate-300 dark:text-slate-600">
-                                                    <BookOpen className="w-8 h-8" />
+                                <div className="space-y-8">
+                                    {/* Guideline content */}
+                                    {selectedGuideline ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            {s.content?.filter(c => c.text).map((item, idx) => (
+                                                <div key={idx} className="space-y-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-1.5 h-6 bg-primary-500 rounded-full" />
+                                                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 italic">
+                                                            {item.title}
+                                                        </h3>
+                                                    </div>
+                                                    <div className="text-slate-600 dark:text-slate-400 leading-relaxed text-[15px] p-5 rounded-[24px] bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 whitespace-pre-wrap">
+                                                        {item.text}
+                                                    </div>
                                                 </div>
-                                                <p className="text-slate-400 font-medium max-w-xs mx-auto italic">
-                                                    Для получения подробной информации по этому разделу используйте вкладку <span className="text-primary-500 font-bold not-italic">"Поиск в PDF"</span>
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                            ))}
+                                            {s.content?.filter(c => c.text).length === 0 && (
+                                                <div className="col-span-2 py-8 text-center bg-slate-50/30 dark:bg-slate-800/10 rounded-[24px] border border-dashed border-slate-100 dark:border-slate-800/50">
+                                                    <p className="text-slate-400 text-sm italic">
+                                                        Нет данных из PDF по этому разделу
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="py-4 px-6 rounded-2xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30 flex items-center gap-3">
+                                            <Info className="w-5 h-5 text-blue-500" />
+                                            <p className="text-sm text-blue-600 dark:text-blue-400">
+                                                Клинические рекомендации не загружены или не выбраны.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Additional structured data for Diagnostics tab */}
+                                    {s.id === 'diagnosis' && (
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                                            {/* Diagnostic Plan */}
+                                            {(disease.diagnosticPlan || []).length > 0 ? (
+                                                <Card className="p-6 rounded-3xl border-slate-100 dark:border-slate-800 bg-blue-50/30 dark:bg-blue-950/10">
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <Stethoscope className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">План диагностики</h3>
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        {(disease.diagnosticPlan || []).map((item: any, idx: number) => (
+                                                            <div key={idx} className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-blue-100 dark:border-blue-900/50">
+                                                                <div className="flex items-center justify-between gap-2 mb-2">
+                                                                    <span className="font-semibold text-slate-900 dark:text-white">{item.test}</span>
+                                                                    <Badge
+                                                                        variant={item.priority === 'high' ? 'default' : 'outline'}
+                                                                        className={clsx(
+                                                                            "text-xs",
+                                                                            item.priority === 'high' && "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                                                        )}
+                                                                    >
+                                                                        {item.priority || 'medium'}
+                                                                    </Badge>
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                                                                    {item.type === 'lab' ? '🧪 Лабораторное' : '🏥 Инструментальное'}
+                                                                </div>
+                                                                {item.rationale && (
+                                                                    <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{item.rationale}</p>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </Card>
+                                            ) : (
+                                                <div className="p-6 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20 text-center">
+                                                    <p className="text-slate-400 italic">План диагностики не заполнен</p>
+                                                </div>
+                                            )}
+
+                                            {/* Differential Diagnosis */}
+                                            {(disease.differentialDiagnosis || []).length > 0 ? (
+                                                <Card className="p-6 rounded-3xl border-slate-100 dark:border-slate-800 bg-amber-50/30 dark:bg-amber-950/10">
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">Дифференциальная диагностика</h3>
+                                                    </div>
+                                                    <ul className="space-y-2">
+                                                        {(disease.differentialDiagnosis || []).map((item: string, idx: number) => (
+                                                            <li key={idx} className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-amber-100 dark:border-amber-900/50">
+                                                                <CheckCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                                                                <span className="text-slate-700 dark:text-slate-300">{item}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </Card>
+                                            ) : (
+                                                <div className="p-6 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20 text-center">
+                                                    <p className="text-slate-400 italic">Дифференциальная диагностика не заполнена</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Additional structured data for Treatment tab */}
+                                    {s.id === 'treatment' && (
+                                        <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
+                                            {(disease.treatmentPlan || []).length > 0 ? (
+                                                <Card className="p-6 rounded-3xl border-slate-100 dark:border-slate-800 bg-green-50/30 dark:bg-green-950/10">
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <Pill className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">План лечения</h3>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {(disease.treatmentPlan || []).map((item: any, idx: number) => (
+                                                            <div key={idx} className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-green-100 dark:border-green-900/50">
+                                                                <div className="flex items-center justify-between gap-2 mb-2">
+                                                                    <span className="font-semibold text-slate-900 dark:text-white">{item.description}</span>
+                                                                    <Badge variant="outline" className="text-xs">
+                                                                        {item.priority || 'medium'}
+                                                                    </Badge>
+                                                                </div>
+                                                                <div className="inline-block px-2 py-1 rounded-lg bg-green-100 dark:bg-green-900/30 text-xs text-green-700 dark:text-green-400 font-medium">
+                                                                    {item.category}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </Card>
+                                            ) : (
+                                                <div className="p-6 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20 text-center">
+                                                    <p className="text-slate-400 italic">План лечения не заполнен</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </TabsContent>
                         ))}
+
+                        {/* Red Flags Tab */}
+                        {hasRedFlags && (
+                            <TabsContent value="red-flags" className="mt-0 focus-visible:outline-none">
+                                <Card className="p-8 rounded-3xl border-rose-200 dark:border-rose-900/50 bg-gradient-to-br from-rose-50 to-orange-50 dark:from-rose-950/20 dark:to-orange-950/20">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-12 h-12 bg-rose-100 dark:bg-rose-900/30 rounded-2xl flex items-center justify-center">
+                                            <AlertTriangle className="w-7 h-7 text-rose-600 dark:text-rose-400" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-rose-900 dark:text-rose-100">Красные флаги</h3>
+                                            <p className="text-sm text-rose-600 dark:text-rose-400">Признаки, требующие немедленного внимания</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {(disease.redFlags || []).map((item: string, idx: number) => (
+                                            <div key={idx} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-rose-200 dark:border-rose-900/50 shadow-sm hover:shadow-md transition-shadow">
+                                                <div className="flex items-start gap-3">
+                                                    <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0" />
+                                                    <span className="text-slate-800 dark:text-slate-200 leading-relaxed">{item}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </Card>
+                            </TabsContent>
+                        )}
 
                         <TabsContent value="medications" className="mt-0 focus-visible:outline-none">
                             <DiseaseMedicationsTab diseaseId={disease.id} diseaseName={disease.nameRu} />
@@ -346,8 +477,8 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                             <DiseaseNotesList diseaseId={disease.id} />
                         </TabsContent>
                     </div>
-                </Tabs>
-            </Card>
-        </div>
+                </Tabs >
+            </Card >
+        </div >
     );
 };

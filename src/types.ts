@@ -11,6 +11,17 @@ export interface ChildProfile {
   gender: 'male' | 'female';
 }
 
+export interface PatientAllergy {
+  id?: number;
+  childId: number;
+  substance: string;
+  reaction?: string | null;
+  severity?: 'mild' | 'moderate' | 'severe' | null;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // ============= VACCINATION MODULE TYPES =============
 // Vaccination-specific data ONLY
 
@@ -206,6 +217,19 @@ export interface IcdCodeSearchResult {
   offset: number;
 }
 
+export interface DiagnosticPlanItem {
+  type: 'lab' | 'instrumental';
+  test: string;
+  priority?: 'low' | 'medium' | 'high';
+  rationale?: string | null;
+}
+
+export interface TreatmentPlanItem {
+  category: 'symptomatic' | 'etiologic' | 'supportive' | 'other';
+  description: string;
+  priority?: 'low' | 'medium' | 'high';
+}
+
 export interface Disease {
   id: number;
   icd10Code: string; // Primary code
@@ -214,6 +238,10 @@ export interface Disease {
   nameEn?: string | null;
   description: string;
   symptoms: string[];
+  diagnosticPlan?: DiagnosticPlanItem[];
+  treatmentPlan?: TreatmentPlanItem[];
+  differentialDiagnosis?: string[];
+  redFlags?: string[];
   createdAt: Date;
   guidelines?: ClinicalGuideline[];
   relatedMedications?: Medication[];
@@ -245,6 +273,74 @@ export interface ClinicalGuideline {
   medications?: string | null; // JSON string array of medications
 }
 
+export interface GuidelinePlan {
+  diseaseId: number;
+  diagnosticPlan: DiagnosticPlanItem[];
+  treatmentPlan: TreatmentPlanItem[];
+  differentialDiagnosis: string[];
+  redFlags: string[];
+  source: 'disease_structured' | 'guideline_raw' | 'none';
+  needsReview: boolean;
+  raw: {
+    labDiagnostics?: string | null;
+    instrumental?: string | null;
+    treatment?: string | null;
+    medications?: string | null;
+  } | null;
+}
+
+export interface MedicationForm {
+  id: string;
+  type: string;
+  concentration?: string | null;
+  unit?: 'mg' | 'ml' | 'mcg' | 'g' | string | null;
+  strengthMg?: number | null;
+  mgPerMl?: number | null;
+  volumeMl?: number | null;
+  description?: string | null;
+}
+
+export interface FixedDose {
+  min?: number | null;
+  max?: number | null;
+  unit?: 'mg' | 'ml' | 'mcg' | 'g' | string | null;
+}
+
+export interface AgeBasedDose {
+  dose: number;
+  unit?: 'mg' | 'ml' | 'mcg' | 'g' | string | null;
+}
+
+export interface DosingRule {
+  type: 'weight_based' | 'bsa_based' | 'fixed' | 'age_based';
+  mgPerKg?: number | null;
+  maxMgPerKg?: number | null;
+  mgPerM2?: number | null;
+  fixedDose?: FixedDose | null;
+  ageBasedDose?: AgeBasedDose | null;
+}
+
+export interface PediatricDosingRule {
+  minAgeMonths?: number | null;
+  maxAgeMonths?: number | null;
+  minWeightKg?: number | null;
+  maxWeightKg?: number | null;
+  formId?: string | null;
+  unit?: 'mg' | 'ml' | 'mcg' | 'g' | string | null;
+  dosing?: DosingRule | null;
+  routeOfAdmin?: RouteOfAdmin | null;
+  timesPerDay?: number | null;
+  intervalHours?: number | null;
+  maxSingleDose?: number | null;
+  maxSingleDosePerKg?: number | null;
+  maxDailyDose?: number | null;
+  maxDailyDosePerKg?: number | null;
+  instruction?: string | null;
+  infusion?: any | null;
+}
+
+export interface AdultDosingRule extends PediatricDosingRule {}
+
 // Расширяем enum для путей введения
 export type RouteOfAdmin = 
   | 'oral'           // Перорально
@@ -269,9 +365,9 @@ export interface Medication {
   icd10Codes: string[];
   packageDescription?: string | null;
   manufacturer?: string | null;
-  forms: any[]; // Parsed JSON (MedicationForm[])
-  pediatricDosing: any[]; // Parsed JSON (PediatricDosingRule[])
-  adultDosing?: any | null; // Parsed JSON (AdultDosingRule[])
+  forms: MedicationForm[];
+  pediatricDosing: PediatricDosingRule[];
+  adultDosing?: AdultDosingRule[] | null;
   contraindications: string;
   cautionConditions?: string | null;
   sideEffects?: string | null;
@@ -438,6 +534,12 @@ declare global {
       sharePatient: (data: { childId: number; userId: number; canEdit: boolean }) => Promise<{ success: boolean; error?: string }>;
       unsharePatient: (data: { childId: number; userId: number }) => Promise<{ success: boolean; error?: string }>;
 
+      // PATIENT ALLERGIES API
+      getPatientAllergies: (childId: number) => Promise<PatientAllergy[]>;
+      createPatientAllergy: (data: PatientAllergy) => Promise<PatientAllergy>;
+      updatePatientAllergy: (id: number, data: Partial<PatientAllergy>) => Promise<PatientAllergy>;
+      deletePatientAllergy: (id: number) => Promise<boolean>;
+
       // DISEASES MODULE API
       getDiseases: () => Promise<Disease[]>;
       getDisease: (id: number) => Promise<Disease & { guidelines: ClinicalGuideline[] }>;
@@ -447,6 +549,7 @@ declare global {
       uploadGuidelinesBatch: (diseaseId: number, pdfPaths: string[]) => Promise<{ success: ClinicalGuideline[]; errors: Array<{ path: string; error: string }> | null }>;
       deleteGuideline: (guidelineId: number) => Promise<boolean>;
       searchDiseases: (symptoms: string[]) => Promise<Disease[]>;
+      getGuidelinePlan: (diseaseId: number) => Promise<GuidelinePlan>;
 
       // Disease Notes (Personal or Shared)
       getDiseaseNotes: (diseaseId: number) => Promise<DiseaseNote[]>;

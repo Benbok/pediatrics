@@ -64,8 +64,25 @@ model Child {
   vaccinationRecords  VaccinationRecord[]
   shares              PatientShare[]
   visits              Visit[]
+  allergies           PatientAllergy[]
 
   @@map("children")
+}
+
+model PatientAllergy {
+  id          Int      @id @default(autoincrement())
+  childId     Int      @map("child_id")
+  substance   String
+  reaction    String?
+  severity    String?  // mild | moderate | severe
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  child       Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId])
+  @@map("patient_allergies")
 }
 
 model VaccinationProfile {
@@ -124,6 +141,10 @@ model Disease {
   description     String
   symptoms        String    @default("[]") // JSON array
   symptomsEmbedding String? @map("symptoms_embedding") // JSON array of numbers (embedding vector)
+  diagnosticPlan  String?   @map("diagnostic_plan") // JSON array
+  treatmentPlan   String?   @map("treatment_plan") // JSON array
+  differentialDiagnosis String? @map("differential_diagnosis") // JSON array
+  redFlags        String?   @map("red_flags") // JSON array
   createdAt       DateTime  @default(now()) @map("created_at")
   
   // Relations

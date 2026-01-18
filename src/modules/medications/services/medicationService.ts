@@ -1,6 +1,7 @@
 import { Medication } from '../../../types';
 import { dataEvents } from '../../../services/dataEvents';
 import { MedicationSchema, CalculateDoseSchema, LinkMedicationToDiseaseSchema } from '../../../validators/medication.validator';
+import { normalizeMedicationRoutes } from '../../../utils/routeOfAdmin';
 import { logger } from '../../../services/logger';
 
 export const medicationService = {
@@ -33,7 +34,8 @@ export const medicationService = {
      */
     async upsertMedication(data: Medication, source: 'manual' | 'vidal_import' = 'manual'): Promise<Medication> {
         // Validate data using Zod
-        const validation = MedicationSchema.safeParse(data);
+        const normalized = normalizeMedicationRoutes(data);
+        const validation = MedicationSchema.safeParse(normalized);
         if (!validation.success) {
             const errorMsg = validation.error.issues.map(i => i.message).join(', ');
             throw new Error(`Ошибка валидации: ${errorMsg}`);
@@ -147,7 +149,11 @@ export const medicationService = {
         error?: string;
     }> {
         try {
-            return await window.electronAPI.importFromVidal(url);
+            const result = await window.electronAPI.importFromVidal(url);
+            if (result?.data) {
+                result.data = normalizeMedicationRoutes(result.data);
+            }
+            return result;
         } catch (error: any) {
             logger.error('[MedicationService] Failed to import from Vidal', { error, url });
             return {
@@ -172,7 +178,11 @@ export const medicationService = {
         error?: string;
     }> {
         try {
-            return await window.electronAPI.importFromJson(jsonString);
+            const result = await window.electronAPI.importFromJson(jsonString);
+            if (result?.data) {
+                result.data = normalizeMedicationRoutes(result.data);
+            }
+            return result;
         } catch (error: any) {
             logger.error('[MedicationService] Failed to import from JSON', { error });
             return {
