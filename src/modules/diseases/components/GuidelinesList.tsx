@@ -5,21 +5,24 @@ import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
-import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2 } from 'lucide-react';
+import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload } from 'lucide-react';
 
 interface GuidelinesListProps {
     diseaseId: number;
     onGuidelineSelect?: (guideline: ClinicalGuideline) => void;
     selectedGuidelineId?: number;
+    onGuidelineAdded?: (guidelines: ClinicalGuideline[]) => void;
 }
 
 export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     diseaseId,
     onGuidelineSelect,
-    selectedGuidelineId
+    selectedGuidelineId,
+    onGuidelineAdded
 }) => {
     const [guidelines, setGuidelines] = useState<ClinicalGuideline[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isUploading, setIsUploading] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; guidelineId: number | null }>({
         isOpen: false,
@@ -34,7 +37,12 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
         setIsLoading(true);
         try {
             const disease = await diseaseService.getDisease(diseaseId);
-            setGuidelines(disease.guidelines || []);
+            const loadedGuidelines = disease.guidelines || [];
+            setGuidelines(loadedGuidelines);
+            // Уведомляем родительский компонент о загрузке guidelines
+            if (onGuidelineAdded) {
+                onGuidelineAdded(loadedGuidelines);
+            }
         } catch (error) {
             console.error('Failed to load guidelines:', error);
         } finally {
@@ -83,6 +91,42 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
         });
     };
 
+    const handleFileUpload = async () => {
+        try {
+            const result = await window.electronAPI.openFile({
+                filters: [{ name: 'PDF Documents', extensions: ['pdf'] }],
+                properties: ['openFile', 'multiSelections'] // Разрешаем выбор нескольких файлов
+            });
+
+            if (!result.canceled && result.filePaths.length > 0) {
+                setIsUploading(true);
+                
+                try {
+                    // Если выбран один файл - используем старый метод, если несколько - batch
+                    if (result.filePaths.length === 1) {
+                        await diseaseService.uploadGuideline(diseaseId, result.filePaths[0]);
+                    } else {
+                        const batchResult = await diseaseService.uploadGuidelinesBatch(diseaseId, result.filePaths);
+                        if (batchResult.errors && batchResult.errors.length > 0) {
+                            alert(`Загружено ${batchResult.success.length} из ${result.filePaths.length} файлов. Ошибки: ${batchResult.errors.map(e => e.path).join(', ')}`);
+                        }
+                    }
+                    
+                    // Перезагружаем список файлов
+                    await loadGuidelines();
+                } catch (error: any) {
+                    console.error('Failed to upload guideline:', error);
+                    alert(error.message || 'Ошибка при загрузке или обработке PDF');
+                } finally {
+                    setIsUploading(false);
+                }
+            }
+        } catch (error: any) {
+            console.error('File dialog error:', error);
+            alert(error.message || 'Ошибка при выборе файлов');
+        }
+    };
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-12">
@@ -93,15 +137,38 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
 
     if (guidelines.length === 0) {
         return (
-            <div className="text-center py-12 text-slate-400">
-                <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="text-sm">Нет загруженных файлов</p>
+            <div className="space-y-4">
+                <div className="text-center py-12 text-slate-400">
+                    <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm mb-4">Нет загруженных файлов</p>
+                    <Button
+                        variant="secondary"
+                        onClick={handleFileUpload}
+                        isLoading={isUploading}
+                        className="rounded-xl"
+                    >
+                        <Upload className="w-5 h-5 mr-2" />
+                        Загрузить PDF
+                    </Button>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="space-y-3">
+            <div className="flex justify-end mb-2">
+                <Button
+                    variant="secondary"
+                    onClick={handleFileUpload}
+                    isLoading={isUploading}
+                    className="rounded-xl"
+                    size="sm"
+                >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Загрузить PDF
+                </Button>
+            </div>
             {guidelines.map((guideline) => {
                 const isSelected = selectedGuidelineId === guideline.id;
                 const isDeleting = deletingId === guideline.id;

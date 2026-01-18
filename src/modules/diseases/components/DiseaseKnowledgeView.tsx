@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Disease, ClinicalGuideline } from '../../../types';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
@@ -27,10 +27,35 @@ interface DiseaseKnowledgeViewProps {
 }
 
 export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ disease }) => {
-    const guidelines = disease.guidelines || [];
-    const [selectedGuideline, setSelectedGuideline] = useState<ClinicalGuideline | null>(guidelines[0] || null);
+    const initialGuidelines = disease.guidelines || [];
+    const [guidelines, setGuidelines] = useState<ClinicalGuideline[]>(initialGuidelines);
+    const [selectedGuideline, setSelectedGuideline] = useState<ClinicalGuideline | null>(initialGuidelines[0] || null);
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
+
+    // Обновляем guidelines при изменении disease из пропсов
+    useEffect(() => {
+        const newGuidelines = disease.guidelines || [];
+        setGuidelines(newGuidelines);
+        // Если выбранный файл больше не существует, выбираем первый
+        if (selectedGuideline && !newGuidelines.find(g => g.id === selectedGuideline.id)) {
+            setSelectedGuideline(newGuidelines[0] || null);
+        }
+    }, [disease.guidelines]);
+
+    const handleGuidelineAdded = (newGuidelines: ClinicalGuideline[]) => {
+        setGuidelines(newGuidelines);
+        // Если еще не выбран файл, выбираем первый (или новый)
+        if (!selectedGuideline && newGuidelines.length > 0) {
+            setSelectedGuideline(newGuidelines[0]);
+        } else if (newGuidelines.length > 0) {
+            // Обновляем selectedGuideline, если он был выбран
+            const updated = newGuidelines.find(g => g.id === selectedGuideline?.id);
+            if (updated) {
+                setSelectedGuideline(updated);
+            }
+        }
+    };
 
     const handleSearch = (term: string) => {
         setSearchTerm(term);
@@ -197,14 +222,9 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                                         setSearchResults([]);
                                     }}
                                     selectedGuidelineId={selectedGuideline?.id}
+                                    onGuidelineAdded={handleGuidelineAdded}
                                 />
                             </div>
-                            {guidelines.length === 0 && (
-                                <div className="text-center py-12 text-slate-400">
-                                    <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                                    <p>Нет загруженных файлов клинических рекомендаций</p>
-                                </div>
-                            )}
                         </TabsContent>
 
                         <TabsContent value="search" className="mt-0 focus-visible:outline-none">
