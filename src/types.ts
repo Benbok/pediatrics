@@ -495,6 +495,7 @@ declare global {
         error?: string;
       }>;
       getPharmacologicalGroups: () => Promise<string[]>;
+      getFormTypes: () => Promise<string[]>;
       searchMedicationsByGroup: (groupName: string) => Promise<Medication[]>;
       toggleMedicationFavorite: (medicationId: number) => Promise<boolean>;
       addMedicationTag: (medicationId: number, tag: string) => Promise<boolean>;

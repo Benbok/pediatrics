@@ -27,31 +27,39 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
 
     // Формируем строку с формами выпуска
     const formsDisplay = React.useMemo(() => {
-        if (!medication.forms || !Array.isArray(medication.forms) || medication.forms.length === 0) {
-            return 'Формы выпуска не указаны';
+        // Сначала пробуем структурированные данные forms
+        if (medication.forms && Array.isArray(medication.forms) && medication.forms.length > 0) {
+            return medication.forms
+                .slice(0, 3) // Показываем максимум 3 формы
+                .map(form => {
+                    const typeMap: Record<string, string> = {
+                        tablet: 'Таблетки',
+                        solution: 'Раствор',
+                        syrup: 'Сироп',
+                        suspension: 'Суспензия',
+                        injection: 'Инъекция',
+                        capsule: 'Капсулы',
+                        suppository: 'Свечи',
+                        powder: 'Порошок',
+                        drops: 'Капли'
+                    };
+                    
+                    const typeName = typeMap[form.type] || form.type || 'Форма';
+                    const concentration = form.concentration ? ` ${form.concentration}` : '';
+                    return `${typeName}${concentration}`;
+                })
+                .join(', ') + (medication.forms.length > 3 ? '...' : '');
         }
         
-        return medication.forms
-            .slice(0, 3) // Показываем максимум 3 формы
-            .map(form => {
-                const typeMap: Record<string, string> = {
-                    tablet: 'Таблетки',
-                    solution: 'Раствор',
-                    syrup: 'Сироп',
-                    suspension: 'Суспензия',
-                    injection: 'Инъекция',
-                    capsule: 'Капсулы',
-                    suppository: 'Свечи',
-                    powder: 'Порошок',
-                    drops: 'Капли'
-                };
-                
-                const typeName = typeMap[form.type] || form.type || 'Форма';
-                const concentration = form.concentration ? ` ${form.concentration}` : '';
-                return `${typeName}${concentration}`;
-            })
-            .join(', ') + (medication.forms.length > 3 ? '...' : '');
-    }, [medication.forms]);
+        // Fallback на текстовое описание packageDescription
+        if (medication.packageDescription && medication.packageDescription.trim()) {
+            return medication.packageDescription.length > 100 
+                ? medication.packageDescription.substring(0, 100) + '...' 
+                : medication.packageDescription;
+        }
+        
+        return 'Формы выпуска не указаны';
+    }, [medication.forms, medication.packageDescription]);
 
     return (
         <Card

@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     importFromVidal: (url) => ipcRenderer.invoke('medications:importFromVidal', url),
     importFromJson: (jsonString) => ipcRenderer.invoke('medications:importFromJson', jsonString),
     getPharmacologicalGroups: () => ipcRenderer.invoke('medications:getPharmacologicalGroups'),
+    getFormTypes: () => ipcRenderer.invoke('medications:getFormTypes'),
     searchMedicationsByGroup: (groupName) => ipcRenderer.invoke('medications:searchByGroup', groupName),
     toggleMedicationFavorite: (medicationId) => ipcRenderer.invoke('medications:toggleFavorite', medicationId),
     addMedicationTag: (medicationId, tag) => ipcRenderer.invoke('medications:addTag', medicationId, tag),

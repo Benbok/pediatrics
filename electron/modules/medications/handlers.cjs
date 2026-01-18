@@ -60,18 +60,11 @@ const setupMedicationHandlers = () => {
         const med = await MedicationService.getById(id);
         if (!med) return null;
 
-        const parsed = {
-            ...med,
-            forms: safeJsonParse(med.forms, []),
-            pediatricDosing: safeJsonParse(med.pediatricDosing, []),
-            indications: safeJsonParse(med.indications, []),
-            userTags: safeJsonParse(med.userTags, [])
-        };
-
+        // getById уже возвращает распарсенные JSON-поля, не нужно парсить повторно
         // Сохраняем в кеш
-        CacheService.set('medications', cacheKey, parsed);
+        CacheService.set('medications', cacheKey, med);
         
-        return parsed;
+        return med;
     }));
 
     ipcMain.handle('medications:upsert', ensureAuthenticated(async (event, data, source = 'manual') => {
@@ -282,6 +275,11 @@ const setupMedicationHandlers = () => {
     // Получить фармакологические группы
     ipcMain.handle('medications:getPharmacologicalGroups', ensureAuthenticated(async () => {
         return await MedicationService.getPharmacologicalGroups();
+    }));
+
+    // Получить типы форм выпуска
+    ipcMain.handle('medications:getFormTypes', ensureAuthenticated(async () => {
+        return await MedicationService.getFormTypes();
     }));
 
     // Поиск по группе

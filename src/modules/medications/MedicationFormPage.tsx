@@ -280,6 +280,18 @@ export const MedicationFormPage: React.FC = () => {
     };
 
     const handleConfirmImport = () => {
+        // Если есть критичные ошибки - вернуться к редактированию JSON
+        if (validationResult && !validationResult.isValid) {
+            setShowPreview(false);
+            setShowImportDialog(true);
+            setImportMethod('json');
+            // Восстанавливаем JSON для редактирования
+            if (previewData) {
+                setJsonText(JSON.stringify(previewData, null, 2));
+            }
+            return;
+        }
+        
         if (previewData) {
             setFormData({
                 ...formData,
@@ -1291,9 +1303,16 @@ export const MedicationFormPage: React.FC = () => {
                             <Button 
                                 variant="primary" 
                                 onClick={handleConfirmImport}
-                                disabled={validationResult && !validationResult.isValid}
+                                className={validationResult && !validationResult.isValid ? 'bg-orange-600 hover:bg-orange-700' : ''}
                             >
-                                {validationResult && !validationResult.isValid ? 'Исправьте ошибки' : 'Подтвердить импорт'}
+                                {validationResult && !validationResult.isValid ? (
+                                    <>
+                                        <AlertCircle className="w-4 h-4 mr-2" />
+                                        Вернуться к редактированию
+                                    </>
+                                ) : (
+                                    'Подтвердить импорт'
+                                )}
                             </Button>
                         </div>
                     </Card>

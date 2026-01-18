@@ -172,6 +172,18 @@ export const medicationService = {
     },
 
     /**
+     * Get all form types
+     */
+    async getFormTypes(): Promise<string[]> {
+        try {
+            return await window.electronAPI.getFormTypes();
+        } catch (error) {
+            console.error('[MedicationService] Failed to get form types:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Search medications by pharmacological group
      */
     async searchByGroup(groupName: string): Promise<Medication[]> {

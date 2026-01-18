@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Search, Plus, Filter, Pill, AlertCircle, Beaker, Star } from 'lucide-react';
 import { PharmGroupFilter } from './components/PharmGroupFilter';
+import { FormTypeFilter } from './components/FormTypeFilter';
 
 export const MedicationsModule: React.FC = () => {
     const navigate = useNavigate();
@@ -18,6 +19,7 @@ export const MedicationsModule: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+    const [selectedFormType, setSelectedFormType] = useState<string | null>(null);
 
     useEffect(() => {
         // Загружаем данные из кеша или делаем запрос
@@ -26,6 +28,16 @@ export const MedicationsModule: React.FC = () => {
                 const data = await loadMedications();
                 setMedications(data);
                 setError(null);
+                
+                // Отладка: проверяем первый препарат
+                if (data.length > 0) {
+                    console.log('[MedicationsModule] Sample medication data:', {
+                        name: data[0].nameRu,
+                        forms: data[0].forms,
+                        formsType: typeof data[0].forms,
+                        formsIsArray: Array.isArray(data[0].forms)
+                    });
+                }
             } catch (err) {
                 setError('Не удалось загрузить базу препаратов');
                 console.error(err);
@@ -35,6 +47,15 @@ export const MedicationsModule: React.FC = () => {
         // Если данные уже в кеше - используем их, иначе загружаем
         if (cachedMedications) {
             setMedications(cachedMedications);
+            // Отладка кешированных данных
+            if (cachedMedications.length > 0) {
+                console.log('[MedicationsModule] Cached medication data:', {
+                    name: cachedMedications[0].nameRu,
+                    forms: cachedMedications[0].forms,
+                    formsType: typeof cachedMedications[0].forms,
+                    formsIsArray: Array.isArray(cachedMedications[0].forms)
+                });
+            }
         } else {
             initializeData();
         }
@@ -66,7 +87,10 @@ export const MedicationsModule: React.FC = () => {
         
         const matchesGroup = !selectedGroup || m.clinicalPharmGroup === selectedGroup;
         
-        return matchesSearch && matchesFavorite && matchesGroup;
+        const matchesFormType = !selectedFormType || 
+            (Array.isArray(m.forms) && m.forms.length > 0 && m.forms.some(form => form && form.type === selectedFormType));
+        
+        return matchesSearch && matchesFavorite && matchesGroup && matchesFormType;
     });
 
     return (
@@ -121,9 +145,12 @@ export const MedicationsModule: React.FC = () => {
                 </Button>
             </div>
 
-            {/* Фильтр по группам */}
+            {/* Фильтры */}
             {medications.length > 0 && (
-                <PharmGroupFilter onGroupSelect={setSelectedGroup} />
+                <div className="space-y-4">
+                    <PharmGroupFilter onGroupSelect={setSelectedGroup} />
+                    <FormTypeFilter onFormTypeSelect={setSelectedFormType} />
+                </div>
             )}
 
             {error && (

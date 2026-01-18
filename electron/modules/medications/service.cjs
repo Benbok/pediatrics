@@ -65,6 +65,10 @@ const MedicationService = {
         });
         return medications.map(med => ({
             ...med,
+            forms: safeJsonParse(med.forms, []),
+            pediatricDosing: safeJsonParse(med.pediatricDosing, []),
+            adultDosing: med.adultDosing ? safeJsonParse(med.adultDosing, null) : null,
+            indications: safeJsonParse(med.indications, []),
             icd10Codes: safeJsonParse(med.icd10Codes, []),
             userTags: safeJsonParse(med.userTags, [])
         }));
@@ -140,7 +144,16 @@ const MedicationService = {
         const normalizeArray = (value) => {
             if (!value) return [];
             if (Array.isArray(value)) return value;
-            if (typeof value === 'string') return [];
+            if (typeof value === 'string') {
+                // Пытаемся распарсить JSON-строку
+                try {
+                    const parsed = JSON.parse(value);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    logger.warn('[MedicationService] Failed to parse JSON string in normalizeArray:', value);
+                    return [];
+                }
+            }
             return [];
         };
         
@@ -405,6 +418,29 @@ const MedicationService = {
     },
 
     /**
+     * Получить список всех типов форм выпуска
+     */
+    async getFormTypes() {
+        const medications = await prisma.medication.findMany({
+            select: {
+                forms: true
+            }
+        });
+        
+        const formTypes = new Set();
+        medications.forEach(med => {
+            const forms = safeJsonParse(med.forms, []);
+            forms.forEach(form => {
+                if (form.type) {
+                    formTypes.add(form.type);
+                }
+            });
+        });
+        
+        return Array.from(formTypes).sort();
+    },
+
+    /**
      * Поиск по группе
      */
     async searchByGroup(groupName) {
@@ -417,8 +453,11 @@ const MedicationService = {
         
         return medications.map(med => ({
             ...med,
-            icd10Codes: safeJsonParse(med.icd10Codes, []),
+            forms: safeJsonParse(med.forms, []),
             pediatricDosing: safeJsonParse(med.pediatricDosing, []),
+            adultDosing: med.adultDosing ? safeJsonParse(med.adultDosing, null) : null,
+            indications: safeJsonParse(med.indications, []),
+            icd10Codes: safeJsonParse(med.icd10Codes, []),
             userTags: safeJsonParse(med.userTags, [])
         }));
     },
