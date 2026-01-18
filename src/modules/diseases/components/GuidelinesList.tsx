@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClinicalGuideline } from '../../../types';
+import { ClinicalGuideline, UploadProgress } from '../../../types';
 import { diseaseService } from '../services/diseaseService';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
@@ -9,15 +9,11 @@ import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload, Ed
 
 interface GuidelinesListProps {
     diseaseId: number;
-    onGuidelineSelect?: (guideline: ClinicalGuideline) => void;
-    selectedGuidelineId?: number;
     onGuidelineAdded?: (guidelines: ClinicalGuideline[]) => void;
 }
 
 export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     diseaseId,
-    onGuidelineSelect,
-    selectedGuidelineId,
     onGuidelineAdded
 }) => {
     const [guidelines, setGuidelines] = useState<ClinicalGuideline[]>([]);
@@ -27,13 +23,33 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editingTitle, setEditingTitle] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<Map<string, UploadProgress>>(new Map());
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; guidelineId: number | null }>({
         isOpen: false,
         guidelineId: null
     });
 
+    // Subscribe to upload progress events
+    useEffect(() => {
+        const unsubscribe = window.electronAPI.onUploadProgress((event: any, progress: UploadProgress) => {
+            setUploadProgress(prev => new Map(prev).set(progress.jobId, progress));
+        });
+
+        return () => unsubscribe();
+    }, []);
+
     useEffect(() => {
         loadGuidelines();
+        // Clear completed uploads when loading fresh data
+        setUploadProgress(prev => {
+            const next = new Map(prev);
+            for (const [jobId, job] of prev.entries()) {
+                if (job.status === 'completed' || job.status === 'failed') {
+                    next.delete(jobId);
+                }
+            }
+            return next;
+        });
     }, [diseaseId]);
 
     const loadGuidelines = async () => {
@@ -136,18 +152,21 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                 setIsUploading(true);
 
                 try {
-                    // Если выбран один файл - используем старый метод, если несколько - batch
-                    if (result.filePaths.length === 1) {
-                        await diseaseService.uploadGuideline(diseaseId, result.filePaths[0]);
-                    } else {
-                        const batchResult = await diseaseService.uploadGuidelinesBatch(diseaseId, result.filePaths);
-                        if (batchResult.errors && batchResult.errors.length > 0) {
-                            alert(`Загружено ${batchResult.success.length} из ${result.filePaths.length} файлов. Ошибки: ${batchResult.errors.map(e => e.path).join(', ')}`);
-                        }
-                    }
+                    // Используем async upload для неблокирующей загрузки
+                    const jobs = await window.electronAPI.uploadGuidelinesAsync(diseaseId, result.filePaths);
 
-                    // Перезагружаем список файлов
-                    await loadGuidelines();
+                    // Initialize progress tracking
+                    const progressMap = new Map<string, UploadProgress>();
+                    jobs.forEach(job => {
+                        progressMap.set(job.jobId, {
+                            jobId: job.jobId,
+                            fileName: job.fileName,
+                            status: 'queued',
+                            progress: 0
+                        });
+                    });
+                    setUploadProgress(progressMap);
+
                 } catch (error: any) {
                     console.error('Failed to upload guideline:', error);
                     alert(error.message || 'Ошибка при загрузке или обработке PDF');
@@ -203,17 +222,53 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                     Загрузить PDF
                 </Button>
             </div>
+
+            {/* Upload progress cards */}
+            {Array.from(uploadProgress.values()).map((progress) => (
+                <Card
+                    key={progress.jobId}
+                    className="p-4 rounded-2xl border-2 border-primary-200 bg-primary-50/30 dark:bg-primary-950/10"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                            {progress.status === 'completed' ? (
+                                <Check className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                            ) : progress.status === 'failed' ? (
+                                <X className="w-5 h-5 text-red-600 dark:text-red-400" />
+                            ) : (
+                                <Loader2 className="w-5 h-5 text-primary-600 dark:text-primary-400 animate-spin" />
+                            )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="font-bold text-sm text-slate-800 dark:text-white truncate">
+                                {progress.fileName}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                                {progress.status === 'queued' && 'В очереди...'}
+                                {progress.status === 'processing' && (progress.step || 'Обработка...')}
+                                {progress.status === 'completed' && 'Загружено успешно'}
+                                {progress.status === 'failed' && `Ошибка: ${progress.error}`}
+                            </div>
+                            {progress.status === 'processing' && progress.progress !== undefined && (
+                                <div className="mt-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
+                                    <div
+                                        className="bg-primary-500 h-1.5 rounded-full transition-all duration-300"
+                                        style={{ width: `${progress.progress}%` }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </Card>
+            ))}
+
             {guidelines.map((guideline) => {
-                const isSelected = selectedGuidelineId === guideline.id;
                 const isDeleting = deletingId === guideline.id;
 
                 return (
                     <Card
                         key={guideline.id}
-                        className={`p-4 rounded-2xl border-2 transition-all ${isSelected
-                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20'
-                                : 'border-slate-100 dark:border-slate-800 hover:border-primary-300'
-                            }`}
+                        className="p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 hover:border-primary-300"
                     >
                         <div className="flex items-start justify-between gap-4">
                             <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -307,16 +362,6 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                                             <Download className="w-4 h-4" />
                                         </Button>
                                     </>
-                                )}
-                                {onGuidelineSelect && !isSelected && (
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => onGuidelineSelect(guideline)}
-                                        className="rounded-xl"
-                                    >
-                                        Выбрать
-                                    </Button>
                                 )}
                                 <Button
                                     variant="ghost"

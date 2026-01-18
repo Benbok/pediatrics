@@ -49,6 +49,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteDisease: (id) => ipcRenderer.invoke('diseases:delete', id),
     uploadGuideline: (diseaseId, pdfPath) => ipcRenderer.invoke('diseases:upload-guideline', { diseaseId, pdfPath }),
     uploadGuidelinesBatch: (diseaseId, pdfPaths) => ipcRenderer.invoke('diseases:upload-guidelines-batch', { diseaseId, pdfPaths }),
+    uploadGuidelinesAsync: (diseaseId, pdfPaths) => ipcRenderer.invoke('diseases:upload-guidelines-async', { diseaseId, pdfPaths }),
+    getUploadStatus: (jobIds) => ipcRenderer.invoke('diseases:get-upload-status', jobIds),
+    onUploadProgress: (callback) => {
+        ipcRenderer.on('guideline:upload-progress', callback);
+        return () => ipcRenderer.removeListener('guideline:upload-progress', callback);
+    },
     updateGuideline: (id, data) => ipcRenderer.invoke('diseases:update-guideline', { id, data }),
     deleteGuideline: (guidelineId) => ipcRenderer.invoke('diseases:delete-guideline', guidelineId),
     searchDiseases: (symptoms) => ipcRenderer.invoke('diseases:search', symptoms),

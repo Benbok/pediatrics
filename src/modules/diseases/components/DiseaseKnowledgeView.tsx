@@ -30,84 +30,50 @@ interface DiseaseKnowledgeViewProps {
 export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ disease }) => {
     const initialGuidelines = disease.guidelines || [];
     const [guidelines, setGuidelines] = useState<ClinicalGuideline[]>(initialGuidelines);
-    const [selectedGuideline, setSelectedGuideline] = useState<ClinicalGuideline | null>(initialGuidelines[0] || null);
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
 
     // Обновляем guidelines при изменении disease из пропсов
     useEffect(() => {
         const newGuidelines = disease.guidelines || [];
-        setGuidelines(newGuidelines);
-        // Если выбранный файл больше не существует, выбираем первый
-        if (selectedGuideline && !newGuidelines.find(g => g.id === selectedGuideline.id)) {
-            setSelectedGuideline(newGuidelines[0] || null);
-        }
     }, [disease.guidelines]);
 
     const handleGuidelineAdded = (newGuidelines: ClinicalGuideline[]) => {
         setGuidelines(newGuidelines);
-        // Если еще не выбран файл, выбираем первый (или новый)
-        if (!selectedGuideline && newGuidelines.length > 0) {
-            setSelectedGuideline(newGuidelines[0]);
-        } else if (newGuidelines.length > 0) {
-            // Обновляем selectedGuideline, если он был выбран
-            const updated = newGuidelines.find(g => g.id === selectedGuideline?.id);
-            if (updated) {
-                setSelectedGuideline(updated);
-            }
-        }
     };
 
     const handleSearch = (term: string) => {
         setSearchTerm(term);
-        if (!term.trim() || !selectedGuideline?.chunks) {
+        if (!term.trim() || guidelines.length === 0) {
             setSearchResults([]);
             return;
         }
 
         try {
-            // Поиск по всем файлам, если выбрано несколько
             let allMatches: any[] = [];
 
-            if (selectedGuideline) {
-                // Поиск только в выбранном файле
-                const chunks = JSON.parse(selectedGuideline.chunks || '[]');
-                const termLower = term.toLowerCase();
-                const matches = chunks
-                    .filter((chunk: any) =>
-                        chunk.text.toLowerCase().includes(termLower) ||
-                        chunk.sectionTitle?.toLowerCase().includes(termLower)
-                    )
-                    .map((chunk: any) => ({
-                        ...chunk,
-                        guidelineTitle: selectedGuideline.title,
-                        guidelineId: selectedGuideline.id
-                    }));
-                allMatches.push(...matches);
-            } else {
-                // Поиск по всем файлам
-                guidelines.forEach(guideline => {
-                    try {
-                        const chunks = JSON.parse(guideline.chunks || '[]');
-                        const termLower = term.toLowerCase();
-                        const matches = chunks
-                            .filter((chunk: any) =>
-                                chunk.text.toLowerCase().includes(termLower) ||
-                                chunk.sectionTitle?.toLowerCase().includes(termLower)
-                            )
-                            .map((chunk: any) => ({
-                                ...chunk,
-                                guidelineTitle: guideline.title,
-                                guidelineId: guideline.id
-                            }));
-                        allMatches.push(...matches);
-                    } catch (e) {
-                        console.error('Error parsing chunks for guideline:', guideline.id, e);
-                    }
-                });
-            }
+            // Поиск по всем файлам
+            guidelines.forEach(guideline => {
+                try {
+                    const chunks = JSON.parse(guideline.chunks || '[]');
+                    const termLower = term.toLowerCase();
+                    const matches = chunks
+                        .filter((chunk: any) =>
+                            chunk.text.toLowerCase().includes(termLower) ||
+                            chunk.sectionTitle?.toLowerCase().includes(termLower)
+                        )
+                        .map((chunk: any) => ({
+                            ...chunk,
+                            guidelineTitle: guideline.title,
+                            guidelineId: guideline.id
+                        }));
+                    allMatches.push(...matches);
+                } catch (e) {
+                    console.error('Error parsing chunks for guideline:', guideline.id, e);
+                }
+            });
 
-            setSearchResults(allMatches.slice(0, 10)); // Limit results
+            setSearchResults(allMatches.slice(0, 20)); // Limit results
         } catch (e) {
             console.error('Search error:', e);
         }
@@ -123,20 +89,10 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
             id: 'search', label: 'Поиск в PDF', icon: Search, isSearch: true
         },
         {
-            id: 'diagnosis', label: 'Диагностика', icon: Stethoscope, content: selectedGuideline ? [
-                { title: 'Клиническая картина', text: selectedGuideline.clinicalPicture },
-                { title: 'Жалобы и анамнез', text: selectedGuideline.complaints },
-                { title: 'Физикальное обследование', text: selectedGuideline.physicalExam },
-                { title: 'Лабораторная диагностика', text: selectedGuideline.labDiagnostics },
-                { title: 'Инструментальная диагностика', text: selectedGuideline.instrumental },
-            ] : []
+            id: 'diagnosis', label: 'Диагностика', icon: Stethoscope, content: []
         },
         {
-            id: 'treatment', label: 'Лечение', icon: Pill, content: selectedGuideline ? [
-                { title: 'Лечение', text: selectedGuideline.treatment },
-                { title: 'Реабилитация', text: selectedGuideline.rehabilitation },
-                { title: 'Профилактика', text: selectedGuideline.prevention },
-            ] : []
+            id: 'treatment', label: 'Лечение', icon: Pill, content: []
         },
         ...(hasRedFlags ? [{ id: 'red-flags', label: 'Красные флаги', icon: AlertTriangle }] : []),
         {
@@ -147,7 +103,6 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
         }
     ];
 
-    const parsedMedications = selectedGuideline?.medications ? JSON.parse(selectedGuideline.medications) : [];
 
     return (
         <div className="space-y-6">
@@ -210,12 +165,6 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                                 </h3>
                                 <GuidelinesList
                                     diseaseId={disease.id!}
-                                    onGuidelineSelect={(guideline) => {
-                                        setSelectedGuideline(guideline);
-                                        setSearchTerm(''); // Сброс поиска при смене файла
-                                        setSearchResults([]);
-                                    }}
-                                    selectedGuidelineId={selectedGuideline?.id}
                                     onGuidelineAdded={handleGuidelineAdded}
                                 />
                             </div>
@@ -299,30 +248,21 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                             <TabsContent key={s.id} value={s.id} className="mt-0 focus-visible:outline-none">
                                 <div className="space-y-8">
                                     {/* Guideline content */}
-                                    {selectedGuideline ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            {s.content?.filter(c => c.text).map((item, idx) => (
-                                                <div key={idx} className="space-y-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-1.5 h-6 bg-primary-500 rounded-full" />
-                                                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 italic">
-                                                            {item.title}
-                                                        </h3>
-                                                    </div>
-                                                    <div className="text-slate-600 dark:text-slate-400 leading-relaxed text-[15px] p-5 rounded-[24px] bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 whitespace-pre-wrap">
-                                                        {item.text}
-                                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        {s.content?.filter(c => c.text).map((item, idx) => (
+                                            <div key={idx} className="space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-1.5 h-6 bg-primary-500 rounded-full" />
+                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 italic">
+                                                        {item.title}
+                                                    </h3>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="py-4 px-6 rounded-2xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30 flex items-center gap-3">
-                                            <Info className="w-5 h-5 text-blue-500" />
-                                            <p className="text-sm text-blue-600 dark:text-blue-400">
-                                                Клинические рекомендации не загружены или не выбраны.
-                                            </p>
-                                        </div>
-                                    )}
+                                                <div className="text-slate-600 dark:text-slate-400 leading-relaxed text-[15px] p-5 rounded-[24px] bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 whitespace-pre-wrap">
+                                                    {item.text}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
 
                                     {/* Additional structured data for Diagnostics tab */}
                                     {s.id === 'diagnosis' && (

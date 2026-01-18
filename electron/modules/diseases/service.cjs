@@ -4,12 +4,31 @@ const { z } = require('zod');
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const { app } = require('electron');
+const { app, BrowserWindow } = require('electron');
 const util = require('util');
 const execPromise = util.promisify(exec);
 const { generateEmbedding, cosineSimilarity, getCachedSearch, cacheSearch } = require('../../services/embeddingService.cjs');
 const { normalizeSymptoms } = require('../../utils/cdssVocabulary.cjs');
 const { normalizeDiseaseData } = require('../../utils/diseaseNormalization.cjs');
+
+// Upload job queue
+const uploadQueue = {
+    jobs: new Map(), // jobId -> { status, diseaseId, fileName, progress, error }
+    processing: false
+};
+
+let jobIdCounter = 0;
+
+function generateJobId() {
+    return `upload-${Date.now()}-${++jobIdCounter}`;
+}
+
+function sendProgressEvent(jobId, data) {
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (mainWindow) {
+        mainWindow.webContents.send('guideline:upload-progress', { jobId, ...data });
+    }
+}
 
 function safeJsonParse(value, defaultValue = []) {
     if (!value || value === null) return defaultValue;
@@ -357,7 +376,100 @@ const DiseaseService = {
     },
 
     /**
-     * Batch upload multiple guidelines
+     * Queue multiple guidelines for async upload
+     */
+    async uploadGuidelinesAsync(diseaseId, pdfPaths) {
+        const jobIds = [];
+
+        for (const pdfPath of pdfPaths) {
+            const jobId = generateJobId();
+            const fileName = path.basename(pdfPath);
+
+            uploadQueue.jobs.set(jobId, {
+                status: 'queued',
+                diseaseId,
+                fileName,
+                pdfPath,
+                progress: 0,
+                error: null
+            });
+
+            jobIds.push({ jobId, fileName });
+            logger.info(`[DiseaseService] Queued upload job ${jobId}: ${fileName}`);
+        }
+
+        // Start processing if not already running
+        if (!uploadQueue.processing) {
+            this.processUploadQueue();
+        }
+
+        return jobIds;
+    },
+
+    /**
+     * Process queued uploads in background
+     */
+    async processUploadQueue() {
+        if (uploadQueue.processing) return;
+
+        uploadQueue.processing = true;
+        logger.info('[DiseaseService] Started processing upload queue');
+
+        const { CacheService } = require('../../services/cacheService.cjs');
+
+        for (const [jobId, job] of uploadQueue.jobs.entries()) {
+            if (job.status !== 'queued') continue;
+
+            try {
+                job.status = 'processing';
+                sendProgressEvent(jobId, { status: 'processing', fileName: job.fileName, progress: 0 });
+
+                // Process the file
+                const guideline = await this.uploadGuidelineSingle(job.diseaseId, job.pdfPath, jobId);
+
+                job.status = 'completed';
+                job.result = guideline;
+                sendProgressEvent(jobId, { status: 'completed', fileName: job.fileName, progress: 100, guidelineId: guideline.id });
+
+                // Invalidate cache to trigger UI refresh
+                CacheService.invalidate('diseases', `id_${job.diseaseId}`);
+
+                logger.info(`[DiseaseService] Completed upload job ${jobId}: ${job.fileName}`);
+            } catch (error) {
+                job.status = 'failed';
+                job.error = error.message;
+                sendProgressEvent(jobId, { status: 'failed', fileName: job.fileName, error: error.message });
+
+                logger.error(`[DiseaseService] Failed upload job ${jobId}:`, error);
+            }
+        }
+
+        uploadQueue.processing = false;
+        logger.info('[DiseaseService] Finished processing upload queue');
+    },
+
+    /**
+     * Get status of upload jobs
+     */
+    getUploadStatus(jobIds) {
+        const statuses = [];
+        for (const jobId of jobIds) {
+            const job = uploadQueue.jobs.get(jobId);
+            if (job) {
+                statuses.push({
+                    jobId,
+                    status: job.status,
+                    fileName: job.fileName,
+                    progress: job.progress,
+                    error: job.error
+                });
+            }
+        }
+        return statuses;
+    },
+
+    /**
+     * Batch upload multiple guidelines (LEGACY - blocking)
      */
     async uploadGuidelinesBatch(diseaseId, pdfPaths) {
         if (!Array.isArray(pdfPaths) || pdfPaths.length === 0) {
@@ -386,23 +498,26 @@ const DiseaseService = {
     },
 
     /**
-     * Parse PDF guideline and save it
+     * Parse PDF guideline and save it (internal method with progress tracking)
      */
-    async uploadGuideline(diseaseId, pdfPath) {
+    async uploadGuidelineSingle(diseaseId, pdfPath, jobId = null) {
         logger.info(`[DiseaseService] Processing PDF: ${pdfPath} for disease ${diseaseId}`);
 
         try {
             // 1. Get Metadata (title, codes, symptoms) - Fast
+            if (jobId) sendProgressEvent(jobId, { progress: 10, step: 'Extracting metadata' });
             const metadataScript = path.join(process.cwd(), 'scripts', 'parse_pdf.py');
             const { stdout: metaStdout } = await execPromise(`python "${metadataScript}" "${pdfPath}"`);
             const metadata = JSON.parse(metaStdout);
 
             // 2. Create Chunks (for search) - Fast
+            if (jobId) sendProgressEvent(jobId, { progress: 40, step: 'Creating chunks' });
             const chunksScript = path.join(process.cwd(), 'scripts', 'create_chunks.py');
             const { stdout: chunksStdout } = await execPromise(`python "${chunksScript}" "${pdfPath}"`);
             const chunks = JSON.parse(chunksStdout);
 
             // 3. Copy file to permanent storage
+            if (jobId) sendProgressEvent(jobId, { progress: 70, step: 'Saving file' });
             const storageDir = path.join(app.getPath('userData'), 'clinical_guidelines');
             if (!fs.existsSync(storageDir)) {
                 fs.mkdirSync(storageDir, { recursive: true });
@@ -414,6 +529,7 @@ const DiseaseService = {
             fs.copyFileSync(pdfPath, destPath);
 
             // 4. Save to database
+            if (jobId) sendProgressEvent(jobId, { progress: 90, step: 'Saving to database' });
             const guideline = await prisma.clinicalGuideline.create({
                 data: {
                     diseaseId: Number(diseaseId),
@@ -433,6 +549,13 @@ const DiseaseService = {
             logger.error('[DiseaseService] Failed to process/upload guideline:', error);
             throw error;
         }
+    },
+
+    /**
+     * Legacy synchronous upload (for single file compatibility)
+     */
+    async uploadGuideline(diseaseId, pdfPath) {
+        return await this.uploadGuidelineSingle(diseaseId, pdfPath, null);
     },
 
     /**

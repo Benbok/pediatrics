@@ -115,6 +115,17 @@ const setupDiseaseHandlers = () => {
         return result;
     }));
 
+    // Async upload handlers
+    ipcMain.handle('diseases:upload-guidelines-async', ensureAuthenticated(async (_, { diseaseId, pdfPaths }) => {
+        const jobIds = await DiseaseService.uploadGuidelinesAsync(diseaseId, pdfPaths);
+        logAudit('GUIDELINES_ASYNC_QUEUED', { diseaseId, count: pdfPaths.length });
+        return jobIds;
+    }));
+
+    ipcMain.handle('diseases:get-upload-status', ensureAuthenticated(async (_, jobIds) => {
+        return DiseaseService.getUploadStatus(jobIds);
+    }));
+
     ipcMain.handle('diseases:update-guideline', ensureAuthenticated(async (_, { id, data }) => {
         const guideline = await DiseaseService.updateGuideline(id, data);
         logAudit('GUIDELINE_UPDATED', { guidelineId: id });

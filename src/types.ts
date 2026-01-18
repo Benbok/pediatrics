@@ -273,6 +273,21 @@ export interface ClinicalGuideline {
   medications?: string | null; // JSON string array of medications
 }
 
+export interface UploadJob {
+  jobId: string;
+  fileName: string;
+}
+
+export interface UploadProgress {
+  jobId: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  fileName: string;
+  progress?: number;
+  step?: string;
+  error?: string;
+  guidelineId?: number;
+}
+
 export interface GuidelinePlan {
   diseaseId: number;
   diagnosticPlan: DiagnosticPlanItem[];
@@ -548,6 +563,9 @@ declare global {
       deleteDisease: (id: number) => Promise<boolean>;
       uploadGuideline: (diseaseId: number, pdfPath: string) => Promise<ClinicalGuideline>;
       uploadGuidelinesBatch: (diseaseId: number, pdfPaths: string[]) => Promise<{ success: ClinicalGuideline[]; errors: Array<{ path: string; error: string }> | null }>;
+      uploadGuidelinesAsync: (diseaseId: number, pdfPaths: string[]) => Promise<UploadJob[]>;
+      getUploadStatus: (jobIds: string[]) => Promise<UploadProgress[]>;
+      onUploadProgress: (callback: (event: any, progress: UploadProgress) => void) => () => void;
       updateGuideline: (id: number, data: Partial<ClinicalGuideline>) => Promise<ClinicalGuideline>;
       deleteGuideline: (guidelineId: number) => Promise<boolean>;
       searchDiseases: (symptoms: string[]) => Promise<Disease[]>;
