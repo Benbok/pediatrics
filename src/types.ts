@@ -350,6 +350,16 @@ export interface DiseaseNote {
   author?: User;
 }
 
+export interface PdfNote {
+  id: number;
+  pdfPath: string;
+  page: number;
+  content: string;
+  authorId: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ============= USER MANAGEMENT =============
 
 export interface User {
@@ -443,6 +453,12 @@ declare global {
       createDiseaseNote: (data: Partial<DiseaseNote>) => Promise<DiseaseNote>;
       updateDiseaseNote: (id: number, data: Partial<DiseaseNote>) => Promise<DiseaseNote>;
       deleteDiseaseNote: (id: number) => Promise<boolean>;
+
+      // PDF Notes
+      getPdfNotes: (params: { pdfPath: string; page?: number }) => Promise<PdfNote[]>;
+      createPdfNote: (data: Partial<PdfNote>) => Promise<PdfNote>;
+      updatePdfNote: (id: number, data: Partial<PdfNote>) => Promise<PdfNote>;
+      deletePdfNote: (id: number) => Promise<boolean>;
 
       // PDF parsing
       parsePdfOnly: (pdfPath: string) => Promise<{

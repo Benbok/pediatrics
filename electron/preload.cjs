@@ -53,6 +53,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateDiseaseNote: (id, data) => ipcRenderer.invoke('diseases:notes-update', { id, data }),
     deleteDiseaseNote: (id) => ipcRenderer.invoke('diseases:notes-delete', id),
 
+    // PDF Notes
+    getPdfNotes: (params) => ipcRenderer.invoke('pdf-notes:list', params),
+    createPdfNote: (data) => ipcRenderer.invoke('pdf-notes:create', data),
+    updatePdfNote: (id, data) => ipcRenderer.invoke('pdf-notes:update', { id, data }),
+    deletePdfNote: (id) => ipcRenderer.invoke('pdf-notes:delete', id),
+
     // MEDICATIONS MODULE API
     getMedications: () => ipcRenderer.invoke('medications:list'),
     getMedication: (id) => ipcRenderer.invoke('medications:get-by-id', id),

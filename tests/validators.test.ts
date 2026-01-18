@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { VisitSchema, AnalyzeVisitSchema } from '../src/validators/visit.validator';
 import { MedicationSchema, CalculateDoseSchema, LinkMedicationToDiseaseSchema } from '../src/validators/medication.validator';
+import { PdfNoteSchema, PdfNoteUpdateSchema } from '../src/validators/pdfNote.validator';
 
 describe('Visit Validators', () => {
     describe('VisitSchema', () => {
@@ -216,5 +217,34 @@ describe('Medication Validators', () => {
             const result = LinkMedicationToDiseaseSchema.safeParse(invalidLink);
             expect(result.success).toBe(false);
         });
+    });
+});
+
+describe('PDF Note Validators', () => {
+    it('should validate a valid PDF note', () => {
+        const validNote = {
+            pdfPath: 'C:\\files\\guideline.pdf',
+            page: 2,
+            content: 'Ключевые рекомендации на этой странице.',
+        };
+
+        const result = PdfNoteSchema.safeParse(validNote);
+        expect(result.success).toBe(true);
+    });
+
+    it('should reject PDF note without content', () => {
+        const invalidNote = {
+            pdfPath: 'C:\\files\\guideline.pdf',
+            page: 1,
+            content: '',
+        };
+
+        const result = PdfNoteSchema.safeParse(invalidNote);
+        expect(result.success).toBe(false);
+    });
+
+    it('should reject update without fields', () => {
+        const result = PdfNoteUpdateSchema.safeParse({});
+        expect(result.success).toBe(false);
     });
 });

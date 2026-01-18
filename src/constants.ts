@@ -1,5 +1,10 @@
 import { VaccineDefinition } from './types';
 
+// PDF Viewer
+export const PDF_THUMBNAIL_CACHE_LIMIT = 200;
+export const PDF_THUMBNAIL_SCALE_DEFAULT = 0.2;
+export const PDF_THUMBNAIL_ITEM_HEIGHT = 280;
+
 // Based on the National Vaccination Calendar of the Russian Federation
 export const VACCINE_SCHEDULE: VaccineDefinition[] = [
   {

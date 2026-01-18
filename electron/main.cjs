@@ -8,6 +8,7 @@ const fs = require('fs');
 const { setupDatabaseHandlers } = require('./database.cjs');
 const { setupAuthHandlers, ensureAuthenticated } = require('./auth.cjs');
 const { setupDiseaseHandlers } = require('./modules/diseases/handlers.cjs');
+const { setupPdfNoteHandlers } = require('./modules/pdf-notes/handlers.cjs');
 const { setupMedicationHandlers } = require('./modules/medications/handlers.cjs');
 const { setupVisitHandlers } = require('./modules/visits/handlers.cjs');
 const { setupIcdCodeHandlers } = require('./modules/icd-codes/handlers.cjs');
@@ -68,6 +69,7 @@ app.whenReady().then(async () => {
 
     logger.info('[Main] Setting up CDSS handlers...');
     setupDiseaseHandlers();
+    setupPdfNoteHandlers();
     setupMedicationHandlers();
     setupVisitHandlers();
     setupIcdCodeHandlers();

@@ -25,6 +25,7 @@ model User {
   visits                Visit[]
   notes                 DiseaseNote[]       @relation("UserNotes")
   medicationChanges     MedicationChangeLog[]
+  pdfNotes              PdfNote[]
   
   @@map("users")
 }
@@ -180,6 +181,21 @@ model ClinicalGuideline {
   disease     Disease  @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
   
   @@map("clinical_guidelines")
+}
+
+model PdfNote {
+  id        Int      @id @default(autoincrement())
+  pdfPath   String   @map("pdf_path")
+  page      Int
+  content   String
+  authorId  Int      @map("author_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  author    User     @relation(fields: [authorId], references: [id])
+
+  @@index([pdfPath, page])
+  @@map("pdf_notes")
 }
 
 model Medication {

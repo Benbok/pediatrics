@@ -363,7 +363,7 @@ npm run test:vidal    # Test Vidal parser (dry run)
 - Выписки из медицинской карты
 - Направления на обследование
 - Perfect PDF rendering
-- Встроенный PDF viewer с превью страниц и поиском
+- Встроенный PDF viewer с превью страниц, оглавлением, поиском и заметками
 
 ---
 
