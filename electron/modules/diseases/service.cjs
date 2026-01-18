@@ -308,6 +308,20 @@ const DiseaseService = {
     },
 
     /**
+     * Update a guideline (e.g. rename)
+     */
+    async updateGuideline(guidelineId, data) {
+        return await prisma.clinicalGuideline.update({
+            where: { id: Number(guidelineId) },
+            data: {
+                title: data.title,
+                source: data.source,
+                content: data.content
+            }
+        });
+    },
+
+    /**
      * Delete a guideline (file)
      */
     async deleteGuideline(guidelineId) {
@@ -403,9 +417,9 @@ const DiseaseService = {
             const guideline = await prisma.clinicalGuideline.create({
                 data: {
                     diseaseId: Number(diseaseId),
-                    title: metadata.title || `Клинические рекомендации: ${path.basename(pdfPath)}`,
+                    title: metadata.title || path.basename(pdfPath),
                     pdfPath: destPath,
-                    content: metadata.description || 'Клинические рекомендации в формате PDF',
+                    content: metadata.description || 'Документ в формате PDF',
                     chunks: JSON.stringify(chunks),
                     source: 'Минздрав РФ',
                 },

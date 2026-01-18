@@ -173,16 +173,6 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                 </div>
 
                 <div className="flex gap-2">
-                    {selectedGuideline?.pdfPath && (
-                        <Button
-                            variant="secondary"
-                            className="rounded-2xl"
-                            onClick={() => window.electronAPI.openPdfAtPage(selectedGuideline.pdfPath!, 1)}
-                        >
-                            <Download className="w-5 h-5 mr-2" />
-                            Открыть PDF
-                        </Button>
-                    )}
                     {guidelines.length > 1 && (
                         <Badge variant="outline" className="px-3 py-1">
                             {guidelines.length} файлов
@@ -255,7 +245,7 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                                                 </Badge>
                                                 {result.guidelineTitle && (
                                                     <Badge variant="outline" size="sm" className="text-[10px]">
-                                                        {result.guidelineTitle}
+                                                        {result.guidelineTitle.replace(/^Клинические рекомендации:\s*/, '')}
                                                     </Badge>
                                                 )}
                                                 <span className="font-bold text-slate-700 dark:text-slate-300">
@@ -324,13 +314,6 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                                                     </div>
                                                 </div>
                                             ))}
-                                            {s.content?.filter(c => c.text).length === 0 && (
-                                                <div className="col-span-2 py-8 text-center bg-slate-50/30 dark:bg-slate-800/10 rounded-[24px] border border-dashed border-slate-100 dark:border-slate-800/50">
-                                                    <p className="text-slate-400 text-sm italic">
-                                                        Нет данных из PDF по этому разделу
-                                                    </p>
-                                                </div>
-                                            )}
                                         </div>
                                     ) : (
                                         <div className="py-4 px-6 rounded-2xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30 flex items-center gap-3">

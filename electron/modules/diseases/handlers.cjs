@@ -115,6 +115,18 @@ const setupDiseaseHandlers = () => {
         return result;
     }));
 
+    ipcMain.handle('diseases:update-guideline', ensureAuthenticated(async (_, { id, data }) => {
+        const guideline = await DiseaseService.updateGuideline(id, data);
+        logAudit('GUIDELINE_UPDATED', { guidelineId: id });
+
+        // Инвалидируем кеш заболевания
+        if (guideline && guideline.diseaseId) {
+            CacheService.invalidate('diseases', `id_${guideline.diseaseId}`);
+        }
+
+        return guideline;
+    }));
+
     ipcMain.handle('diseases:delete-guideline', ensureAuthenticated(async (_, guidelineId) => {
         const guideline = await DiseaseService.deleteGuideline(guidelineId);
         logAudit('GUIDELINE_DELETED', { guidelineId });

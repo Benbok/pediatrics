@@ -8,6 +8,9 @@ const setupVisitHandlers = () => {
         const visits = await VisitService.listForChild(childId);
         return visits.map(v => ({
             ...v,
+            createdAt: v.createdAt?.toISOString(),
+            updatedAt: v.updatedAt?.toISOString(),
+            visitDate: typeof v.visitDate === 'string' ? v.visitDate : v.visitDate?.toISOString()?.split('T')[0],
             complicationIds: JSON.parse(v.complicationIds || '[]'),
             comorbidityIds: JSON.parse(v.comorbidityIds || '[]'),
             prescriptions: JSON.parse(v.prescriptions || '[]'),
@@ -19,6 +22,9 @@ const setupVisitHandlers = () => {
         if (!visit) return null;
         return {
             ...visit,
+            createdAt: visit.createdAt?.toISOString(),
+            updatedAt: visit.updatedAt?.toISOString(),
+            visitDate: typeof visit.visitDate === 'string' ? visit.visitDate : visit.visitDate?.toISOString()?.split('T')[0],
             complicationIds: JSON.parse(visit.complicationIds || '[]'),
             comorbidityIds: JSON.parse(visit.comorbidityIds || '[]'),
             prescriptions: JSON.parse(visit.prescriptions || '[]'),

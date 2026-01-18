@@ -5,7 +5,7 @@ import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
-import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload } from 'lucide-react';
+import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload, Edit3, Check, X } from 'lucide-react';
 
 interface GuidelinesListProps {
     diseaseId: number;
@@ -24,6 +24,9 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [editingTitle, setEditingTitle] = useState('');
+    const [isUpdating, setIsUpdating] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; guidelineId: number | null }>({
         isOpen: false,
         guidelineId: null
@@ -60,7 +63,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
         const guidelineId = confirmDelete.guidelineId;
         setConfirmDelete({ isOpen: false, guidelineId: null });
         setDeletingId(guidelineId);
-        
+
         try {
             await window.electronAPI.deleteGuideline(guidelineId);
             await loadGuidelines();
@@ -91,6 +94,37 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
         });
     };
 
+    const cleanTitle = (title: string) => {
+        return title.replace(/^Клинические рекомендации:\s*/, '');
+    };
+
+    const handleStartEdit = (guideline: ClinicalGuideline) => {
+        setEditingId(guideline.id);
+        setEditingTitle(cleanTitle(guideline.title));
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setEditingTitle('');
+    };
+
+    const handleSaveEdit = async (guidelineId: number) => {
+        if (!editingTitle.trim()) return;
+
+        setIsUpdating(true);
+        try {
+            await diseaseService.updateGuideline(guidelineId, editingTitle);
+            await loadGuidelines();
+            setEditingId(null);
+            setEditingTitle('');
+        } catch (error) {
+            console.error('Failed to update guideline name:', error);
+            alert('Ошибка при обновлении названия файла');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
     const handleFileUpload = async () => {
         try {
             const result = await window.electronAPI.openFile({
@@ -100,7 +134,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
 
             if (!result.canceled && result.filePaths.length > 0) {
                 setIsUploading(true);
-                
+
                 try {
                     // Если выбран один файл - используем старый метод, если несколько - batch
                     if (result.filePaths.length === 1) {
@@ -111,7 +145,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                             alert(`Загружено ${batchResult.success.length} из ${result.filePaths.length} файлов. Ошибки: ${batchResult.errors.map(e => e.path).join(', ')}`);
                         }
                     }
-                    
+
                     // Перезагружаем список файлов
                     await loadGuidelines();
                 } catch (error: any) {
@@ -176,11 +210,10 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                 return (
                     <Card
                         key={guideline.id}
-                        className={`p-4 rounded-2xl border-2 transition-all ${
-                            isSelected
+                        className={`p-4 rounded-2xl border-2 transition-all ${isSelected
                                 ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20'
                                 : 'border-slate-100 dark:border-slate-800 hover:border-primary-300'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-start justify-between gap-4">
                             <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -188,15 +221,58 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                                     <FileText className="w-5 h-5 text-slate-600 dark:text-slate-400" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-slate-800 dark:text-white mb-1 truncate">
-                                        {guideline.title}
-                                    </div>
+                                    {editingId === guideline.id ? (
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <input
+                                                type="text"
+                                                value={editingTitle}
+                                                onChange={(e) => setEditingTitle(e.target.value)}
+                                                className="flex-1 px-2 py-1 text-sm font-bold border-2 border-primary-500 rounded-lg outline-none bg-white dark:bg-slate-900"
+                                                autoFocus
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleSaveEdit(guideline.id);
+                                                    if (e.key === 'Escape') handleCancelEdit();
+                                                }}
+                                            />
+                                            <Button
+                                                variant="primary"
+                                                size="sm"
+                                                onClick={() => handleSaveEdit(guideline.id)}
+                                                isLoading={isUpdating}
+                                                className="h-8 w-8 p-0 rounded-lg"
+                                            >
+                                                <Check className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={handleCancelEdit}
+                                                disabled={isUpdating}
+                                                className="h-8 w-8 p-0 rounded-lg"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 mb-1 group/title">
+                                            <div className="font-bold text-slate-800 dark:text-white truncate">
+                                                {cleanTitle(guideline.title)}
+                                            </div>
+                                            <button
+                                                onClick={() => handleStartEdit(guideline)}
+                                                className="opacity-0 group-hover/title:opacity-100 transition-opacity p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 hover:text-primary-500"
+                                                title="Переименовать"
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
                                     <div className="flex items-center gap-3 text-xs text-slate-500 mb-2">
                                         <div className="flex items-center gap-1">
                                             <Calendar className="w-3 h-3" />
                                             {formatDate(guideline.createdAt)}
                                         </div>
-                                        {guideline.source && (
+                                        {guideline.source && guideline.source !== 'Минздрав РФ' && (
                                             <Badge variant="outline" size="sm" className="text-[10px]">
                                                 {guideline.source}
                                             </Badge>
@@ -261,7 +337,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                     </Card>
                 );
             })}
-            
+
             <ConfirmDialog
                 isOpen={confirmDelete.isOpen}
                 title="Удаление файла"

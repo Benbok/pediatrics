@@ -114,6 +114,18 @@ export const diseaseService = {
     },
 
     /**
+     * Update a guideline (rename)
+     */
+    async updateGuideline(guidelineId: number, title: string): Promise<ClinicalGuideline> {
+        try {
+            return await window.electronAPI.updateGuideline(guidelineId, { title });
+        } catch (error) {
+            console.error('[DiseaseService] Failed to update guideline:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Delete a guideline
      */
     async deleteGuideline(guidelineId: number): Promise<boolean> {

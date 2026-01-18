@@ -31,10 +31,11 @@ export const VisitSchema = z.object({
     prescriptions: z.array(z.any()).default([]),
     recommendations: z.string().nullable().optional(),
     status: z.enum(['draft', 'completed'], {
-        errorMap: () => ({ message: 'Статус должен быть "draft" или "completed"' })
+        message: 'Статус должен быть "draft" или "completed"'
     }),
     notes: z.string().nullable().optional(),
     createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
 });
 
 export type VisitInput = z.infer<typeof VisitSchema>;

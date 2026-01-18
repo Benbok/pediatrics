@@ -339,10 +339,10 @@ export interface PediatricDosingRule {
   infusion?: any | null;
 }
 
-export interface AdultDosingRule extends PediatricDosingRule {}
+export interface AdultDosingRule extends PediatricDosingRule { }
 
 // Расширяем enum для путей введения
-export type RouteOfAdmin = 
+export type RouteOfAdmin =
   | 'oral'           // Перорально
   | 'rectal'         // Ректально
   | 'iv_bolus'       // В/В болюсно
@@ -413,6 +413,7 @@ export interface Visit {
   status: 'draft' | 'completed';
   notes?: string | null;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface DiagnosisSuggestion {
@@ -547,9 +548,21 @@ declare global {
       deleteDisease: (id: number) => Promise<boolean>;
       uploadGuideline: (diseaseId: number, pdfPath: string) => Promise<ClinicalGuideline>;
       uploadGuidelinesBatch: (diseaseId: number, pdfPaths: string[]) => Promise<{ success: ClinicalGuideline[]; errors: Array<{ path: string; error: string }> | null }>;
+      updateGuideline: (id: number, data: Partial<ClinicalGuideline>) => Promise<ClinicalGuideline>;
       deleteGuideline: (guidelineId: number) => Promise<boolean>;
       searchDiseases: (symptoms: string[]) => Promise<Disease[]>;
       getGuidelinePlan: (diseaseId: number) => Promise<GuidelinePlan>;
+      importDiseaseFromJson: (jsonString: string) => Promise<{
+        success: boolean;
+        data?: Disease;
+        validation?: {
+          isValid: boolean;
+          errors: any[];
+          warnings: any[];
+          needsReview: boolean;
+        };
+        error?: string;
+      }>;
 
       // Disease Notes (Personal or Shared)
       getDiseaseNotes: (diseaseId: number) => Promise<DiseaseNote[]>;
@@ -591,16 +604,16 @@ declare global {
         duplicate?: Medication | null;
         error?: string;
       }>;
-      importFromVidal: (url: string) => Promise<{ 
-        success: boolean; 
-        data?: Medication; 
+      importFromVidal: (url: string) => Promise<{
+        success: boolean;
+        data?: Medication;
         validation?: {
           isValid: boolean;
           errors: any[];
           warnings: any[];
           needsReview: boolean;
         };
-        error?: string 
+        error?: string
       }>;
       importFromJson: (jsonString: string) => Promise<{
         success: boolean;

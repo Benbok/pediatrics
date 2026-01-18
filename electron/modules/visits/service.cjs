@@ -5,6 +5,7 @@ const { calculateBMI, calculateBSA, validateAnthropometry } = require('../../uti
 const { normalizeText, normalizeContraindicationsText } = require('../../utils/cdssVocabulary.cjs');
 const { parseComplaints, rankDiagnoses } = require('../../services/cdssService.cjs');
 const { DiseaseService } = require('../diseases/service.cjs');
+const { decrypt } = require('../../crypto.cjs');
 
 /**
  * Безопасный парсинг JSON полей
@@ -13,7 +14,7 @@ function safeJsonParse(value, defaultValue = []) {
     if (!value || value === null) return defaultValue;
     if (typeof value !== 'string') return defaultValue;
     if (value.trim() === '') return defaultValue;
-    
+
     try {
         return JSON.parse(value);
     } catch (error) {
@@ -174,8 +175,8 @@ const VisitService = {
             // Рассчитываем возраст
             const birthDate = new Date(child.birthDate);
             const now = new Date();
-            const ageMonths = (now.getFullYear() - birthDate.getFullYear()) * 12 + 
-                            (now.getMonth() - birthDate.getMonth());
+            const ageMonths = (now.getFullYear() - birthDate.getFullYear()) * 12 +
+                (now.getMonth() - birthDate.getMonth());
 
             // 2. Парсим жалобы через Gemini
             logger.info(`[VisitService] Parsing complaints for visit ${visitId}`);
@@ -193,7 +194,7 @@ const VisitService = {
             // 3. Semantic search по симптомам (получаем топ-20 кандидатов)
             logger.info(`[VisitService] Searching diseases by symptoms: ${parsed.symptoms.join(', ')}`);
             const candidateDiseases = await DiseaseService.searchBySymptoms(parsed.symptoms);
-            
+
             if (candidateDiseases.length === 0) {
                 logger.warn('[VisitService] No diseases found for symptoms');
                 return [];
@@ -215,15 +216,22 @@ const VisitService = {
             );
 
             // 5. Формируем результат с полными данными заболеваний
+            logger.info(`[VisitService] Mapping ${rankings.length} rankings to diseases`);
+            logger.debug(`[VisitService] Available candidate IDs: ${topCandidates.map(d => d.id).join(', ')}`);
+            logger.debug(`[VisitService] Ranking disease IDs: ${rankings.map(r => r.diseaseId).join(', ')}`);
+
             const suggestions = rankings.map(ranking => {
                 const disease = topCandidates.find(d => d.id === ranking.diseaseId);
-                if (!disease) return null;
+                if (!disease) {
+                    logger.warn(`[VisitService] Disease ID ${ranking.diseaseId} not found in candidates`);
+                    return null;
+                }
 
                 return {
                     disease: {
                         ...disease,
-                        symptoms: Array.isArray(disease.symptoms) 
-                            ? disease.symptoms 
+                        symptoms: Array.isArray(disease.symptoms)
+                            ? disease.symptoms
                             : JSON.parse(disease.symptoms || '[]'),
                         icd10Codes: Array.isArray(disease.icd10Codes)
                             ? disease.icd10Codes
@@ -305,9 +313,17 @@ const VisitService = {
         });
 
         // Рассчитываем возраст
-        const birthDate = new Date(child.birthDate);
+        if (!child.birthDate) {
+            throw new Error(`У ребенка (id=${childId}) не указана дата рождения`);
+        }
+
+        // Дешифруем дату рождения (в БД хранится в зашифрованном виде)
+        const birthDate = decrypt(child.birthDate); // Decrypts "hash..." to "YYYY-MM-DD"
         const now = new Date();
-        const ageMonths = calculateAgeInMonths(child.birthDate, now);
+
+        logger.info(`[VisitService] Calculating age for child ${childId}, birthDate: ${birthDate}`);
+
+        const ageMonths = calculateAgeInMonths(birthDate, now);
 
         // Получаем ICD-10 коды заболевания
         const icd10Codes = safeJsonParse(disease.icd10Codes, []);

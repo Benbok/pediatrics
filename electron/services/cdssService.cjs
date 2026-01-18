@@ -136,7 +136,7 @@ function _callGeminiAPIWithKey(apiKey, prompt, systemInstruction = null) {
  */
 async function callGeminiAPI(prompt, systemInstruction = null) {
     const manager = getApiKeyManager();
-    
+
     // Используем apiKeyManager с ротацией, если доступен
     if (manager) {
         try {
@@ -185,7 +185,7 @@ ${childWeight ? `Вес ребенка: ${childWeight} кг` : ''}
 
     try {
         const response = await callGeminiAPI(prompt);
-        
+
         // Извлекаем JSON из ответа (может быть обернут в markdown)
         let jsonText = response.trim();
         if (jsonText.startsWith('```json')) {
@@ -195,7 +195,7 @@ ${childWeight ? `Вес ребенка: ${childWeight} кг` : ''}
         }
 
         const parsed = JSON.parse(jsonText);
-        
+
         if (!parsed.symptoms || !Array.isArray(parsed.symptoms)) {
             throw new Error('Invalid response format: symptoms array not found');
         }
@@ -231,42 +231,51 @@ async function rankDiagnoses(symptoms, diseases, patientContext = {}) {
     }
 
     const symptomsText = symptoms.join(', ');
-    const ageText = patientContext.ageMonths 
-        ? `${patientContext.ageMonths} месяцев` 
+    const ageText = patientContext.ageMonths
+        ? `${patientContext.ageMonths} месяцев`
         : 'возраст не указан';
 
-    const diseasesList = diseases.map((d, idx) => {
+    // Формируем список кандидатов в JSON формате для более надежного парсинга
+    const diseasesList = diseases.map((d) => {
         const dSymptoms = Array.isArray(d.symptoms) ? d.symptoms : JSON.parse(d.symptoms || '[]');
-        return `${idx + 1}. ${d.nameRu} (${d.icd10Code}): ${dSymptoms.join(', ')}`;
-    }).join('\n');
+        return {
+            id: d.id,
+            name: d.nameRu,
+            icd10: d.icd10Code,
+            symptoms: dSymptoms
+        };
+    });
 
     const prompt = `На основе симптомов оцени вероятность каждого диагноза для ребенка.
 
-Симптомы: ${symptomsText}
+Симптомы пациента: ${symptomsText}
 Возраст: ${ageText}
 ${patientContext.weight ? `Вес: ${patientContext.weight} кг` : ''}
 ${patientContext.height ? `Рост: ${patientContext.height} см` : ''}
 
-Кандидаты:
-${diseasesList}
+Список кандидатов (JSON):
+${JSON.stringify(diseasesList, null, 2)}
 
-Верни ТОЛЬКО валидный JSON массив без каких-либо пояснений и markdown-разметки:
+Верни ТОЛЬКО валидный JSON массив без каких-либо пояснений и markdown-разметки.
+Для каждого диагноза укажи его id (число из поля "id" выше), confidence (от 0.0 до 1.0), 
+reasoning (краткое объяснение на русском) и matchedSymptoms (массив совпавших симптомов).
+
+Пример ответа:
 [
   {
-    "diseaseId": 1,
+    "diseaseId": 42,
     "confidence": 0.85,
-    "reasoning": "Краткое объяснение высокой уверенности",
-    "matchedSymptoms": ["симптом1", "симптом2"]
+    "reasoning": "Симптомы соответствуют клинической картине",
+    "matchedSymptoms": ["лихорадка", "кашель"]
   }
 ]
 
-confidence должен быть от 0.0 до 1.0 (где 1.0 = полная уверенность).
-reasoning - краткое объяснение на русском языке (1-2 предложения).
-matchedSymptoms - массив симптомов, которые совпали с заболеванием.`;
+ВАЖНО: diseaseId должен быть числом из поля "id" кандидата, например 42, а не строкой и не null.`;
 
     try {
         const response = await callGeminiAPI(prompt);
-        
+        logger.info('[CDSSService] Raw AI response (first 500 chars):', response.substring(0, 500));
+
         // Извлекаем JSON из ответа
         let jsonText = response.trim();
         if (jsonText.startsWith('```json')) {
@@ -275,33 +284,55 @@ matchedSymptoms - массив симптомов, которые совпали
             jsonText = jsonText.replace(/```\n?/g, '').trim();
         }
 
+        logger.info('[CDSSService] Extracted JSON:', jsonText.substring(0, 500));
+
         const rankings = JSON.parse(jsonText);
-        
+        logger.info(`[CDSSService] Parsed rankings array, length: ${rankings?.length || 0}`);
+
         if (!Array.isArray(rankings)) {
             throw new Error('Invalid response format: expected array');
         }
 
         // Валидация и нормализация
         const validated = rankings
-            .map(r => ({
-                diseaseId: Number(r.diseaseId),
-                confidence: Math.max(0, Math.min(1, Number(r.confidence) || 0)),
-                reasoning: r.reasoning || 'Нет объяснения',
-                matchedSymptoms: Array.isArray(r.matchedSymptoms) ? r.matchedSymptoms : []
-            }))
-            .filter(r => r.diseaseId && !isNaN(r.diseaseId))
+            .map((r, idx) => {
+                const diseaseId = Number(r.diseaseId);
+                const isValid = diseaseId && !isNaN(diseaseId);
+
+                if (!isValid) {
+                    logger.warn(`[CDSSService] Invalid diseaseId at index ${idx}:`, r.diseaseId);
+                }
+
+                return {
+                    diseaseId,
+                    confidence: Math.max(0, Math.min(1, Number(r.confidence) || 0)),
+                    reasoning: r.reasoning || 'Нет объяснения',
+                    matchedSymptoms: Array.isArray(r.matchedSymptoms) ? r.matchedSymptoms : []
+                };
+            })
+            .filter(r => {
+                const isValid = r.diseaseId && !isNaN(r.diseaseId);
+                if (!isValid) {
+                    logger.warn(`[CDSSService] Filtered out invalid result:`, r);
+                }
+                return isValid;
+            })
             .sort((a, b) => b.confidence - a.confidence)
             .slice(0, 5); // Топ-5
 
-        logger.info(`[CDSSService] Ranked ${validated.length} diagnoses`);
+        logger.info(`[CDSSService] Ranked ${validated.length} diagnoses (from ${rankings.length} raw results)`);
+        if (validated.length > 0) {
+            logger.debug('[CDSSService] Top result:', validated[0]);
+        }
         return validated;
 
     } catch (error) {
         logger.error('[CDSSService] Failed to rank diagnoses:', error);
+        logger.error('[CDSSService] Error stack:', error.stack);
         // Fallback: простое ранжирование по количеству совпавших симптомов
         return diseases.map((d, idx) => {
             const dSymptoms = Array.isArray(d.symptoms) ? d.symptoms : JSON.parse(d.symptoms || '[]');
-            const matched = symptoms.filter(s => 
+            const matched = symptoms.filter(s =>
                 dSymptoms.some(ds => ds.toLowerCase().includes(s.toLowerCase()))
             );
             return {
@@ -311,8 +342,8 @@ matchedSymptoms - массив симптомов, которые совпали
                 matchedSymptoms: matched
             };
         })
-        .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, 5);
+            .sort((a, b) => b.confidence - a.confidence)
+            .slice(0, 5);
     }
 }
 
