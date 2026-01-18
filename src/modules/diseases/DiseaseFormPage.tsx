@@ -21,8 +21,11 @@ import {
     CheckCircle2,
     FileUp,
     Sparkles,
-    Trash2
+    Trash2,
+    Copy,
+    Eye
 } from 'lucide-react';
+import DISEASE_JSON_TEMPLATE from './templates/diseaseJsonTemplate.json';
 
 export const DiseaseFormPage: React.FC = () => {
     const { id } = useParams<{ id?: string }>();
@@ -44,6 +47,20 @@ export const DiseaseFormPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    // JSON Import states
+    const [showImportDialog, setShowImportDialog] = useState(false);
+    const [jsonText, setJsonText] = useState('');
+    const [jsonError, setJsonError] = useState<string | null>(null);
+    const [isImporting, setIsImporting] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewData, setPreviewData] = useState<Disease | null>(null);
+    const [validationResult, setValidationResult] = useState<{
+        isValid: boolean;
+        errors: any[];
+        warnings: any[];
+        needsReview: boolean;
+    } | null>(null);
 
     useEffect(() => {
         if (isEdit) {
@@ -265,6 +282,91 @@ export const DiseaseFormPage: React.FC = () => {
         }
     };
 
+    // Валидация JSON в реальном времени
+    useEffect(() => {
+        if (jsonText.trim()) {
+            try {
+                JSON.parse(jsonText);
+                setJsonError(null);
+            } catch (err: any) {
+                setJsonError(err.message || 'Неверный формат JSON');
+            }
+        } else {
+            setJsonError(null);
+        }
+    }, [jsonText]);
+
+    const handleCopyTemplate = () => {
+        const templateStr = JSON.stringify(DISEASE_JSON_TEMPLATE, null, 2);
+        navigator.clipboard.writeText(templateStr).then(() => {
+            setJsonText(templateStr);
+            setError(null);
+        }).catch(() => {
+            setError('Не удалось скопировать шаблон');
+        });
+    };
+
+    const handleImportFromJson = async () => {
+        if (!jsonText.trim()) {
+            setError('Вставьте JSON данные');
+            return;
+        }
+        
+        if (jsonError) {
+            setError('Исправьте ошибки в JSON перед импортом');
+            return;
+        }
+        
+        setIsImporting(true);
+        setError(null);
+        
+        try {
+            const result = await diseaseService.importFromJson(jsonText);
+            
+            if (result.success && result.data) {
+                // Сохранить результаты валидации
+                if (result.validation) {
+                    setValidationResult(result.validation);
+                }
+                
+                // Показать предпросмотр
+                setPreviewData(result.data);
+                setShowPreview(true);
+                setShowImportDialog(false);
+            } else {
+                setError(result.error || 'Не удалось импортировать данные');
+            }
+        } catch (err: any) {
+            setError(err.message || 'Произошла ошибка при импорте');
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    const handleConfirmImport = () => {
+        // Если есть критичные ошибки - вернуться к редактированию JSON
+        if (validationResult && !validationResult.isValid) {
+            setShowPreview(false);
+            setShowImportDialog(true);
+            // Восстанавливаем JSON для редактирования
+            if (previewData) {
+                setJsonText(JSON.stringify(previewData, null, 2));
+            }
+            return;
+        }
+        
+        if (previewData) {
+            setFormData({
+                ...formData,
+                ...previewData,
+            });
+            setShowPreview(false);
+            setPreviewData(null);
+            setValidationResult(null);
+            setJsonText('');
+        }
+    };
+
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
@@ -288,16 +390,27 @@ export const DiseaseFormPage: React.FC = () => {
                         </Button>
                     )}
                     {!isEdit && (
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={handlePdfImport}
-                            isLoading={isParsing}
-                            className="h-12 px-6 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-purple-200 hover:border-purple-400 transition-all shadow-sm font-bold"
-                        >
-                            <Sparkles className="w-5 h-5 mr-2 text-purple-600" />
-                            {isParsing ? 'Парсинг...' : 'Импорт из PDF'}
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={handlePdfImport}
+                                isLoading={isParsing}
+                                className="h-12 px-6 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-purple-200 hover:border-purple-400 transition-all shadow-sm font-bold"
+                            >
+                                <Sparkles className="w-5 h-5 mr-2 text-purple-600" />
+                                {isParsing ? 'Парсинг...' : 'Импорт из PDF'}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setShowImportDialog(true)}
+                                className="h-12 px-6 rounded-xl bg-gradient-to-r from-blue-50 to-teal-50 dark:from-blue-900/20 dark:to-teal-900/20 border-blue-200 hover:border-blue-400 transition-all shadow-sm font-bold"
+                            >
+                                <FileText className="w-5 h-5 mr-2 text-blue-600" />
+                                Импорт из JSON
+                            </Button>
+                        </div>
                     )}
                 </div>
             </div>
@@ -503,6 +616,240 @@ export const DiseaseFormPage: React.FC = () => {
                 onConfirm={handleDeleteConfirm}
                 onCancel={() => setShowDeleteConfirm(false)}
             />
+
+            {/* Диалог импорта из JSON */}
+            {showImportDialog && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <Card className="p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        <h2 className="text-xl font-bold mb-4">Импорт заболевания из JSON</h2>
+                        
+                        <div className="flex gap-2 mb-2">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={handleCopyTemplate}
+                                className="text-xs"
+                            >
+                                <Copy className="w-3 h-3 mr-1" />
+                                Скопировать шаблон
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => {
+                                    setJsonText('');
+                                    setJsonError(null);
+                                }}
+                                className="text-xs"
+                            >
+                                <X className="w-3 h-3 mr-1" />
+                                Очистить
+                            </Button>
+                        </div>
+                        
+                        <textarea
+                            value={jsonText}
+                            onChange={e => setJsonText(e.target.value)}
+                            placeholder="Вставьте JSON данные заболевания здесь..."
+                            className={`w-full h-64 p-3 rounded-xl border-2 font-mono text-sm ${
+                                jsonError
+                                    ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
+                                    : jsonText && !jsonError
+                                    ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
+                                    : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
+                            }`}
+                        />
+                        
+                        {jsonError && (
+                            <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                                <p className="text-xs text-red-600 dark:text-red-400 font-bold">
+                                    Ошибка JSON: {jsonError}
+                                </p>
+                            </div>
+                        )}
+                        
+                        {jsonText && !jsonError && (
+                            <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                <p className="text-xs text-green-600 dark:text-green-400 font-bold">
+                                    ✓ JSON валиден
+                                </p>
+                            </div>
+                        )}
+                        
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-4">
+                            Вставьте JSON данные заболевания. Используйте кнопку "Скопировать шаблон" для получения примера структуры.
+                        </p>
+                        
+                        <div className="flex gap-3 mt-6">
+                            <Button
+                                variant="primary"
+                                onClick={handleImportFromJson}
+                                isLoading={isImporting}
+                                disabled={!jsonText.trim() || !!jsonError}
+                            >
+                                Импортировать
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                onClick={() => {
+                                    setShowImportDialog(false);
+                                    setJsonText('');
+                                    setJsonError(null);
+                                }}
+                            >
+                                Отмена
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
+
+            {/* Предпросмотр импорта */}
+            {showPreview && previewData && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <Card className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900">
+                            <div className="flex items-center gap-3 mb-2">
+                                <Eye className="w-6 h-6 text-primary-500" />
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    Предпросмотр импорта
+                                </h2>
+                            </div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                Проверьте данные перед добавлением в базу
+                            </p>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            {/* Основная информация */}
+                            <div>
+                                <h3 className="text-lg font-bold mb-3">Основная информация</h3>
+                                <div className="space-y-2">
+                                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                                        <div className="text-xs font-bold text-slate-500 uppercase">Название (RU)</div>
+                                        <div className="text-sm text-slate-900 dark:text-white">{previewData.nameRu || 'Не заполнено'}</div>
+                                    </div>
+                                    {previewData.nameEn && (
+                                        <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                                            <div className="text-xs font-bold text-slate-500 uppercase">Название (EN)</div>
+                                            <div className="text-sm text-slate-900 dark:text-white">{previewData.nameEn}</div>
+                                        </div>
+                                    )}
+                                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                                        <div className="text-xs font-bold text-slate-500 uppercase">Код МКБ-10</div>
+                                        <div className="text-sm text-slate-900 dark:text-white font-mono">{previewData.icd10Code || 'Не заполнено'}</div>
+                                    </div>
+                                    {previewData.icd10Codes && previewData.icd10Codes.length > 0 && (
+                                        <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                                            <div className="text-xs font-bold text-slate-500 uppercase mb-2">Все коды МКБ-10</div>
+                                            <div className="flex flex-wrap gap-1">
+                                                {previewData.icd10Codes.map((code, idx) => (
+                                                    <Badge key={idx} variant="outline" className="font-mono">{code}</Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                                        <div className="text-xs font-bold text-slate-500 uppercase">Описание</div>
+                                        <div className="text-sm text-slate-900 dark:text-white whitespace-pre-wrap">{previewData.description || 'Не заполнено'}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Симптомы */}
+                            {previewData.symptoms && previewData.symptoms.length > 0 && (
+                                <div>
+                                    <h3 className="text-lg font-bold mb-3">Симптомы</h3>
+                                    <div className="flex flex-wrap gap-2">
+                                        {previewData.symptoms.map((symptom, idx) => (
+                                            <Badge key={idx} variant="primary">{symptom}</Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Ошибки валидации */}
+                            {validationResult && validationResult.errors.length > 0 && (
+                                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                                    <h4 className="font-bold text-red-700 dark:text-red-300 mb-2">
+                                        ❌ Ошибки ({validationResult.errors.length})
+                                    </h4>
+                                    <ul className="space-y-1">
+                                        {validationResult.errors.map((err, idx) => (
+                                            <li key={idx} className="text-sm text-red-600 dark:text-red-400">
+                                                <strong>{err.field}:</strong> {err.message}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {/* Предупреждения */}
+                            {validationResult && validationResult.warnings.length > 0 && (
+                                <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl">
+                                    <h4 className="font-bold text-orange-700 dark:text-orange-300 mb-2">
+                                        ⚠️ Предупреждения ({validationResult.warnings.length})
+                                    </h4>
+                                    <ul className="space-y-1">
+                                        {validationResult.warnings.map((warn, idx) => (
+                                            <li key={idx} className={`text-sm ${
+                                                warn.severity === 'high' ? 'text-orange-700' : 'text-orange-600'
+                                            } dark:text-orange-400`}>
+                                                <strong>{warn.field}:</strong> {warn.message}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                            
+                            <div className="mt-4 p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                                <p className="text-sm text-orange-800 dark:text-orange-200">
+                                    💡 <strong>Внимание:</strong> Обязательно проверьте все значения перед сохранением!
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-slate-200 dark:border-slate-800 flex gap-3">
+                            {validationResult && !validationResult.isValid ? (
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => {
+                                        setShowPreview(false);
+                                        setShowImportDialog(true);
+                                        if (previewData) {
+                                            setJsonText(JSON.stringify(previewData, null, 2));
+                                        }
+                                    }}
+                                    className="flex-1"
+                                >
+                                    Вернуться к редактированию
+                                </Button>
+                            ) : (
+                                <>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => {
+                                            setShowPreview(false);
+                                            setPreviewData(null);
+                                            setValidationResult(null);
+                                        }}
+                                    >
+                                        Отмена
+                                    </Button>
+                                    <Button
+                                        variant="primary"
+                                        onClick={handleConfirmImport}
+                                        className="flex-1"
+                                    >
+                                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                                        Подтвердить и заполнить форму
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 };

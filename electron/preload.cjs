@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteGuideline: (guidelineId) => ipcRenderer.invoke('diseases:delete-guideline', guidelineId),
     searchDiseases: (symptoms) => ipcRenderer.invoke('diseases:search', symptoms),
     parsePdfOnly: (pdfPath) => ipcRenderer.invoke('diseases:parse-pdf-only', pdfPath),
+    importDiseaseFromJson: (jsonString) => ipcRenderer.invoke('diseases:importFromJson', jsonString),
 
     // Disease Notes
     getDiseaseNotes: (diseaseId) => ipcRenderer.invoke('diseases:notes-list', diseaseId),

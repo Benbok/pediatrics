@@ -111,5 +111,30 @@ export const diseaseService = {
             console.error('[DiseaseService] Search failed:', error);
             throw error;
         }
+    },
+
+    /**
+     * Import disease from JSON string
+     */
+    async importFromJson(jsonString: string): Promise<{
+        success: boolean;
+        data?: Disease;
+        validation?: {
+            isValid: boolean;
+            errors: any[];
+            warnings: any[];
+            needsReview: boolean;
+        };
+        error?: string;
+    }> {
+        try {
+            return await window.electronAPI.importDiseaseFromJson(jsonString);
+        } catch (error: any) {
+            console.error('[DiseaseService] Failed to import from JSON', { error });
+            return {
+                success: false,
+                error: error.message || 'Не удалось импортировать данные из JSON'
+            };
+        }
     }
 };
