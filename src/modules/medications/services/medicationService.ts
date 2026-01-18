@@ -1,5 +1,7 @@
 import { Medication } from '../../../types';
 import { dataEvents } from '../../../services/dataEvents';
+import { MedicationSchema, CalculateDoseSchema, LinkMedicationToDiseaseSchema } from '../../../validators/medication.validator';
+import { logger } from '../../../services/logger';
 
 export const medicationService = {
     /**
@@ -9,7 +11,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.getMedications();
         } catch (error) {
-            console.error('[MedicationService] Failed to fetch medications:', error);
+            logger.error('[MedicationService] Failed to fetch medications', { error });
             throw error;
         }
     },
@@ -21,7 +23,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.getMedication(id);
         } catch (error) {
-            console.error('[MedicationService] Failed to fetch medication details:', error);
+            logger.error('[MedicationService] Failed to fetch medication details', { error, medicationId: id });
             throw error;
         }
     },
@@ -30,14 +32,21 @@ export const medicationService = {
      * Create or update a medication
      */
     async upsertMedication(data: Medication, source: 'manual' | 'vidal_import' = 'manual'): Promise<Medication> {
+        // Validate data using Zod
+        const validation = MedicationSchema.safeParse(data);
+        if (!validation.success) {
+            const errorMsg = validation.error.issues.map(i => i.message).join(', ');
+            throw new Error(`Ошибка валидации: ${errorMsg}`);
+        }
+
         try {
-            const result = await window.electronAPI.upsertMedication(data, source);
+            const result = await window.electronAPI.upsertMedication(validation.data as Medication, source);
             // Уведомляем об изменении данных для инвалидации кеша
             dataEvents.notifyUpdated('medications', result.id);
             return result;
-        } catch (error) {
-            console.error('[MedicationService] Failed to save medication:', error);
-            throw error;
+        } catch (error: any) {
+            logger.error('[MedicationService] Failed to save medication', { error, medicationData: data });
+            throw new Error(error.message || 'Ошибка при сохранении препарата');
         }
     },
 
@@ -51,7 +60,7 @@ export const medicationService = {
             dataEvents.notifyDeleted('medications', id);
             return result;
         } catch (error) {
-            console.error('[MedicationService] Failed to delete medication:', error);
+            logger.error('[MedicationService] Failed to delete medication', { error, medicationId: id });
             throw error;
         }
     },
@@ -60,11 +69,18 @@ export const medicationService = {
      * Calculate dosage for child
      */
     async calculateDose(medicationId: number, weight: number, ageMonths: number, height?: number | null): Promise<any> {
+        // Validate input using Zod
+        const validation = CalculateDoseSchema.safeParse({ medicationId, weight, ageMonths, height });
+        if (!validation.success) {
+            const errorMsg = validation.error.issues.map(i => i.message).join(', ');
+            throw new Error(`Ошибка валидации: ${errorMsg}`);
+        }
+
         try {
-            return await window.electronAPI.calculateDose({ medicationId, weight, ageMonths, height: height || null });
-        } catch (error) {
-            console.error('[MedicationService] Dose calculation failed:', error);
-            throw error;
+            return await window.electronAPI.calculateDose(validation.data);
+        } catch (error: any) {
+            logger.error('[MedicationService] Dose calculation failed', { error, medicationId, weight, ageMonths, height });
+            throw new Error(error.message || 'Ошибка при расчете дозировки');
         }
     },
 
@@ -72,11 +88,18 @@ export const medicationService = {
      * Link medication to a disease
      */
     async linkToDisease(data: { diseaseId: number; medicationId: number; priority?: number; dosing?: string; duration?: string }): Promise<any> {
+        // Validate input using Zod
+        const validation = LinkMedicationToDiseaseSchema.safeParse(data);
+        if (!validation.success) {
+            const errorMsg = validation.error.issues.map(i => i.message).join(', ');
+            throw new Error(`Ошибка валидации: ${errorMsg}`);
+        }
+
         try {
-            return await window.electronAPI.linkMedicationToDisease(data);
-        } catch (error) {
-            console.error('[MedicationService] Linking to disease failed:', error);
-            throw error;
+            return await window.electronAPI.linkMedicationToDisease(validation.data);
+        } catch (error: any) {
+            logger.error('[MedicationService] Linking to disease failed', { error, linkData: data });
+            throw new Error(error.message || 'Ошибка при связи препарата с заболеванием');
         }
     },
 
@@ -87,7 +110,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.getMedicationsByDisease(diseaseId);
         } catch (error) {
-            console.error('[MedicationService] Failed to fetch medications for disease:', error);
+            logger.error('[MedicationService] Failed to fetch medications for disease', { error, diseaseId });
             throw error;
         }
     },
@@ -104,7 +127,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.checkDuplicateMedication(nameRu, excludeId);
         } catch (error) {
-            console.error('[MedicationService] Failed to check duplicate:', error);
+            logger.error('[MedicationService] Failed to check duplicate', { error, nameRu, excludeId });
             throw error;
         }
     },
@@ -126,7 +149,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.importFromVidal(url);
         } catch (error: any) {
-            console.error('[MedicationService] Failed to import from Vidal:', error);
+            logger.error('[MedicationService] Failed to import from Vidal', { error, url });
             return {
                 success: false,
                 error: error.message || 'Не удалось импортировать данные'
@@ -151,7 +174,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.importFromJson(jsonString);
         } catch (error: any) {
-            console.error('[MedicationService] Failed to import from JSON:', error);
+            logger.error('[MedicationService] Failed to import from JSON', { error });
             return {
                 success: false,
                 error: error.message || 'Не удалось импортировать данные из JSON'
@@ -166,7 +189,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.getPharmacologicalGroups();
         } catch (error) {
-            console.error('[MedicationService] Failed to get groups:', error);
+            logger.error('[MedicationService] Failed to get groups', { error });
             throw error;
         }
     },
@@ -178,7 +201,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.getFormTypes();
         } catch (error) {
-            console.error('[MedicationService] Failed to get form types:', error);
+            logger.error('[MedicationService] Failed to get form types', { error });
             throw error;
         }
     },
@@ -190,7 +213,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.searchMedicationsByGroup(groupName);
         } catch (error) {
-            console.error('[MedicationService] Failed to search by group:', error);
+            logger.error('[MedicationService] Failed to search by group', { error, groupName });
             throw error;
         }
     },
@@ -205,7 +228,7 @@ export const medicationService = {
             dataEvents.notifyUpdated('medications', medicationId);
             return result;
         } catch (error) {
-            console.error('[MedicationService] Failed to toggle favorite:', error);
+            logger.error('[MedicationService] Failed to toggle favorite', { error, medicationId });
             throw error;
         }
     },
@@ -217,7 +240,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.addMedicationTag(medicationId, tag);
         } catch (error) {
-            console.error('[MedicationService] Failed to add tag:', error);
+            logger.error('[MedicationService] Failed to add tag', { error, medicationId, tag });
             throw error;
         }
     },
@@ -229,7 +252,7 @@ export const medicationService = {
         try {
             return await window.electronAPI.getMedicationChangeHistory(medicationId);
         } catch (error) {
-            console.error('[MedicationService] Failed to get change history:', error);
+            logger.error('[MedicationService] Failed to get change history', { error, medicationId });
             throw error;
         }
     }

@@ -52,6 +52,7 @@ export const MedicationFormPage: React.FC = () => {
         contraindications: '',
         indications: [],
     });
+    const [icd10Input, setIcd10Input] = useState('');
 
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -134,9 +135,17 @@ export const MedicationFormPage: React.FC = () => {
                 return;
             }
             setFormData(data);
+            setIcd10Input((data.icd10Codes || []).join(', '));
         } catch (err: any) {
             setError(err?.message || 'Не удалось загрузить данные препарата');
         }
+    };
+
+    const parseIcd10Codes = (value: string) => {
+        return value
+            .split(/[,\n;]/)
+            .map(code => code.trim().toUpperCase())
+            .filter(Boolean);
     };
 
     const handleSave = async (e: React.FormEvent) => {
@@ -153,7 +162,8 @@ export const MedicationFormPage: React.FC = () => {
 
         try {
             const source = validationResult ? 'vidal_import' : 'manual';
-            await medicationService.upsertMedication(formData as Medication, source);
+            const icd10Codes = parseIcd10Codes(icd10Input);
+            await medicationService.upsertMedication({ ...formData, icd10Codes } as Medication, source);
             setSuccess(true);
             setTimeout(() => navigate('/medications'), 1500);
         } catch (err: any) {
@@ -297,6 +307,7 @@ export const MedicationFormPage: React.FC = () => {
                 ...formData,
                 ...previewData,
             });
+            setIcd10Input((previewData.icd10Codes || []).join(', '));
             setShowPreview(false);
             setPreviewData(null);
             // Сохраняем validationResult для отображения в форме
@@ -458,10 +469,11 @@ export const MedicationFormPage: React.FC = () => {
                                 Коды МКБ-10 (через запятую)
                             </label>
                             <Input
-                                value={(formData.icd10Codes || []).join(', ')}
-                                onChange={e => setFormData({
+                                value={icd10Input}
+                                onChange={e => setIcd10Input(e.target.value)}
+                                onBlur={() => setFormData({
                                     ...formData,
-                                    icd10Codes: e.target.value.split(',').map(c => c.trim().toUpperCase()).filter(Boolean)
+                                    icd10Codes: parseIcd10Codes(icd10Input)
                                 })}
                                 placeholder="J00, J20.9, R50"
                                 className="h-14 rounded-2xl font-mono"

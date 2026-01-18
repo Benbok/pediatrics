@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { visitService } from './services/visitService';
 import { medicationService } from '../medications/services/medicationService';
 import { diseaseService } from '../diseases/services/diseaseService';
+import { patientService } from '../../services/patient.service';
+import { logger } from '../../services/logger';
 import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion } from '../../types';
 import { MedicationBrowser } from './components/MedicationBrowser';
 import { Card } from '../../components/ui/Card';
@@ -63,7 +65,10 @@ export const VisitFormPage: React.FC = () => {
 
     const loadData = async () => {
         try {
-            const childData = await window.electronAPI.getChild(Number(childId));
+            const childData = await patientService.getChildById(Number(childId));
+            if (!childData) {
+                throw new Error('Пациент не найден');
+            }
             setChild(childData);
 
             if (isEdit) {
@@ -95,7 +100,7 @@ export const VisitFormPage: React.FC = () => {
                 }
             }
         } catch (err) {
-            console.error('Failed to load last anthropometry', err);
+            logger.error('Failed to load last anthropometry', { error: err });
         }
     };
 
@@ -180,13 +185,13 @@ export const VisitFormPage: React.FC = () => {
                 setSuggestions(results);
                 
                 const duration = Date.now() - startTime;
-                console.log(`[VisitFormPage] Analysis completed in ${duration}ms`);
+                logger.info(`[VisitFormPage] Analysis completed in ${duration}ms`, { visitId: id, duration });
                 
                 if (duration > 5000) {
-                    console.warn(`[VisitFormPage] Analysis took longer than expected: ${duration}ms`);
+                    logger.warn(`[VisitFormPage] Analysis took longer than expected: ${duration}ms`, { duration });
                 }
             } catch (err: any) {
-                console.error('Analysis failed', err);
+                logger.error('Analysis failed', { error: err, visitId: id });
                 setError(err.message || 'Ошибка анализа. Попробуйте еще раз.');
             } finally {
                 setIsAnalyzing(false);
@@ -219,7 +224,7 @@ export const VisitFormPage: React.FC = () => {
                 const recommendations = await visitService.getMedicationsForDiagnosis(disease.id, Number(childId));
                 setMedicationRecommendations(recommendations);
             } catch (err: any) {
-                console.error('Failed to load medications:', err);
+                logger.error('Failed to load medications', { error: err, diseaseId: disease.id, childId });
                 setError('Не удалось загрузить препараты для диагноза');
             } finally {
                 setIsLoadingMedications(false);
@@ -266,12 +271,12 @@ export const VisitFormPage: React.FC = () => {
         const currentHeight = formData.currentHeight || null;
 
         try {
-            const doseInfo = await window.electronAPI.calculateDose({
-                medicationId: med.id!,
-                weight: currentWeight,
+            const doseInfo = await medicationService.calculateDose(
+                med.id!,
+                currentWeight,
                 ageMonths,
-                height: currentHeight
-            });
+                currentHeight
+            );
 
             setFormData({
                 ...formData,
@@ -286,7 +291,7 @@ export const VisitFormPage: React.FC = () => {
                 ]
             });
         } catch (err) {
-            console.error('Dose calc failed', err);
+            logger.error('Dose calc failed', { error: err, medicationId: med.id, weight: currentWeight, ageMonths, height: currentHeight });
         }
     };
 

@@ -35,6 +35,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, initialPage = 1 
     const [pageInput, setPageInput] = useState(String(initialPage));
     const [showThumbnails, setShowThumbnails] = useState(false);
     const [thumbnails, setThumbnails] = useState<{ [key: number]: string }>({});
+    const [thumbnailsProgress, setThumbnailsProgress] = useState<{ loaded: number; total: number }>({
+        loaded: 0,
+        total: 0
+    });
+    const [thumbnailsError, setThumbnailsError] = useState<string | null>(null);
+    const thumbnailsTaskRef = useRef(0);
 
     useEffect(() => {
         loadPdf();
@@ -50,8 +56,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, initialPage = 1 
     useEffect(() => {
         if (pdf && showThumbnails) {
             generateThumbnails();
+        } else {
+            thumbnailsTaskRef.current += 1;
         }
-    }, [pdf, showThumbnails]);
+    }, [pdf, showThumbnails, totalPages]);
 
     const loadPdf = async () => {
         setLoading(true);
@@ -128,26 +136,56 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, initialPage = 1 
 
     const generateThumbnails = async () => {
         if (!pdf) return;
-        const thumbs: { [key: number]: string } = {};
+        const taskId = thumbnailsTaskRef.current + 1;
+        thumbnailsTaskRef.current = taskId;
+        setThumbnails({});
+        setThumbnailsError(null);
+        setThumbnailsProgress({ loaded: 0, total: totalPages });
 
-        for (let i = 1; i <= Math.min(totalPages, 20); i++) { // Limit to 20 for performance
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 0.2 });
+        const batchSize = 4;
+        for (let i = 1; i <= totalPages; i += batchSize) {
+            if (thumbnailsTaskRef.current !== taskId) return;
 
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
+            const batchEnd = Math.min(totalPages, i + batchSize - 1);
+            const batchPages = Array.from({ length: batchEnd - i + 1 }, (_, idx) => i + idx);
+            const batchThumbs: { [key: number]: string } = {};
 
-            await page.render({
-                canvasContext: context,
-                viewport: viewport,
-            }).promise;
+            try {
+                await Promise.all(
+                    batchPages.map(async (pageNum) => {
+                        const page = await pdf.getPage(pageNum);
+                        const viewport = page.getViewport({ scale: 0.2 });
 
-            thumbs[i] = canvas.toDataURL();
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        if (!context) return;
+
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+
+                        await page.render({
+                            canvasContext: context,
+                            viewport: viewport,
+                        }).promise;
+
+                        batchThumbs[pageNum] = canvas.toDataURL();
+                    })
+                );
+            } catch (err: any) {
+                setThumbnailsError(err?.message || 'Ошибка загрузки превью страниц');
+                return;
+            }
+
+            if (thumbnailsTaskRef.current !== taskId) return;
+
+            setThumbnails(prev => ({ ...prev, ...batchThumbs }));
+            setThumbnailsProgress(prev => ({
+                loaded: prev.loaded + batchPages.length,
+                total: totalPages
+            }));
+
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
-
-        setThumbnails(thumbs);
     };
 
     const searchInPdf = async () => {
@@ -239,22 +277,41 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath, initialPage = 1 
             {/* Thumbnails Sidebar */}
             {showThumbnails && (
                 <div className="w-48 bg-slate-800 border-r border-slate-700 overflow-y-auto p-2">
+                    <div className="flex items-center justify-between text-xs text-slate-300 px-1 mb-2">
+                        <span>Превью страниц</span>
+                        {thumbnailsProgress.total > 0 && (
+                            <span>{thumbnailsProgress.loaded}/{thumbnailsProgress.total}</span>
+                        )}
+                    </div>
+                    {thumbnailsError && (
+                        <div className="text-xs text-red-400 bg-slate-900/60 border border-red-500/30 rounded p-2 mb-2">
+                            {thumbnailsError}
+                        </div>
+                    )}
                     <div className="space-y-2">
-                        {Object.entries(thumbnails).map(([pageNum, dataUrl]) => (
-                            <div
-                                key={pageNum}
-                                onClick={() => setCurrentPage(parseInt(pageNum))}
-                                className={`cursor-pointer border-2 rounded-lg overflow-hidden transition-all ${currentPage === parseInt(pageNum)
-                                    ? 'border-primary-500 shadow-lg'
-                                    : 'border-slate-600 hover:border-slate-500'
-                                    }`}
-                            >
-                                <img src={dataUrl} alt={`Page ${pageNum}`} className="w-full" />
-                                <div className="text-center text-xs text-slate-300 py-1 bg-slate-700">
-                                    {pageNum}
+                        {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => {
+                            const dataUrl = thumbnails[pageNum];
+                            const isActive = currentPage === pageNum;
+                            return (
+                                <div
+                                    key={pageNum}
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className={`cursor-pointer border-2 rounded-lg overflow-hidden transition-all ${isActive
+                                        ? 'border-primary-500 shadow-lg'
+                                        : 'border-slate-600 hover:border-slate-500'
+                                        }`}
+                                >
+                                    {dataUrl ? (
+                                        <img src={dataUrl} alt={`Page ${pageNum}`} className="w-full" />
+                                    ) : (
+                                        <div className="w-full aspect-[3/4] bg-slate-700 animate-pulse" />
+                                    )}
+                                    <div className="text-center text-xs text-slate-300 py-1 bg-slate-700">
+                                        {pageNum}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}

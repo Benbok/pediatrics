@@ -7,6 +7,7 @@ import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import {
     ChevronLeft,
     ChevronRight,
@@ -42,6 +43,7 @@ export const DiseaseFormPage: React.FC = () => {
     const [isParsing, setIsParsing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     useEffect(() => {
         if (isEdit) {
@@ -113,15 +115,15 @@ export const DiseaseFormPage: React.FC = () => {
         });
     };
 
-    const handleDelete = async () => {
+    const handleDeleteClick = () => {
+        if (!isEdit || !id) return;
+        setShowDeleteConfirm(true);
+    };
+
+    const handleDeleteConfirm = async () => {
         if (!isEdit || !id) return;
 
-        const confirmed = window.confirm(
-            `Вы уверены, что хотите удалить заболевание "${formData.nameRu}"? \nЭто действие нельзя отменить.`
-        );
-
-        if (!confirmed) return;
-
+        setShowDeleteConfirm(false);
         setIsSaving(true);
         try {
             await diseaseService.deleteDisease(Number(id));
@@ -278,7 +280,7 @@ export const DiseaseFormPage: React.FC = () => {
                         <Button
                             type="button"
                             variant="ghost"
-                            onClick={handleDelete}
+                            onClick={handleDeleteClick}
                             className="h-12 px-6 rounded-xl text-rose-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all font-bold"
                         >
                             <Trash2 className="w-5 h-5 mr-2" />
@@ -490,6 +492,17 @@ export const DiseaseFormPage: React.FC = () => {
                     </Button>
                 </div>
             </form>
+
+            <ConfirmDialog
+                isOpen={showDeleteConfirm}
+                title="Удаление заболевания"
+                message={`Вы уверены, что хотите удалить заболевание "${formData.nameRu}"?\n\nЭто действие нельзя отменить.`}
+                confirmText="Удалить"
+                cancelText="Отмена"
+                variant="danger"
+                onConfirm={handleDeleteConfirm}
+                onCancel={() => setShowDeleteConfirm(false)}
+            />
         </div>
     );
 };

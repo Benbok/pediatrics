@@ -163,9 +163,17 @@ const MedicationService = {
             return String(value);
         };
 
+        // При обновлении: если icd10Codes не передан, сохраняем существующие значения
+        let icd10CodesToSave = rest.icd10Codes;
+        if (id && oldData && (rest.icd10Codes === undefined || rest.icd10Codes === null)) {
+            // При обновлении, если icd10Codes не передан, используем существующие
+            icd10CodesToSave = oldData.icd10Codes || [];
+            logger.info(`[MedicationService] Preserving existing icd10Codes for medication ${id}:`, icd10CodesToSave);
+        }
+
         const dbData = {
             ...rest,
-            icd10Codes: JSON.stringify(normalizeArray(rest.icd10Codes)),
+            icd10Codes: JSON.stringify(normalizeArray(icd10CodesToSave)),
             forms: JSON.stringify(normalizeArray(rest.forms)),
             pediatricDosing: JSON.stringify(normalizeArray(rest.pediatricDosing)),
             adultDosing: rest.adultDosing ? JSON.stringify(normalizeArray(rest.adultDosing)) : null,
@@ -528,7 +536,8 @@ const MedicationService = {
         // Сравнить старые и новые данные
         const fieldsToTrack = [
             'nameRu', 'activeSubstance', 'atcCode', 'manufacturer',
-            'clinicalPharmGroup', 'pediatricDosing', 'contraindications'
+            'clinicalPharmGroup', 'pediatricDosing', 'contraindications',
+            'icd10Codes'
         ];
         
         fieldsToTrack.forEach(field => {

@@ -87,6 +87,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAllIcdCodes: (params) => ipcRenderer.invoke('icd-codes:get-all', params),
     getIcdCategories: () => ipcRenderer.invoke('icd-codes:get-categories'),
 
+    // LOGGING API
+    log: (level, message, metadata) => ipcRenderer.invoke('logger:log', level, message, metadata),
+
     // API KEYS POOL MANAGEMENT API
     getApiKeysPoolStatus: () => ipcRenderer.invoke('api-keys:get-pool-status'),
     resetApiKey: (keyIndex) => ipcRenderer.invoke('api-keys:reset-key', keyIndex),

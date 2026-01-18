@@ -1,4 +1,6 @@
 import { Visit, DiagnosisSuggestion, MedicationRecommendation } from '../../../types';
+import { VisitSchema, AnalyzeVisitSchema } from '../../../validators/visit.validator';
+import { logger } from '../../../services/logger';
 
 export const visitService = {
     /**
@@ -8,7 +10,7 @@ export const visitService = {
         try {
             return await window.electronAPI.getVisits(childId);
         } catch (error) {
-            console.error('[VisitService] Failed to fetch visits:', error);
+            logger.error('[VisitService] Failed to fetch visits', { error, childId });
             throw error;
         }
     },
@@ -20,7 +22,7 @@ export const visitService = {
         try {
             return await window.electronAPI.getVisit(id);
         } catch (error) {
-            console.error('[VisitService] Failed to fetch visit details:', error);
+            logger.error('[VisitService] Failed to fetch visit details', { error, visitId: id });
             throw error;
         }
     },
@@ -29,11 +31,18 @@ export const visitService = {
      * Create or update a visit
      */
     async upsertVisit(data: Visit): Promise<Visit> {
+        // Validate data using Zod
+        const validation = VisitSchema.safeParse(data);
+        if (!validation.success) {
+            const errorMsg = validation.error.issues.map(i => i.message).join(', ');
+            throw new Error(`Ошибка валидации: ${errorMsg}`);
+        }
+
         try {
-            return await window.electronAPI.upsertVisit(data);
-        } catch (error) {
-            console.error('[VisitService] Failed to save visit:', error);
-            throw error;
+            return await window.electronAPI.upsertVisit(validation.data as Visit);
+        } catch (error: any) {
+            logger.error('[VisitService] Failed to save visit', { error, visitData: data });
+            throw new Error(error.message || 'Ошибка при сохранении посещения');
         }
     },
 
@@ -44,7 +53,7 @@ export const visitService = {
         try {
             return await window.electronAPI.deleteVisit(id);
         } catch (error) {
-            console.error('[VisitService] Failed to delete visit:', error);
+            logger.error('[VisitService] Failed to delete visit', { error, visitId: id });
             throw error;
         }
     },
@@ -53,11 +62,18 @@ export const visitService = {
      * Analyze visit complaints for CDSS suggestions
      */
     async analyzeVisit(visitId: number): Promise<DiagnosisSuggestion[]> {
+        // Validate visitId
+        const validation = AnalyzeVisitSchema.safeParse({ visitId });
+        if (!validation.success) {
+            const errorMsg = validation.error.issues.map(i => i.message).join(', ');
+            throw new Error(`Ошибка валидации: ${errorMsg}`);
+        }
+
         try {
-            return await window.electronAPI.analyzeVisit(visitId);
-        } catch (error) {
-            console.error('[VisitService] Visit analysis failed:', error);
-            throw error;
+            return await window.electronAPI.analyzeVisit(validation.data.visitId);
+        } catch (error: any) {
+            logger.error('[VisitService] Visit analysis failed', { error, visitId });
+            throw new Error(error.message || 'Ошибка при анализе посещения');
         }
     },
 
@@ -65,11 +81,19 @@ export const visitService = {
      * Get medications for a specific diagnosis with calculated doses
      */
     async getMedicationsForDiagnosis(diseaseId: number, childId: number): Promise<MedicationRecommendation[]> {
+        // Validate IDs
+        if (!diseaseId || diseaseId < 1) {
+            throw new Error('ID заболевания должен быть больше 0');
+        }
+        if (!childId || childId < 1) {
+            throw new Error('ID пациента должен быть больше 0');
+        }
+
         try {
             return await window.electronAPI.getMedicationsForDiagnosis({ diseaseId, childId });
-        } catch (error) {
-            console.error('[VisitService] Failed to get medications for diagnosis:', error);
-            throw error;
+        } catch (error: any) {
+            logger.error('[VisitService] Failed to get medications for diagnosis', { error, diseaseId, childId });
+            throw new Error(error.message || 'Ошибка при получении препаратов для диагноза');
         }
     }
 };

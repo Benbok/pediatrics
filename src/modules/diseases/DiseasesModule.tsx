@@ -6,6 +6,7 @@ import { Disease } from '../../types';
 import { DiseaseCard } from './components/DiseaseCard';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Search, Plus, Filter, BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 
 export const DiseasesModule: React.FC = () => {
@@ -14,6 +15,11 @@ export const DiseasesModule: React.FC = () => {
     const [diseases, setDiseases] = useState<Disease[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; diseaseId: number | null; diseaseName: string }>({
+        isOpen: false,
+        diseaseId: null,
+        diseaseName: ''
+    });
 
     useEffect(() => {
         // Загружаем данные из кеша или делаем запрос
@@ -43,15 +49,17 @@ export const DiseasesModule: React.FC = () => {
         }
     }, [cachedDiseases]);
 
-    const handleDeleteDisease = async (id: number) => {
+    const handleDeleteDisease = (id: number) => {
         const disease = diseases.find(d => d.id === id);
         if (!disease) return;
+        setDeleteConfirm({ isOpen: true, diseaseId: id, diseaseName: disease.nameRu });
+    };
 
-        const confirmed = window.confirm(
-            `Вы уверены, что хотите удалить заболевание "${disease.nameRu}"? \nЭто действие нельзя отменить.`
-        );
+    const handleDeleteConfirm = async () => {
+        const id = deleteConfirm.diseaseId;
+        if (!id) return;
 
-        if (!confirmed) return;
+        setDeleteConfirm({ isOpen: false, diseaseId: null, diseaseName: '' });
 
         // Оптимистичное обновление - удаляем из UI сразу
         const originalDiseases = [...diseases];
@@ -73,9 +81,13 @@ export const DiseasesModule: React.FC = () => {
         } catch (err: any) {
             // Откат при ошибке
             setDiseases(originalDiseases);
-            setError(err.message || 'Ошибка при удалении');
+                setError(err.message || 'Ошибка при удалении');
             console.error(err);
         }
+    };
+
+    const handleDeleteCancel = () => {
+        setDeleteConfirm({ isOpen: false, diseaseId: null, diseaseName: '' });
     };
 
     const filteredDiseases = diseases.filter(d =>
@@ -176,6 +188,17 @@ export const DiseasesModule: React.FC = () => {
                     </p>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={deleteConfirm.isOpen}
+                title="Удаление заболевания"
+                message={`Вы уверены, что хотите удалить заболевание "${deleteConfirm.diseaseName}"?\n\nЭто действие нельзя отменить.`}
+                confirmText="Удалить"
+                cancelText="Отмена"
+                variant="danger"
+                onConfirm={handleDeleteConfirm}
+                onCancel={handleDeleteCancel}
+            />
         </div>
     );
 };

@@ -13,6 +13,7 @@ import {
     Trash2
 } from 'lucide-react';
 import { DiseaseKnowledgeView } from './components/DiseaseKnowledgeView';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 export const DiseaseDetailPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -21,6 +22,7 @@ export const DiseaseDetailPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isDeleting, setIsDeleting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     useEffect(() => {
         loadDisease();
@@ -49,15 +51,14 @@ export const DiseaseDetailPage: React.FC = () => {
         }
     };
 
-    const handleDelete = async () => {
+    const handleDeleteClick = () => {
+        setShowDeleteConfirm(true);
+    };
+
+    const handleDeleteConfirm = async () => {
         if (!disease?.id) return;
-
-        const confirmed = window.confirm(
-            `Вы уверены, что хотите удалить заболевание "${disease.nameRu}"? \nЭто действие нельзя отменить.`
-        );
-
-        if (!confirmed) return;
-
+        
+        setShowDeleteConfirm(false);
         setIsDeleting(true);
         try {
             const success = await diseaseService.deleteDisease(disease.id);
@@ -117,7 +118,7 @@ export const DiseaseDetailPage: React.FC = () => {
 
                     <Button
                         variant="ghost"
-                        onClick={handleDelete}
+                        onClick={handleDeleteClick}
                         isLoading={isDeleting}
                         className="rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/10"
                     >
@@ -128,6 +129,17 @@ export const DiseaseDetailPage: React.FC = () => {
             </div>
 
             <DiseaseKnowledgeView disease={disease} />
+
+            <ConfirmDialog
+                isOpen={showDeleteConfirm}
+                title="Удаление заболевания"
+                message={`Вы уверены, что хотите удалить заболевание "${disease?.nameRu}"?\n\nЭто действие нельзя отменить.`}
+                confirmText="Удалить"
+                cancelText="Отмена"
+                variant="danger"
+                onConfirm={handleDeleteConfirm}
+                onCancel={() => setShowDeleteConfirm(false)}
+            />
         </div>
     );
 };

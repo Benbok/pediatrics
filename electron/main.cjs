@@ -78,6 +78,33 @@ app.whenReady().then(async () => {
         return CacheService.getStats();
     }));
     
+    // Logger IPC handler (for renderer process logging)
+    ipcMain.handle('logger:log', async (_, level, message, metadata) => {
+        try {
+            const logMetadata = metadata || {};
+            switch (level) {
+                case 'error':
+                    logger.error(`[Renderer] ${message}`, logMetadata);
+                    break;
+                case 'warn':
+                    logger.warn(`[Renderer] ${message}`, logMetadata);
+                    break;
+                case 'info':
+                    logger.info(`[Renderer] ${message}`, logMetadata);
+                    break;
+                case 'debug':
+                    logger.debug(`[Renderer] ${message}`, logMetadata);
+                    break;
+                default:
+                    logger.info(`[Renderer] ${message}`, logMetadata);
+            }
+            return { success: true };
+        } catch (error) {
+            logger.error('[Main] Logger IPC handler error:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    
     ipcMain.handle('cache:clear-all', ensureAuthenticated(async () => {
         CacheService.invalidateAll();
         return { success: true };
@@ -148,7 +175,7 @@ app.whenReady().then(async () => {
                 ? path.join(__dirname, '../public/print-certificate.html')
                 : path.join(__dirname, '../dist/print-certificate.html');
 
-            console.log('[Main] Loading print page:', printPagePath);
+            logger.info('[Main] Loading print page', { printPagePath });
             await printWin.loadFile(printPagePath);
 
             // Inject the certificate data and render
@@ -163,7 +190,7 @@ app.whenReady().then(async () => {
             await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Generate PDF from the clean window
-            console.log('[Main] Generating PDF...');
+            logger.info('[Main] Generating PDF');
             const data = await printWin.webContents.printToPDF({
                 printBackground: true,
                 landscape: true,
@@ -213,7 +240,7 @@ app.whenReady().then(async () => {
         try {
             return await fs.promises.readFile(filePath, 'utf8');
         } catch (error) {
-            console.error('[Main] Failed to read file:', error);
+            logger.error('[Main] Failed to read file', { error, filePath });
             throw error;
         }
     }));
@@ -221,7 +248,7 @@ app.whenReady().then(async () => {
         try {
             return await shell.openPath(filePath);
         } catch (error) {
-            console.error('[Main] Failed to open path:', error);
+            logger.error('[Main] Failed to open path', { error, filePath });
             throw error;
         }
     });

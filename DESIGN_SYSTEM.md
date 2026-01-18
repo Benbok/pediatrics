@@ -153,6 +153,42 @@ Avoid rectangular standard tabs. Use the **Pill/Track** style for premium feel.
   - Active State: `bg-white` (Light) / `bg-slate-900` (Dark), `text-primary-600`, `shadow-xl shadow-primary-500/10`.
   - Transition: `duration-300` on state change.
 
+### ConfirmDialog (Confirmation Modal)
+Standardized modal for confirming user actions (deletions, critical operations).
+- **Usage:** Replace all `window.confirm()` calls with this component for consistent UX.
+- **Structure:**
+  - **Overlay:** `bg-black bg-opacity-50`, full screen `fixed inset-0`, `z-50`.
+  - **Container:** Centered with `flex items-center justify-center`.
+  - **Dialog Box:**
+    - Max width: `max-w-md` for optimal readability.
+    - Bg: `bg-white` (Light) / `bg-slate-900` (Dark).
+    - Border: `border border-slate-200` (Light) / `border-slate-800` (Dark).
+    - Radius: `rounded-2xl`.
+    - Shadow: `shadow-xl` for depth.
+- **Animation:**
+  - **Overlay:** Fade-in with `transition-opacity duration-300 ease-out animate-in fade-in`.
+  - **Dialog:** Combined zoom and slide effect: `transform transition-all duration-300 ease-out animate-in fade-in zoom-in-95 slide-in-from-bottom-2`.
+  - **Rationale:** Smooth, non-jarring appearance that draws attention without feeling abrupt.
+- **Header:**
+  - Icon: `AlertTriangle` from lucide-react, color varies by variant (danger/warning/info).
+  - Title: `text-lg font-bold`, with variant-specific icon color.
+  - Close button: `text-slate-400`, hover `text-slate-600`.
+- **Body:**
+  - Text: `text-slate-700` (Light) / `text-slate-300` (Dark).
+  - Supports `whitespace-pre-line` for multi-line messages.
+- **Footer:**
+  - Actions: `flex items-center justify-end gap-3`.
+  - Buttons: Secondary (Cancel) and Primary/Danger (Confirm) based on variant.
+  - Button radius: `rounded-xl` for consistency.
+- **Variants:**
+  - **danger:** Red icon (`text-red-600 dark:text-red-400`), danger button variant for confirm.
+  - **warning:** Yellow icon (`text-yellow-600 dark:text-yellow-400`), primary button.
+  - **info:** Blue icon (`text-blue-600 dark:text-blue-400`), primary button.
+- **Accessibility:**
+  - Click outside (overlay) triggers cancel (standard modal pattern).
+  - Click inside dialog does not close it (`stopPropagation`).
+  - Escape key handling should be implemented at component usage level if needed.
+
 ### Filter Pills/Tags
 Used for filtering content by categories (e.g., pharmacological groups, status filters).
 - **Selected State (CRITICAL):**
@@ -194,9 +230,11 @@ New Components to Create:
 4. `Card` (Header, Content, Footer)
 5. `Badge` (Status indicators)
 6. `Avatar` (User profiles)
+7. `ConfirmDialog` (Confirmation modal for user actions)
 
 ## 7. Motion & Aesthetics
 - **Transitions:** `transition-all duration-200` on hover states.
+- **Modal Animations:** Use smooth fade-in and scale animations for modal dialogs. Overlay fades in with `transition-opacity duration-300 ease-out`, dialog content uses `transform transition-all duration-300 ease-out` with inline styles for opacity (0→1) and transform (`scale(0.95) translateY(8px)` → `scale(1) translateY(0)`) for premium feel.
 - **Glassmorphism:** Use `backdrop-blur-md` and `bg-white/80` for sticky headers or modals.
 - **Gradients:** Use subtle gradients for branding elements, e.g., `bg-gradient-to-r from-blue-600 to-indigo-600` for main logos or primary buttons (optional).
 

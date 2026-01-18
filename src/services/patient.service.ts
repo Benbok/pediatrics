@@ -2,6 +2,7 @@ import { ChildProfile } from '../types';
 import { ChildProfileSchema } from '../validators/child.validator';
 import { getFormattedAge } from '../utils/ageUtils';
 import { dataEvents } from './dataEvents';
+import { logger } from './logger';
 
 /**
  * PATIENT SERVICE
@@ -18,7 +19,7 @@ export const patientService = {
         try {
             return await window.electronAPI.getChildren();
         } catch (error) {
-            console.error('Service error: Failed to fetch children', error);
+            logger.error('Service error: Failed to fetch children', { error });
             throw error;
         }
     },
@@ -30,7 +31,7 @@ export const patientService = {
         try {
             return await window.electronAPI.getChild(id);
         } catch (error) {
-            console.error(`Service error: Failed to fetch child ${id}`, error);
+            logger.error(`Service error: Failed to fetch child ${id}`, { error, childId: id });
             return null;
         }
     },
@@ -52,7 +53,7 @@ export const patientService = {
             dataEvents.notifyCreated('patients', result.id);
             return result;
         } catch (error: any) {
-            console.error('Service error: Failed to create child', error);
+            logger.error('Service error: Failed to create child', { error, data });
             throw new Error(error.message || 'Ошибка при сохранении данных пациента');
         }
     },
@@ -74,7 +75,7 @@ export const patientService = {
             dataEvents.notifyUpdated('patients', id);
             return result;
         } catch (error: any) {
-            console.error(`Service error: Failed to update child ${id}`, error);
+            logger.error(`Service error: Failed to update child ${id}`, { error, childId: id, updates });
             throw new Error(error.message || 'Ошибка при обновлении данных пациента');
         }
     },
@@ -89,7 +90,7 @@ export const patientService = {
             dataEvents.notifyDeleted('patients', id);
             return result;
         } catch (error) {
-            console.error(`Service error: Failed to delete child ${id}`, error);
+            logger.error(`Service error: Failed to delete child ${id}`, { error, childId: id });
             throw error;
         }
     },

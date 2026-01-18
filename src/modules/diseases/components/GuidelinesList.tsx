@@ -4,6 +4,7 @@ import { diseaseService } from '../services/diseaseService';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2 } from 'lucide-react';
 
 interface GuidelinesListProps {
@@ -20,6 +21,10 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     const [guidelines, setGuidelines] = useState<ClinicalGuideline[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; guidelineId: number | null }>({
+        isOpen: false,
+        guidelineId: null
+    });
 
     useEffect(() => {
         loadGuidelines();
@@ -37,12 +42,17 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
         }
     };
 
-    const handleDelete = async (guidelineId: number) => {
-        if (!confirm('Вы уверены, что хотите удалить этот файл?')) {
-            return;
-        }
+    const handleDeleteClick = (guidelineId: number) => {
+        setConfirmDelete({ isOpen: true, guidelineId });
+    };
 
+    const handleDeleteConfirm = async () => {
+        if (!confirmDelete.guidelineId) return;
+
+        const guidelineId = confirmDelete.guidelineId;
+        setConfirmDelete({ isOpen: false, guidelineId: null });
         setDeletingId(guidelineId);
+        
         try {
             await window.electronAPI.deleteGuideline(guidelineId);
             await loadGuidelines();
@@ -52,6 +62,10 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
         } finally {
             setDeletingId(null);
         }
+    };
+
+    const handleDeleteCancel = () => {
+        setConfirmDelete({ isOpen: false, guidelineId: null });
     };
 
     const formatFileSize = (bytes: number) => {
@@ -151,20 +165,20 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                                         </Button>
                                     </>
                                 )}
-                                {onGuidelineSelect && (
+                                {onGuidelineSelect && !isSelected && (
                                     <Button
-                                        variant={isSelected ? 'primary' : 'secondary'}
+                                        variant="secondary"
                                         size="sm"
                                         onClick={() => onGuidelineSelect(guideline)}
                                         className="rounded-xl"
                                     >
-                                        {isSelected ? 'Выбран' : 'Выбрать'}
+                                        Выбрать
                                     </Button>
                                 )}
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleDelete(guideline.id)}
+                                    onClick={() => handleDeleteClick(guideline.id)}
                                     disabled={isDeleting}
                                     className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
                                     title="Удалить"
@@ -180,6 +194,17 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                     </Card>
                 );
             })}
+            
+            <ConfirmDialog
+                isOpen={confirmDelete.isOpen}
+                title="Удаление файла"
+                message="Вы уверены, что хотите удалить этот файл?"
+                confirmText="Удалить"
+                cancelText="Отмена"
+                variant="danger"
+                onConfirm={handleDeleteConfirm}
+                onCancel={handleDeleteCancel}
+            />
         </div>
     );
 };

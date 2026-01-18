@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Medication } from '../../../types';
 import { medicationService } from '../../medications/services/medicationService';
 import { MedicationCard } from '../../medications/components/MedicationCard';
-import { Pill, Loader2, AlertCircle } from 'lucide-react';
+import { Pill, Loader2, AlertCircle, Layers } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { logger } from '../../../services/logger';
+import { Badge } from '../../../components/ui/Badge';
 
 interface DiseaseMedicationsTabProps {
     diseaseId: number;
@@ -28,11 +30,36 @@ export const DiseaseMedicationsTab: React.FC<DiseaseMedicationsTabProps> = ({ di
             setError(null);
         } catch (err) {
             setError('Не удалось загрузить препараты');
-            console.error(err);
+            logger.error('Failed to load medications for disease', { error: err, diseaseId });
         } finally {
             setIsLoading(false);
         }
     };
+
+    // Группировка препаратов по фармакологическим группам
+    // ВАЖНО: useMemo должен вызываться до всех условных возвратов (правило хуков React)
+    const groupedMedications = useMemo(() => {
+        const groups: Record<string, Medication[]> = {};
+        
+        medications.forEach(med => {
+            // Используем clinicalPharmGroup, если есть, иначе pharmTherapyGroup, иначе "Прочие"
+            const groupName = med.clinicalPharmGroup || med.pharmTherapyGroup || 'Прочие';
+            
+            if (!groups[groupName]) {
+                groups[groupName] = [];
+            }
+            groups[groupName].push(med);
+        });
+        
+        // Сортируем группы по алфавиту, "Прочие" в конец
+        const sortedGroups = Object.entries(groups).sort(([a], [b]) => {
+            if (a === 'Прочие') return 1;
+            if (b === 'Прочие') return -1;
+            return a.localeCompare(b, 'ru');
+        });
+        
+        return sortedGroups;
+    }, [medications]);
 
     if (isLoading) {
         return (
@@ -68,22 +95,36 @@ export const DiseaseMedicationsTab: React.FC<DiseaseMedicationsTabProps> = ({ di
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <p className="text-slate-600 dark:text-slate-400">
                     Найдено препаратов: <span className="font-bold text-primary-600">{medications.length}</span>
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {medications.map(med => (
-                    <MedicationCard
-                        key={med.id}
-                        medication={med}
-                        onSelect={(id) => navigate(`/medications/${id}?from=disease&diseaseId=${diseaseId}`)}
-                    />
-                ))}
-            </div>
+            {groupedMedications.map(([groupName, groupMedications]) => (
+                <div key={groupName} className="space-y-4">
+                    <div className="flex items-center gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
+                        <Layers className="w-5 h-5 text-primary-500" />
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+                            {groupName}
+                        </h3>
+                        <Badge variant="outline" className="text-xs">
+                            {groupMedications.length} {groupMedications.length === 1 ? 'препарат' : groupMedications.length < 5 ? 'препарата' : 'препаратов'}
+                        </Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {groupMedications.map(med => (
+                            <MedicationCard
+                                key={med.id}
+                                medication={med}
+                                onSelect={(id) => navigate(`/medications/${id}?from=disease&diseaseId=${diseaseId}`)}
+                            />
+                        ))}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 };

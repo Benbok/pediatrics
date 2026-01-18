@@ -21,6 +21,25 @@ export const MedicationsModule: React.FC = () => {
     const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
     const [selectedFormType, setSelectedFormType] = useState<string | null>(null);
 
+    const formTypeLabelMap: Record<string, string> = {
+        tablet: 'Таблетки',
+        solution: 'Раствор',
+        syrup: 'Сироп',
+        suspension: 'Суспензия',
+        injection: 'Инъекция',
+        capsule: 'Капсулы',
+        suppository: 'Свечи',
+        powder: 'Порошок',
+        drops: 'Капли',
+        ointment: 'Мазь',
+        gel: 'Гель',
+        cream: 'Крем',
+        spray: 'Спрей',
+        patch: 'Пластырь'
+    };
+
+    const getFormTypeLabel = (type: string) => formTypeLabelMap[type] || type;
+
     useEffect(() => {
         // Загружаем данные из кеша или делаем запрос
         const initializeData = async () => {
@@ -87,8 +106,30 @@ export const MedicationsModule: React.FC = () => {
         
         const matchesGroup = !selectedGroup || m.clinicalPharmGroup === selectedGroup;
         
-        const matchesFormType = !selectedFormType || 
-            (Array.isArray(m.forms) && m.forms.length > 0 && m.forms.some(form => form && form.type === selectedFormType));
+        const matchesFormType = !selectedFormType || (() => {
+            if (!selectedFormType) return true;
+            const normalizedType = selectedFormType.toLowerCase();
+            const normalizedLabel = getFormTypeLabel(selectedFormType).toLowerCase();
+
+            if (Array.isArray(m.forms) && m.forms.length > 0) {
+                const hasStructuredMatch = m.forms.some(form => {
+                    if (!form) return false;
+                    if (typeof form === 'string') {
+                        const text = form.toLowerCase();
+                        return text.includes(normalizedType) || text.includes(normalizedLabel);
+                    }
+                    if (typeof form.type === 'string') {
+                        const text = form.type.toLowerCase();
+                        return text.includes(normalizedType) || text.includes(normalizedLabel);
+                    }
+                    return false;
+                });
+                if (hasStructuredMatch) return true;
+            }
+
+            const descriptionText = (m.packageDescription || '').toLowerCase();
+            return descriptionText.includes(normalizedType) || descriptionText.includes(normalizedLabel);
+        })();
         
         return matchesSearch && matchesFavorite && matchesGroup && matchesFormType;
     });

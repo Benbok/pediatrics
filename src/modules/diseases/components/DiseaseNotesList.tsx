@@ -4,6 +4,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { DiseaseNoteCard } from './DiseaseNoteCard';
 import { DiseaseNoteEditor } from './DiseaseNoteEditor';
 import { Button } from '../../../components/ui/Button';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import {
     Plus,
     MessageSquare,
@@ -24,6 +25,7 @@ export const DiseaseNotesList: React.FC<DiseaseNotesListProps> = ({ diseaseId })
     const [editingNote, setEditingNote] = useState<DiseaseNote | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filter, setFilter] = useState<'all' | 'my' | 'shared'>('all');
+    const [deleteNoteId, setDeleteNoteId] = useState<number | null>(null);
 
     useEffect(() => {
         loadNotes();
@@ -60,14 +62,20 @@ export const DiseaseNotesList: React.FC<DiseaseNotesListProps> = ({ diseaseId })
         }
     };
 
-    const handleDeleteNote = async (id: number) => {
-        if (!window.confirm('Вы уверены, что хотите удалить эту заметку?')) return;
+    const handleDeleteNote = (id: number) => {
+        setDeleteNoteId(id);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteNoteId) return;
 
         try {
-            await window.electronAPI.deleteDiseaseNote(id);
+            await window.electronAPI.deleteDiseaseNote(deleteNoteId);
             loadNotes();
         } catch (error) {
             console.error('Failed to delete note:', error);
+        } finally {
+            setDeleteNoteId(null);
         }
     };
 
@@ -215,6 +223,17 @@ export const DiseaseNotesList: React.FC<DiseaseNotesListProps> = ({ diseaseId })
                     )}
                 </>
             )}
+
+            <ConfirmDialog
+                isOpen={deleteNoteId !== null}
+                title="Удаление заметки"
+                message="Вы уверены, что хотите удалить эту заметку?"
+                confirmText="Удалить"
+                cancelText="Отмена"
+                variant="danger"
+                onConfirm={handleDeleteConfirm}
+                onCancel={() => setDeleteNoteId(null)}
+            />
         </div>
     );
 };

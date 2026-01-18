@@ -79,9 +79,11 @@ const setupMedicationHandlers = () => {
             CacheService.invalidate('medications', 'all'); // Список всех препаратов
             if (result.id) {
                 CacheService.invalidate('medications', `id_${result.id}`); // Конкретный препарат
-                // Также инвалидируем кеш для всех заболеваний, связанных с этим препаратом
-                // (через medications:get-by-disease)
-                CacheService.invalidate('medications', `by_disease_${result.id}`);
+                // Инвалидируем все кеши по заболеваниям (так как препарат может быть связан с разными заболеваниями)
+                // Используем паттерн для инвалидации всех ключей, начинающихся с "disease_"
+                // К сожалению, CacheService не поддерживает паттерны, поэтому инвалидируем весь namespace
+                // Это безопасно, так как кеш по заболеваниям пересоздается при следующем запросе
+                CacheService.invalidate('medications'); // Инвалидируем весь namespace medications
             }
             
             return result;
