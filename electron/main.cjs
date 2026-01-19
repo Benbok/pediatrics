@@ -75,13 +75,13 @@ app.whenReady().then(async () => {
     setupVisitHandlers();
     setupIcdCodeHandlers();
     setupAllergyHandlers();
-    
+
     // Cache Service handlers
     const { CacheService } = require('./services/cacheService.cjs');
     ipcMain.handle('cache:get-stats', ensureAuthenticated(async () => {
         return CacheService.getStats();
     }));
-    
+
     // Logger IPC handler (for renderer process logging)
     ipcMain.handle('logger:log', async (_, level, message, metadata) => {
         try {
@@ -108,17 +108,17 @@ app.whenReady().then(async () => {
             return { success: false, error: error.message };
         }
     });
-    
+
     ipcMain.handle('cache:clear-all', ensureAuthenticated(async () => {
         CacheService.invalidateAll();
         return { success: true };
     }));
-    
+
     ipcMain.handle('cache:clear-namespace', ensureAuthenticated(async (_, namespace) => {
         CacheService.invalidate(namespace);
         return { success: true };
     }));
-    
+
     logger.info('[Main] Cache service handlers registered');
 
     // Initialize API Key Manager
@@ -273,6 +273,7 @@ app.whenReady().then(async () => {
                 }
             });
 
+            pdfWin.maximize();
             pdfWin.setMenu(null);
 
             const encodedPath = encodeURIComponent(filePath);
