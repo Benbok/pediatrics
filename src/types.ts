@@ -408,23 +408,97 @@ export interface Medication {
   updatedAt?: string;
 }
 
+export interface DiagnosisEntry {
+  code: string; // Код МКБ
+  nameRu: string; // Название диагноза на русском
+  diseaseId?: number; // Опциональная связь с Disease (база знаний)
+}
+
 export interface Visit {
   id?: number;
   childId: number;
   doctorId: number;
   visitDate: string;
+  
+  // Тип приема и организационные данные
+  visitType?: 'primary' | 'followup' | 'consultation' | 'emergency' | 'urgent' | null;
+  visitPlace?: 'clinic' | 'home' | 'other' | null;
+  visitTime?: string | null; // время приема (ЧЧ:ММ)
+  ticketNumber?: string | null; // номер талона 025-1/у
+  referringDoctorId?: number | null; // ID направившего врача (для консультации)
+  
+  // Anthropometry
   currentWeight?: number | null; // в кг
   currentHeight?: number | null; // в см
   bmi?: number | null; // Body Mass Index
   bsa?: number | null; // Body Surface Area (м²)
+  
+  // Анамнез (структурированный)
+  diseaseHistory?: string | null;
+  lifeHistory?: string | null;
+  allergyHistory?: string | null;
+  previousDiseases?: string | null;
+  
+  // Показатели жизнедеятельности (Vital Signs)
+  bloodPressureSystolic?: number | null; // систолическое АД (мм рт.ст.)
+  bloodPressureDiastolic?: number | null; // диастолическое АД (мм рт.ст.)
+  pulse?: number | null; // пульс (уд/мин)
+  respiratoryRate?: number | null; // частота дыхательных движений (ЧДД)
+  temperature?: number | null; // температура тела (°C)
+  oxygenSaturation?: number | null; // сатурация кислорода (SpO2, %)
+  consciousnessLevel?: string | null;
+  
+  // Объективный осмотр по системам (структурированный JSON)
+  generalCondition?: string | null;
+  consciousness?: string | null;
+  skinMucosa?: string | null;
+  lymphNodes?: string | null;
+  musculoskeletal?: string | null;
+  respiratory?: string | null;
+  cardiovascular?: string | null;
+  abdomen?: string | null;
+  urogenital?: string | null;
+  nervousSystem?: string | null;
+  
+  // Input
   complaints: string;
   complaintsJson?: any | null;
   physicalExam?: string | null;
+  
+  // Диагностика и лечение
+  additionalExaminationPlan?: string | null;
+  laboratoryTests?: string | any[] | null; // JSON массив или строка
+  instrumentalTests?: string | any[] | null; // JSON массив или строка
+  consultationRequests?: string | any[] | null; // JSON массив или строка
+  physiotherapy?: string | null;
+  isFirstTimeDiagnosis?: boolean | null;
+  isTrauma?: boolean | null;
+  
+  // Диагнозы (структурированные с поддержкой ручного ввода и МКБ)
+  primaryDiagnosis?: string | DiagnosisEntry | null; // JSON строка или объект
+  complications?: string | DiagnosisEntry[] | null; // JSON массив
+  comorbidities?: string | DiagnosisEntry[] | null; // JSON массив
+  // Legacy поля для обратной совместимости
   primaryDiagnosisId?: number | null;
-  complicationIds?: number[] | null;
-  comorbidityIds?: number[] | null;
+  complicationIds?: string | number[] | null;
+  comorbidityIds?: string | number[] | null;
+  
+  // Treatment
   prescriptions: any[];
   recommendations?: string | null;
+  
+  // Исходы и маршрутизация
+  outcome?: 'recovery' | 'improvement' | 'no_change' | 'worsening' | null;
+  patientRoute?: 'ambulatory' | 'hospitalization' | 'consultation' | 'other' | null;
+  hospitalizationIndication?: string | null;
+  nextVisitDate?: string | null; // дата следующего приема (ГГГГ-ММ-ДД)
+  
+  // Документооборот
+  informedConsentId?: number | null;
+  disabilityCertificate?: boolean | null;
+  preferentialPrescription?: boolean | null;
+  certificateIssued?: boolean | null;
+  
   status: 'draft' | 'completed';
   notes?: string | null;
   createdAt?: string;
@@ -436,6 +510,50 @@ export interface DiagnosisSuggestion {
   confidence: number; // 0.0 - 1.0
   reasoning: string;
   matchedSymptoms: string[];
+}
+
+export interface InformedConsent {
+  id?: number;
+  visitId?: number | null;
+  childId: number;
+  doctorId: number;
+  consentDate: string;
+  
+  // Описание вмешательства
+  interventionDescription: string;
+  goals?: string | null;
+  alternatives?: string | null;
+  
+  // Информация о рисках
+  risks?: string | null;
+  seriousComplicationsFrequency?: string | null;
+  
+  // Статус согласия
+  status: 'given' | 'refused' | 'withdrawn';
+  patientSignature?: string | null;
+  doctorSignature?: string | null;
+  signatureDate?: string | null;
+  
+  // Для несовершеннолетних
+  parentName?: string | null;
+  parentRelation?: string | null;
+  
+  notes?: string | null;
+  createdAt?: string;
+}
+
+export interface VisitTemplate {
+  id?: number;
+  name: string;
+  visitType: string;
+  specialty?: string | null;
+  description?: string | null;
+  templateData: string; // JSON со структурой полей
+  isDefault: boolean;
+  isPublic: boolean;
+  createdById: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface MedicationRecommendation {

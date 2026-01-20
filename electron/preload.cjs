@@ -100,6 +100,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     analyzeVisit: (visitId) => ipcRenderer.invoke('visits:analyze', visitId),
     getMedicationsForDiagnosis: ({ diseaseId, childId }) => ipcRenderer.invoke('visits:get-medications-for-diagnosis', { diseaseId, childId }),
 
+    // INFORMED CONSENT MODULE API
+    getInformedConsent: (id) => ipcRenderer.invoke('informed-consent:get-by-id', id),
+    getInformedConsentByVisitId: (visitId) => ipcRenderer.invoke('informed-consent:get-by-visit-id', visitId),
+    getInformedConsentHistory: (childId) => ipcRenderer.invoke('informed-consent:get-history-for-child', childId),
+    upsertInformedConsent: (data) => ipcRenderer.invoke('informed-consent:upsert', data),
+    deleteInformedConsent: (id) => ipcRenderer.invoke('informed-consent:delete', id),
+    getInformedConsentTemplate: (interventionType) => ipcRenderer.invoke('informed-consent:get-template', interventionType),
+    needsNewInformedConsent: ({ childId, interventionDescription }) => ipcRenderer.invoke('informed-consent:needs-new-consent', { childId, interventionDescription }),
+
+    // VISIT TEMPLATES MODULE API
+    getVisitTemplate: (id) => ipcRenderer.invoke('visit-templates:get-by-id', id),
+    getAllVisitTemplates: () => ipcRenderer.invoke('visit-templates:get-all'),
+    getVisitTemplatesByType: (visitType) => ipcRenderer.invoke('visit-templates:get-by-visit-type', visitType),
+    upsertVisitTemplate: (data) => ipcRenderer.invoke('visit-templates:upsert', data),
+    deleteVisitTemplate: (id) => ipcRenderer.invoke('visit-templates:delete', id),
+    applyVisitTemplate: ({ templateData, existingData }) => ipcRenderer.invoke('visit-templates:apply', { templateData, existingData }),
+
     // ICD CODES MODULE API
     loadIcdCodes: () => ipcRenderer.invoke('icd-codes:load'),
     getIcdCodeByCode: (code) => ipcRenderer.invoke('icd-codes:get-by-code', code),

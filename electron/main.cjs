@@ -13,6 +13,8 @@ const { setupMedicationHandlers } = require('./modules/medications/handlers.cjs'
 const { setupVisitHandlers } = require('./modules/visits/handlers.cjs');
 const { setupIcdCodeHandlers } = require('./modules/icd-codes/handlers.cjs');
 const { setupAllergyHandlers } = require('./modules/allergies/handlers.cjs');
+const { setupInformedConsentHandlers } = require('./modules/informed-consent/handlers.cjs');
+const { setupVisitTemplateHandlers } = require('./modules/visits/template-handlers.cjs');
 const { initializeDatabase } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const isDev = !app.isPackaged;
@@ -75,6 +77,8 @@ app.whenReady().then(async () => {
     setupVisitHandlers();
     setupIcdCodeHandlers();
     setupAllergyHandlers();
+    setupInformedConsentHandlers();
+    setupVisitTemplateHandlers();
 
     // Cache Service handlers
     const { CacheService } = require('./services/cacheService.cjs');
@@ -314,5 +318,26 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit();
+    }
+});
+
+app.on('before-quit', async (event) => {
+    logger.info('[Main] Application is closing, disconnecting Prisma...');
+    try {
+        const { prisma } = require('./prisma-client.cjs');
+        await prisma.$disconnect();
+        logger.info('[Main] Prisma disconnected successfully');
+    } catch (error) {
+        logger.error('[Main] Error disconnecting Prisma:', error);
+    }
+});
+
+app.on('will-quit', async (event) => {
+    // Финальная очистка
+    try {
+        const { prisma } = require('./prisma-client.cjs');
+        await prisma.$disconnect();
+    } catch (error) {
+        // Игнорируем ошибки при финальном закрытии
     }
 });

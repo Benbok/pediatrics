@@ -1,19 +1,41 @@
 const { ipcMain } = require('electron');
 const { VisitService } = require('./service.cjs');
 const { ensureAuthenticated } = require('../../auth.cjs');
-const { logAudit } = require('../../logger.cjs');
+const { logAudit, logger } = require('../../logger.cjs');
+
+/**
+ * Сериализация даты для передачи в frontend
+ */
+function serializeDate(date) {
+    if (!date) return null;
+    if (typeof date === 'string') return date;
+    return date.toISOString();
+}
+
+/**
+ * Сериализация даты без времени (только дата)
+ */
+function serializeDateOnly(date) {
+    if (!date) return null;
+    if (typeof date === 'string') {
+        // Если уже строка формата YYYY-MM-DD, возвращаем как есть
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+        // Иначе пытаемся парсить
+        return new Date(date).toISOString().split('T')[0];
+    }
+    return date.toISOString().split('T')[0];
+}
 
 const setupVisitHandlers = () => {
     ipcMain.handle('visits:list-for-child', ensureAuthenticated(async (_, childId) => {
         const visits = await VisitService.listForChild(childId);
         return visits.map(v => ({
             ...v,
-            createdAt: v.createdAt?.toISOString(),
-            updatedAt: v.updatedAt?.toISOString(),
-            visitDate: typeof v.visitDate === 'string' ? v.visitDate : v.visitDate?.toISOString()?.split('T')[0],
-            complicationIds: JSON.parse(v.complicationIds || '[]'),
-            comorbidityIds: JSON.parse(v.comorbidityIds || '[]'),
-            prescriptions: JSON.parse(v.prescriptions || '[]'),
+            createdAt: serializeDate(v.createdAt),
+            updatedAt: serializeDate(v.updatedAt),
+            visitDate: serializeDateOnly(v.visitDate),
+            nextVisitDate: serializeDateOnly(v.nextVisitDate),
+            // JSON поля уже распарсены в сервисе через _parseVisitFields
         }));
     }));
 
@@ -22,12 +44,11 @@ const setupVisitHandlers = () => {
         if (!visit) return null;
         return {
             ...visit,
-            createdAt: visit.createdAt?.toISOString(),
-            updatedAt: visit.updatedAt?.toISOString(),
-            visitDate: typeof visit.visitDate === 'string' ? visit.visitDate : visit.visitDate?.toISOString()?.split('T')[0],
-            complicationIds: JSON.parse(visit.complicationIds || '[]'),
-            comorbidityIds: JSON.parse(visit.comorbidityIds || '[]'),
-            prescriptions: JSON.parse(visit.prescriptions || '[]'),
+            createdAt: serializeDate(visit.createdAt),
+            updatedAt: serializeDate(visit.updatedAt),
+            visitDate: serializeDateOnly(visit.visitDate),
+            nextVisitDate: serializeDateOnly(visit.nextVisitDate),
+            // JSON поля уже распарсены в сервисе через _parseVisitFields
         };
     }));
 
@@ -35,11 +56,26 @@ const setupVisitHandlers = () => {
         try {
             const result = await VisitService.upsert(data);
             logAudit(data.id ? 'VISIT_UPDATED' : 'VISIT_CREATED', { visitId: result.id, childId: result.childId });
-            return result;
+            // Возвращаем распарсенные данные
+            const parsed = VisitService._parseVisitFields(result);
+            return {
+                ...parsed,
+                createdAt: serializeDate(parsed.createdAt),
+                updatedAt: serializeDate(parsed.updatedAt),
+                visitDate: serializeDateOnly(parsed.visitDate),
+                nextVisitDate: serializeDateOnly(parsed.nextVisitDate),
+            };
         } catch (error) {
-            if (error.name === 'ZodError') {
+            if (error.name === 'ZodError' && error.errors && Array.isArray(error.errors)) {
                 throw new Error(error.errors.map(e => e.message).join(', '));
             }
+            // Логируем ошибку для отладки
+            logger.error('[VisitHandler] Save error:', { 
+                errorName: error?.name, 
+                errorMessage: error?.message,
+                hasErrors: !!error?.errors,
+                error: error 
+            });
             throw error;
         }
     }));

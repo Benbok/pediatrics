@@ -23,6 +23,152 @@ function safeJsonParse(value, defaultValue = []) {
     }
 }
 
+/**
+ * Определение типа приема на основе истории
+ */
+async function determineVisitType(childId, doctorId, visitDate, referringDoctorId = null) {
+    if (referringDoctorId) {
+        return 'consultation';
+    }
+    
+    // Проверяем, был ли ранее прием у этого врача
+    const previousVisits = await prisma.visit.findMany({
+        where: {
+            childId: Number(childId),
+            doctorId: Number(doctorId),
+            visitDate: { lt: new Date(visitDate) }
+        },
+        orderBy: { visitDate: 'desc' },
+        take: 1
+    });
+    
+    if (previousVisits.length === 0) {
+        return 'primary';
+    }
+    
+    const lastVisit = previousVisits[0];
+    const daysSinceLastVisit = Math.floor((new Date(visitDate) - new Date(lastVisit.visitDate)) / (1000 * 60 * 60 * 24));
+    
+    if (daysSinceLastVisit > 30) {
+        return 'primary'; // Если прошло более месяца, считаем первичным
+    }
+    
+    return 'followup';
+}
+
+/**
+ * Нормализация диагнозов: конвертация в единый формат и синхронизация legacy полей
+ */
+function normalizeDiagnoses(data) {
+    const result = { ...data };
+    
+    // Нормализация primaryDiagnosis
+    if (result.primaryDiagnosis) {
+        if (typeof result.primaryDiagnosis === 'string') {
+            try {
+                result.primaryDiagnosis = JSON.parse(result.primaryDiagnosis);
+            } catch (e) {
+                logger.warn('[VisitService] Failed to parse primaryDiagnosis JSON:', e.message);
+            }
+        }
+        // Заполняем legacy поле из diseaseId
+        if (result.primaryDiagnosis?.diseaseId && !result.primaryDiagnosisId) {
+            result.primaryDiagnosisId = result.primaryDiagnosis.diseaseId;
+        }
+    }
+    
+    // Нормализация complications
+    if (result.complications) {
+        if (typeof result.complications === 'string') {
+            try {
+                result.complications = JSON.parse(result.complications);
+            } catch (e) {
+                logger.warn('[VisitService] Failed to parse complications JSON:', e.message);
+                result.complications = [];
+            }
+        }
+        // Синхронизация с legacy полем
+        if (Array.isArray(result.complications)) {
+            const ids = result.complications
+                .map(c => c.diseaseId)
+                .filter(Boolean);
+            if (ids.length > 0) {
+                result.complicationIds = JSON.stringify(ids);
+            }
+        }
+    }
+    
+    // Нормализация comorbidities
+    if (result.comorbidities) {
+        if (typeof result.comorbidities === 'string') {
+            try {
+                result.comorbidities = JSON.parse(result.comorbidities);
+            } catch (e) {
+                logger.warn('[VisitService] Failed to parse comorbidities JSON:', e.message);
+                result.comorbidities = [];
+            }
+        }
+        // Синхронизация с legacy полем
+        if (Array.isArray(result.comorbidities)) {
+            const ids = result.comorbidities
+                .map(c => c.diseaseId)
+                .filter(Boolean);
+            if (ids.length > 0) {
+                result.comorbidityIds = JSON.stringify(ids);
+            }
+        }
+    }
+    
+    // Сериализация диагнозов для сохранения в БД
+    if (result.primaryDiagnosis && typeof result.primaryDiagnosis === 'object') {
+        result.primaryDiagnosis = JSON.stringify(result.primaryDiagnosis);
+    }
+    if (result.complications && Array.isArray(result.complications)) {
+        result.complications = JSON.stringify(result.complications);
+    }
+    if (result.comorbidities && Array.isArray(result.comorbidities)) {
+        result.comorbidities = JSON.stringify(result.comorbidities);
+    }
+    
+    return result;
+}
+
+/**
+ * Генерация номера талона 025-1/у
+ */
+function generateTicketNumber(childId, visitDate) {
+    const date = new Date(visitDate);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    // Формат: ГГГГ-ММ-ДД-XXXX (где XXXX - порядковый номер для этого дня)
+    return `${year}-${month}-${day}-${String(childId).padStart(4, '0')}`;
+}
+
+/**
+ * Автозаполнение данных из предыдущего приема
+ */
+async function autofillFromPreviousVisit(childId, visitDate) {
+    const previousVisit = await prisma.visit.findFirst({
+        where: {
+            childId: Number(childId),
+            visitDate: { lt: new Date(visitDate) }
+        },
+        orderBy: { visitDate: 'desc' }
+    });
+    
+    if (!previousVisit) return {};
+    
+    return {
+        // Антропометрия обычно не копируется (измеряется каждый раз)
+        // Анамнез жизни обычно статичен, можно копировать
+        lifeHistory: previousVisit.lifeHistory || null,
+        // Хронические диагнозы - можно предложить как сопутствующие
+        // (но не копировать автоматически, только если указано в legacy поле)
+    };
+}
+
 function getAllergyWarnings(medication, allergies) {
     if (!allergies || allergies.length === 0) return [];
 
@@ -45,56 +191,196 @@ function getAllergyWarnings(medication, allergies) {
         });
 }
 
+// Схема для объекта диагноза
+const DiagnosisEntrySchema = z.object({
+    code: z.string().regex(/^[A-Z]\d{2}\.?\d{0,2}$/, 'Неверный формат кода МКБ'),
+    nameRu: z.string().min(1, 'Название диагноза обязательно'),
+    diseaseId: z.number().positive().optional(),
+});
+
 const VisitSchema = z.object({
     id: z.number().optional(),
     childId: z.number(),
     doctorId: z.number(),
     visitDate: z.string().or(z.date()),
+    
+    // Тип приема и организационные данные
+    visitType: z.enum(['primary', 'followup', 'consultation', 'emergency', 'urgent']).optional().nullable(),
+    visitPlace: z.enum(['clinic', 'home', 'other']).optional().nullable(),
+    visitTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional().nullable(),
+    ticketNumber: z.string().optional().nullable(),
+    referringDoctorId: z.number().positive().optional().nullable(),
+    
+    // Anthropometry
     currentWeight: z.number().min(0.5).max(200).optional().nullable(),
     currentHeight: z.number().min(30).max(250).optional().nullable(),
     bmi: z.number().optional().nullable(),
     bsa: z.number().optional().nullable(),
+    
+    // Анамнез (структурированный)
+    diseaseHistory: z.string().optional().nullable(),
+    lifeHistory: z.string().optional().nullable(),
+    allergyHistory: z.string().optional().nullable(),
+    previousDiseases: z.string().optional().nullable(),
+    
+    // Показатели жизнедеятельности
+    // Валидация здесь только техническая - для типа данных
+    // Клиническая валидация выполняется на уровне UI (визуальные подсказки)
+    bloodPressureSystolic: z.number().int().min(0).max(300).optional().nullable(),
+    bloodPressureDiastolic: z.number().int().min(0).max(200).optional().nullable(),
+    pulse: z.number().int().min(0).max(300).optional().nullable(),
+    respiratoryRate: z.number().int().min(0).max(100).optional().nullable(),
+    temperature: z.number().min(20.0).max(50.0).optional().nullable(),
+    oxygenSaturation: z.number().int().min(0).max(100).optional().nullable(),
+    consciousnessLevel: z.string().optional().nullable(),
+    
+    // Объективный осмотр по системам
+    generalCondition: z.string().optional().nullable(),
+    consciousness: z.string().optional().nullable(),
+    skinMucosa: z.string().optional().nullable(),
+    lymphNodes: z.string().optional().nullable(),
+    musculoskeletal: z.string().optional().nullable(),
+    respiratory: z.string().optional().nullable(),
+    cardiovascular: z.string().optional().nullable(),
+    abdomen: z.string().optional().nullable(),
+    urogenital: z.string().optional().nullable(),
+    nervousSystem: z.string().optional().nullable(),
+    
+    // Input
     complaints: z.string().min(1),
     complaintsJson: z.string().optional().nullable(),
     physicalExam: z.string().optional().nullable(),
+    
+    // Диагностика и лечение
+    additionalExaminationPlan: z.string().optional().nullable(),
+    laboratoryTests: z.union([z.string(), z.array(z.any())]).optional().nullable(),
+    instrumentalTests: z.union([z.string(), z.array(z.any())]).optional().nullable(),
+    consultationRequests: z.union([z.string(), z.array(z.any())]).optional().nullable(),
+    physiotherapy: z.string().optional().nullable(),
+    isFirstTimeDiagnosis: z.boolean().optional().nullable(),
+    isTrauma: z.boolean().optional().nullable(),
+    
+    // Диагнозы (структурированные)
+    primaryDiagnosis: z.union([z.string(), DiagnosisEntrySchema]).optional().nullable(),
+    complications: z.union([z.string(), z.array(DiagnosisEntrySchema)]).optional().nullable(),
+    comorbidities: z.union([z.string(), z.array(DiagnosisEntrySchema)]).optional().nullable(),
+    // Legacy поля
     primaryDiagnosisId: z.number().optional().nullable(),
-    complicationIds: z.array(z.number()).default([]),
-    comorbidityIds: z.array(z.number()).default([]),
+    complicationIds: z.union([z.string(), z.array(z.number())]).optional().nullable(),
+    comorbidityIds: z.union([z.string(), z.array(z.number())]).optional().nullable(),
+    
+    // Treatment
     prescriptions: z.array(z.any()).default([]),
     recommendations: z.string().optional().nullable(),
+    
+    // Исходы и маршрутизация
+    outcome: z.enum(['recovery', 'improvement', 'no_change', 'worsening']).optional().nullable(),
+    patientRoute: z.enum(['ambulatory', 'hospitalization', 'consultation', 'other']).optional().nullable(),
+    hospitalizationIndication: z.string().optional().nullable(),
+    nextVisitDate: z.string().optional().nullable(),
+    
+    // Документооборот
+    informedConsentId: z.number().positive().optional().nullable(),
+    disabilityCertificate: z.boolean().optional().nullable(),
+    preferentialPrescription: z.boolean().optional().nullable(),
+    certificateIssued: z.boolean().optional().nullable(),
+    
     status: z.enum(['draft', 'completed']).default('draft'),
     notes: z.string().optional().nullable(),
 });
 
 const VisitService = {
     /**
+     * Парсинг JSON полей при возврате данных из БД
+     */
+    _parseVisitFields(visit) {
+        if (!visit) return visit;
+        
+        const parsed = { ...visit };
+        
+        // Парсинг диагнозов
+        if (parsed.primaryDiagnosis && typeof parsed.primaryDiagnosis === 'string') {
+            try {
+                parsed.primaryDiagnosis = JSON.parse(parsed.primaryDiagnosis);
+            } catch (e) {
+                logger.warn('[VisitService] Failed to parse primaryDiagnosis:', e.message);
+            }
+        }
+        if (parsed.complications && typeof parsed.complications === 'string') {
+            try {
+                parsed.complications = JSON.parse(parsed.complications);
+            } catch (e) {
+                logger.warn('[VisitService] Failed to parse complications:', e.message);
+            }
+        }
+        if (parsed.comorbidities && typeof parsed.comorbidities === 'string') {
+            try {
+                parsed.comorbidities = JSON.parse(parsed.comorbidities);
+            } catch (e) {
+                logger.warn('[VisitService] Failed to parse comorbidities:', e.message);
+            }
+        }
+        
+        // Парсинг других JSON полей
+        parsed.complicationIds = safeJsonParse(parsed.complicationIds, []);
+        parsed.comorbidityIds = safeJsonParse(parsed.comorbidityIds, []);
+        parsed.prescriptions = safeJsonParse(parsed.prescriptions, []);
+        parsed.laboratoryTests = safeJsonParse(parsed.laboratoryTests, []);
+        parsed.instrumentalTests = safeJsonParse(parsed.instrumentalTests, []);
+        parsed.consultationRequests = safeJsonParse(parsed.consultationRequests, []);
+        
+        return parsed;
+    },
+
+    /**
      * List visits for a child
      */
     async listForChild(childId) {
-        return await prisma.visit.findMany({
-            where: { childId: Number(childId) },
-            include: {
-                primaryDiagnosis: true,
-                doctor: {
-                    select: { fullName: true }
-                }
-            },
-            orderBy: { visitDate: 'desc' }
-        });
+        try {
+            const visits = await prisma.visit.findMany({
+                where: { childId: Number(childId) },
+                include: {
+                    primaryDisease: true,
+                    doctor: {
+                        select: { fullName: true }
+                    },
+                    informedConsent: {
+                        select: {
+                            id: true,
+                            status: true,
+                            consentDate: true
+                        }
+                    }
+                },
+                orderBy: { visitDate: 'desc' }
+            });
+            
+            return visits.map(v => this._parseVisitFields(v));
+        } catch (error) {
+            logger.error('[VisitService] Failed to list visits for child:', {
+                error: error.message,
+                stack: error.stack,
+                childId
+            });
+            throw error;
+        }
     },
 
     /**
      * Get visit by ID
      */
     async getById(id) {
-        return await prisma.visit.findUnique({
+        const visit = await prisma.visit.findUnique({
             where: { id: Number(id) },
             include: {
                 child: true,
-                primaryDiagnosis: true,
-                doctor: true
+                primaryDisease: true,
+                doctor: true,
+                informedConsent: true
             }
         });
+        
+        return this._parseVisitFields(visit);
     },
 
     /**
@@ -103,6 +389,27 @@ const VisitService = {
     async upsert(data) {
         const validated = VisitSchema.parse(data);
         const { id, ...rest } = validated;
+
+        // Определение типа приема, если не указан
+        if (!rest.visitType) {
+            rest.visitType = await determineVisitType(
+                rest.childId,
+                rest.doctorId,
+                rest.visitDate,
+                rest.referringDoctorId
+            );
+        }
+
+        // Генерация номера талона, если не указан
+        if (!rest.ticketNumber && !id) {
+            rest.ticketNumber = generateTicketNumber(rest.childId, rest.visitDate);
+        }
+
+        // Автозаполнение из предыдущего приема (только для новых)
+        if (!id) {
+            const autofilled = await autofillFromPreviousVisit(rest.childId, rest.visitDate);
+            Object.assign(rest, autofilled);
+        }
 
         // Валидация антропометрии
         const anthropometryValidation = validateAnthropometry(rest.currentWeight, rest.currentHeight);
@@ -122,14 +429,33 @@ const VisitService = {
             }
         }
 
+        // Нормализация диагнозов
+        const normalized = normalizeDiagnoses(rest);
+
+        // Подготовка данных для БД
         const dbData = {
-            ...rest,
+            ...normalized,
             visitDate: new Date(rest.visitDate),
             bmi,
             bsa,
-            complicationIds: JSON.stringify(rest.complicationIds),
-            comorbidityIds: JSON.stringify(rest.comorbidityIds),
-            prescriptions: JSON.stringify(rest.prescriptions),
+            // Сериализация JSON полей
+            complicationIds: typeof normalized.complicationIds === 'string' 
+                ? normalized.complicationIds 
+                : JSON.stringify(normalized.complicationIds || []),
+            comorbidityIds: typeof normalized.comorbidityIds === 'string'
+                ? normalized.comorbidityIds
+                : JSON.stringify(normalized.comorbidityIds || []),
+            prescriptions: JSON.stringify(normalized.prescriptions || []),
+            laboratoryTests: typeof normalized.laboratoryTests === 'string' 
+                ? normalized.laboratoryTests 
+                : (normalized.laboratoryTests ? JSON.stringify(normalized.laboratoryTests) : null),
+            instrumentalTests: typeof normalized.instrumentalTests === 'string'
+                ? normalized.instrumentalTests
+                : (normalized.instrumentalTests ? JSON.stringify(normalized.instrumentalTests) : null),
+            consultationRequests: typeof normalized.consultationRequests === 'string'
+                ? normalized.consultationRequests
+                : (normalized.consultationRequests ? JSON.stringify(normalized.consultationRequests) : null),
+            nextVisitDate: normalized.nextVisitDate ? new Date(normalized.nextVisitDate) : null,
         };
 
         if (id) {
@@ -156,12 +482,56 @@ const VisitService = {
     /**
      * AI-powered analysis of complaints
      * Returns suggested diagnoses with confidence scores and reasoning
+     * Расширенный анализ с учетом анамнеза, показателей жизнедеятельности и клинического осмотра
      */
     async analyzeVisit(visitId) {
         const visit = await this.getById(visitId);
         if (!visit) throw new Error('Прием не найден');
 
-        if (!visit.complaints || visit.complaints.trim().length === 0) {
+        // Собираем все клинические данные для анализа
+        const clinicalData = [];
+        if (visit.complaints && visit.complaints.trim().length > 0) {
+            clinicalData.push(`Жалобы: ${visit.complaints}`);
+        }
+        if (visit.diseaseHistory) {
+            clinicalData.push(`Анамнез заболевания: ${visit.diseaseHistory}`);
+        }
+        if (visit.allergyHistory) {
+            clinicalData.push(`Аллергологический анамнез: ${visit.allergyHistory}`);
+        }
+        if (visit.physicalExam) {
+            clinicalData.push(`Объективный осмотр: ${visit.physicalExam}`);
+        }
+        
+        // Добавляем показатели жизнедеятельности
+        const vitalSigns = [];
+        if (visit.temperature) vitalSigns.push(`Температура: ${visit.temperature}°C`);
+        if (visit.pulse) vitalSigns.push(`Пульс: ${visit.pulse} уд/мин`);
+        if (visit.bloodPressureSystolic && visit.bloodPressureDiastolic) {
+            vitalSigns.push(`АД: ${visit.bloodPressureSystolic}/${visit.bloodPressureDiastolic} мм рт.ст.`);
+        }
+        if (visit.respiratoryRate) vitalSigns.push(`ЧДД: ${visit.respiratoryRate} в минуту`);
+        if (visit.oxygenSaturation) vitalSigns.push(`SpO2: ${visit.oxygenSaturation}%`);
+        
+        if (vitalSigns.length > 0) {
+            clinicalData.push(`Показатели жизнедеятельности: ${vitalSigns.join(', ')}`);
+        }
+        
+        // Добавляем объективный осмотр по системам
+        const systemsExam = [];
+        if (visit.generalCondition) systemsExam.push(`Общее состояние: ${visit.generalCondition}`);
+        if (visit.respiratory) systemsExam.push(`Органы дыхания: ${visit.respiratory}`);
+        if (visit.cardiovascular) systemsExam.push(`ССС: ${visit.cardiovascular}`);
+        if (visit.abdomen) systemsExam.push(`Органы брюшной полости: ${visit.abdomen}`);
+        if (visit.nervousSystem) systemsExam.push(`Нервная система: ${visit.nervousSystem}`);
+        
+        if (systemsExam.length > 0) {
+            clinicalData.push(`Объективный осмотр по системам: ${systemsExam.join('; ')}`);
+        }
+
+        const combinedClinicalText = clinicalData.join('\n\n');
+
+        if (combinedClinicalText.trim().length === 0) {
             return [];
         }
 
@@ -173,21 +543,22 @@ const VisitService = {
             }
 
             // Рассчитываем возраст
-            const birthDate = new Date(child.birthDate);
+            const birthDateStr = decrypt(child.birthDate);
+            const birthDate = new Date(birthDateStr);
             const now = new Date();
             const ageMonths = (now.getFullYear() - birthDate.getFullYear()) * 12 +
                 (now.getMonth() - birthDate.getMonth());
 
-            // 2. Парсим жалобы через Gemini
-            logger.info(`[VisitService] Parsing complaints for visit ${visitId}`);
+            // 2. Парсим клинические данные через Gemini (расширенный анализ)
+            logger.info(`[VisitService] Parsing clinical data for visit ${visitId}`);
             const parsed = await parseComplaints(
-                visit.complaints,
+                combinedClinicalText,
                 ageMonths,
                 visit.currentWeight || null
             );
 
             if (!parsed.symptoms || parsed.symptoms.length === 0) {
-                logger.warn('[VisitService] No symptoms extracted from complaints');
+                logger.warn('[VisitService] No symptoms extracted from clinical data');
                 return [];
             }
 
@@ -203,7 +574,7 @@ const VisitService = {
             // Ограничиваем до топ-20 для ранжирования
             const topCandidates = candidateDiseases.slice(0, 20);
 
-            // 4. Ранжируем через Gemini (получаем топ-5)
+            // 4. Ранжируем через Gemini с учетом всех данных
             logger.info(`[VisitService] Ranking ${topCandidates.length} candidate diseases`);
             const rankings = await rankDiagnoses(
                 parsed.symptoms,
@@ -211,14 +582,14 @@ const VisitService = {
                 {
                     ageMonths,
                     weight: visit.currentWeight || null,
-                    height: visit.currentHeight || null
+                    height: visit.currentHeight || null,
+                    temperature: visit.temperature || null,
+                    vitalSigns: vitalSigns.join(', ')
                 }
             );
 
             // 5. Формируем результат с полными данными заболеваний
             logger.info(`[VisitService] Mapping ${rankings.length} rankings to diseases`);
-            logger.debug(`[VisitService] Available candidate IDs: ${topCandidates.map(d => d.id).join(', ')}`);
-            logger.debug(`[VisitService] Ranking disease IDs: ${rankings.map(r => r.diseaseId).join(', ')}`);
 
             const suggestions = rankings.map(ranking => {
                 const disease = topCandidates.find(d => d.id === ranking.diseaseId);
@@ -249,7 +620,7 @@ const VisitService = {
         } catch (error) {
             logger.error('[VisitService] Analysis failed:', error);
             // Fallback на простой поиск
-            return this._fallbackAnalysis(visit.complaints);
+            return this._fallbackAnalysis(combinedClinicalText);
         }
     },
 

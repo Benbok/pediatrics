@@ -85,10 +85,16 @@ async function initDatabase() {
   logger.info('[Database] isDev:', isDev);
   logger.info('[Database] dbPath:', dbPath);
 
-  try {
-    logger.info('[Database] Connecting to Prisma...');
-    await prisma.$connect();
-    logger.info('[Database] Connected at:', dbPath);
+    try {
+        logger.info('[Database] Connecting to Prisma...');
+        await prisma.$connect();
+        
+        // Устанавливаем busy_timeout для SQLite (в миллисекундах)
+        // Это позволяет базе данных ждать до 5 секунд перед возвращением ошибки "database is locked"
+        await prisma.$executeRawUnsafe(`PRAGMA busy_timeout = 5000`);
+        
+        logger.info('[Database] Connected at:', dbPath);
+        logger.info('[Database] SQLite busy_timeout set to 5000ms');
 
     // In production, check if schema exists and is correct
     if (!isDev) {

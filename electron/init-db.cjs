@@ -12,6 +12,9 @@ async function initializeDatabase() {
     try {
         logger.info('[DB Init] Checking database initialization status...');
 
+        // Устанавливаем busy_timeout для SQLite перед операциями
+        await prisma.$executeRawUnsafe(`PRAGMA busy_timeout = 5000`);
+
         // Check if users table is empty
         const userCount = await prisma.user.count();
 
