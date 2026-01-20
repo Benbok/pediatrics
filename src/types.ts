@@ -591,6 +591,14 @@ export interface VisitTemplate {
   updatedAt?: string;
 }
 
+export interface DilutionInfo {
+  enabled: boolean;
+  diluentType?: 'nacl_0_9' | 'glucose_5' | 'glucose_10' | 'water_inj' | null;
+  diluentVolumeMl?: number | null;
+  concentrationMgPerMl?: number | null;
+  finalVolumeMl?: number | null;
+}
+
 export interface MedicationRecommendation {
   medication: Medication;
   recommendedDose: any; // DoseCalculationResult

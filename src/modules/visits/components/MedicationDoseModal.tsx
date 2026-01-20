@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, Pill } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, AlertCircle, Pill, Beaker } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Medication } from '../../../types';
+import { getRouteLabel, requiresDilution, ROUTE_LABELS, RouteOfAdmin } from '../../../utils/routeOfAdmin';
+import { getDiluentLabel, DILUENT_LABELS, DiluentType } from '../../../utils/diluentTypes';
+import { calculateDilution, validateDilutionInput } from '../services/medicationDoseCalcService';
 
 interface MedicationDoseModalProps {
     isOpen: boolean;
@@ -20,6 +23,16 @@ export interface DoseData {
     duration: string;
     singleDoseMg?: number | null;
     timesPerDay?: number | null;
+    routeOfAdmin?: string | null;
+    packagingDescription?: string | null;
+    dilution?: {
+        enabled: boolean;
+        drugAmountMg?: number | null;
+        diluentType?: 'nacl_0_9' | 'glucose_5' | 'glucose_10' | 'water_inj' | null;
+        diluentVolumeMl?: number | null;
+        concentrationMgPerMl?: number | null;
+        volumeToDrawMl?: number | null;
+    } | null;
 }
 
 export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
@@ -36,16 +49,64 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
     const [duration, setDuration] = useState(initialDoseData?.duration || '5-7 дней');
     const [singleDoseMg, setSingleDoseMg] = useState<string>(initialDoseData?.singleDoseMg?.toString() || '');
     const [timesPerDay, setTimesPerDay] = useState<string>(initialDoseData?.timesPerDay?.toString() || '');
+    const [routeOfAdmin, setRouteOfAdmin] = useState<string>(initialDoseData?.routeOfAdmin || medication?.routeOfAdmin || '');
+    const [packagingDescription, setPackagingDescription] = useState(initialDoseData?.packagingDescription || '');
 
-    // Обновляем поля при изменении initialDoseData
+    // Dilution state
+    const [dilutionEnabled, setDilutionEnabled] = useState(initialDoseData?.dilution?.enabled || false);
+    const [drugAmountMg, setDrugAmountMg] = useState<string>(initialDoseData?.dilution?.drugAmountMg?.toString() || '');
+    const [diluentType, setDiluentType] = useState<DiluentType | ''>(initialDoseData?.dilution?.diluentType || '');
+    const [diluentVolumeMl, setDiluentVolumeMl] = useState<string>(initialDoseData?.dilution?.diluentVolumeMl?.toString() || '');
+
+    // Check if route requires dilution
+    const canShowDilution = useMemo(() => requiresDilution(routeOfAdmin), [routeOfAdmin]);
+
+    // Calculate dilution results
+    const dilutionResult = useMemo(() => {
+        if (!dilutionEnabled || !canShowDilution || !singleDoseMg || !drugAmountMg || !diluentVolumeMl || !diluentType) {
+            return null;
+        }
+
+        const singleDose = parseFloat(singleDoseMg);
+        const drugAmount = parseFloat(drugAmountMg);
+        const volume = parseFloat(diluentVolumeMl);
+
+        if (isNaN(singleDose) || isNaN(drugAmount) || isNaN(volume) || singleDose <= 0 || drugAmount <= 0 || volume <= 0) {
+            return null;
+        }
+
+        const result = calculateDilution({
+            singleDoseMg: singleDose,
+            drugAmountMg: drugAmount,
+            diluentType: diluentType as DiluentType,
+            diluentVolumeMl: volume
+        });
+
+        if ('message' in result) {
+            return null; // Error, don't show result
+        }
+
+        return result;
+    }, [dilutionEnabled, canShowDilution, singleDoseMg, drugAmountMg, diluentVolumeMl, diluentType]);
+
+    // Обновляем поля при изменении initialDoseData или medication
     useEffect(() => {
         if (initialDoseData) {
             setDosing(initialDoseData.dosing || '');
             setDuration(initialDoseData.duration || '5-7 дней');
             setSingleDoseMg(initialDoseData.singleDoseMg?.toString() || '');
             setTimesPerDay(initialDoseData.timesPerDay?.toString() || '');
+            setRouteOfAdmin(initialDoseData.routeOfAdmin || medication?.routeOfAdmin || '');
+            setPackagingDescription(initialDoseData.packagingDescription || medication?.packageDescription || '');
+            setDilutionEnabled(initialDoseData.dilution?.enabled || false);
+            setDrugAmountMg(initialDoseData.dilution?.drugAmountMg?.toString() || '');
+            setDiluentType(initialDoseData.dilution?.diluentType || '');
+            setDiluentVolumeMl(initialDoseData.dilution?.diluentVolumeMl?.toString() || '');
+        } else if (medication) {
+            setRouteOfAdmin(medication.routeOfAdmin || '');
+            setPackagingDescription(medication.packageDescription || '');
         }
-    }, [initialDoseData]);
+    }, [initialDoseData, medication]);
 
     // Сброс при закрытии
     useEffect(() => {
@@ -54,6 +115,11 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             setDuration('5-7 дней');
             setSingleDoseMg('');
             setTimesPerDay('');
+            setPackagingDescription('');
+            setDilutionEnabled(false);
+            setDrugAmountMg('');
+            setDiluentType('');
+            setDiluentVolumeMl('');
         }
     }, [isOpen]);
 
@@ -65,6 +131,16 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             duration: duration.trim() || '5-7 дней',
             singleDoseMg: singleDoseMg ? parseFloat(singleDoseMg) : null,
             timesPerDay: timesPerDay ? parseInt(timesPerDay) : null,
+            routeOfAdmin: routeOfAdmin || null,
+            packagingDescription: packagingDescription.trim() || null,
+            dilution: dilutionEnabled && canShowDilution ? {
+                enabled: true,
+                drugAmountMg: drugAmountMg ? parseFloat(drugAmountMg) : null,
+                diluentType: (diluentType || null) as DiluentType | null,
+                diluentVolumeMl: diluentVolumeMl ? parseFloat(diluentVolumeMl) : null,
+                concentrationMgPerMl: dilutionResult?.concentrationMgPerMl || null,
+                volumeToDrawMl: dilutionResult?.volumeToDrawMl || null,
+            } : null,
         };
         onConfirm(doseData);
     };
@@ -75,12 +151,12 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
         timesPerDay !== (initialDoseData?.timesPerDay?.toString() || '');
 
     return (
-        <div 
+        <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300"
             onClick={onClose}
         >
-            <div 
-                className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full border dark:border-slate-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300"
+            <div
+                className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] border dark:border-slate-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
@@ -96,16 +172,31 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                             <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                                 {medication.nameRu}
                             </p>
-                            {(patientWeight || patientAgeMonths) && (
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                    {patientWeight && `Вес: ${patientWeight} кг`}
-                                    {patientAgeMonths && ` • Возраст: ${patientAgeMonths} мес.`}
-                                    {patientHeight && ` • Рост: ${patientHeight} см`}
-                                </p>
-                            )}
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-medium text-slate-500 dark:text-slate-500">Способ:</span>
+                                    <select
+                                        value={routeOfAdmin}
+                                        onChange={(e) => setRouteOfAdmin(e.target.value)}
+                                        className="text-xs font-semibold text-primary-600 dark:text-primary-400 bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:underline"
+                                    >
+                                        <option value="">Не указано</option>
+                                        {Object.entries(ROUTE_LABELS).map(([value, label]) => (
+                                            <option key={value} value={value}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {(patientWeight || patientAgeMonths) && (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        {patientWeight && `Вес: ${patientWeight} кг`}
+                                        {patientAgeMonths && ` • Возраст: ${patientAgeMonths} мес.`}
+                                        {patientHeight && ` • Рост: ${patientHeight} см`}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     </div>
-                    <button 
+                    <button
                         onClick={onClose}
                         className="p-2 hover:bg-primary-100 dark:hover:bg-primary-900/40 rounded-full transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                     >
@@ -125,12 +216,26 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                             value={dosing}
                             onChange={(e) => setDosing(e.target.value)}
                             placeholder="Например: По 10 мг/кг каждые 12 часов..."
-                            rows={4}
+                            rows={3}
                             className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm transition-all duration-200 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 text-slate-900 dark:text-white"
                         />
                         <p className="text-xs text-slate-500 dark:text-slate-400">
                             Полная инструкция по применению препарата
                         </p>
+                    </div>
+
+                    {/* Описание упаковки */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            Описание формы выпуска и упаковки
+                        </label>
+                        <Input
+                            type="text"
+                            value={packagingDescription}
+                            onChange={(e) => setPackagingDescription(e.target.value)}
+                            placeholder="Например: Флакон 500 мг + растворитель 10 мл"
+                            className="w-full"
+                        />
                     </div>
 
                     {/* Длительность */}
@@ -181,6 +286,103 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                             </p>
                         </div>
                     </div>
+
+                    {/* Разведение препарата (только для IV/IM) */}
+                    {canShowDilution && (
+                        <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Beaker className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        Разведение препарата
+                                    </label>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={dilutionEnabled}
+                                        onChange={(e) => {
+                                            setDilutionEnabled(e.target.checked);
+                                            if (!e.target.checked) {
+                                                setDiluentType('');
+                                                setDiluentVolumeMl('');
+                                            }
+                                        }}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
+                                </label>
+                            </div>
+
+                            {dilutionEnabled && (
+                                <div className="space-y-4 mt-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                            Количество сухого вещества (мг)
+                                        </label>
+                                        <Input
+                                            type="number"
+                                            step="0.1"
+                                            value={drugAmountMg}
+                                            onChange={(e) => setDrugAmountMg(e.target.value)}
+                                            placeholder="Например: 500"
+                                            className="w-full"
+                                        />
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                                            Общее количество действующего вещества в ампуле/флаконе
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                Растворитель
+                                            </label>
+                                            <select
+                                                value={diluentType}
+                                                onChange={(e) => setDiluentType(e.target.value as DiluentType | '')}
+                                                className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 text-slate-900 dark:text-white"
+                                            >
+                                                <option value="">Выберите растворитель</option>
+                                                {Object.entries(DILUENT_LABELS).map(([key, label]) => (
+                                                    <option key={key} value={key}>
+                                                        {label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                Объем растворителя (мл)
+                                            </label>
+                                            <Input
+                                                type="number"
+                                                step="0.1"
+                                                value={diluentVolumeMl}
+                                                onChange={(e) => setDiluentVolumeMl(e.target.value)}
+                                                placeholder="Например: 10"
+                                                className="w-full"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {dilutionResult && (
+                                        <div className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-primary-200 dark:border-primary-900/40">
+                                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                                Расчетные параметры:
+                                            </p>
+                                            <div className="text-xs">
+                                                <span className="text-slate-500 dark:text-slate-400">Объем для набора:</span>
+                                                <span className="ml-2 font-semibold text-primary-600 dark:text-primary-400 text-sm">
+                                                    {dilutionResult.volumeToDrawMl} мл
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}

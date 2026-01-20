@@ -47,14 +47,14 @@ function normalizeRouteOfAdmin(value, instructionText = '') {
             // Если в инструкции четко указано внутримышечно
             return 'im';
         } else if (hasIv && hasIm) {
-            // Оба указаны - используем iv_infusion как более распространенный вариант
-            logger.info('[RouteOfAdmin] Both IV and IM mentioned in instruction for parenteral, defaulting to iv_infusion');
-            return 'iv_infusion';
+            // Оба указаны - используем iv_bolus как более распространенный вариант для парентерального введения
+            logger.info('[RouteOfAdmin] Both IV and IM mentioned in instruction for parenteral, defaulting to iv_bolus');
+            return 'iv_bolus';
         } else {
-            // Для parenteral без уточнений в инструкции, используем iv_infusion по умолчанию
-            // так как парентеральное введение чаще всего означает внутривенное
-            logger.info('[RouteOfAdmin] Parenteral route without clear indication, defaulting to iv_infusion');
-            return 'iv_infusion';
+            // Для parenteral без уточнений в инструкции, используем iv_bolus по умолчанию
+            // так как парентеральное введение чаще всего означает внутривенное болюсное введение
+            logger.info('[RouteOfAdmin] Parenteral route without clear indication, defaulting to iv_bolus');
+            return 'iv_bolus';
         }
     }
 

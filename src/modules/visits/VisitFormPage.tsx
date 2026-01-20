@@ -46,10 +46,13 @@ import {
     Calendar,
     Clock,
     FileText,
-    Eye
+    Eye,
+    Beaker
 } from 'lucide-react';
 import { calculateBMI, calculateBSA, getBMICategory, getBMICategoryLabel, formatBMI, formatBSA, validateAnthropometry } from '../../utils/anthropometry';
 import { calculateAgeInMonths, getFormattedAge } from '../../utils/ageUtils';
+import { getRouteLabel } from '../../utils/routeOfAdmin';
+import { getDiluentLabel } from '../../utils/diluentTypes';
 
 export const VisitFormPage: React.FC = () => {
     const { childId, id } = useParams<{ childId: string; id?: string }>();
@@ -88,32 +91,32 @@ export const VisitFormPage: React.FC = () => {
     const [isLoadingMedications, setIsLoadingMedications] = useState(false);
     const [isMedicationBrowserOpen, setIsMedicationBrowserOpen] = useState(false);
     const [autoDetectedVisitType, setAutoDetectedVisitType] = useState<VisitType | null>(null);
-    
+
     // Модальное окно редактирования дозировки
     const [isDoseModalOpen, setIsDoseModalOpen] = useState(false);
     const [selectedMedicationForDose, setSelectedMedicationForDose] = useState<Medication | null>(null);
     const [calculatedDoseData, setCalculatedDoseData] = useState<Partial<DoseData> | null>(null);
     const [pendingMedicationId, setPendingMedicationId] = useState<number | null>(null);
-    
+
     // Шаблоны назначений
     const [isMedicationTemplateSelectorOpen, setIsMedicationTemplateSelectorOpen] = useState(false);
     const [isBatchEditorOpen, setIsBatchEditorOpen] = useState(false);
     const [pendingTemplateItems, setPendingTemplateItems] = useState<any[]>([]);
     const [isCreateMedicationTemplateOpen, setIsCreateMedicationTemplateOpen] = useState(false);
-    
+
     // Модальные окна
     const [isIcdSearchOpen, setIsIcdSearchOpen] = useState(false);
     const [isDiseaseSearchOpen, setIsDiseaseSearchOpen] = useState(false);
     const [currentDiagnosisSelector, setCurrentDiagnosisSelector] = useState<'primary' | 'complications' | 'comorbidities' | null>(null);
-    
+
     // Sidepanel для просмотра заболевания
     const [selectedDiseaseForView, setSelectedDiseaseForView] = useState<Disease | null>(null);
     const [isDiseasePanelOpen, setIsDiseasePanelOpen] = useState(false);
-    
+
     // Информированное согласие
     const [informedConsent, setInformedConsent] = useState<InformedConsent | null>(null);
     const [showConsentForm, setShowConsentForm] = useState(false);
-    
+
     useEffect(() => {
         loadData();
     }, [id, childId]);
@@ -128,7 +131,7 @@ export const VisitFormPage: React.FC = () => {
 
             if (isEdit && id) {
                 const visitData = await visitService.getVisit(Number(id));
-                
+
                 // Парсим JSON поля диагнозов, если они строки
                 const parsedData = { ...visitData };
                 if (typeof parsedData.primaryDiagnosis === 'string' && parsedData.primaryDiagnosis) {
@@ -152,14 +155,14 @@ export const VisitFormPage: React.FC = () => {
                         logger.warn('[VisitFormPage] Failed to parse comorbidities:', e);
                     }
                 }
-                
+
                 setFormData(parsedData);
-                
+
                 if (visitData.currentWeight && visitData.currentHeight) {
                     setCalculatedBMI(visitData.bmi || calculateBMI(visitData.currentWeight, visitData.currentHeight));
                     setCalculatedBSA(visitData.bsa || calculateBSA(visitData.currentWeight, visitData.currentHeight));
                 }
-                
+
                 // Загружаем информированное согласие, если есть
                 if (visitData.informedConsentId) {
                     try {
@@ -184,16 +187,16 @@ export const VisitFormPage: React.FC = () => {
     // Определение типа приема
     const determineVisitType = async (): Promise<VisitType> => {
         if (!childId || !currentUser?.id) return 'primary';
-        
+
         try {
             const visits = await visitService.getVisits(Number(childId));
             if (visits.length === 0) return 'primary';
-            
+
             const lastVisit = visits[0];
             const daysSinceLastVisit = Math.floor(
                 (new Date().getTime() - new Date(lastVisit.visitDate).getTime()) / (1000 * 60 * 60 * 24)
             );
-            
+
             return daysSinceLastVisit > 30 ? 'primary' : 'followup';
         } catch (err) {
             logger.error('[VisitFormPage] Failed to determine visit type:', err);
@@ -258,7 +261,7 @@ export const VisitFormPage: React.FC = () => {
     const handleSave = async (status: 'draft' | 'completed' = 'draft') => {
         setIsSaving(true);
         setError(null);
-        
+
         // Проверка наличия основного диагноза
         // Диагноз может быть объектом или строкой (JSON), проверяем оба варианта
         let hasPrimaryDiagnosis = false;
@@ -279,7 +282,7 @@ export const VisitFormPage: React.FC = () => {
                 }
             }
         }
-        
+
         if (!hasPrimaryDiagnosis) {
             const errorMessage = 'Основной диагноз обязателен для сохранения приема';
             setError(errorMessage);
@@ -288,11 +291,11 @@ export const VisitFormPage: React.FC = () => {
             setIsSaving(false);
             return;
         }
-        
+
         try {
             // Подготовка данных для сохранения: сериализация JSON полей диагнозов
             const dataToSave = { ...formData, status };
-            
+
             // Сериализуем диагнозы в JSON строки, если они объекты
             if (dataToSave.primaryDiagnosis && typeof dataToSave.primaryDiagnosis === 'object') {
                 dataToSave.primaryDiagnosis = JSON.stringify(dataToSave.primaryDiagnosis);
@@ -303,7 +306,7 @@ export const VisitFormPage: React.FC = () => {
             if (dataToSave.comorbidities && Array.isArray(dataToSave.comorbidities)) {
                 dataToSave.comorbidities = JSON.stringify(dataToSave.comorbidities);
             }
-            
+
             // Сериализуем другие JSON поля
             if (Array.isArray(dataToSave.laboratoryTests)) {
                 dataToSave.laboratoryTests = JSON.stringify(dataToSave.laboratoryTests);
@@ -314,10 +317,10 @@ export const VisitFormPage: React.FC = () => {
             if (Array.isArray(dataToSave.consultationRequests)) {
                 dataToSave.consultationRequests = JSON.stringify(dataToSave.consultationRequests);
             }
-            
+
             const savedVisit = await visitService.upsertVisit(dataToSave as Visit);
             setSuccess(true);
-            
+
             // Если статус completed и нужно согласие, показываем форму
             if (status === 'completed' && !informedConsent) {
                 // Проверяем, требуется ли согласие
@@ -330,24 +333,24 @@ export const VisitFormPage: React.FC = () => {
                     return; // Не перенаправляем, показываем форму согласия
                 }
             }
-            
+
             setTimeout(() => navigate(`/patients/${childId}/visits`), 1500);
         } catch (err: any) {
             const errorMessage = err.message || 'Ошибка сохранения';
             setError(errorMessage);
             logger.error('[VisitFormPage] Save failed:', err);
-            
+
             // Парсим ошибки валидации для отображения в модальном окне
             if (errorMessage.includes('Ошибка валидации') || errorMessage.includes('валидации')) {
                 // Извлекаем список ошибок из сообщения
                 let errorsList: string[] = [];
-                
+
                 // Убираем префикс "Ошибка валидации: " если есть
                 let cleanMessage = errorMessage;
                 if (cleanMessage.includes('Ошибка валидации:')) {
                     cleanMessage = cleanMessage.split('Ошибка валидации:')[1]?.trim() || cleanMessage;
                 }
-                
+
                 // Разбиваем по запятой, учитывая что некоторые ошибки могут содержать запятые в скобках
                 // Простое разбиение по запятым должно работать для большинства случаев
                 if (cleanMessage.includes(',')) {
@@ -355,7 +358,7 @@ export const VisitFormPage: React.FC = () => {
                 } else {
                     errorsList = [cleanMessage];
                 }
-                
+
                 if (errorsList.length > 0) {
                     setValidationErrors(errorsList);
                     setIsErrorModalOpen(true);
@@ -387,22 +390,22 @@ export const VisitFormPage: React.FC = () => {
 
     const runAnalysis = async () => {
         if (!childId) return;
-        
+
         // Проверяем, есть ли данные для анализа
-        const hasClinicalData = 
-                               formData.complaints?.trim() || 
-                               formData.diseaseHistory?.trim() || 
-                               formData.physicalExam?.trim();
+        const hasClinicalData =
+            formData.complaints?.trim() ||
+            formData.diseaseHistory?.trim() ||
+            formData.physicalExam?.trim();
 
         if (!hasClinicalData) {
             setError('Введите жалобы, анамнез или данные осмотра для анализа');
             return;
         }
-        
+
         setIsAnalyzing(true);
         setError(null);
         const startTime = Date.now();
-        
+
         try {
             // Сначала сохраняем визит как черновик (если еще не сохранен)
             let visitId = formData.id;
@@ -423,10 +426,10 @@ export const VisitFormPage: React.FC = () => {
             // Выполняем AI-анализ (использует расширенные поля из service)
             const results = await visitService.analyzeVisit(visitId!);
             setSuggestions(results);
-            
+
             const duration = Date.now() - startTime;
             logger.info(`[VisitFormPage] Analysis completed in ${duration}ms`, { visitId, duration });
-            
+
             if (duration > 5000) {
                 logger.warn(`[VisitFormPage] Analysis took longer than expected: ${duration}ms`, { duration });
             }
@@ -445,7 +448,7 @@ export const VisitFormPage: React.FC = () => {
             nameRu: disease.nameRu,
             diseaseId: disease.id,
         };
-        
+
         setFormData(prev => ({
             ...prev,
             primaryDiagnosis: diagnosisEntry,
@@ -460,8 +463,8 @@ export const VisitFormPage: React.FC = () => {
                 // Фильтруем препараты с учетом аллергоанамнеза
                 const filtered = recommendations.filter(rec => {
                     // Если есть предупреждения об аллергии, исключаем препарат
-                    const hasAllergyWarning = rec.warnings?.some(w => 
-                        w.toLowerCase().includes('аллергия') || 
+                    const hasAllergyWarning = rec.warnings?.some(w =>
+                        w.toLowerCase().includes('аллергия') ||
                         w.toLowerCase().includes('непереносимость')
                     );
                     return !hasAllergyWarning && rec.canUse;
@@ -482,7 +485,7 @@ export const VisitFormPage: React.FC = () => {
             primaryDiagnosis: diagnosis,
             primaryDiagnosisId: diagnosis?.diseaseId || null,
         }));
-        
+
         // Если выбран диагноз с diseaseId, загружаем препараты
         if (diagnosis?.diseaseId && childId) {
             selectDiagnosis({ id: diagnosis.diseaseId } as Disease);
@@ -585,7 +588,9 @@ export const VisitFormPage: React.FC = () => {
                 dosing: doseInfo?.instruction || recommendation?.recommendedDose?.instruction || '',
                 duration: recommendation?.duration || '5-7 дней',
                 singleDoseMg: doseInfo?.singleDoseMg ?? recommendation?.recommendedDose?.singleDoseMg,
-                timesPerDay: doseInfo?.timesPerDay ?? recommendation?.recommendedDose?.timesPerDay
+                timesPerDay: doseInfo?.timesPerDay ?? recommendation?.recommendedDose?.timesPerDay,
+                routeOfAdmin: medication?.routeOfAdmin || null,
+                dilution: null // Разведение настраивается вручную в модальном окне
             };
 
             // Открываем модальное окно для редактирования дозировки
@@ -625,7 +630,9 @@ export const VisitFormPage: React.FC = () => {
                 dosing: doseInfo.canUse ? doseInfo.instruction : '',
                 duration: '5-7 дней',
                 singleDoseMg: doseInfo.singleDoseMg,
-                timesPerDay: doseInfo.timesPerDay
+                timesPerDay: doseInfo.timesPerDay,
+                routeOfAdmin: med?.routeOfAdmin || null,
+                dilution: null // Разведение настраивается вручную в модальном окне
             };
 
             // Открываем модальное окно для редактирования дозировки
@@ -646,17 +653,19 @@ export const VisitFormPage: React.FC = () => {
         if (!selectedMedicationForDose || pendingMedicationId === null) return;
 
         const currentPrescriptions = formData.prescriptions || [];
-        
+
         // Проверяем, редактируем ли существующее назначение или добавляем новое
         const existingIndex = currentPrescriptions.findIndex((p: any) => p.medicationId === pendingMedicationId);
-        
+
         const updatedPrescription = {
             medicationId: pendingMedicationId,
             name: selectedMedicationForDose.nameRu,
             dosing: doseData.dosing,
             duration: doseData.duration,
             singleDoseMg: doseData.singleDoseMg,
-            timesPerDay: doseData.timesPerDay
+            timesPerDay: doseData.timesPerDay,
+            routeOfAdmin: doseData.routeOfAdmin || selectedMedicationForDose.routeOfAdmin || null,
+            dilution: doseData.dilution || null
         };
 
         if (existingIndex >= 0) {
@@ -1062,87 +1071,86 @@ export const VisitFormPage: React.FC = () => {
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
                             </div>
                         ) : medicationRecommendations.length > 0 ? (
-                                <div className="space-y-3 mb-4">
-                                    {medicationRecommendations.map((rec) => {
-                                        const isSelected = formData.prescriptions?.some((p: any) => p.medicationId === rec.medication.id);
-                                        return (
-                                            <div
-                                                key={rec.medication.id}
-                                                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer ${
-                                                    isSelected
-                                                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20'
-                                                        : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-primary-300'
+                            <div className="space-y-3 mb-4">
+                                {medicationRecommendations.map((rec) => {
+                                    const isSelected = formData.prescriptions?.some((p: any) => p.medicationId === rec.medication.id);
+                                    return (
+                                        <div
+                                            key={rec.medication.id}
+                                            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer ${isSelected
+                                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20'
+                                                : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-primary-300'
                                                 }`}
-                                                onClick={() => toggleMedicationSelection(rec.medication.id)}
-                                            >
-                                                <div className="flex items-start gap-3">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSelected}
-                                                        onChange={() => toggleMedicationSelection(rec.medication.id)}
-                                                        className="mt-1 w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                                                    />
-                                                    <div className="flex-1">
-                                                        <div className="font-bold text-slate-800 dark:text-white mb-1">
-                                                            {rec.medication.nameRu}
-                                                        </div>
-                                                        <div className="text-xs text-slate-500 mb-2">
-                                                            {rec.medication.activeSubstance}
-                                                        </div>
-                                                        {rec.recommendedDose && rec.canUse && (
-                                                            <div className="text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg">
-                                                                <div className="font-semibold">Дозировка:</div>
-                                                                <div>{rec.recommendedDose.instruction}</div>
-                                                                {rec.recommendedDose.singleDoseMg && (
-                                                                    <div className="text-xs text-slate-500 mt-1">
-                                                                        Разовая доза: {rec.recommendedDose.singleDoseMg} мг
-                                                                        {rec.recommendedDose.timesPerDay && ` × ${rec.recommendedDose.timesPerDay} раз в день`}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {rec.warnings && rec.warnings.length > 0 && (
-                                                            <div className="mt-2 text-xs text-red-600 dark:text-red-400">
-                                                                ⚠️ {rec.warnings.join(', ')}
-                                                            </div>
-                                                        )}
-                                                        {!rec.canUse && (
-                                                            <div className="mt-2 text-xs text-red-600 dark:text-red-400">
-                                                                ⚠️ {rec.recommendedDose?.message || 'Препарат не рекомендуется'}
-                                                            </div>
-                                                        )}
+                                            onClick={() => toggleMedicationSelection(rec.medication.id)}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => toggleMedicationSelection(rec.medication.id)}
+                                                    className="mt-1 w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                                />
+                                                <div className="flex-1">
+                                                    <div className="font-bold text-slate-800 dark:text-white mb-1">
+                                                        {rec.medication.nameRu}
                                                     </div>
+                                                    <div className="text-xs text-slate-500 mb-2">
+                                                        {rec.medication.activeSubstance}
+                                                    </div>
+                                                    {rec.recommendedDose && rec.canUse && (
+                                                        <div className="text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg">
+                                                            <div className="font-semibold">Дозировка:</div>
+                                                            <div>{rec.recommendedDose.instruction}</div>
+                                                            {rec.recommendedDose.singleDoseMg && (
+                                                                <div className="text-xs text-slate-500 mt-1">
+                                                                    Разовая доза: {rec.recommendedDose.singleDoseMg} мг
+                                                                    {rec.recommendedDose.timesPerDay && ` × ${rec.recommendedDose.timesPerDay} раз в день`}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {rec.warnings && rec.warnings.length > 0 && (
+                                                        <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                                                            ⚠️ {rec.warnings.join(', ')}
+                                                        </div>
+                                                    )}
+                                                    {!rec.canUse && (
+                                                        <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                                                            ⚠️ {rec.recommendedDose?.message || 'Препарат не рекомендуется'}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : !primaryDiagnosis ? (
-                                <div className="text-center py-8 text-slate-400">
-                                    <Pill className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                    <p>Выберите основной диагноз, чтобы увидеть рекомендованные препараты</p>
-                                </div>
-                            ) : (
-                                <div className="text-center py-8 text-slate-400">
-                                    <Pill className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                    <p>Для данного диагноза не найдено рекомендованных препаратов</p>
-                                    <p className="text-xs mt-2 text-slate-500">Вы можете выбрать препарат вручную из справочника</p>
-                                </div>
-                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : !primaryDiagnosis ? (
+                            <div className="text-center py-8 text-slate-400">
+                                <Pill className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                <p>Выберите основной диагноз, чтобы увидеть рекомендованные препараты</p>
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 text-slate-400">
+                                <Pill className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                <p>Для данного диагноза не найдено рекомендованных препаратов</p>
+                                <p className="text-xs mt-2 text-slate-500">Вы можете выбрать препарат вручную из справочника</p>
+                            </div>
+                        )}
 
                         <div className="flex gap-2">
-                            <Button 
-                                variant="secondary" 
-                                className="flex-1 h-12 rounded-xl group border-dashed" 
+                            <Button
+                                variant="secondary"
+                                className="flex-1 h-12 rounded-xl group border-dashed"
                                 onClick={() => setIsMedicationBrowserOpen(true)}
                             >
                                 <Plus className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
                                 Выбрать препарат
                             </Button>
                             {currentUser?.id && (
-                                <Button 
-                                    variant="secondary" 
-                                    className="h-12 rounded-xl group border-dashed" 
+                                <Button
+                                    variant="secondary"
+                                    className="h-12 rounded-xl group border-dashed"
                                     onClick={() => setIsMedicationTemplateSelectorOpen(true)}
                                 >
                                     <FileText className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
@@ -1161,8 +1169,8 @@ export const VisitFormPage: React.FC = () => {
                             {currentUser?.id && (
                                 <div className="flex gap-2">
                                     {formData.prescriptions && formData.prescriptions.length > 0 && (
-                                        <Button 
-                                            variant="ghost" 
+                                        <Button
+                                            variant="ghost"
                                             size="sm"
                                             onClick={() => setIsCreateMedicationTemplateOpen(true)}
                                             className="text-xs"
@@ -1172,8 +1180,8 @@ export const VisitFormPage: React.FC = () => {
                                             Сохранить шаблон
                                         </Button>
                                     )}
-                                    <Button 
-                                        variant="ghost" 
+                                    <Button
+                                        variant="ghost"
                                         size="sm"
                                         onClick={() => setIsMedicationTemplateSelectorOpen(true)}
                                         className="text-xs"
@@ -1194,11 +1202,37 @@ export const VisitFormPage: React.FC = () => {
                                     </div>
                                     <div className="flex-1">
                                         <div className="font-bold text-slate-800 dark:text-white">{p.name}</div>
+                                        {p.routeOfAdmin && (
+                                            <div className="text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                                Способ введения: <span className="font-semibold">{getRouteLabel(p.routeOfAdmin)}</span>
+                                            </div>
+                                        )}
                                         <div className="text-xs text-slate-500">{p.dosing} | {p.duration}</div>
                                         {(p.singleDoseMg || p.timesPerDay) && (
                                             <div className="text-xs text-slate-500 mt-1">
                                                 Разовая доза: {p.singleDoseMg ?? '—'} мг
                                                 {p.timesPerDay ? ` × ${p.timesPerDay} раз в день` : ''}
+                                            </div>
+                                        )}
+                                        {p.dilution && p.dilution.enabled && (
+                                            <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900/40">
+                                                <div className="font-semibold mb-1 flex items-center gap-1">
+                                                    <Beaker className="w-3 h-3" />
+                                                    Разведение:
+                                                </div>
+                                                {p.dilution.drugAmountMg && (
+                                                    <div>
+                                                        Количество в ампуле: {p.dilution.drugAmountMg} мг
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    {getDiluentLabel(p.dilution.diluentType || null)} - {p.dilution.diluentVolumeMl || '—'} мл
+                                                </div>
+                                                {p.dilution.volumeToDrawMl && (
+                                                    <div className="mt-1 font-semibold text-primary-600 dark:text-primary-400">
+                                                        Объем для набора: {p.dilution.volumeToDrawMl} мл
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -1215,7 +1249,9 @@ export const VisitFormPage: React.FC = () => {
                                                         dosing: p.dosing || '',
                                                         duration: p.duration || '5-7 дней',
                                                         singleDoseMg: p.singleDoseMg || null,
-                                                        timesPerDay: p.timesPerDay || null
+                                                        timesPerDay: p.timesPerDay || null,
+                                                        routeOfAdmin: p.routeOfAdmin || med?.routeOfAdmin || null,
+                                                        dilution: p.dilution || null
                                                     });
                                                     setPendingMedicationId(p.medicationId);
                                                     setIsDoseModalOpen(true);
@@ -1268,7 +1304,7 @@ export const VisitFormPage: React.FC = () => {
                                     const confidencePercent = Math.round(s.confidence * 100);
                                     const confidenceColor = s.confidence > 0.7 ? 'text-green-600' : s.confidence > 0.4 ? 'text-yellow-600' : 'text-red-600';
                                     const confidenceBg = s.confidence > 0.7 ? 'bg-green-50 dark:bg-green-950/20' : s.confidence > 0.4 ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'bg-red-50 dark:bg-red-950/20';
-                                    
+
                                     return (
                                         <div
                                             key={idx}
@@ -1296,12 +1332,11 @@ export const VisitFormPage: React.FC = () => {
                                                 <div className="text-slate-600 dark:text-slate-400 italic">{s.reasoning}</div>
                                             </div>
                                             <div className="mt-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-2">
-                                                <div 
-                                                    className={`h-1.5 rounded-full transition-all ${
-                                                        s.confidence > 0.7 ? 'bg-green-500' : 
-                                                        s.confidence > 0.4 ? 'bg-yellow-500' : 
-                                                        'bg-red-500'
-                                                    }`}
+                                                <div
+                                                    className={`h-1.5 rounded-full transition-all ${s.confidence > 0.7 ? 'bg-green-500' :
+                                                        s.confidence > 0.4 ? 'bg-yellow-500' :
+                                                            'bg-red-500'
+                                                        }`}
                                                     style={{ width: `${confidencePercent}%` }}
                                                 />
                                             </div>
@@ -1332,8 +1367,8 @@ export const VisitFormPage: React.FC = () => {
                             <div className="text-center py-6">
                                 <Stethoscope className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                                 <p className="text-xs text-slate-400 font-medium italic">
-                                    {isAnalyzing 
-                                        ? 'AI анализирует данные...' 
+                                    {isAnalyzing
+                                        ? 'AI анализирует данные...'
                                         : 'Заполните анамнез и клинический осмотр для получения рекомендаций'}
                                 </p>
                             </div>
@@ -1486,11 +1521,11 @@ export const VisitFormPage: React.FC = () => {
 
             {/* Medication Template Selector Modal */}
             {currentUser?.id && isMedicationTemplateSelectorOpen && (
-                <div 
+                <div
                     className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
                     onClick={() => setIsMedicationTemplateSelectorOpen(false)}
                 >
-                    <div 
+                    <div
                         className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border dark:border-slate-800 p-6"
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -1539,7 +1574,7 @@ export const VisitFormPage: React.FC = () => {
                         // Проверяем дубликаты перед добавлением
                         const currentPrescriptions = formData.prescriptions || [];
                         const duplicates: string[] = [];
-                        
+
                         prescriptions.forEach((prescription: any) => {
                             const dupCheck = visitService.checkDuplicateMedication(
                                 currentPrescriptions,

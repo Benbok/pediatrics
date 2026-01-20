@@ -270,7 +270,22 @@ const VisitSchema = z.object({
     comorbidityIds: z.union([z.string(), z.array(z.number())]).optional().nullable(),
     
     // Treatment
-    prescriptions: z.array(z.any()).default([]),
+    prescriptions: z.array(z.object({
+        medicationId: z.number().optional(),
+        name: z.string().optional(),
+        dosing: z.string().optional(),
+        duration: z.string().optional(),
+        singleDoseMg: z.number().nullable().optional(),
+        timesPerDay: z.number().nullable().optional(),
+        routeOfAdmin: z.string().nullable().optional(),
+        dilution: z.object({
+            enabled: z.boolean(),
+            diluentType: z.enum(['nacl_0_9', 'glucose_5', 'glucose_10', 'water_inj']).nullable().optional(),
+            diluentVolumeMl: z.number().positive().nullable().optional(),
+            concentrationMgPerMl: z.number().positive().nullable().optional(),
+            finalVolumeMl: z.number().positive().nullable().optional(),
+        }).nullable().optional(),
+    })).default([]),
     recommendations: z.string().optional().nullable(),
     
     // Исходы и маршрутизация
