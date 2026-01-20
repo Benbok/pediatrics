@@ -65,8 +65,8 @@ const setupVisitTemplateHandlers = () => {
         return true;
     }));
 
-    ipcMain.handle('visit-templates:apply', ensureAuthenticated(async (_, { templateData, existingData }) => {
-        return VisitTemplateService.applyTemplate(templateData, existingData);
+    ipcMain.handle('visit-templates:apply', ensureAuthenticated(async (_, { templateId, existingData }) => {
+        return await VisitTemplateService.applyTemplate(templateId, existingData);
     }));
 };
 

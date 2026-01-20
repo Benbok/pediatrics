@@ -95,5 +95,26 @@ export const visitService = {
             logger.error('[VisitService] Failed to get medications for diagnosis', { error, diseaseId, childId });
             throw new Error(error.message || 'Ошибка при получении препаратов для диагноза');
         }
+    },
+
+    /**
+     * Check if medication is already in prescriptions list
+     * Business logic helper - validates duplicate medications
+     */
+    checkDuplicateMedication(prescriptions: any[], medicationId: number): { isDuplicate: boolean; errorMessage?: string } {
+        if (!prescriptions || !Array.isArray(prescriptions)) {
+            return { isDuplicate: false };
+        }
+
+        const existing = prescriptions.find((p: any) => p.medicationId === medicationId);
+        
+        if (existing) {
+            return {
+                isDuplicate: true,
+                errorMessage: `Препарат уже добавлен в назначения`
+            };
+        }
+
+        return { isDuplicate: false };
     }
 };

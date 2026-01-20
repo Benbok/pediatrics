@@ -542,13 +542,48 @@ export interface InformedConsent {
   createdAt?: string;
 }
 
+export interface MedicationTemplateItem {
+  medicationId: number;
+  preferredRoute?: string | null;
+  defaultDuration?: string | null;
+  overrideInstruction?: string | null;
+  overrideSingleDoseMg?: number | null;
+  overrideTimesPerDay?: number | null;
+  notes?: string | null;
+}
+
+export interface MedicationTemplate {
+  id?: number;
+  name: string;
+  description?: string | null;
+  items: string | MedicationTemplateItem[]; // JSON строка или парсированный массив
+  isPublic?: boolean;
+  createdById: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ExamTextTemplate {
+  id?: number;
+  name?: string | null;
+  systemKey: string; // generalCondition, cardiovascular, etc.
+  text: string;
+  tags: string | string[]; // JSON строка или парсированный массив
+  isPublic?: boolean;
+  createdById: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface VisitTemplate {
   id?: number;
   name: string;
   visitType: string;
   specialty?: string | null;
   description?: string | null;
-  templateData: string; // JSON со структурой полей
+  templateData: string | any; // JSON со структурой полей (строка или объект)
+  medicationTemplateId?: number | null;
+  examTemplateSetId?: number | null; // Можно хранить как JSON массив ID в templateData
   isDefault: boolean;
   isPublic: boolean;
   createdById: number;

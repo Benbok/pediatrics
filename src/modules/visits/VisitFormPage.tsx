@@ -18,13 +18,17 @@ import { DiseaseSearchModal } from './components/DiseaseSearchModal';
 import { DiseaseSidePanel } from './components/DiseaseSidePanel';
 import { InformedConsentForm } from './components/InformedConsentForm';
 import { VisitTemplateSelector } from './components/VisitTemplateSelector';
+import { MedicationDoseModal, DoseData } from './components/MedicationDoseModal';
+import { MedicationTemplateSelector } from './components/MedicationTemplateSelector';
+import { MedicationTemplateBatchEditor } from './components/MedicationTemplateBatchEditor';
+import { CreateMedicationTemplateModal } from './components/CreateMedicationTemplateModal';
+import { medicationTemplateService } from './services/medicationTemplateService';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { ErrorModal } from '../../components/ui/ErrorModal';
 import { useAuth } from '../../context/AuthContext';
-import { useDebounce } from '../../hooks/useDebounce';
 import {
     ChevronLeft,
     Save,
@@ -83,8 +87,19 @@ export const VisitFormPage: React.FC = () => {
     const [medicationRecommendations, setMedicationRecommendations] = useState<any[]>([]);
     const [isLoadingMedications, setIsLoadingMedications] = useState(false);
     const [isMedicationBrowserOpen, setIsMedicationBrowserOpen] = useState(false);
-    const [analysisTimeout, setAnalysisTimeout] = useState<NodeJS.Timeout | null>(null);
     const [autoDetectedVisitType, setAutoDetectedVisitType] = useState<VisitType | null>(null);
+    
+    // Модальное окно редактирования дозировки
+    const [isDoseModalOpen, setIsDoseModalOpen] = useState(false);
+    const [selectedMedicationForDose, setSelectedMedicationForDose] = useState<Medication | null>(null);
+    const [calculatedDoseData, setCalculatedDoseData] = useState<Partial<DoseData> | null>(null);
+    const [pendingMedicationId, setPendingMedicationId] = useState<number | null>(null);
+    
+    // Шаблоны назначений
+    const [isMedicationTemplateSelectorOpen, setIsMedicationTemplateSelectorOpen] = useState(false);
+    const [isBatchEditorOpen, setIsBatchEditorOpen] = useState(false);
+    const [pendingTemplateItems, setPendingTemplateItems] = useState<any[]>([]);
+    const [isCreateMedicationTemplateOpen, setIsCreateMedicationTemplateOpen] = useState(false);
     
     // Модальные окна
     const [isIcdSearchOpen, setIsIcdSearchOpen] = useState(false);
@@ -99,27 +114,6 @@ export const VisitFormPage: React.FC = () => {
     const [informedConsent, setInformedConsent] = useState<InformedConsent | null>(null);
     const [showConsentForm, setShowConsentForm] = useState(false);
     
-    // Формируем данные для AI анализа (debounced)
-    const clinicalDataForAnalysis = useDebounce(
-        JSON.stringify({
-            complaints: formData.complaints,
-            diseaseHistory: formData.diseaseHistory,
-            allergyHistory: formData.allergyHistory,
-            physicalExam: formData.physicalExam,
-            temperature: formData.temperature,
-            pulse: formData.pulse,
-            respiratoryRate: formData.respiratoryRate,
-            bloodPressureSystolic: formData.bloodPressureSystolic,
-            bloodPressureDiastolic: formData.bloodPressureDiastolic,
-            generalCondition: formData.generalCondition,
-            respiratory: formData.respiratory,
-            cardiovascular: formData.cardiovascular,
-            abdomen: formData.abdomen,
-            nervousSystem: formData.nervousSystem,
-        }),
-        1500
-    );
-
     useEffect(() => {
         loadData();
     }, [id, childId]);
@@ -389,39 +383,21 @@ export const VisitFormPage: React.FC = () => {
         }
     };
 
-    // Автоматический анализ при изменении клинических данных
-    useEffect(() => {
-        if (!formData.id || !childId) return;
-        
-        // Отменяем предыдущий анализ
-        if (analysisTimeout) {
-            clearTimeout(analysisTimeout);
-        }
+    // AI анализ запускается вручную через кнопку
 
+    const runAnalysis = async () => {
+        if (!childId) return;
+        
         // Проверяем, есть ли данные для анализа
-        const hasClinicalData = formData.complaints?.trim() || 
+        const hasClinicalData = 
+                               formData.complaints?.trim() || 
                                formData.diseaseHistory?.trim() || 
                                formData.physicalExam?.trim();
 
         if (!hasClinicalData) {
-            setSuggestions([]);
+            setError('Введите жалобы, анамнез или данные осмотра для анализа');
             return;
         }
-
-        // Debounce: ждем 1.5 секунды перед выполнением анализа
-        const timeout = setTimeout(async () => {
-            await runAnalysis();
-        }, 1500);
-
-        setAnalysisTimeout(timeout);
-
-        return () => {
-            if (timeout) clearTimeout(timeout);
-        };
-    }, [clinicalDataForAnalysis, formData.id]);
-
-    const runAnalysis = async () => {
-        if (!childId) return;
         
         setIsAnalyzing(true);
         setError(null);
@@ -462,14 +438,6 @@ export const VisitFormPage: React.FC = () => {
         }
     };
 
-    // Cleanup timeout on unmount
-    useEffect(() => {
-        return () => {
-            if (analysisTimeout) {
-                clearTimeout(analysisTimeout);
-            }
-        };
-    }, [analysisTimeout]);
 
     const selectDiagnosis = async (disease: Disease) => {
         const diagnosisEntry: DiagnosisEntry = {
@@ -554,11 +522,20 @@ export const VisitFormPage: React.FC = () => {
         const isSelected = currentPrescriptions.some((p: any) => p.medicationId === medicationId);
 
         if (isSelected) {
+            // Удаление из списка
             setFormData({
                 ...formData,
                 prescriptions: currentPrescriptions.filter((p: any) => p.medicationId !== medicationId)
             });
         } else {
+            // Проверка дубликатов перед добавлением
+            const duplicateCheck = visitService.checkDuplicateMedication(currentPrescriptions, medicationId);
+            if (duplicateCheck.isDuplicate) {
+                setValidationErrors([duplicateCheck.errorMessage || 'Препарат уже добавлен']);
+                setIsErrorModalOpen(true);
+                return;
+            }
+
             const recommendation = medicationRecommendations.find(r => r.medication.id === medicationId);
             if (!child) {
                 setError('Не удалось рассчитать дозировку: данные пациента не загружены');
@@ -571,6 +548,20 @@ export const VisitFormPage: React.FC = () => {
             const currentWeight = formData.currentWeight || (child.birthWeight / 1000);
             const currentHeight = formData.currentHeight || null;
 
+            // Загружаем препарат для модального окна
+            let medication: Medication | null = recommendation?.medication || null;
+            if (!medication) {
+                try {
+                    medication = await medicationService.getMedication(medicationId);
+                } catch (err) {
+                    logger.warn('[VisitFormPage] Failed to load medication details', { error: err, medicationId });
+                    setError('Не удалось загрузить данные препарата');
+                    setIsErrorModalOpen(true);
+                    return;
+                }
+            }
+
+            // Рассчитываем дозировку
             let doseInfo: any = null;
             try {
                 doseInfo = await medicationService.calculateDose(
@@ -589,43 +580,35 @@ export const VisitFormPage: React.FC = () => {
                 });
             }
 
-            let medicationName = recommendation?.medication?.nameRu;
-            if (!medicationName) {
-                try {
-                    const med = await medicationService.getMedication(medicationId);
-                    medicationName = med?.nameRu;
-                } catch (err) {
-                    logger.warn('[VisitFormPage] Failed to load medication details', { error: err, medicationId });
-                }
-            }
-
-            const dosingInstruction =
-                doseInfo?.instruction ||
-                recommendation?.recommendedDose?.instruction ||
-                '';
-
-            const newPrescription = {
-                medicationId: medicationId,
-                name: medicationName || 'Препарат',
-                dosing: dosingInstruction,
+            // Подготавливаем начальные данные для модального окна
+            const initialDoseData: Partial<DoseData> = {
+                dosing: doseInfo?.instruction || recommendation?.recommendedDose?.instruction || '',
                 duration: recommendation?.duration || '5-7 дней',
                 singleDoseMg: doseInfo?.singleDoseMg ?? recommendation?.recommendedDose?.singleDoseMg,
                 timesPerDay: doseInfo?.timesPerDay ?? recommendation?.recommendedDose?.timesPerDay
             };
 
-            setFormData({
-                ...formData,
-                prescriptions: [...currentPrescriptions, newPrescription]
-            });
+            // Открываем модальное окно для редактирования дозировки
+            setSelectedMedicationForDose(medication);
+            setCalculatedDoseData(initialDoseData);
+            setPendingMedicationId(medicationId);
+            setIsDoseModalOpen(true);
         }
     };
 
     const addPrescription = async (med: Medication) => {
         if (!child) return;
 
-        const ageMonths = calculateAgeInMonths(child.birthDate, new Date());
+        // Проверка дубликатов
+        const currentPrescriptions = formData.prescriptions || [];
+        const duplicateCheck = visitService.checkDuplicateMedication(currentPrescriptions, med.id!);
+        if (duplicateCheck.isDuplicate) {
+            setValidationErrors([duplicateCheck.errorMessage || 'Препарат уже добавлен']);
+            setIsErrorModalOpen(true);
+            return;
+        }
 
-        // Используем текущий вес из формы, если есть, иначе вес при рождении
+        const ageMonths = calculateAgeInMonths(child.birthDate, new Date());
         const currentWeight = formData.currentWeight || (child.birthWeight / 1000);
         const currentHeight = formData.currentHeight || null;
 
@@ -637,23 +620,74 @@ export const VisitFormPage: React.FC = () => {
                 currentHeight
             );
 
-            setFormData(prev => ({
-                ...prev,
-                prescriptions: [
-                    ...(prev.prescriptions || []),
-                    {
-                        medicationId: med.id,
-                        name: med.nameRu,
-                        dosing: doseInfo.canUse ? doseInfo.instruction : '',
-                        duration: '5-7 дней',
-                        singleDoseMg: doseInfo.singleDoseMg,
-                        timesPerDay: doseInfo.timesPerDay
-                    }
-                ]
-            }));
+            // Подготавливаем начальные данные для модального окна
+            const initialDoseData: Partial<DoseData> = {
+                dosing: doseInfo.canUse ? doseInfo.instruction : '',
+                duration: '5-7 дней',
+                singleDoseMg: doseInfo.singleDoseMg,
+                timesPerDay: doseInfo.timesPerDay
+            };
+
+            // Открываем модальное окно для редактирования дозировки
+            setSelectedMedicationForDose(med);
+            setCalculatedDoseData(initialDoseData);
+            setPendingMedicationId(med.id!);
+            setIsDoseModalOpen(true);
         } catch (err) {
             logger.error('[VisitFormPage] Dose calc failed', { error: err, medicationId: med.id, weight: currentWeight, ageMonths, height: currentHeight });
+            setError('Не удалось рассчитать дозировку');
+            setValidationErrors(['Не удалось рассчитать дозировку для препарата']);
+            setIsErrorModalOpen(true);
         }
+    };
+
+    // Обработчик подтверждения дозировки из модального окна
+    const handleDoseConfirm = (doseData: DoseData) => {
+        if (!selectedMedicationForDose || pendingMedicationId === null) return;
+
+        const currentPrescriptions = formData.prescriptions || [];
+        
+        // Проверяем, редактируем ли существующее назначение или добавляем новое
+        const existingIndex = currentPrescriptions.findIndex((p: any) => p.medicationId === pendingMedicationId);
+        
+        const updatedPrescription = {
+            medicationId: pendingMedicationId,
+            name: selectedMedicationForDose.nameRu,
+            dosing: doseData.dosing,
+            duration: doseData.duration,
+            singleDoseMg: doseData.singleDoseMg,
+            timesPerDay: doseData.timesPerDay
+        };
+
+        if (existingIndex >= 0) {
+            // Обновляем существующее назначение
+            const updated = [...currentPrescriptions];
+            updated[existingIndex] = updatedPrescription;
+            setFormData({
+                ...formData,
+                prescriptions: updated
+            });
+        } else {
+            // Добавляем новое назначение
+            setFormData({
+                ...formData,
+                prescriptions: [...currentPrescriptions, updatedPrescription]
+            });
+        }
+
+        // Закрываем модальное окно и очищаем состояние
+        setIsDoseModalOpen(false);
+        setSelectedMedicationForDose(null);
+        setCalculatedDoseData(null);
+        setPendingMedicationId(null);
+    };
+
+    // Обработчик отмены модального окна дозировки
+    const handleDoseCancel = () => {
+        setIsDoseModalOpen(false);
+        setSelectedMedicationForDose(null);
+        setCalculatedDoseData(null);
+        setPendingMedicationId(null);
     };
 
     // Вычисляем возраст ребенка для показателей жизнедеятельности
@@ -759,6 +793,23 @@ export const VisitFormPage: React.FC = () => {
                             visitType={formData.visitType}
                             onSelect={(templateData) => {
                                 setFormData(prev => ({ ...prev, ...templateData }));
+                            }}
+                            onTemplateApplied={async (result) => {
+                                // Если шаблон содержит ссылку на шаблон назначений, применяем его
+                                if (result.medicationTemplateId && child) {
+                                    try {
+                                        const items = await medicationTemplateService.prepareApplication({
+                                            templateId: result.medicationTemplateId,
+                                            childWeight: formData.currentWeight || (child.birthWeight / 1000),
+                                            childAgeMonths: calculateAgeInMonths(child.birthDate, new Date()),
+                                            childHeight: formData.currentHeight || null,
+                                        });
+                                        setPendingTemplateItems(items);
+                                        setIsBatchEditorOpen(true);
+                                    } catch (err) {
+                                        logger.error('[VisitFormPage] Failed to prepare medication template from visit template', { error: err });
+                                    }
+                                }
                             }}
                             currentData={formData}
                         />
@@ -909,6 +960,7 @@ export const VisitFormPage: React.FC = () => {
                     <PhysicalExamBySystems
                         formData={formData}
                         onChange={handleFieldChange}
+                        userId={currentUser?.id}
                     />
 
                     {/* Жалобы (для AI анализа) */}
@@ -918,12 +970,25 @@ export const VisitFormPage: React.FC = () => {
                                 <Activity className="w-5 h-5 text-red-500" />
                                 Жалобы
                             </h2>
-                            {isAnalyzing && (
-                                <Badge variant="primary" size="sm">
-                                    <Sparkles className="w-3 h-3 mr-1" />
-                                    Анализ AI...
-                                </Badge>
-                            )}
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => runAnalysis()}
+                                disabled={isAnalyzing || !formData.complaints?.trim()}
+                                className="flex items-center gap-2"
+                            >
+                                {isAnalyzing ? (
+                                    <>
+                                        <Sparkles className="w-4 h-4 animate-pulse" />
+                                        Анализ AI...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="w-4 h-4" />
+                                        Анализ AI
+                                    </>
+                                )}
+                            </Button>
                         </div>
                         <div>
                             <textarea
@@ -934,7 +999,7 @@ export const VisitFormPage: React.FC = () => {
                                 className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all font-medium text-slate-800 dark:text-white"
                             />
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                                AI автоматически анализирует жалобы, анамнез и клинический осмотр для подбора диагнозов
+                                Нажмите "Анализ AI" для анализа жалоб, анамнеза и клинического осмотра для подбора диагнозов
                             </p>
                         </div>
                     </Card>
@@ -1065,21 +1130,61 @@ export const VisitFormPage: React.FC = () => {
                                 </div>
                             )}
 
-                        <Button 
-                            variant="secondary" 
-                            className="w-full h-12 rounded-xl group border-dashed" 
-                            onClick={() => setIsMedicationBrowserOpen(true)}
-                        >
-                            <Plus className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
-                            Выбрать другой препарат из справочника
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button 
+                                variant="secondary" 
+                                className="flex-1 h-12 rounded-xl group border-dashed" 
+                                onClick={() => setIsMedicationBrowserOpen(true)}
+                            >
+                                <Plus className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
+                                Выбрать препарат
+                            </Button>
+                            {currentUser?.id && (
+                                <Button 
+                                    variant="secondary" 
+                                    className="h-12 rounded-xl group border-dashed" 
+                                    onClick={() => setIsMedicationTemplateSelectorOpen(true)}
+                                >
+                                    <FileText className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
+                                    Шаблон
+                                </Button>
+                            )}
+                        </div>
                     </Card>
 
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
-                        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                            <Pill className="w-5 h-5 text-teal-500" />
-                            Выбранные назначения
-                        </h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <Pill className="w-5 h-5 text-teal-500" />
+                                Выбранные назначения
+                            </h2>
+                            {currentUser?.id && (
+                                <div className="flex gap-2">
+                                    {formData.prescriptions && formData.prescriptions.length > 0 && (
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm"
+                                            onClick={() => setIsCreateMedicationTemplateOpen(true)}
+                                            className="text-xs"
+                                            title="Сохранить текущие назначения как шаблон"
+                                        >
+                                            <Save className="w-3 h-3 mr-1" />
+                                            Сохранить шаблон
+                                        </Button>
+                                    )}
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        onClick={() => setIsMedicationTemplateSelectorOpen(true)}
+                                        className="text-xs"
+                                        title="Выбрать сохраненный шаблон"
+                                    >
+                                        <FileText className="w-3 h-3 mr-1" />
+                                        Выбрать шаблон
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
 
                         <div className="space-y-3">
                             {formData.prescriptions?.map((p: any, idx: number) => (
@@ -1097,17 +1202,45 @@ export const VisitFormPage: React.FC = () => {
                                             </div>
                                         )}
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setFormData({
-                                            ...formData,
-                                            prescriptions: formData.prescriptions?.filter((_, i) => i !== idx)
-                                        })}
-                                        className="text-slate-400 hover:text-red-500"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={async () => {
+                                                // Редактирование дозировки
+                                                try {
+                                                    const med = await medicationService.getMedication(p.medicationId);
+                                                    setSelectedMedicationForDose(med);
+                                                    setCalculatedDoseData({
+                                                        dosing: p.dosing || '',
+                                                        duration: p.duration || '5-7 дней',
+                                                        singleDoseMg: p.singleDoseMg || null,
+                                                        timesPerDay: p.timesPerDay || null
+                                                    });
+                                                    setPendingMedicationId(p.medicationId);
+                                                    setIsDoseModalOpen(true);
+                                                } catch (err) {
+                                                    logger.error('[VisitFormPage] Failed to load medication for edit', { error: err, medicationId: p.medicationId });
+                                                }
+                                            }}
+                                            className="text-slate-400 hover:text-primary-500"
+                                            title="Редактировать дозировку"
+                                        >
+                                            <FileText className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setFormData({
+                                                ...formData,
+                                                prescriptions: formData.prescriptions?.filter((_, i) => i !== idx)
+                                            })}
+                                            className="text-slate-400 hover:text-red-500"
+                                            title="Удалить назначение"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </div>
                                 </div>
                             ))}
                             {(!formData.prescriptions || formData.prescriptions.length === 0) && (
@@ -1336,6 +1469,123 @@ export const VisitFormPage: React.FC = () => {
                 message={validationErrors.length > 0 ? validationErrors.join(', ') : error || 'Произошла ошибка при сохранении'}
                 errors={validationErrors.length > 0 ? validationErrors : undefined}
             />
+
+            {/* Medication Dose Edit Modal */}
+            {child && (
+                <MedicationDoseModal
+                    isOpen={isDoseModalOpen}
+                    onClose={handleDoseCancel}
+                    onConfirm={handleDoseConfirm}
+                    medication={selectedMedicationForDose}
+                    initialDoseData={calculatedDoseData || undefined}
+                    patientWeight={formData.currentWeight || (child.birthWeight / 1000)}
+                    patientAgeMonths={calculateAgeInMonths(child.birthDate, new Date())}
+                    patientHeight={formData.currentHeight || null}
+                />
+            )}
+
+            {/* Medication Template Selector Modal */}
+            {currentUser?.id && isMedicationTemplateSelectorOpen && (
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+                    onClick={() => setIsMedicationTemplateSelectorOpen(false)}
+                >
+                    <div 
+                        className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border dark:border-slate-800 p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-xl font-bold mb-4 text-slate-900 dark:text-white">
+                            Выберите шаблон назначений
+                        </h3>
+                        <MedicationTemplateSelector
+                            userId={currentUser.id}
+                            onApply={async (templateId) => {
+                                if (!child) return;
+                                try {
+                                    const items = await medicationTemplateService.prepareApplication({
+                                        templateId,
+                                        childWeight: formData.currentWeight || (child.birthWeight / 1000),
+                                        childAgeMonths: calculateAgeInMonths(child.birthDate, new Date()),
+                                        childHeight: formData.currentHeight || null,
+                                    });
+                                    setPendingTemplateItems(items);
+                                    setIsMedicationTemplateSelectorOpen(false);
+                                    setIsBatchEditorOpen(true);
+                                } catch (err) {
+                                    logger.error('[VisitFormPage] Failed to prepare template', { error: err });
+                                    setError('Не удалось загрузить шаблон назначений');
+                                    setIsErrorModalOpen(true);
+                                }
+                            }}
+                        />
+                        <div className="mt-4 flex justify-end">
+                            <Button variant="ghost" onClick={() => setIsMedicationTemplateSelectorOpen(false)}>
+                                Отмена
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Medication Template Batch Editor */}
+            {child && (
+                <MedicationTemplateBatchEditor
+                    isOpen={isBatchEditorOpen}
+                    onClose={() => {
+                        setIsBatchEditorOpen(false);
+                        setPendingTemplateItems([]);
+                    }}
+                    onConfirm={(prescriptions) => {
+                        // Проверяем дубликаты перед добавлением
+                        const currentPrescriptions = formData.prescriptions || [];
+                        const duplicates: string[] = [];
+                        
+                        prescriptions.forEach((prescription: any) => {
+                            const dupCheck = visitService.checkDuplicateMedication(
+                                currentPrescriptions,
+                                prescription.medicationId
+                            );
+                            if (dupCheck.isDuplicate) {
+                                duplicates.push(prescription.name);
+                            }
+                        });
+
+                        if (duplicates.length > 0) {
+                            setValidationErrors([
+                                `Препараты уже добавлены: ${duplicates.join(', ')}`
+                            ]);
+                            setIsErrorModalOpen(true);
+                            return;
+                        }
+
+                        setFormData({
+                            ...formData,
+                            prescriptions: [...currentPrescriptions, ...prescriptions]
+                        });
+                        setIsBatchEditorOpen(false);
+                        setPendingTemplateItems([]);
+                    }}
+                    templateItems={pendingTemplateItems}
+                    childWeight={formData.currentWeight || (child.birthWeight / 1000)}
+                    childAgeMonths={calculateAgeInMonths(child.birthDate, new Date())}
+                    childHeight={formData.currentHeight || null}
+                />
+            )}
+
+            {/* Create Medication Template Modal */}
+            {currentUser?.id && (
+                <CreateMedicationTemplateModal
+                    isOpen={isCreateMedicationTemplateOpen}
+                    onClose={() => setIsCreateMedicationTemplateOpen(false)}
+                    onSuccess={() => {
+                        // Можно показать уведомление об успешном сохранении
+                        setSuccess(true);
+                        setTimeout(() => setSuccess(false), 3000);
+                    }}
+                    prescriptions={formData.prescriptions || []}
+                    userId={currentUser.id}
+                />
+            )}
         </div>
     );
 };

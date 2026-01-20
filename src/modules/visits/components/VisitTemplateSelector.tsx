@@ -24,12 +24,14 @@ import { logger } from '../../../services/logger';
 interface VisitTemplateSelectorProps {
     visitType: string | null;
     onSelect: (templateData: Partial<Visit>) => void;
+    onTemplateApplied?: (result: { mergedData: Partial<Visit>; medicationTemplateId?: number | null; examTemplateSetId?: number | null; template: VisitTemplate }) => void;
     currentData?: Partial<Visit>;
 }
 
 export const VisitTemplateSelector: React.FC<VisitTemplateSelectorProps> = ({
     visitType,
     onSelect,
+    onTemplateApplied,
     currentData,
 }) => {
     const [templates, setTemplates] = useState<VisitTemplate[]>([]);
@@ -57,14 +59,24 @@ export const VisitTemplateSelector: React.FC<VisitTemplateSelectorProps> = ({
 
     const handleApplyTemplate = async (template: VisitTemplate) => {
         try {
-            const applied = await window.electronAPI.applyVisitTemplate({
-                templateData: template.templateData,
+            const result = await window.electronAPI.applyVisitTemplate({
+                templateId: template.id!,
                 existingData: currentData || {},
             });
             setSelectedTemplate(template);
-            onSelect(applied);
+            // result содержит mergedData, medicationTemplateId, examTemplateSetId
+            onSelect(result.mergedData);
+            
+            // Вызываем callback с полной информацией о примененном шаблоне
+            if (onTemplateApplied) {
+                onTemplateApplied({
+                    ...result,
+                    template
+                });
+            }
         } catch (err: any) {
             logger.error('[VisitTemplateSelector] Failed to apply template:', err);
+            throw err;
         }
     };
 

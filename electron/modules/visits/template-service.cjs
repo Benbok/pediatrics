@@ -9,6 +9,8 @@ const VisitTemplateSchema = z.object({
     specialty: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
     templateData: z.string().min(1, 'Данные шаблона обязательны'),
+    medicationTemplateId: z.number().optional().nullable(),
+    examTemplateSetId: z.number().optional().nullable(),
     isDefault: z.boolean().default(false),
     isPublic: z.boolean().default(true),
     createdById: z.number().positive(),
@@ -24,6 +26,13 @@ const VisitTemplateService = {
             include: {
                 createdBy: {
                     select: { fullName: true }
+                },
+                medicationTemplate: {
+                    include: {
+                        createdBy: {
+                            select: { fullName: true }
+                        }
+                    }
                 }
             }
         });
@@ -126,21 +135,44 @@ const VisitTemplateService = {
 
     /**
      * Применить шаблон к данным приема
+     * Если шаблон ссылается на medicationTemplateId или examTemplateSetId,
+     * эти шаблоны будут загружены и применены отдельно
      */
-    applyTemplate(templateData, existingData = {}) {
+    async applyTemplate(templateId, existingData = {}) {
         try {
-            const template = JSON.parse(templateData);
+            const template = await this.getById(templateId);
+            if (!template) {
+                throw new Error('Шаблон не найден');
+            }
+
+            const templateDataParsed = JSON.parse(template.templateData);
             
             // Мерджим данные шаблона с существующими данными
-            // Существующие данные имеют приоритет
-            return {
-                ...template,
+            // Существующие данные имеют приоритет (не перезаписываем непустые поля)
+            const merged = {
+                ...templateDataParsed,
                 ...existingData,
                 // Специальная обработка для некоторых полей
                 id: existingData.id, // ID не перезаписываем
                 childId: existingData.childId, // childId не перезаписываем
                 doctorId: existingData.doctorId, // doctorId не перезаписываем
-                visitDate: existingData.visitDate || template.visitDate || new Date().toISOString().split('T')[0],
+                visitDate: existingData.visitDate || templateDataParsed.visitDate || new Date().toISOString().split('T')[0],
+            };
+
+            // Удаляем пустые поля из шаблона, чтобы не перезаписывать заполненные
+            Object.keys(templateDataParsed).forEach(key => {
+                if (existingData[key] && existingData[key] !== null && existingData[key] !== '') {
+                    // Оставляем существующее значение
+                } else if (templateDataParsed[key]) {
+                    merged[key] = templateDataParsed[key];
+                }
+            });
+
+            // Возвращаем также ссылки на шаблоны назначений и текстов осмотра
+            return {
+                mergedData: merged,
+                medicationTemplateId: template.medicationTemplateId,
+                examTemplateSetId: template.examTemplateSetId,
             };
         } catch (e) {
             logger.error('[VisitTemplateService] Failed to apply template:', e);

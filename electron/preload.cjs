@@ -113,9 +113,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getVisitTemplate: (id) => ipcRenderer.invoke('visit-templates:get-by-id', id),
     getAllVisitTemplates: () => ipcRenderer.invoke('visit-templates:get-all'),
     getVisitTemplatesByType: (visitType) => ipcRenderer.invoke('visit-templates:get-by-visit-type', visitType),
+
+    // MEDICATION TEMPLATES MODULE API
+    getMedicationTemplate: (id) => ipcRenderer.invoke('medication-templates:get-by-id', id),
+    getAllMedicationTemplates: (userId) => ipcRenderer.invoke('medication-templates:get-all', userId),
+    upsertMedicationTemplate: (data) => ipcRenderer.invoke('medication-templates:upsert', data),
+    deleteMedicationTemplate: (id, userId) => ipcRenderer.invoke('medication-templates:delete', id, userId),
+    prepareMedicationTemplateApplication: (params) => ipcRenderer.invoke('medication-templates:prepare-application', params),
+
+    // EXAM TEXT TEMPLATES MODULE API
+    getExamTextTemplate: (id) => ipcRenderer.invoke('exam-text-templates:get-by-id', id),
+    getExamTextTemplatesBySystem: (systemKey, userId) => ipcRenderer.invoke('exam-text-templates:get-by-system', systemKey, userId),
+    getAllExamTextTemplates: (userId) => ipcRenderer.invoke('exam-text-templates:get-all', userId),
+    getExamTextTemplatesByTags: (params) => ipcRenderer.invoke('exam-text-templates:get-by-tags', params),
+    upsertExamTextTemplate: (data) => ipcRenderer.invoke('exam-text-templates:upsert', data),
+    deleteExamTextTemplate: (id, userId) => ipcRenderer.invoke('exam-text-templates:delete', id, userId),
     upsertVisitTemplate: (data) => ipcRenderer.invoke('visit-templates:upsert', data),
     deleteVisitTemplate: (id) => ipcRenderer.invoke('visit-templates:delete', id),
-    applyVisitTemplate: ({ templateData, existingData }) => ipcRenderer.invoke('visit-templates:apply', { templateData, existingData }),
+    applyVisitTemplate: ({ templateId, existingData }) => ipcRenderer.invoke('visit-templates:apply', { templateId, existingData }),
 
     // ICD CODES MODULE API
     loadIcdCodes: () => ipcRenderer.invoke('icd-codes:load'),

@@ -1,12 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../../../components/ui/Card';
-import { ChevronDown, ChevronUp, Eye, Heart, Brain, Activity, Stethoscope, FileText } from 'lucide-react';
+import { Button } from '../../../components/ui/Button';
+import { ChevronDown, ChevronUp, Eye, Heart, Brain, Activity, Stethoscope, FileText, ChevronsDownUp, Save } from 'lucide-react';
 import { Visit } from '../../../types';
+import { examTextTemplateService } from '../services/examTextTemplateService';
+import { ExamTextTemplate } from '../../../types';
+import { CreateExamTextTemplateModal } from './CreateExamTextTemplateModal';
+import { logger } from '../../../services/logger';
 
 interface PhysicalExamBySystemsProps {
     formData: Partial<Visit>;
     onChange: (field: keyof Visit, value: any) => void;
     errors?: Record<string, string>;
+    userId?: number;
 }
 
 interface SystemSection {
@@ -94,8 +100,12 @@ export const PhysicalExamBySystems: React.FC<PhysicalExamBySystemsProps> = ({
     formData,
     onChange,
     errors = {},
+    userId,
 }) => {
     const [expandedSystems, setExpandedSystems] = useState<Set<keyof Visit>>(new Set());
+    const [templatesBySystem, setTemplatesBySystem] = useState<Record<string, ExamTextTemplate[]>>({});
+    const [selectedSystemForTemplate, setSelectedSystemForTemplate] = useState<keyof Visit | null>(null);
+    const [systemForSaveTemplate, setSystemForSaveTemplate] = useState<{ key: keyof Visit; label: string } | null>(null);
 
     const toggleSystem = (key: keyof Visit) => {
         const newExpanded = new Set(expandedSystems);
@@ -209,6 +219,78 @@ export const PhysicalExamBySystems: React.FC<PhysicalExamBySystemsProps> = ({
 
                             {isExpanded && (
                                 <div className="p-4 space-y-3">
+                                    {userId && (
+                                        <div className="flex items-center justify-end gap-2">
+                                            {value && value.trim().length > 0 && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setSystemForSaveTemplate({ key: system.key, label: system.label })}
+                                                    className="text-xs"
+                                                    title="Сохранить текущий текст как шаблон"
+                                                >
+                                                    <Save className="w-3 h-3 mr-1" />
+                                                    Сохранить шаблон
+                                                </Button>
+                                            )}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={async () => {
+                                                    try {
+                                                        const templates = await examTextTemplateService.getBySystemKey(
+                                                            system.key as string,
+                                                            userId
+                                                        );
+                                                        setTemplatesBySystem(prev => ({
+                                                            ...prev,
+                                                            [system.key]: templates
+                                                        }));
+                                                        setSelectedSystemForTemplate(system.key);
+                                                    } catch (err) {
+                                                        logger.error('[PhysicalExamBySystems] Failed to load templates', { error: err, systemKey: system.key });
+                                                    }
+                                                }}
+                                                className="text-xs"
+                                                title="Выбрать сохраненный шаблон"
+                                            >
+                                                <ChevronsDownUp className="w-3 h-3 mr-1" />
+                                                Выбрать шаблон
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {selectedSystemForTemplate === system.key && templatesBySystem[system.key] && templatesBySystem[system.key].length > 0 && (
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-2 border border-slate-200 dark:border-slate-700">
+                                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                                Выберите шаблон:
+                                            </p>
+                                            {templatesBySystem[system.key].map((template) => (
+                                                <button
+                                                    key={template.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const currentValue = (formData[system.key] as string) || '';
+                                                        const newValue = currentValue 
+                                                            ? `${currentValue}\n\n${template.text}`
+                                                            : template.text;
+                                                        onChange(system.key, newValue);
+                                                        setSelectedSystemForTemplate(null);
+                                                    }}
+                                                    className="w-full text-left p-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-colors"
+                                                >
+                                                    {template.name || template.text.substring(0, 50) + '...'}
+                                                </button>
+                                            ))}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setSelectedSystemForTemplate(null)}
+                                                className="w-full text-xs"
+                                            >
+                                                Закрыть
+                                            </Button>
+                                        </div>
+                                    )}
                                     <textarea
                                         value={value || ''}
                                         onChange={(e) => onChange(system.key, e.target.value)}
@@ -238,6 +320,21 @@ export const PhysicalExamBySystems: React.FC<PhysicalExamBySystemsProps> = ({
                     );
                 })}
             </div>
+
+            {/* Create Exam Text Template Modal */}
+            {userId && systemForSaveTemplate && (
+                <CreateExamTextTemplateModal
+                    isOpen={systemForSaveTemplate !== null}
+                    onClose={() => setSystemForSaveTemplate(null)}
+                    onSuccess={() => {
+                        setSystemForSaveTemplate(null);
+                    }}
+                    systemKey={systemForSaveTemplate.key as string}
+                    systemLabel={systemForSaveTemplate.label}
+                    initialText={(formData[systemForSaveTemplate.key] as string) || ''}
+                    userId={userId}
+                />
+            )}
         </Card>
     );
 };

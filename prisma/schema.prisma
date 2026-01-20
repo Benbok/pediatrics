@@ -28,6 +28,8 @@ model User {
   pdfNotes              PdfNote[]
   informedConsents      InformedConsent[]
   visitTemplates        VisitTemplate[]
+  medicationTemplates   MedicationTemplate[]
+  examTextTemplates     ExamTextTemplate[]
 
   @@map("users")
 }
@@ -329,15 +331,63 @@ model VisitTemplate {
   // Структура шаблона (JSON)
   templateData String @map("template_data") // JSON со структурой полей
 
+  // Ссылки на другие шаблоны
+  medicationTemplateId Int? @map("medication_template_id") // Ссылка на шаблон назначений
+  examTemplateSetId    Int? @map("exam_template_set_id") // Ссылка на набор шаблонов осмотра (можно хранить JSON array в templateData)
+
   isDefault   Boolean  @default(false) @map("is_default")
   isPublic    Boolean  @default(true) @map("is_public") // Доступен всем или только создателю
   createdById Int      @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  createdBy          User                @relation(fields: [createdById], references: [id])
+  medicationTemplate MedicationTemplate? @relation(fields: [medicationTemplateId], references: [id])
+
+  @@unique([createdById, name]) // Уникальность по создателю и имени
+  @@index([createdById])
+  @@map("visit_templates")
+}
+
+model MedicationTemplate {
+  id          Int     @id @default(autoincrement())
+  name        String // Название шаблона (например: "ОРВИ стандартная схема")
+  description String? // Описание шаблона
+
+  // Элементы шаблона (JSON массив MedicationTemplateItem[])
+  items String @map("items") // JSON: [{ medicationId, preferredRoute?, defaultDuration?, overrideInstruction?, overrideSingleDoseMg?, overrideTimesPerDay?, notes? }]
+
+  isPublic    Boolean  @default(false) @map("is_public") // Персональные шаблоны по умолчанию
+  createdById Int      @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdBy      User            @relation(fields: [createdById], references: [id])
+  visitTemplates VisitTemplate[] // Обратная связь
+
+  @@unique([createdById, name]) // Уникальность по создателю и имени
+  @@index([createdById])
+  @@map("medication_templates")
+}
+
+model ExamTextTemplate {
+  id        Int     @id @default(autoincrement())
+  name      String? // Название шаблона (опционально, для удобства)
+  systemKey String  @map("system_key") // Ключ системы (generalCondition, cardiovascular, etc.)
+  text      String // Текст шаблона
+
+  // Теги для категоризации (JSON массив строк)
+  tags String @default("[]") @map("tags") // JSON: ["ОРВИ", "бронхит", ...]
+
+  isPublic    Boolean  @default(false) @map("is_public") // Персональные шаблоны по умолчанию
+  createdById Int      @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
   createdBy User @relation(fields: [createdById], references: [id])
 
-  @@map("visit_templates")
+  @@index([createdById, systemKey])
+  @@map("exam_text_templates")
 }
 
 model Visit {
