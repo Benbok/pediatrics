@@ -1,20 +1,117 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card } from '../../../components/ui/Card';
-import { Input } from '../../../components/ui/Input';
-import { FileText, Heart, AlertCircle, History } from 'lucide-react';
-import { Visit } from '../../../types';
+import { FileText } from 'lucide-react';
+import { Visit, HeredityData, BirthData, FeedingData, InfectiousDiseasesData, AllergyStatusData } from '../../../types';
+import {
+    HereditySection,
+    BirthSection,
+    FeedingSection,
+    InfectiousDiseasesSection,
+    AllergyStatusSection,
+} from './anamnesis025';
 
 interface AnamnesisSectionProps {
     formData: Partial<Visit>;
     onChange: (field: keyof Visit, value: any) => void;
+    visitType?: 'primary' | 'followup' | 'consultation' | 'emergency' | 'urgent' | null;
     errors?: Record<string, string>;
 }
 
 export const AnamnesisSection: React.FC<AnamnesisSectionProps> = ({
     formData,
     onChange,
+    visitType,
     errors = {},
 }) => {
+    // Показывать только для первичного приема и консультации
+    const shouldShow = visitType === 'primary' || visitType === 'consultation';
+
+    if (!shouldShow) {
+        return null;
+    }
+
+    // Парсинг JSON полей
+    const heredityData = useMemo(() => {
+        if (!formData.heredityData) return null;
+        if (typeof formData.heredityData === 'string') {
+            try {
+                return JSON.parse(formData.heredityData) as HeredityData;
+            } catch {
+                return null;
+            }
+        }
+        return formData.heredityData as HeredityData;
+    }, [formData.heredityData]);
+
+    const birthData = useMemo(() => {
+        if (!formData.birthData) return null;
+        if (typeof formData.birthData === 'string') {
+            try {
+                return JSON.parse(formData.birthData) as BirthData;
+            } catch {
+                return null;
+            }
+        }
+        return formData.birthData as BirthData;
+    }, [formData.birthData]);
+
+    const feedingData = useMemo(() => {
+        if (!formData.feedingData) return null;
+        if (typeof formData.feedingData === 'string') {
+            try {
+                return JSON.parse(formData.feedingData) as FeedingData;
+            } catch {
+                return null;
+            }
+        }
+        return formData.feedingData as FeedingData;
+    }, [formData.feedingData]);
+
+    const infectiousDiseasesData = useMemo(() => {
+        if (!formData.infectiousDiseasesData) return null;
+        if (typeof formData.infectiousDiseasesData === 'string') {
+            try {
+                return JSON.parse(formData.infectiousDiseasesData) as InfectiousDiseasesData;
+            } catch {
+                return null;
+            }
+        }
+        return formData.infectiousDiseasesData as InfectiousDiseasesData;
+    }, [formData.infectiousDiseasesData]);
+
+    const allergyStatusData = useMemo(() => {
+        if (!formData.allergyStatusData) return null;
+        if (typeof formData.allergyStatusData === 'string') {
+            try {
+                return JSON.parse(formData.allergyStatusData) as AllergyStatusData;
+            } catch {
+                return null;
+            }
+        }
+        return formData.allergyStatusData as AllergyStatusData;
+    }, [formData.allergyStatusData]);
+
+    // Обработчики для обновления JSON полей
+    const handleHeredityChange = (data: HeredityData) => {
+        onChange('heredityData', JSON.stringify(data));
+    };
+
+    const handleBirthChange = (data: BirthData) => {
+        onChange('birthData', JSON.stringify(data));
+    };
+
+    const handleFeedingChange = (data: FeedingData) => {
+        onChange('feedingData', JSON.stringify(data));
+    };
+
+    const handleInfectiousDiseasesChange = (data: InfectiousDiseasesData) => {
+        onChange('infectiousDiseasesData', JSON.stringify(data));
+    };
+
+    const handleAllergyStatusChange = (data: AllergyStatusData) => {
+        onChange('allergyStatusData', JSON.stringify(data));
+    };
+
     return (
         <Card className="p-6 space-y-6">
             <div className="flex items-center gap-3 mb-4">
@@ -22,138 +119,16 @@ export const AnamnesisSection: React.FC<AnamnesisSectionProps> = ({
                     <FileText className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                 </div>
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                    Анамнез
+                    Анамнез жизни (форма 025/у)
                 </h3>
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-                {/* Анамнез заболевания */}
-                <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                        <Heart className="w-4 h-4" />
-                        Анамнез заболевания
-                    </label>
-                    <textarea
-                        value={formData.diseaseHistory || ''}
-                        onChange={(e) => onChange('diseaseHistory', e.target.value)}
-                        placeholder="Начало заболевания, развитие симптомов, предшествующее лечение..."
-                        rows={4}
-                        className={`
-                            w-full px-4 py-3 bg-white dark:bg-slate-900 border rounded-xl text-sm
-                            transition-all duration-200 placeholder:text-slate-400
-                            focus:outline-none focus:ring-4 focus:ring-offset-0
-                            ${errors.diseaseHistory
-                                ? 'border-red-300 text-red-900 focus:ring-red-500/10 focus:border-red-500'
-                                : 'border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-primary-500/10 focus:border-primary-500'
-                            }
-                        `}
-                    />
-                    {errors.diseaseHistory && (
-                        <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            {errors.diseaseHistory}
-                        </p>
-                    )}
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Опишите начало заболевания, динамику развития симптомов, проведенное ранее лечение
-                    </p>
-                </div>
-
-                {/* Анамнез жизни */}
-                <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                        <History className="w-4 h-4" />
-                        Анамнез жизни
-                    </label>
-                    <textarea
-                        value={formData.lifeHistory || ''}
-                        onChange={(e) => onChange('lifeHistory', e.target.value)}
-                        placeholder="Профессия родителей, вредные привычки родителей, наследственность, особенности развития..."
-                        rows={4}
-                        className={`
-                            w-full px-4 py-3 bg-white dark:bg-slate-900 border rounded-xl text-sm
-                            transition-all duration-200 placeholder:text-slate-400
-                            focus:outline-none focus:ring-4 focus:ring-offset-0
-                            ${errors.lifeHistory
-                                ? 'border-red-300 text-red-900 focus:ring-red-500/10 focus:border-red-500'
-                                : 'border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-primary-500/10 focus:border-primary-500'
-                            }
-                        `}
-                    />
-                    {errors.lifeHistory && (
-                        <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            {errors.lifeHistory}
-                        </p>
-                    )}
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Семейный анамнез, особенности течения беременности и родов, раннего развития
-                    </p>
-                </div>
-
-                {/* Аллергологический анамнез */}
-                <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                        <AlertCircle className="w-4 h-4" />
-                        Аллергологический анамнез
-                    </label>
-                    <textarea
-                        value={formData.allergyHistory || ''}
-                        onChange={(e) => onChange('allergyHistory', e.target.value)}
-                        placeholder="Уточненные аллергические реакции, пищевые аллергии, лекарственная непереносимость..."
-                        rows={3}
-                        className={`
-                            w-full px-4 py-3 bg-white dark:bg-slate-900 border rounded-xl text-sm
-                            transition-all duration-200 placeholder:text-slate-400
-                            focus:outline-none focus:ring-4 focus:ring-offset-0
-                            ${errors.allergyHistory
-                                ? 'border-red-300 text-red-900 focus:ring-red-500/10 focus:border-red-500'
-                                : 'border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-primary-500/10 focus:border-primary-500'
-                            }
-                        `}
-                    />
-                    {errors.allergyHistory && (
-                        <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            {errors.allergyHistory}
-                        </p>
-                    )}
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Указываются все известные аллергические реакции и непереносимости
-                    </p>
-                </div>
-
-                {/* Перенесенные заболевания */}
-                <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                        <History className="w-4 h-4" />
-                        Перенесенные заболевания
-                    </label>
-                    <textarea
-                        value={formData.previousDiseases || ''}
-                        onChange={(e) => onChange('previousDiseases', e.target.value)}
-                        placeholder="Хронические заболевания, перенесенные операции, тяжелые инфекционные заболевания..."
-                        rows={3}
-                        className={`
-                            w-full px-4 py-3 bg-white dark:bg-slate-900 border rounded-xl text-sm
-                            transition-all duration-200 placeholder:text-slate-400
-                            focus:outline-none focus:ring-4 focus:ring-offset-0
-                            ${errors.previousDiseases
-                                ? 'border-red-300 text-red-900 focus:ring-red-500/10 focus:border-red-500'
-                                : 'border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:ring-primary-500/10 focus:border-primary-500'
-                            }
-                        `}
-                    />
-                    {errors.previousDiseases && (
-                        <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            {errors.previousDiseases}
-                        </p>
-                    )}
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Указываются все значимые перенесенные заболевания и оперативные вмешательства
-                    </p>
-                </div>
+            <div className="space-y-6">
+                <HereditySection data={heredityData} onChange={handleHeredityChange} />
+                <BirthSection data={birthData} onChange={handleBirthChange} />
+                <FeedingSection data={feedingData} onChange={handleFeedingChange} />
+                <InfectiousDiseasesSection data={infectiousDiseasesData} onChange={handleInfectiousDiseasesChange} />
+                <AllergyStatusSection data={allergyStatusData} onChange={handleAllergyStatusChange} />
             </div>
         </Card>
     );

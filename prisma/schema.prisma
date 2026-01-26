@@ -409,11 +409,17 @@ model Visit {
   bmi           Float? // Body Mass Index (автоматически рассчитывается)
   bsa           Float? // Body Surface Area (площадь тела, м²)
 
-  // Анамнез (структурированный)
-  diseaseHistory   String? @map("disease_history") // анамнез заболевания
-  lifeHistory      String? @map("life_history") // анамнез жизни
-  allergyHistory   String? @map("allergy_history") // аллергологический анамнез (уточненный)
-  previousDiseases String? @map("previous_diseases") // перенесенные заболевания
+  // АНАМНЕЗ ЗАБОЛЕВАНИЯ (для всех типов приема)
+  diseaseOnset         String? @map("disease_onset") // когда началось заболевание и первые симптомы
+  diseaseCourse        String? @map("disease_course") // течение болезни
+  treatmentBeforeVisit String? @map("treatment_before_visit") // лечение, проводимое до обращения
+
+  // АНАМНЕЗ ЖИЗНИ 025/у (только для primary и consultation)
+  heredityData           String? @map("heredity_data") // JSON: наследственность
+  birthData              String? @map("birth_data") // JSON: сведения о беременности и родах
+  feedingData            String? @map("feeding_data") // JSON: вскармливание
+  infectiousDiseasesData String? @map("infectious_diseases_data") // JSON: перенесенные инфекционные заболевания
+  allergyStatusData      String? @map("allergy_status_data") // JSON: аллергический статус
 
   // Показатели жизнедеятельности (Vital Signs)
   bloodPressureSystolic  Int?    @map("blood_pressure_systolic") // систолическое АД (мм рт.ст.)

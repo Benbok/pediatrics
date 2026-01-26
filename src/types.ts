@@ -414,6 +414,60 @@ export interface DiagnosisEntry {
   diseaseId?: number; // Опциональная связь с Disease (база знаний)
 }
 
+// ============= АНАМНЕЗ ЖИЗНИ 025/у (структурированные данные) =============
+
+export interface HeredityData {
+  tuberculosis: boolean;
+  diabetes: boolean;
+  hypertension: boolean;
+  oncology: boolean;
+  allergies: boolean;
+  other?: string | null;
+}
+
+export interface BirthData {
+  pregnancyCourse?: string | null;
+  obstetricalHistory?: string | null;
+  deliveryMethod?: 'natural' | 'cesarean' | null;
+  gestationalAge?: number | null; // недель
+  birthWeight?: number | null; // граммы
+  birthHeight?: number | null; // см
+  apgarScore?: number | null;
+  neonatalComplications?: boolean | null;
+  neonatalComplicationsDetails?: string | null;
+}
+
+export interface FeedingData {
+  breastfeeding?: boolean | null;
+  breastfeedingFrom?: string | null; // дата или возраст
+  breastfeedingTo?: string | null;
+  complementaryFoodAge?: number | null; // месяцев
+  nutritionFeatures?: string | null;
+}
+
+export interface InfectiousDiseaseEntry {
+  had: boolean;
+  ageYears?: number | null;
+}
+
+export interface InfectiousDiseasesData {
+  measles?: InfectiousDiseaseEntry;
+  chickenpox?: InfectiousDiseaseEntry;
+  rubella?: InfectiousDiseaseEntry;
+  pertussis?: InfectiousDiseaseEntry;
+  scarletFever?: InfectiousDiseaseEntry;
+  tonsillitis?: { had: boolean; perYear?: number | null };
+  other?: string | null;
+}
+
+export interface AllergyStatusData {
+  food?: string | null;
+  medication?: string | null;
+  materials?: string | null;
+  insectBites?: string | null;
+  seasonal?: string | null;
+}
+
 export interface Visit {
   id?: number;
   childId: number;
@@ -433,11 +487,17 @@ export interface Visit {
   bmi?: number | null; // Body Mass Index
   bsa?: number | null; // Body Surface Area (м²)
   
-  // Анамнез (структурированный)
-  diseaseHistory?: string | null;
-  lifeHistory?: string | null;
-  allergyHistory?: string | null;
-  previousDiseases?: string | null;
+  // АНАМНЕЗ ЗАБОЛЕВАНИЯ (для всех типов приема)
+  diseaseOnset?: string | null; // когда началось заболевание и первые симптомы
+  diseaseCourse?: string | null; // течение болезни
+  treatmentBeforeVisit?: string | null; // лечение, проводимое до обращения
+
+  // АНАМНЕЗ ЖИЗНИ 025/у (только для primary/consultation)
+  heredityData?: HeredityData | string | null;
+  birthData?: BirthData | string | null;
+  feedingData?: FeedingData | string | null;
+  infectiousDiseasesData?: InfectiousDiseasesData | string | null;
+  allergyStatusData?: AllergyStatusData | string | null;
   
   // Показатели жизнедеятельности (Vital Signs)
   bloodPressureSystolic?: number | null; // систолическое АД (мм рт.ст.)

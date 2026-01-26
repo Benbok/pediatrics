@@ -162,8 +162,12 @@ async function autofillFromPreviousVisit(childId, visitDate) {
     
     return {
         // Антропометрия обычно не копируется (измеряется каждый раз)
-        // Анамнез жизни обычно статичен, можно копировать
-        lifeHistory: previousVisit.lifeHistory || null,
+        // Анамнез жизни 025/у обычно статичен, можно копировать
+        heredityData: previousVisit.heredityData || null,
+        birthData: previousVisit.birthData || null,
+        feedingData: previousVisit.feedingData || null,
+        infectiousDiseasesData: previousVisit.infectiousDiseasesData || null,
+        allergyStatusData: previousVisit.allergyStatusData || null,
         // Хронические диагнозы - можно предложить как сопутствующие
         // (но не копировать автоматически, только если указано в legacy поле)
     };
@@ -217,11 +221,17 @@ const VisitSchema = z.object({
     bmi: z.number().optional().nullable(),
     bsa: z.number().optional().nullable(),
     
-    // Анамнез (структурированный)
-    diseaseHistory: z.string().optional().nullable(),
-    lifeHistory: z.string().optional().nullable(),
-    allergyHistory: z.string().optional().nullable(),
-    previousDiseases: z.string().optional().nullable(),
+    // АНАМНЕЗ ЗАБОЛЕВАНИЯ (для всех типов приема)
+    diseaseOnset: z.string().optional().nullable(),
+    diseaseCourse: z.string().optional().nullable(),
+    treatmentBeforeVisit: z.string().optional().nullable(),
+
+    // АНАМНЕЗ ЖИЗНИ 025/у (только для primary/consultation)
+    heredityData: z.string().optional().nullable(),
+    birthData: z.string().optional().nullable(),
+    feedingData: z.string().optional().nullable(),
+    infectiousDiseasesData: z.string().optional().nullable(),
+    allergyStatusData: z.string().optional().nullable(),
     
     // Показатели жизнедеятельности
     // Валидация здесь только техническая - для типа данных
@@ -503,19 +513,34 @@ const VisitService = {
         const visit = await this.getById(visitId);
         if (!visit) throw new Error('Прием не найден');
 
+        const { AnamnesisFormatter } = require('./anamnesis-formatter.cjs');
+
         // Собираем все клинические данные для анализа
         const clinicalData = [];
+        
+        // 1. АНАМНЕЗ ЗАБОЛЕВАНИЯ
         if (visit.complaints && visit.complaints.trim().length > 0) {
             clinicalData.push(`Жалобы: ${visit.complaints}`);
         }
-        if (visit.diseaseHistory) {
-            clinicalData.push(`Анамнез заболевания: ${visit.diseaseHistory}`);
+        if (visit.diseaseOnset && visit.diseaseOnset.trim().length > 0) {
+            clinicalData.push(`Начало заболевания: ${visit.diseaseOnset}`);
         }
-        if (visit.allergyHistory) {
-            clinicalData.push(`Аллергологический анамнез: ${visit.allergyHistory}`);
+        if (visit.diseaseCourse && visit.diseaseCourse.trim().length > 0) {
+            clinicalData.push(`Течение болезни: ${visit.diseaseCourse}`);
         }
-        if (visit.physicalExam) {
-            clinicalData.push(`Объективный осмотр: ${visit.physicalExam}`);
+        if (visit.treatmentBeforeVisit && visit.treatmentBeforeVisit.trim().length > 0) {
+            clinicalData.push(`Предшествующее лечение: ${visit.treatmentBeforeVisit}`);
+        }
+        
+        // 2. АНАМНЕЗ ЖИЗНИ 025/у (структурированный)
+        const anamnesisLife = AnamnesisFormatter.formatFullAnamnesis(visit);
+        if (anamnesisLife.length > 0) {
+            clinicalData.push(`\nАнамнез жизни:\n${anamnesisLife.join('\n')}`);
+        }
+        
+        // 3. Объективный осмотр
+        if (visit.physicalExam && visit.physicalExam.trim().length > 0) {
+            clinicalData.push(`\nОбъективный осмотр: ${visit.physicalExam}`);
         }
         
         // Добавляем показатели жизнедеятельности

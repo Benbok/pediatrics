@@ -40,7 +40,7 @@ const setupVisitTemplateHandlers = () => {
             const result = await VisitTemplateService.upsert({
                 ...data,
                 createdById: data.createdById || session.user.id,
-            });
+            }, session.user.id);
             logAudit(data.id ? 'VISIT_TEMPLATE_UPDATED' : 'VISIT_TEMPLATE_CREATED', {
                 templateId: result.id,
                 name: result.name

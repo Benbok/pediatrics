@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import {
+    HeredityDataSchema,
+    BirthDataSchema,
+    FeedingDataSchema,
+    InfectiousDiseasesDataSchema,
+    AllergyStatusDataSchema,
+} from './anamnesis025.validator';
 
 // Схема для объекта диагноза
 export const DiagnosisEntrySchema = z.object({
@@ -64,11 +71,17 @@ export const VisitSchema = z.object({
     bmi: z.number().nullable().optional(),
     bsa: z.number().nullable().optional(),
     
-    // Анамнез (структурированный)
-    diseaseHistory: z.string().nullable().optional(),
-    lifeHistory: z.string().nullable().optional(),
-    allergyHistory: z.string().nullable().optional(),
-    previousDiseases: z.string().nullable().optional(),
+    // АНАМНЕЗ ЗАБОЛЕВАНИЯ (для всех типов приема)
+    diseaseOnset: z.string().nullable().optional(),
+    diseaseCourse: z.string().nullable().optional(),
+    treatmentBeforeVisit: z.string().nullable().optional(),
+
+    // АНАМНЕЗ ЖИЗНИ 025/у (только для primary/consultation)
+    heredityData: z.union([z.string(), HeredityDataSchema]).nullable().optional(),
+    birthData: z.union([z.string(), BirthDataSchema]).nullable().optional(),
+    feedingData: z.union([z.string(), FeedingDataSchema]).nullable().optional(),
+    infectiousDiseasesData: z.union([z.string(), InfectiousDiseasesDataSchema]).nullable().optional(),
+    allergyStatusData: z.union([z.string(), AllergyStatusDataSchema]).nullable().optional(),
     
     // Показатели жизнедеятельности (Vital Signs)
     // Валидация здесь только техническая - для типа данных

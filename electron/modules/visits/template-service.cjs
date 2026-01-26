@@ -88,7 +88,7 @@ const VisitTemplateService = {
     /**
      * Создать или обновить шаблон
      */
-    async upsert(data) {
+    async upsert(data, userId) {
         const validated = VisitTemplateSchema.parse(data);
         const { id, ...rest } = validated;
 
@@ -100,6 +100,19 @@ const VisitTemplateService = {
         }
 
         if (id) {
+            // При обновлении проверяем права доступа
+            const existingTemplate = await prisma.visitTemplate.findUnique({
+                where: { id: Number(id) }
+            });
+
+            if (!existingTemplate) {
+                throw new Error('Шаблон не найден');
+            }
+
+            if (existingTemplate.createdById !== Number(userId)) {
+                throw new Error('У вас нет прав на редактирование этого шаблона');
+            }
+
             return await prisma.visitTemplate.update({
                 where: { id },
                 data: rest,
