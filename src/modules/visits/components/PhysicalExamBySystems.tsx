@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
-import { ChevronDown, ChevronUp, Eye, Heart, Brain, Activity, Stethoscope, FileText, ChevronsDownUp, Save } from 'lucide-react';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
+import { ChevronDown, ChevronUp, Eye, Heart, Brain, Activity, Stethoscope, FileText, ChevronsDownUp, Save, Trash2, Pencil } from 'lucide-react';
 import { Visit } from '../../../types';
 import { examTextTemplateService } from '../services/examTextTemplateService';
 import { ExamTextTemplate } from '../../../types';
@@ -106,6 +107,14 @@ export const PhysicalExamBySystems: React.FC<PhysicalExamBySystemsProps> = ({
     const [templatesBySystem, setTemplatesBySystem] = useState<Record<string, ExamTextTemplate[]>>({});
     const [selectedSystemForTemplate, setSelectedSystemForTemplate] = useState<keyof Visit | null>(null);
     const [systemForSaveTemplate, setSystemForSaveTemplate] = useState<{ key: keyof Visit; label: string } | null>(null);
+    const [editingTemplate, setEditingTemplate] = useState<{ templateId: number; systemKey: keyof Visit; systemLabel: string } | null>(null);
+    const [deletingTemplateId, setDeletingTemplateId] = useState<number | null>(null);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; templateId: number | null; templateName: string; systemKey: keyof Visit | null }>({
+        isOpen: false,
+        templateId: null,
+        templateName: '',
+        systemKey: null
+    });
 
     const toggleSystem = (key: keyof Visit) => {
         const newExpanded = new Set(expandedSystems);
@@ -123,6 +132,52 @@ export const PhysicalExamBySystems: React.FC<PhysicalExamBySystemsProps> = ({
 
     const collapseAll = () => {
         setExpandedSystems(new Set());
+    };
+
+    const handleDeleteClick = (template: ExamTextTemplate, systemKey: keyof Visit) => {
+        if (!userId || !template.id) return;
+        setDeleteConfirm({
+            isOpen: true,
+            templateId: template.id,
+            templateName: template.name || template.text.substring(0, 50) + '...',
+            systemKey
+        });
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteConfirm.templateId || !deleteConfirm.systemKey || !userId) return;
+
+        const templateId = deleteConfirm.templateId;
+        const systemKey = deleteConfirm.systemKey;
+
+        setDeleteConfirm({ isOpen: false, templateId: null, templateName: '', systemKey: null });
+        setDeletingTemplateId(templateId);
+
+        try {
+            await examTextTemplateService.delete(templateId, userId);
+            // Обновляем список шаблонов
+            const updatedTemplates = await examTextTemplateService.getBySystemKey(
+                systemKey as string,
+                userId
+            );
+            setTemplatesBySystem(prev => ({
+                ...prev,
+                [systemKey]: updatedTemplates
+            }));
+            // Если шаблонов не осталось, закрываем список
+            if (updatedTemplates.length === 0) {
+                setSelectedSystemForTemplate(null);
+            }
+        } catch (err) {
+            logger.error('[PhysicalExamBySystems] Failed to delete template', { error: err, templateId });
+            alert('Не удалось удалить шаблон');
+        } finally {
+            setDeletingTemplateId(null);
+        }
+    };
+
+    const handleDeleteCancel = () => {
+        setDeleteConfirm({ isOpen: false, templateId: null, templateName: '', systemKey: null });
     };
 
     return (
@@ -265,21 +320,60 @@ export const PhysicalExamBySystems: React.FC<PhysicalExamBySystemsProps> = ({
                                                 Выберите шаблон:
                                             </p>
                                             {templatesBySystem[system.key].map((template) => (
-                                                <button
+                                                <div
                                                     key={template.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const currentValue = (formData[system.key] as string) || '';
-                                                        const newValue = currentValue 
-                                                            ? `${currentValue}\n\n${template.text}`
-                                                            : template.text;
-                                                        onChange(system.key, newValue);
-                                                        setSelectedSystemForTemplate(null);
-                                                    }}
-                                                    className="w-full text-left p-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-colors"
+                                                    className="flex items-center gap-2 group"
                                                 >
-                                                    {template.name || template.text.substring(0, 50) + '...'}
-                                                </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const currentValue = (formData[system.key] as string) || '';
+                                                            const newValue = currentValue 
+                                                                ? `${currentValue}\n\n${template.text}`
+                                                                : template.text;
+                                                            onChange(system.key, newValue);
+                                                            setSelectedSystemForTemplate(null);
+                                                        }}
+                                                        className="flex-1 text-left p-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-colors"
+                                                    >
+                                                        {template.name || template.text.substring(0, 50) + '...'}
+                                                    </button>
+                                                    {userId && (
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const systemInfo = systems.find(s => s.key === system.key);
+                                                                    if (template.id && systemInfo) {
+                                                                        setEditingTemplate({
+                                                                            templateId: template.id,
+                                                                            systemKey: system.key,
+                                                                            systemLabel: systemInfo.label
+                                                                        });
+                                                                    }
+                                                                }}
+                                                                disabled={deletingTemplateId === template.id}
+                                                                className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                title="Редактировать шаблон"
+                                                            >
+                                                                <Pencil className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteClick(template, system.key);
+                                                                }}
+                                                                disabled={deletingTemplateId === template.id}
+                                                                className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                title="Удалить шаблон"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             ))}
                                             <Button
                                                 variant="ghost"
@@ -326,8 +420,23 @@ export const PhysicalExamBySystems: React.FC<PhysicalExamBySystemsProps> = ({
                 <CreateExamTextTemplateModal
                     isOpen={systemForSaveTemplate !== null}
                     onClose={() => setSystemForSaveTemplate(null)}
-                    onSuccess={() => {
+                    onSuccess={async () => {
                         setSystemForSaveTemplate(null);
+                        // Обновляем список шаблонов после создания
+                        if (systemForSaveTemplate.key && userId) {
+                            try {
+                                const templates = await examTextTemplateService.getBySystemKey(
+                                    systemForSaveTemplate.key as string,
+                                    userId
+                                );
+                                setTemplatesBySystem(prev => ({
+                                    ...prev,
+                                    [systemForSaveTemplate.key]: templates
+                                }));
+                            } catch (err) {
+                                logger.error('[PhysicalExamBySystems] Failed to reload templates after create', { error: err });
+                            }
+                        }
                     }}
                     systemKey={systemForSaveTemplate.key as string}
                     systemLabel={systemForSaveTemplate.label}
@@ -335,6 +444,49 @@ export const PhysicalExamBySystems: React.FC<PhysicalExamBySystemsProps> = ({
                     userId={userId}
                 />
             )}
+
+            {/* Edit Exam Text Template Modal */}
+            {userId && editingTemplate && (
+                <CreateExamTextTemplateModal
+                    isOpen={editingTemplate !== null}
+                    onClose={() => setEditingTemplate(null)}
+                    onSuccess={async () => {
+                        setEditingTemplate(null);
+                        // Обновляем список шаблонов после редактирования
+                        if (editingTemplate.systemKey && userId) {
+                            try {
+                                const templates = await examTextTemplateService.getBySystemKey(
+                                    editingTemplate.systemKey as string,
+                                    userId
+                                );
+                                setTemplatesBySystem(prev => ({
+                                    ...prev,
+                                    [editingTemplate.systemKey]: templates
+                                }));
+                            } catch (err) {
+                                logger.error('[PhysicalExamBySystems] Failed to reload templates after edit', { error: err });
+                            }
+                        }
+                    }}
+                    systemKey={editingTemplate.systemKey as string}
+                    systemLabel={editingTemplate.systemLabel}
+                    initialText="" // Не используется при редактировании, данные загружаются из шаблона
+                    userId={userId}
+                    templateId={editingTemplate.templateId}
+                />
+            )}
+
+            {/* Delete Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={deleteConfirm.isOpen}
+                title="Удаление шаблона"
+                message={`Вы уверены, что хотите удалить шаблон "${deleteConfirm.templateName}"?\n\nЭто действие нельзя отменить.`}
+                confirmText="Удалить"
+                cancelText="Отмена"
+                variant="danger"
+                onConfirm={handleDeleteConfirm}
+                onCancel={handleDeleteCancel}
+            />
         </Card>
     );
 };

@@ -821,6 +821,7 @@ export const VisitFormPage: React.FC = () => {
                                 }
                             }}
                             currentData={formData}
+                            userId={currentUser?.id}
                         />
                     )}
 
