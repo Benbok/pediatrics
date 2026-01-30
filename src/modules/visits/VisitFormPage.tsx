@@ -273,6 +273,7 @@ export const VisitFormPage: React.FC = () => {
                         logger.warn('[VisitFormPage] Failed to load informed consent:', err);
                     }
                 }
+
             } else {
                 // Для нового приема определяем тип автоматически
                 const autoType = await determineVisitType();
@@ -682,6 +683,27 @@ export const VisitFormPage: React.FC = () => {
             setIsLoadingMedications(false);
         }
     };
+
+    // Загрузка препаратов для существующего приема при открытии
+    const medicationsLoadedForEdit = useRef(false);
+    useEffect(() => {
+        // Загружаем препараты только один раз при редактировании существующего приема
+        if (isEdit && initialLoadDone.current && !medicationsLoadedForEdit.current) {
+            const primary = formData.primaryDiagnosis as DiagnosisEntry | null;
+            const complicationsArr = Array.isArray(formData.complications) ? formData.complications as DiagnosisEntry[] : [];
+            const comorbiditiesArr = Array.isArray(formData.comorbidities) ? formData.comorbidities as DiagnosisEntry[] : [];
+            
+            if (primary || complicationsArr.length > 0 || comorbiditiesArr.length > 0) {
+                medicationsLoadedForEdit.current = true;
+                loadMedicationsForAllDiagnoses(primary, complicationsArr, comorbiditiesArr);
+                logger.info('[VisitFormPage] Loading medications for existing visit', { 
+                    hasPrimary: !!primary,
+                    complicationsCount: complicationsArr.length,
+                    comorbiditiesCount: comorbiditiesArr.length
+                });
+            }
+        }
+    }, [isEdit, formData.primaryDiagnosis, formData.complications, formData.comorbidities]);
 
     const handlePrimaryDiagnosisSelect = async (diagnosis: DiagnosisEntry | null) => {
         setFormData(prev => ({
