@@ -58,6 +58,7 @@
     "better-sqlite3": "^12.5.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
+    "lodash": "^4.17.23",
     "lucide-react": "^0.562.0",
     "pdfjs-dist": "^5.4.530",
     "react": "18.3.1",
@@ -71,6 +72,7 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.2",
     "@tailwindcss/postcss": "^4.1.18",
+    "@types/lodash": "^4.17.23",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/ui": "^4.0.16",

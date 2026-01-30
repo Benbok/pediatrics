@@ -18,6 +18,8 @@ import {
 import clsx from 'clsx';
 import { useAuth } from '../../context/AuthContext';
 import { Badge } from '../ui/Badge';
+import { TabsProvider } from '../../context/TabsContext';
+import { TabBar } from './TabBar';
 
 export const AppShell: React.FC = () => {
   const { logout, currentUser } = useAuth();
@@ -131,65 +133,70 @@ export const AppShell: React.FC = () => {
           isSidebarOpen ? "pl-68" : "pl-22"
         )}
       >
-        {/* Top Header */}
-        <header className="h-20 flex items-center justify-between px-8 sticky top-0 z-40 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-900 transition-colors duration-500">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-primary-600 dark:hover:text-primary-400 transition-all hover:shadow-md active:scale-95 shadow-sm"
-            >
-              <Menu size={20} />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex items-center bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <TabsProvider>
+          {/* Top Header */}
+          <header className="h-20 flex items-center justify-between px-8 sticky top-0 z-40 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-900 transition-colors duration-500">
+            <div className="flex items-center gap-4">
               <button
-                onClick={toggleTheme}
-                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                title={isDarkMode ? 'Светлая тема' : 'Темная тема'}
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-primary-600 dark:hover:text-primary-400 transition-all hover:shadow-md active:scale-95 shadow-sm"
               >
-                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+                <Menu size={20} />
               </button>
-              <NavLink
-                to="/settings"
-                className={({ isActive }) => clsx(
-                  "p-2 rounded-lg transition-colors",
-                  isActive ? "bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-                )}
-              >
-                <Settings size={18} />
-              </NavLink>
             </div>
 
-            <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 mx-2" />
-
-            {currentUser && (
-              <div className="flex items-center gap-3 pl-2 group cursor-pointer">
-                <div className="text-right hidden sm:block">
-                  <div className="text-sm font-bold text-slate-900 dark:text-white leading-none mb-1">
-                    {currentUser.fullName}
-                  </div>
-                  <div className="text-[10px] uppercase font-black text-primary-600 dark:text-primary-400 tracking-wider">
-                    {currentUser.isAdmin ? 'Администратор' : 'Врач'}
-                  </div>
-                </div>
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600 p-0.5 shadow-lg shadow-primary-500/20 group-hover:scale-110 transition-transform duration-300">
-                  <div className="w-full h-full rounded-[14px] bg-white dark:bg-slate-900 flex items-center justify-center overflow-hidden">
-                    <UserCircle size={24} className="text-primary-600 dark:text-primary-400" />
-                  </div>
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <button
+                  onClick={toggleTheme}
+                  className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  title={isDarkMode ? 'Светлая тема' : 'Темная тема'}
+                >
+                  {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+                </button>
+                <NavLink
+                  to="/settings"
+                  className={({ isActive }) => clsx(
+                    "p-2 rounded-lg transition-colors",
+                    isActive ? "bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <Settings size={18} />
+                </NavLink>
               </div>
-            )}
-          </div>
-        </header>
 
-        {/* Content Area */}
-        <main className="flex-1 p-8 overflow-y-auto">
-          <div className="max-w-7xl mx-auto">
-            <Outlet />
-          </div>
-        </main>
+              <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 mx-2" />
+
+              {currentUser && (
+                <div className="flex items-center gap-3 pl-2 group cursor-pointer">
+                  <div className="text-right hidden sm:block">
+                    <div className="text-sm font-bold text-slate-900 dark:text-white leading-none mb-1">
+                      {currentUser.fullName}
+                    </div>
+                    <div className="text-[10px] uppercase font-black text-primary-600 dark:text-primary-400 tracking-wider">
+                      {currentUser.isAdmin ? 'Администратор' : 'Врач'}
+                    </div>
+                  </div>
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600 p-0.5 shadow-lg shadow-primary-500/20 group-hover:scale-110 transition-transform duration-300">
+                    <div className="w-full h-full rounded-[14px] bg-white dark:bg-slate-900 flex items-center justify-center overflow-hidden">
+                      <UserCircle size={24} className="text-primary-600 dark:text-primary-400" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </header>
+
+          {/* Tab Bar - shows open visit forms */}
+          <TabBar />
+
+          {/* Content Area */}
+          <main className="flex-1 p-8 overflow-y-auto">
+            <div className="max-w-7xl mx-auto">
+              <Outlet />
+            </div>
+          </main>
+        </TabsProvider>
       </div>
     </div>
   );

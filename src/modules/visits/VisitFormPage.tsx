@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { visitService } from './services/visitService';
 import { medicationService } from '../medications/services/medicationService';
@@ -6,6 +6,9 @@ import { diseaseService } from '../diseases/services/diseaseService';
 import { patientService } from '../../services/patient.service';
 import { informedConsentService } from './services/informedConsentService';
 import { logger } from '../../services/logger';
+import { draftService } from '../../services/draftService';
+import { useTabs } from '../../context/TabsContext';
+import debounce from 'lodash/debounce';
 import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, InformedConsent, MedicationRecommendation } from '../../types';
 import { MedicationBrowser } from './components/MedicationBrowser';
 import { VisitTypeSelector, VisitType } from './components/VisitTypeSelector';
@@ -118,6 +121,103 @@ export const VisitFormPage: React.FC = () => {
     const [informedConsent, setInformedConsent] = useState<InformedConsent | null>(null);
     const [showConsentForm, setShowConsentForm] = useState(false);
 
+    // Восстановление черновика
+    const [showRestoreModal, setShowRestoreModal] = useState(false);
+    const [savedDraft, setSavedDraft] = useState<Partial<Visit> | null>(null);
+    const [hasLocalChanges, setHasLocalChanges] = useState(false);
+    const initialLoadDone = useRef(false);
+    const tabRegistered = useRef(false);
+
+    // Tabs integration
+    const { openTab, closeTab, markDirty } = useTabs();
+
+    // Ключ для черновика в localStorage
+    const draftKey = draftService.getVisitDraftKey(Number(childId), id ? Number(id) : null);
+    const tabId = id ? `visit-${childId}-${id}` : `visit-${childId}-new`;
+
+    // Регистрация вкладки ТОЛЬКО после загрузки данных ребенка
+    useEffect(() => {
+        if (child && !tabRegistered.current) {
+            // ChildProfile использует поля: surname, name, patronymic
+            const childFullName = `${child.surname || ''} ${child.name || ''}`.trim() || 'Пациент';
+            const route = id 
+                ? `/patients/${childId}/visits/${id}` 
+                : `/patients/${childId}/visits/new`;
+            
+            openTab({
+                id: tabId,
+                type: 'visit-form',
+                route,
+                label: `Прием: ${childFullName}`,
+                isDirty: false,
+                metadata: {
+                    childId: Number(childId),
+                    childName: childFullName,
+                    visitId: id ? Number(id) : null
+                }
+            });
+            tabRegistered.current = true;
+            logger.info('[VisitFormPage] Tab registered', { tabId, childFullName });
+        }
+    }, [child, childId, id, openTab, tabId]);
+
+    // Функция для установки флага dirty
+    const setDirty = useCallback((isDirty: boolean) => {
+        markDirty(tabId, isDirty);
+    }, [markDirty, tabId]);
+
+    // Debounced автосохранение черновика
+    const debouncedSaveDraft = useMemo(
+        () => debounce((data: Partial<Visit>) => {
+            if (!initialLoadDone.current) return;
+            draftService.saveDraft(draftKey, data);
+            setDirty(true);
+            logger.info('[VisitFormPage] Draft auto-saved', { draftKey });
+        }, 3000),
+        [draftKey, setDirty]
+    );
+
+    // Автосохранение при изменении formData
+    useEffect(() => {
+        if (hasLocalChanges && initialLoadDone.current) {
+            debouncedSaveDraft(formData);
+        }
+        return () => {
+            debouncedSaveDraft.cancel();
+        };
+    }, [formData, hasLocalChanges, debouncedSaveDraft]);
+
+    // Проверка черновика при загрузке
+    useEffect(() => {
+        if (!initialLoadDone.current && !isEdit) {
+            const draft = draftService.loadDraft<Partial<Visit>>(draftKey);
+            if (draft && draft.data) {
+                // Показываем модальное окно восстановления
+                setSavedDraft(draft.data);
+                setShowRestoreModal(true);
+            }
+        }
+    }, [draftKey, isEdit]);
+
+    // Обработчик восстановления черновика
+    const handleRestoreDraft = () => {
+        if (savedDraft) {
+            setFormData(savedDraft);
+            setShowRestoreModal(false);
+            setSavedDraft(null);
+            setHasLocalChanges(true);
+            logger.info('[VisitFormPage] Draft restored', { draftKey });
+        }
+    };
+
+    // Обработчик отклонения черновика
+    const handleDiscardDraft = () => {
+        draftService.removeDraft(draftKey);
+        setShowRestoreModal(false);
+        setSavedDraft(null);
+        logger.info('[VisitFormPage] Draft discarded', { draftKey });
+    };
+
     useEffect(() => {
         loadData();
     }, [id, childId]);
@@ -179,6 +279,9 @@ export const VisitFormPage: React.FC = () => {
                 setFormData(prev => ({ ...prev, visitType: autoType }));
                 setAutoDetectedVisitType(autoType);
             }
+            
+            // Помечаем, что начальная загрузка завершена
+            initialLoadDone.current = true;
         } catch (err: any) {
             setError(err.message || 'Ошибка загрузки данных');
             logger.error('[VisitFormPage] Load data failed:', err);
@@ -208,6 +311,7 @@ export const VisitFormPage: React.FC = () => {
     // Обработчик изменения полей формы
     const handleFieldChange = useCallback((field: keyof Visit, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+        setHasLocalChanges(true);
     }, []);
 
     const loadLastAnthropometry = async () => {
@@ -321,6 +425,12 @@ export const VisitFormPage: React.FC = () => {
 
             const savedVisit = await visitService.upsertVisit(dataToSave as Visit);
             setSuccess(true);
+            
+            // Очищаем черновик и помечаем вкладку как "чистую" после успешного сохранения
+            draftService.removeDraft(draftKey);
+            setDirty(false);
+            setHasLocalChanges(false);
+            logger.info('[VisitFormPage] Visit saved, draft cleared', { draftKey });
 
             // Если статус completed и нужно согласие, показываем форму
             if (status === 'completed' && !informedConsent) {
@@ -1632,6 +1742,52 @@ export const VisitFormPage: React.FC = () => {
                 message={validationErrors.length > 0 ? validationErrors.join(', ') : error || 'Произошла ошибка при сохранении'}
                 errors={validationErrors.length > 0 ? validationErrors : undefined}
             />
+
+            {/* Draft Restore Modal */}
+            {showRestoreModal && savedDraft && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full border dark:border-slate-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+                        <div className="p-6 border-b dark:border-slate-800 bg-blue-50 dark:bg-blue-950/20">
+                            <div className="flex items-start gap-4">
+                                <div className="p-3 bg-blue-100 dark:bg-blue-900/40 rounded-2xl">
+                                    <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                                        Найден несохраненный черновик
+                                    </h3>
+                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        {draftService.getDraftTimestamp(draftKey) && 
+                                            `Последнее изменение: ${draftService.formatDraftTime(draftService.getDraftTimestamp(draftKey)!)}`
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-slate-700 dark:text-slate-300 mb-4">
+                                Вы начинали заполнять форму приема для этого пациента, но не сохранили её. 
+                                Хотите восстановить данные?
+                            </p>
+                            {savedDraft.visitType && (
+                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                    Тип приема: {savedDraft.visitType === 'primary' ? 'Первичный' : 
+                                                 savedDraft.visitType === 'followup' ? 'Повторный' : 
+                                                 savedDraft.visitType === 'consultation' ? 'Консультация' : savedDraft.visitType}
+                                </p>
+                            )}
+                        </div>
+                        <div className="p-6 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3">
+                            <Button variant="ghost" onClick={handleDiscardDraft}>
+                                Начать заново
+                            </Button>
+                            <Button variant="primary" onClick={handleRestoreDraft}>
+                                Восстановить
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Medication Dose Edit Modal */}
             {child && (
