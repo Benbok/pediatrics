@@ -1004,6 +1004,138 @@ const VisitService = {
 
         // Сортируем по приоритету
         return recommendations.sort((a, b) => a.priority - b.priority);
+    },
+
+    /**
+     * Получить диагностические исследования по коду МКБ
+     * Ищет ВСЕ заболевания, у которых данный код присутствует в icd10Codes,
+     * и собирает их diagnosticPlan
+     * @param {string} icdCode - Код МКБ (например, J10.8)
+     * @returns {Promise<Array>} Массив диагностических исследований с источником
+     */
+    async getDiagnosticsByIcdCode(icdCode) {
+        if (!icdCode) {
+            throw new Error('Код МКБ обязателен');
+        }
+
+        // Нормализуем код МКБ
+        const normalizedCode = icdCode.toUpperCase().trim();
+        logger.info(`[VisitService] getDiagnosticsByIcdCode: searching for code ${normalizedCode}`);
+
+        // Получаем ВСЕ заболевания и фильтруем вручную
+        const allDiseases = await prisma.disease.findMany();
+
+        logger.info(`[VisitService] Checking ${allDiseases.length} diseases for diagnostics with ICD code ${normalizedCode}`);
+
+        // Фильтруем заболевания, у которых есть совпадение по коду МКБ
+        const diseases = allDiseases.filter(disease => {
+            // Собираем ВСЕ коды заболевания (основной + дополнительные)
+            const additionalCodes = safeJsonParse(disease.icd10Codes, []);
+            const allDiseaseCodes = [
+                disease.icd10Code,
+                ...additionalCodes
+            ].filter(Boolean);
+
+            // Проверяем, есть ли совпадение с любым из кодов заболевания
+            const hasMatch = allDiseaseCodes.some(diseaseCode => {
+                // Точное совпадение
+                if (diseaseCode === normalizedCode) return true;
+                
+                // Частичное совпадение: если код заболевания - это префикс диагноза
+                if (normalizedCode.startsWith(diseaseCode + '.')) return true;
+                
+                // Обратное частичное совпадение: если диагноз - это префикс кода заболевания
+                if (diseaseCode.startsWith(normalizedCode + '.')) return true;
+                
+                return false;
+            });
+
+            return hasMatch;
+        });
+
+        logger.info(`[VisitService] Found ${diseases.length} diseases matching ICD code ${normalizedCode} for diagnostics`);
+
+        // Собираем диагностические исследования из всех найденных заболеваний
+        const diagnosticsMap = new Map(); // Для дедупликации по названию исследования
+
+        for (const disease of diseases) {
+            const diagnosticPlan = safeJsonParse(disease.diagnosticPlan, []);
+            
+            for (const item of diagnosticPlan) {
+                if (!item || !item.test) continue;
+                
+                const testKey = item.test.toLowerCase().trim();
+                
+                // Если исследование еще не добавлено, добавляем его
+                if (!diagnosticsMap.has(testKey)) {
+                    diagnosticsMap.set(testKey, {
+                        item: {
+                            type: item.type || 'lab',
+                            test: item.test,
+                            priority: item.priority || 'medium',
+                            rationale: item.rationale || null
+                        },
+                        sourceDiseaseName: disease.nameRu,
+                        sourceDiseaseId: disease.id
+                    });
+                }
+            }
+        }
+
+        const result = Array.from(diagnosticsMap.values());
+        logger.info(`[VisitService] Found ${result.length} unique diagnostic tests for ICD code ${normalizedCode}`);
+
+        return result;
+    },
+
+    /**
+     * Получить ВСЕ диагностические исследования из всех заболеваний базы знаний
+     * Используется для справочника исследований
+     * @returns {Promise<Array>} Массив всех диагностических исследований с источниками
+     */
+    async getAllDiagnosticTests() {
+        logger.info('[VisitService] Getting all diagnostic tests from knowledge base');
+
+        const allDiseases = await prisma.disease.findMany();
+        
+        // Map для дедупликации по названию исследования, но сохраняем все источники
+        const diagnosticsMap = new Map();
+
+        for (const disease of allDiseases) {
+            const diagnosticPlan = safeJsonParse(disease.diagnosticPlan, []);
+            const diseaseCodes = safeJsonParse(disease.icd10Codes, []);
+            const allCodes = [disease.icd10Code, ...diseaseCodes].filter(Boolean);
+            
+            for (const item of diagnosticPlan) {
+                if (!item || !item.test) continue;
+                
+                const testKey = item.test.toLowerCase().trim();
+                
+                if (!diagnosticsMap.has(testKey)) {
+                    diagnosticsMap.set(testKey, {
+                        item: {
+                            type: item.type || 'lab',
+                            test: item.test,
+                            priority: item.priority || 'medium',
+                            rationale: item.rationale || null
+                        },
+                        sourceDiseaseName: disease.nameRu,
+                        sourceDiseaseId: disease.id,
+                        icd10Codes: allCodes // Коды МКБ для фильтрации
+                    });
+                } else {
+                    // Добавляем коды к существующему исследованию
+                    const existing = diagnosticsMap.get(testKey);
+                    const newCodes = allCodes.filter(c => !existing.icd10Codes.includes(c));
+                    existing.icd10Codes = [...existing.icd10Codes, ...newCodes];
+                }
+            }
+        }
+
+        const result = Array.from(diagnosticsMap.values());
+        logger.info(`[VisitService] Found ${result.length} total unique diagnostic tests`);
+
+        return result;
     }
 };
 
@@ -1057,4 +1189,4 @@ async function getExpandedIcdCodes(icdCodes) {
     return result;
 }
 
-module.exports = { VisitService, VisitSchema, getExpandedIcdCodes };
+module.exports = { VisitService, VisitSchema, getExpandedIcdCodes, safeJsonParse };

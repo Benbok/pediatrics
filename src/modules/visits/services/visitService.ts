@@ -138,6 +138,24 @@ export const visitService = {
     },
 
     /**
+     * Get diagnostic tests by ICD code
+     * Searches all diseases with matching ICD code and collects their diagnosticPlan
+     */
+    async getDiagnosticsByIcdCode(icdCode: string): Promise<import('../../../types').DiagnosticRecommendation[]> {
+        // Validate input
+        if (!icdCode || icdCode.trim() === '') {
+            throw new Error('Код МКБ обязателен');
+        }
+
+        try {
+            return await window.electronAPI.getDiagnosticsByIcdCode(icdCode);
+        } catch (error: any) {
+            logger.error('[VisitService] Failed to get diagnostics by ICD code', { error, icdCode });
+            throw new Error(error.message || 'Ошибка при получении диагностических исследований по коду МКБ');
+        }
+    },
+
+    /**
      * Check if medication is already in prescriptions list
      * Business logic helper - validates duplicate medications
      */

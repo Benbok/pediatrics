@@ -27,6 +27,11 @@ import { MedicationTemplateSelector } from './components/MedicationTemplateSelec
 import { MedicationTemplateBatchEditor } from './components/MedicationTemplateBatchEditor';
 import { CreateMedicationTemplateModal } from './components/CreateMedicationTemplateModal';
 import { medicationTemplateService } from './services/medicationTemplateService';
+import { CreateDiagnosticTemplateModal } from './components/CreateDiagnosticTemplateModal';
+import { DiagnosticTemplateSelector } from './components/DiagnosticTemplateSelector';
+import { DiagnosticTemplateBatchEditor } from './components/DiagnosticTemplateBatchEditor';
+import { DiagnosticBrowser } from './components/DiagnosticBrowser';
+import { diagnosticTemplateService } from './services/diagnosticTemplateService';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -51,7 +56,12 @@ import {
     Clock,
     FileText,
     Eye,
-    Beaker
+    Beaker,
+    Microscope,
+    FlaskConical,
+    FileBarChart,
+    X,
+    Search
 } from 'lucide-react';
 import { calculateBMI, calculateBSA, getBMICategory, getBMICategoryLabel, formatBMI, formatBSA, validateAnthropometry } from '../../utils/anthropometry';
 import { calculateAgeInMonths, getFormattedAge } from '../../utils/ageUtils';
@@ -107,6 +117,14 @@ export const VisitFormPage: React.FC = () => {
     const [isBatchEditorOpen, setIsBatchEditorOpen] = useState(false);
     const [pendingTemplateItems, setPendingTemplateItems] = useState<any[]>([]);
     const [isCreateMedicationTemplateOpen, setIsCreateMedicationTemplateOpen] = useState(false);
+
+    // Диагностические исследования
+    const [diagnosticRecommendations, setDiagnosticRecommendations] = useState<import('../../types').DiagnosticRecommendation[]>([]);
+    const [isLoadingDiagnostics, setIsLoadingDiagnostics] = useState(false);
+    const [isCreateDiagnosticTemplateOpen, setIsCreateDiagnosticTemplateOpen] = useState(false);
+    const [isDiagnosticTemplateSelectorOpen, setIsDiagnosticTemplateSelectorOpen] = useState(false);
+    const [diagnosticTemplateToEdit, setDiagnosticTemplateToEdit] = useState<import('../../types').DiagnosticTemplate | null>(null);
+    const [isDiagnosticBrowserOpen, setIsDiagnosticBrowserOpen] = useState(false);
 
     // Модальные окна
     const [isIcdSearchOpen, setIsIcdSearchOpen] = useState(false);
@@ -684,23 +702,93 @@ export const VisitFormPage: React.FC = () => {
         }
     };
 
-    // Загрузка препаратов для существующего приема при открытии
+    /**
+     * Загрузка диагностических исследований для всех выбранных диагнозов
+     * (основной + осложнения + сопутствующие) по кодам МКБ
+     */
+    const loadDiagnosticsForAllDiagnoses = async (
+        primary: DiagnosisEntry | null,
+        complicationsArr: DiagnosisEntry[],
+        comorbiditiesArr: DiagnosisEntry[]
+    ) => {
+        // Собираем все МКБ коды из диагнозов
+        const allDiagnoses: DiagnosisEntry[] = [
+            ...(primary ? [primary] : []),
+            ...complicationsArr,
+            ...comorbiditiesArr
+        ];
+        
+        // Извлекаем уникальные коды МКБ
+        const icdCodes = [...new Set(
+            allDiagnoses.map(d => d.code).filter(Boolean)
+        )] as string[];
+        
+        if (icdCodes.length === 0) {
+            setDiagnosticRecommendations([]);
+            return;
+        }
+        
+        setIsLoadingDiagnostics(true);
+        try {
+            // Загружаем диагностику для каждого кода МКБ
+            const allRecommendations = await Promise.all(
+                icdCodes.map(code => visitService.getDiagnosticsByIcdCode(code))
+            );
+            
+            // Объединяем и дедуплицируем по названию исследования
+            const diagnosticsMap = new Map<string, import('../../types').DiagnosticRecommendation>();
+            allRecommendations.flat().forEach(rec => {
+                const testKey = rec.item.test.toLowerCase().trim();
+                if (!diagnosticsMap.has(testKey)) {
+                    diagnosticsMap.set(testKey, rec);
+                }
+            });
+            
+            setDiagnosticRecommendations(Array.from(diagnosticsMap.values()));
+            logger.info('[VisitFormPage] Loaded diagnostics for diagnoses', { 
+                icdCodes, 
+                count: diagnosticsMap.size 
+            });
+        } catch (err) {
+            logger.error('[VisitFormPage] Failed to load diagnostics', { err });
+            setDiagnosticRecommendations([]);
+        } finally {
+            setIsLoadingDiagnostics(false);
+        }
+    };
+
+    // Загрузка препаратов и диагностики для существующего приема при открытии
     const medicationsLoadedForEdit = useRef(false);
+    const diagnosticsLoadedForEdit = useRef(false);
     useEffect(() => {
-        // Загружаем препараты только один раз при редактировании существующего приема
-        if (isEdit && initialLoadDone.current && !medicationsLoadedForEdit.current) {
+        // Загружаем препараты и диагностику только один раз при редактировании существующего приема
+        if (isEdit && initialLoadDone.current) {
             const primary = formData.primaryDiagnosis as DiagnosisEntry | null;
             const complicationsArr = Array.isArray(formData.complications) ? formData.complications as DiagnosisEntry[] : [];
             const comorbiditiesArr = Array.isArray(formData.comorbidities) ? formData.comorbidities as DiagnosisEntry[] : [];
             
             if (primary || complicationsArr.length > 0 || comorbiditiesArr.length > 0) {
-                medicationsLoadedForEdit.current = true;
-                loadMedicationsForAllDiagnoses(primary, complicationsArr, comorbiditiesArr);
-                logger.info('[VisitFormPage] Loading medications for existing visit', { 
-                    hasPrimary: !!primary,
-                    complicationsCount: complicationsArr.length,
-                    comorbiditiesCount: comorbiditiesArr.length
-                });
+                // Загружаем препараты
+                if (!medicationsLoadedForEdit.current) {
+                    medicationsLoadedForEdit.current = true;
+                    loadMedicationsForAllDiagnoses(primary, complicationsArr, comorbiditiesArr);
+                    logger.info('[VisitFormPage] Loading medications for existing visit', { 
+                        hasPrimary: !!primary,
+                        complicationsCount: complicationsArr.length,
+                        comorbiditiesCount: comorbiditiesArr.length
+                    });
+                }
+                
+                // Загружаем диагностику
+                if (!diagnosticsLoadedForEdit.current) {
+                    diagnosticsLoadedForEdit.current = true;
+                    loadDiagnosticsForAllDiagnoses(primary, complicationsArr, comorbiditiesArr);
+                    logger.info('[VisitFormPage] Loading diagnostics for existing visit', { 
+                        hasPrimary: !!primary,
+                        complicationsCount: complicationsArr.length,
+                        comorbiditiesCount: comorbiditiesArr.length
+                    });
+                }
             }
         }
     }, [isEdit, formData.primaryDiagnosis, formData.complications, formData.comorbidities]);
@@ -712,8 +800,11 @@ export const VisitFormPage: React.FC = () => {
             primaryDiagnosisId: diagnosis?.diseaseId || null,
         }));
 
-        // Перезагружаем препараты для всех диагнозов
-        await loadMedicationsForAllDiagnoses(diagnosis, complications, comorbidities);
+        // Перезагружаем препараты и диагностику для всех диагнозов
+        await Promise.all([
+            loadMedicationsForAllDiagnoses(diagnosis, complications, comorbidities),
+            loadDiagnosticsForAllDiagnoses(diagnosis, complications, comorbidities)
+        ]);
     };
 
     const handleComplicationsChange = async (newComplications: DiagnosisEntry[]) => {
@@ -722,8 +813,11 @@ export const VisitFormPage: React.FC = () => {
             complications: newComplications.length > 0 ? newComplications : null,
         }));
 
-        // Перезагружаем препараты для всех диагнозов
-        await loadMedicationsForAllDiagnoses(primaryDiagnosis, newComplications, comorbidities);
+        // Перезагружаем препараты и диагностику для всех диагнозов
+        await Promise.all([
+            loadMedicationsForAllDiagnoses(primaryDiagnosis, newComplications, comorbidities),
+            loadDiagnosticsForAllDiagnoses(primaryDiagnosis, newComplications, comorbidities)
+        ]);
     };
 
     const handleComorbiditiesChange = async (newComorbidities: DiagnosisEntry[]) => {
@@ -732,8 +826,11 @@ export const VisitFormPage: React.FC = () => {
             comorbidities: newComorbidities.length > 0 ? newComorbidities : null,
         }));
 
-        // Перезагружаем препараты для всех диагнозов
-        await loadMedicationsForAllDiagnoses(primaryDiagnosis, complications, newComorbidities);
+        // Перезагружаем препараты и диагностику для всех диагнозов
+        await Promise.all([
+            loadMedicationsForAllDiagnoses(primaryDiagnosis, complications, newComorbidities),
+            loadDiagnosticsForAllDiagnoses(primaryDiagnosis, complications, newComorbidities)
+        ]);
     };
 
     const handleViewDisease = async (disease: Disease) => {
@@ -953,6 +1050,120 @@ export const VisitFormPage: React.FC = () => {
         setPendingMedicationId(null);
     };
 
+    // ==================== ОБРАБОТЧИКИ ДИАГНОСТИЧЕСКИХ ИССЛЕДОВАНИЙ ====================
+
+    // Добавить исследование в выбранную диагностику
+    const handleAddDiagnosticTest = (item: import('../../types').DiagnosticPlanItem) => {
+        const fieldName = item.type === 'lab' ? 'laboratoryTests' : 'instrumentalTests';
+        const currentTests = (formData as any)[fieldName] || [];
+        
+        // Проверка на дубликат по названию
+        if (currentTests.some((t: import('../../types').DiagnosticPlanItem) => 
+            t.test.toLowerCase().trim() === item.test.toLowerCase().trim()
+        )) {
+            return; // Уже добавлено
+        }
+        
+        setFormData(prev => ({
+            ...prev,
+            [fieldName]: [...currentTests, item]
+        }));
+        setHasLocalChanges(true);
+    };
+
+    // Удалить исследование из выбранной диагностики по индексу
+    const handleRemoveDiagnosticTest = (type: 'lab' | 'instrumental', index: number) => {
+        const fieldName = type === 'lab' ? 'laboratoryTests' : 'instrumentalTests';
+        const currentTests = (formData as any)[fieldName] || [];
+        
+        setFormData(prev => ({
+            ...prev,
+            [fieldName]: currentTests.filter((_: any, i: number) => i !== index)
+        }));
+        setHasLocalChanges(true);
+    };
+
+    // Удалить исследование из выбранной диагностики по названию (для справочника)
+    const handleRemoveDiagnosticTestByName = (testName: string, type: 'lab' | 'instrumental') => {
+        const fieldName = type === 'lab' ? 'laboratoryTests' : 'instrumentalTests';
+        const currentTests = (formData as any)[fieldName] || [];
+        
+        setFormData(prev => ({
+            ...prev,
+            [fieldName]: currentTests.filter((t: any) => 
+                t.test.toLowerCase().trim() !== testName.toLowerCase().trim()
+            )
+        }));
+        setHasLocalChanges(true);
+    };
+
+    // Сохранить текущий набор исследований как шаблон
+    const handleSaveDiagnosticTemplate = () => {
+        setIsCreateDiagnosticTemplateOpen(true);
+    };
+
+    // Загрузить шаблон диагностики
+    const handleLoadDiagnosticTemplate = () => {
+        setIsDiagnosticTemplateSelectorOpen(true);
+    };
+
+    // Применить шаблон диагностики
+    const handleApplyDiagnosticTemplate = (items: import('../../types').DiagnosticPlanItem[]) => {
+        // Группируем по типу и добавляем к текущим
+        const labTests = items.filter(i => i.type === 'lab');
+        const instrumentalTests = items.filter(i => i.type === 'instrumental');
+        
+        const currentLabTests = (formData as any).laboratoryTests || [];
+        const currentInstrumentalTests = (formData as any).instrumentalTests || [];
+        
+        setFormData(prev => ({
+            ...prev,
+            laboratoryTests: [
+                ...currentLabTests,
+                ...labTests.filter(lt => 
+                    !currentLabTests.some((t: import('../../types').DiagnosticPlanItem) => 
+                        t.test.toLowerCase().trim() === lt.test.toLowerCase().trim()
+                    )
+                )
+            ],
+            instrumentalTests: [
+                ...currentInstrumentalTests,
+                ...instrumentalTests.filter(it => 
+                    !currentInstrumentalTests.some((t: import('../../types').DiagnosticPlanItem) => 
+                        t.test.toLowerCase().trim() === it.test.toLowerCase().trim()
+                    )
+                )
+            ]
+        }));
+        setHasLocalChanges(true);
+        setIsDiagnosticTemplateSelectorOpen(false);
+    };
+
+    // Редактировать шаблон диагностики
+    const handleEditDiagnosticTemplate = (template: import('../../types').DiagnosticTemplate) => {
+        setDiagnosticTemplateToEdit(template);
+        setIsDiagnosticTemplateSelectorOpen(false);
+    };
+
+    // Удалить шаблон диагностики (из селектора)
+    const handleDeleteDiagnosticTemplate = async (templateId: number) => {
+        // Удаление обрабатывается в DiagnosticTemplateSelector
+        logger.info('[VisitFormPage] Diagnostic template deleted', { templateId });
+    };
+
+    // Шаблон диагностики сохранен
+    const handleDiagnosticTemplateSaved = () => {
+        setIsCreateDiagnosticTemplateOpen(false);
+        setDiagnosticTemplateToEdit(null);
+    };
+
+    // Получить текущие диагностические исследования для шаблона
+    const getCurrentDiagnosticItems = (): import('../../types').DiagnosticPlanItem[] => {
+        const labTests = ((formData as any).laboratoryTests || []) as import('../../types').DiagnosticPlanItem[];
+        const instrumentalTests = ((formData as any).instrumentalTests || []) as import('../../types').DiagnosticPlanItem[];
+        return [...labTests, ...instrumentalTests];
+    };
+
     // Вычисляем возраст ребенка на дату приема (для показателей жизнедеятельности и дозировок)
     const visitDateForCalculation = formData.visitDate ? new Date(formData.visitDate) : new Date();
     const ageMonths = child ? calculateAgeInMonths(
@@ -988,6 +1199,22 @@ export const VisitFormPage: React.FC = () => {
     const comorbidities = typeof formData.comorbidities === 'string'
         ? (formData.comorbidities ? JSON.parse(formData.comorbidities) : [])
         : (Array.isArray(formData.comorbidities) ? formData.comorbidities : []);
+
+    // Мемоизированные ICD коды для DiagnosticBrowser (предотвращает лишние перерендеры)
+    const diagnosticBrowserIcdCodes = useMemo(() => {
+        const codes: string[] = [];
+        if (primaryDiagnosis?.code) codes.push(primaryDiagnosis.code);
+        complications.forEach((c: any) => c?.code && codes.push(c.code));
+        comorbidities.forEach((c: any) => c?.code && codes.push(c.code));
+        return codes;
+    }, [primaryDiagnosis, complications, comorbidities]);
+
+    // Мемоизированный список выбранных диагностических исследований
+    const currentDiagnosticItems = useMemo(() => {
+        const labTests = ((formData as any).laboratoryTests || []) as import('../../types').DiagnosticPlanItem[];
+        const instrumentalTests = ((formData as any).instrumentalTests || []) as import('../../types').DiagnosticPlanItem[];
+        return [...labTests, ...instrumentalTests];
+    }, [(formData as any).laboratoryTests, (formData as any).instrumentalTests]);
 
     return (
         <div className={`p-6 max-w-7xl mx-auto space-y-6 pb-24 ${isDiseasePanelOpen ? 'mr-[50%]' : ''} transition-all duration-300`}>
@@ -1512,6 +1739,238 @@ export const VisitFormPage: React.FC = () => {
                             )}
                         </div>
                     </Card>
+
+                    {/* ==================== ДИАГНОСТИЧЕСКИЕ ИССЛЕДОВАНИЯ ==================== */}
+                    
+                    {/* Рекомендованная диагностика (из базы знаний) - компактный вид */}
+                    <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <Microscope className="w-5 h-5 text-blue-500" />
+                                Диагностика
+                            </h2>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setIsDiagnosticBrowserOpen(true)}
+                                className="rounded-xl"
+                            >
+                                <Search className="w-4 h-4 mr-1" />
+                                Справочник
+                            </Button>
+                        </div>
+
+                        {isLoadingDiagnostics ? (
+                            <div className="flex items-center justify-center py-4">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                            </div>
+                        ) : diagnosticRecommendations.length > 0 ? (
+                            <div className="space-y-3">
+                                {/* Компактный вид - показываем по 2 записи каждого типа */}
+                                {(() => {
+                                    const labItems = diagnosticRecommendations.filter(r => r.item.type === 'lab');
+                                    const instrItems = diagnosticRecommendations.filter(r => r.item.type === 'instrumental');
+                                    const maxVisible = 2;
+                                    
+                                    const renderCompactItem = (rec: import('../../types').DiagnosticRecommendation, idx: number, type: 'lab' | 'instrumental') => {
+                                        const isAdded = type === 'lab' 
+                                            ? ((formData as any).laboratoryTests || []).some(
+                                                (t: import('../../types').DiagnosticPlanItem) => 
+                                                    t.test.toLowerCase().trim() === rec.item.test.toLowerCase().trim()
+                                              )
+                                            : ((formData as any).instrumentalTests || []).some(
+                                                (t: import('../../types').DiagnosticPlanItem) => 
+                                                    t.test.toLowerCase().trim() === rec.item.test.toLowerCase().trim()
+                                              );
+                                        const colorClass = type === 'lab' ? 'blue' : 'purple';
+                                        
+                                        return (
+                                            <div 
+                                                key={`${type}-${idx}`}
+                                                className={`p-2 rounded-lg flex items-center justify-between gap-2 ${
+                                                    isAdded 
+                                                        ? `bg-${colorClass}-50 dark:bg-${colorClass}-950/20 border border-${colorClass}-200 dark:border-${colorClass}-800` 
+                                                        : 'bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    {type === 'lab' ? (
+                                                        <FlaskConical className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                                    ) : (
+                                                        <FileBarChart className="w-4 h-4 text-purple-500 flex-shrink-0" />
+                                                    )}
+                                                    <span className="text-sm text-slate-800 dark:text-white truncate">
+                                                        {rec.item.test}
+                                                    </span>
+                                                </div>
+                                                {isAdded ? (
+                                                    <CheckCircle2 className={`w-4 h-4 text-${colorClass}-500 flex-shrink-0`} />
+                                                ) : (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => handleAddDiagnosticTest(rec.item)}
+                                                        className="p-1 h-auto"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        );
+                                    };
+                                    
+                                    return (
+                                        <>
+                                            {/* Лабораторные - первые 2 */}
+                                            {labItems.length > 0 && (
+                                                <div className="space-y-1">
+                                                    <div className="text-xs font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1">
+                                                        <FlaskConical className="w-3 h-3" />
+                                                        Лабораторные ({labItems.length})
+                                                    </div>
+                                                    {labItems.slice(0, maxVisible).map((rec, idx) => renderCompactItem(rec, idx, 'lab'))}
+                                                    {labItems.length > maxVisible && (
+                                                        <button
+                                                            onClick={() => setIsDiagnosticBrowserOpen(true)}
+                                                            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 pl-6"
+                                                        >
+                                                            + ещё {labItems.length - maxVisible}...
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                            
+                                            {/* Инструментальные - первые 2 */}
+                                            {instrItems.length > 0 && (
+                                                <div className="space-y-1">
+                                                    <div className="text-xs font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-1">
+                                                        <FileBarChart className="w-3 h-3" />
+                                                        Инструментальные ({instrItems.length})
+                                                    </div>
+                                                    {instrItems.slice(0, maxVisible).map((rec, idx) => renderCompactItem(rec, idx, 'instrumental'))}
+                                                    {instrItems.length > maxVisible && (
+                                                        <button
+                                                            onClick={() => setIsDiagnosticBrowserOpen(true)}
+                                                            className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 pl-6"
+                                                        >
+                                                            + ещё {instrItems.length - maxVisible}...
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-slate-400 text-center py-2">
+                                Выберите диагноз или откройте справочник исследований
+                            </p>
+                        )}
+                    </Card>
+
+                    {/* Выбранная диагностика */}
+                    <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <ClipboardList className="w-5 h-5 text-blue-500" />
+                                Выбранная диагностика
+                            </h2>
+                            {currentUser?.id && (
+                                <div className="flex gap-2">
+                                    {currentDiagnosticItems.length > 0 && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleSaveDiagnosticTemplate}
+                                            className="text-xs"
+                                            title="Сохранить текущие исследования как шаблон"
+                                        >
+                                            <Save className="w-3 h-3 mr-1" />
+                                            Сохранить шаблон
+                                        </Button>
+                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleLoadDiagnosticTemplate}
+                                        className="text-xs"
+                                        title="Выбрать сохраненный шаблон"
+                                    >
+                                        <FileText className="w-3 h-3 mr-1" />
+                                        Выбрать шаблон
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Лабораторные исследования */}
+                        {(formData as any).laboratoryTests && (formData as any).laboratoryTests.length > 0 && (
+                            <div className="mb-4">
+                                <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1">
+                                    <FlaskConical className="w-4 h-4" />
+                                    Лабораторные исследования ({(formData as any).laboratoryTests.length})
+                                </h3>
+                                <div className="space-y-2">
+                                    {((formData as any).laboratoryTests as import('../../types').DiagnosticPlanItem[]).map((test, idx) => (
+                                        <div key={idx} className="p-3 border border-slate-200 dark:border-slate-700 rounded-xl flex justify-between items-start bg-slate-50 dark:bg-slate-800/50">
+                                            <div className="flex-1">
+                                                <p className="font-medium text-slate-900 dark:text-white">{test.test}</p>
+                                                {test.rationale && (
+                                                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{test.rationale}</p>
+                                                )}
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleRemoveDiagnosticTest('lab', idx)}
+                                                className="text-slate-400 hover:text-red-600"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Инструментальные исследования */}
+                        {(formData as any).instrumentalTests && (formData as any).instrumentalTests.length > 0 && (
+                            <div>
+                                <h3 className="text-sm font-semibold text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-1">
+                                    <FileBarChart className="w-4 h-4" />
+                                    Инструментальные исследования ({(formData as any).instrumentalTests.length})
+                                </h3>
+                                <div className="space-y-2">
+                                    {((formData as any).instrumentalTests as import('../../types').DiagnosticPlanItem[]).map((test, idx) => (
+                                        <div key={idx} className="p-3 border border-slate-200 dark:border-slate-700 rounded-xl flex justify-between items-start bg-slate-50 dark:bg-slate-800/50">
+                                            <div className="flex-1">
+                                                <p className="font-medium text-slate-900 dark:text-white">{test.test}</p>
+                                                {test.rationale && (
+                                                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{test.rationale}</p>
+                                                )}
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleRemoveDiagnosticTest('instrumental', idx)}
+                                                className="text-slate-400 hover:text-red-600"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {(!(formData as any).laboratoryTests || (formData as any).laboratoryTests.length === 0) &&
+                         (!(formData as any).instrumentalTests || (formData as any).instrumentalTests.length === 0) && (
+                            <div className="text-center py-8 text-slate-400 italic">
+                                Добавьте исследования из раздела "Диагностика" или загрузите шаблон
+                            </div>
+                        )}
+                    </Card>
                 </div>
 
                 <div className="lg:col-span-1">
@@ -1927,6 +2386,63 @@ export const VisitFormPage: React.FC = () => {
                     userId={currentUser.id}
                 />
             )}
+
+            {/* ==================== DIAGNOSTIC TEMPLATE MODALS ==================== */}
+            
+            {/* Create Diagnostic Template Modal */}
+            {currentUser?.id && (
+                <CreateDiagnosticTemplateModal
+                    isOpen={isCreateDiagnosticTemplateOpen}
+                    onClose={() => setIsCreateDiagnosticTemplateOpen(false)}
+                    onSuccess={handleDiagnosticTemplateSaved}
+                    diagnosticItems={currentDiagnosticItems}
+                    userId={currentUser.id}
+                />
+            )}
+
+            {/* Diagnostic Template Selector Modal */}
+            {currentUser?.id && (
+                <DiagnosticTemplateSelector
+                    isOpen={isDiagnosticTemplateSelectorOpen}
+                    onClose={() => setIsDiagnosticTemplateSelectorOpen(false)}
+                    userId={currentUser.id}
+                    onSelect={handleApplyDiagnosticTemplate}
+                    onEdit={handleEditDiagnosticTemplate}
+                    onDelete={handleDeleteDiagnosticTemplate}
+                />
+            )}
+
+            {/* Diagnostic Template Batch Editor Modal */}
+            {currentUser?.id && diagnosticTemplateToEdit && (
+                <DiagnosticTemplateBatchEditor
+                    isOpen={!!diagnosticTemplateToEdit}
+                    onClose={() => setDiagnosticTemplateToEdit(null)}
+                    template={diagnosticTemplateToEdit}
+                    onSave={async (updated) => {
+                        try {
+                            await diagnosticTemplateService.upsert(updated);
+                            handleDiagnosticTemplateSaved();
+                            setSuccess(true);
+                            setTimeout(() => setSuccess(false), 3000);
+                        } catch (err) {
+                            logger.error('[VisitFormPage] Failed to update diagnostic template', { err });
+                            setError('Не удалось сохранить шаблон');
+                            setIsErrorModalOpen(true);
+                        }
+                    }}
+                    userId={currentUser.id}
+                />
+            )}
+
+            {/* Diagnostic Browser Modal */}
+            <DiagnosticBrowser
+                isOpen={isDiagnosticBrowserOpen}
+                onClose={() => setIsDiagnosticBrowserOpen(false)}
+                onSelect={handleAddDiagnosticTest}
+                onRemove={(item) => handleRemoveDiagnosticTestByName(item.test, item.type || 'lab')}
+                currentIcd10Codes={diagnosticBrowserIcdCodes}
+                selectedTests={currentDiagnosticItems}
+            />
         </div>
     );
 };

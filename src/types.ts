@@ -624,6 +624,27 @@ export interface MedicationTemplate {
   updatedAt?: string;
 }
 
+export interface DiagnosticTemplate {
+  id?: number;
+  name: string;
+  description?: string | null;
+  items: string | DiagnosticPlanItem[]; // JSON строка или парсированный массив
+  isPublic?: boolean;
+  createdById: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DiagnosticRecommendation {
+  item: DiagnosticPlanItem;
+  sourceDiseaseName: string;
+  sourceDiseaseId?: number;
+}
+
+export interface DiagnosticRecommendationWithCodes extends DiagnosticRecommendation {
+  icd10Codes: string[]; // Коды МКБ для фильтрации
+}
+
 export interface ExamTextTemplate {
   id?: number;
   name?: string | null;
@@ -882,6 +903,21 @@ declare global {
       getMedicationsForDiagnosis: (params: { diseaseId: number; childId: number }) => Promise<MedicationRecommendation[]>;
       getMedicationsByIcdCode: (params: { icdCode: string; childId: number }) => Promise<MedicationRecommendation[]>;
       getExpandedIcdCodes: (icdCodes: string[]) => Promise<string[]>;
+
+      // MEDICATION TEMPLATES API
+      getMedicationTemplate: (id: number) => Promise<MedicationTemplate | null>;
+      getAllMedicationTemplates: (userId: number) => Promise<MedicationTemplate[]>;
+      upsertMedicationTemplate: (data: MedicationTemplate) => Promise<MedicationTemplate>;
+      deleteMedicationTemplate: (id: number, userId: number) => Promise<boolean>;
+      prepareMedicationTemplateApplication: (params: { templateId: number; childWeight: number; childAgeMonths: number; childHeight?: number | null }) => Promise<MedicationTemplateItem[]>;
+
+      // DIAGNOSTIC TEMPLATES API
+      getDiagnosticTemplate: (id: number) => Promise<DiagnosticTemplate | null>;
+      getAllDiagnosticTemplates: (userId: number) => Promise<DiagnosticTemplate[]>;
+      upsertDiagnosticTemplate: (data: DiagnosticTemplate) => Promise<DiagnosticTemplate>;
+      deleteDiagnosticTemplate: (id: number, userId: number) => Promise<boolean>;
+      getDiagnosticsByIcdCode: (icdCode: string) => Promise<DiagnosticRecommendation[]>;
+      getAllDiagnosticTests: () => Promise<DiagnosticRecommendationWithCodes[]>;
 
       // ICD CODES MODULE API
       loadIcdCodes: () => Promise<{ success: boolean; count: number }>;

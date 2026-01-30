@@ -123,6 +123,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteMedicationTemplate: (id, userId) => ipcRenderer.invoke('medication-templates:delete', id, userId),
     prepareMedicationTemplateApplication: (params) => ipcRenderer.invoke('medication-templates:prepare-application', params),
 
+    // DIAGNOSTIC TEMPLATES MODULE API
+    getDiagnosticTemplate: (id) => ipcRenderer.invoke('diagnostic-templates:get-by-id', id),
+    getAllDiagnosticTemplates: (userId) => ipcRenderer.invoke('diagnostic-templates:get-all', userId),
+    upsertDiagnosticTemplate: (data) => ipcRenderer.invoke('diagnostic-templates:upsert', data),
+    deleteDiagnosticTemplate: (id, userId) => ipcRenderer.invoke('diagnostic-templates:delete', id, userId),
+    getDiagnosticsByIcdCode: (icdCode) => ipcRenderer.invoke('visits:get-diagnostics-by-icd-code', icdCode),
+    getAllDiagnosticTests: () => ipcRenderer.invoke('visits:get-all-diagnostic-tests'),
+
     // EXAM TEXT TEMPLATES MODULE API
     getExamTextTemplate: (id) => ipcRenderer.invoke('exam-text-templates:get-by-id', id),
     getExamTextTemplatesBySystem: (systemKey, userId) => ipcRenderer.invoke('exam-text-templates:get-by-system', systemKey, userId),

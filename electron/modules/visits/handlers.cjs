@@ -101,6 +101,14 @@ const setupVisitHandlers = () => {
     ipcMain.handle('visits:get-expanded-icd-codes', ensureAuthenticated(async (_, { icdCodes }) => {
         return await getExpandedIcdCodes(icdCodes);
     }));
+
+    ipcMain.handle('visits:get-diagnostics-by-icd-code', ensureAuthenticated(async (_, icdCode) => {
+        return await VisitService.getDiagnosticsByIcdCode(icdCode);
+    }));
+
+    ipcMain.handle('visits:get-all-diagnostic-tests', ensureAuthenticated(async () => {
+        return await VisitService.getAllDiagnosticTests();
+    }));
 };
 
 module.exports = { setupVisitHandlers };

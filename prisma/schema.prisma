@@ -30,6 +30,7 @@ model User {
   visitTemplates        VisitTemplate[]
   medicationTemplates   MedicationTemplate[]
   examTextTemplates     ExamTextTemplate[]
+  diagnosticTemplates   DiagnosticTemplate[]
 
   @@map("users")
 }
@@ -506,4 +507,25 @@ model MedicationChangeLog {
   user       User       @relation(fields: [userId], references: [id])
 
   @@map("medication_change_logs")
+}
+
+// ============= DIAGNOSTIC TEMPLATES =============
+
+model DiagnosticTemplate {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+
+  items String @map("items") // JSON: DiagnosticPlanItem[]
+
+  isPublic    Boolean  @default(false) @map("is_public")
+  createdById Int      @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  @@unique([createdById, name])
+  @@index([createdById])
+  @@map("diagnostic_templates")
 }
