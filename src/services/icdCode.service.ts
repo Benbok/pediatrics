@@ -1,4 +1,5 @@
 import { IcdCode, IcdCodeSearchParams, IcdCodeSearchResult } from '../types';
+import { logger } from './logger';
 
 export const icdCodeService = {
     /**
@@ -8,7 +9,7 @@ export const icdCodeService = {
         try {
             return await window.electronAPI.loadIcdCodes();
         } catch (error) {
-            console.error('[IcdCodeService] Failed to load ICD codes:', error);
+            logger.error('[IcdCodeService] Failed to load ICD codes', { error });
             throw error;
         }
     },
@@ -23,7 +24,7 @@ export const icdCodeService = {
             }
             return await window.electronAPI.getIcdCodeByCode(code);
         } catch (error) {
-            console.error('[IcdCodeService] Failed to get ICD code:', error);
+            logger.error('[IcdCodeService] Failed to get ICD code', { error, code });
             throw error;
         }
     },
@@ -35,7 +36,7 @@ export const icdCodeService = {
         try {
             return await window.electronAPI.searchIcdCodes(params);
         } catch (error) {
-            console.error('[IcdCodeService] Failed to search ICD codes:', error);
+            logger.error('[IcdCodeService] Failed to search ICD codes', { error, params });
             throw error;
         }
     },
@@ -47,7 +48,7 @@ export const icdCodeService = {
         try {
             return await window.electronAPI.getIcdCodesByCategory({ category, limit, offset });
         } catch (error) {
-            console.error('[IcdCodeService] Failed to get ICD codes by category:', error);
+            logger.error('[IcdCodeService] Failed to get ICD codes by category', { error, category, limit, offset });
             throw error;
         }
     },
@@ -59,7 +60,7 @@ export const icdCodeService = {
         try {
             return await window.electronAPI.getAllIcdCodes({ limit, offset });
         } catch (error) {
-            console.error('[IcdCodeService] Failed to get all ICD codes:', error);
+            logger.error('[IcdCodeService] Failed to get all ICD codes', { error, limit, offset });
             throw error;
         }
     },
@@ -71,7 +72,7 @@ export const icdCodeService = {
         try {
             return await window.electronAPI.getIcdCategories();
         } catch (error) {
-            console.error('[IcdCodeService] Failed to get ICD categories:', error);
+            logger.error('[IcdCodeService] Failed to get ICD categories', { error });
             throw error;
         }
     }

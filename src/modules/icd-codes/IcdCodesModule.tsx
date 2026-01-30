@@ -8,6 +8,7 @@ import { IcdCodeCategoryFilter } from './components/IcdCodeCategoryFilter';
 import { Input } from '../../components/ui/Input';
 import { Search, FileText, AlertCircle, Loader2 } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
+import { logger } from '../../services/logger';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -46,7 +47,7 @@ export const IcdCodesModule: React.FC = () => {
             setError(null);
         } catch (err: any) {
             setError('Не удалось загрузить справочник МКБ');
-            console.error(err);
+            logger.error('[IcdCodesModule] Failed to load ICD codes', { error: err });
         } finally {
             setIsLoading(false);
         }
@@ -83,7 +84,7 @@ export const IcdCodesModule: React.FC = () => {
             setError(null);
         } catch (err: any) {
             setError('Ошибка при поиске кодов МКБ');
-            console.error(err);
+            logger.error('[IcdCodesModule] Search error', { error: err, query: debouncedSearchQuery, category: selectedCategory });
         } finally {
             setIsSearching(false);
         }
@@ -120,7 +121,7 @@ export const IcdCodesModule: React.FC = () => {
             setCurrentPage(nextPage);
         } catch (err: any) {
             setError('Ошибка при загрузке кодов');
-            console.error(err);
+            logger.error('[IcdCodesModule] Load more error', { error: err, page: currentPage });
         } finally {
             setIsSearching(false);
         }
@@ -167,10 +168,10 @@ export const IcdCodesModule: React.FC = () => {
             } else {
                 // Заболевание не найдено - ничего не делаем
                 // В будущем можно показать уведомление или предложить создать заболевание
-                console.info(`[IcdCodesModule] No disease found for code ${code.code}`);
+                logger.info('[IcdCodesModule] No disease found for code', { code: code.code });
             }
         } catch (err) {
-            console.error('[IcdCodesModule] Failed to search for disease:', err);
+            logger.error('[IcdCodesModule] Failed to search for disease', { error: err, code: code.code });
         }
     };
 

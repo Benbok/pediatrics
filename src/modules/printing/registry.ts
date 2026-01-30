@@ -1,4 +1,5 @@
 import { PrintTemplate } from './types';
+import { logger } from '../../services/logger';
 
 /**
  * Центральный реестр всех шаблонов печати
@@ -21,7 +22,7 @@ class PrintTemplateRegistry {
         }
 
         this.templates.set(template.id, template as PrintTemplate);
-        console.log(`[PrintRegistry] Registered template: ${template.id} - ${template.name}`);
+        logger.info('[PrintRegistry] Registered template', { templateId: template.id, templateName: template.name });
     }
 
     /**
@@ -72,7 +73,7 @@ class PrintTemplateRegistry {
     unregister(templateId: string): boolean {
         const result = this.templates.delete(templateId);
         if (result) {
-            console.log(`[PrintRegistry] Unregistered template: ${templateId}`);
+            logger.info('[PrintRegistry] Unregistered template', { templateId });
         }
         return result;
     }
@@ -82,7 +83,7 @@ class PrintTemplateRegistry {
      */
     clear(): void {
         this.templates.clear();
-        console.log('[PrintRegistry] Cleared all templates');
+        logger.info('[PrintRegistry] Cleared all templates');
     }
 
     /**

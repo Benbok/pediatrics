@@ -70,10 +70,38 @@ class AnamnesisFormatter {
         
         const parts = [];
         
-        if (data.breastfeeding === false) {
-            parts.push('искусственное вскармливание с рождения');
-        } else if (data.breastfeeding && data.breastfeedingTo) {
-            parts.push(`грудное вскармливание до ${data.breastfeedingTo}`);
+        // Обратная совместимость: преобразуем старые boolean значения
+        let breastfeedingType = data.breastfeeding;
+        if (breastfeedingType === true) breastfeedingType = 'yes';
+        if (breastfeedingType === false) breastfeedingType = 'no';
+        
+        // Обрабатываем тип вскармливания
+        if (breastfeedingType === 'no') {
+            if (data.formulaName) {
+                parts.push(`искусственное вскармливание (${data.formulaName})`);
+            } else {
+                parts.push('искусственное вскармливание');
+            }
+        } else if (breastfeedingType === 'yes') {
+            if (data.breastfeedingTo) {
+                parts.push(`грудное вскармливание до ${data.breastfeedingTo}`);
+            } else if (data.breastfeedingFrom) {
+                parts.push(`грудное вскармливание с ${data.breastfeedingFrom}`);
+            } else {
+                parts.push('грудное вскармливание');
+            }
+        } else if (breastfeedingType === 'mixed') {
+            let mixedInfo = 'смешанное вскармливание';
+            if (data.breastfeedingFrom || data.breastfeedingTo) {
+                const period = [];
+                if (data.breastfeedingFrom) period.push(`с ${data.breastfeedingFrom}`);
+                if (data.breastfeedingTo) period.push(`до ${data.breastfeedingTo}`);
+                mixedInfo += ` (грудное ${period.join(' ')})`;
+            }
+            if (data.formulaName) {
+                mixedInfo += `, смесь: ${data.formulaName}`;
+            }
+            parts.push(mixedInfo);
         }
         
         if (data.complementaryFoodAge && data.complementaryFoodAge < 4) {

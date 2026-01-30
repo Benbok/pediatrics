@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { templateRegistry } from '../registry';
 import { DocumentMetadata, PrintOptions } from '../types';
 import { applyPrintStyles, removePrintStyles } from '../utils/printStyles';
+import { logger } from '../../../services/logger';
 import './PrintPreview.css';
 
 interface PrintPreviewProps {
@@ -52,17 +53,17 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
 
         // Небольшая задержка перед вызовом печати
         setTimeout(() => {
-            console.log('[PrintPreview] Calling electronAPI.print()...');
+            logger.info('[PrintPreview] Calling electronAPI.print()', { templateId });
             if ((window as any).electronAPI?.print) {
                 try {
                     (window as any).electronAPI.print();
-                    console.log('[PrintPreview] electronAPI.print() dispatched');
+                    logger.info('[PrintPreview] electronAPI.print() dispatched', { templateId });
                 } catch (err) {
-                    console.error('[PrintPreview] IPC Print failed, falling back to window.print():', err);
+                    logger.warn('[PrintPreview] IPC Print failed, falling back to window.print()', { error: err, templateId });
                     window.print();
                 }
             } else {
-                console.warn('[PrintPreview] electronAPI.print not found, using window.print()');
+                logger.warn('[PrintPreview] electronAPI.print not found, using window.print()', { templateId });
                 window.print();
             }
             setIsPrinting(false);
@@ -88,15 +89,16 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
 
         if ((window as any).electronAPI?.exportPDF) {
             try {
-                console.log('[PrintPreview] Calling exportPDF with data...');
+                logger.info('[PrintPreview] Calling exportPDF', { templateId });
                 // Pass the certificate data to the main process
                 await (window as any).electronAPI.exportPDF(data);
-                console.log('[PrintPreview] PDF exported and opened');
+                logger.info('[PrintPreview] PDF exported and opened', { templateId });
             } catch (err) {
-                console.error('[PrintPreview] PDF Export failed:', err);
+                logger.error('[PrintPreview] PDF Export failed', { error: err, templateId });
                 alert('Не удалось создать PDF');
             }
         } else {
+            logger.warn('[PrintPreview] PDF экспорт недоступен в этом окружении', { templateId });
             alert('PDF экспорт недоступен в этом окружении');
         }
         setIsPrinting(false);

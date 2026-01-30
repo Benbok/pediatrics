@@ -2,6 +2,7 @@ import { templateRegistry } from '../../registry';
 import { VaccinationCertificate } from './VaccinationCertificate';
 import { VaccinationCertificateData, isVaccinationCertificateData } from './types';
 import { PrintTemplate } from '../../types';
+import { logger } from '../../../../services/logger';
 
 /**
  * Регистрация шаблона сертификата прививок
@@ -31,6 +32,6 @@ const vaccinationCertificateTemplate: PrintTemplate<VaccinationCertificateData> 
 // Регистрируем шаблон
 templateRegistry.register(vaccinationCertificateTemplate);
 
-console.log('[Vaccination Template] Template registered successfully');
+logger.info('[Vaccination Template] Template registered successfully', { templateId: 'vaccination-certificate' });
 
 export default vaccinationCertificateTemplate;

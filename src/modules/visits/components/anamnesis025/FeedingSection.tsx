@@ -32,31 +32,41 @@ export const FeedingSection: React.FC<FeedingSectionProps> = ({ data, onChange }
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                         Грудное вскармливание
                     </label>
-                    <div className="flex gap-4">
-                        <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors flex-1">
+                    <div className="grid grid-cols-3 gap-4">
+                        <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
                             <input
                                 type="radio"
                                 name="breastfeeding"
-                                checked={feedingData.breastfeeding === true}
-                                onChange={() => handleChange('breastfeeding', true)}
+                                checked={feedingData.breastfeeding === 'yes'}
+                                onChange={() => handleChange('breastfeeding', 'yes')}
                                 className="w-4 h-4 text-primary-600"
                             />
                             <span className="text-sm text-slate-700 dark:text-slate-300">Да</span>
                         </label>
-                        <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors flex-1">
+                        <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
                             <input
                                 type="radio"
                                 name="breastfeeding"
-                                checked={feedingData.breastfeeding === false}
-                                onChange={() => handleChange('breastfeeding', false)}
+                                checked={feedingData.breastfeeding === 'no'}
+                                onChange={() => handleChange('breastfeeding', 'no')}
                                 className="w-4 h-4 text-primary-600"
                             />
                             <span className="text-sm text-slate-700 dark:text-slate-300">Нет</span>
                         </label>
+                        <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                            <input
+                                type="radio"
+                                name="breastfeeding"
+                                checked={feedingData.breastfeeding === 'mixed'}
+                                onChange={() => handleChange('breastfeeding', 'mixed')}
+                                className="w-4 h-4 text-primary-600"
+                            />
+                            <span className="text-sm text-slate-700 dark:text-slate-300">Смешанное</span>
+                        </label>
                     </div>
                 </div>
 
-                {feedingData.breastfeeding && (
+                {(feedingData.breastfeeding === 'yes' || feedingData.breastfeeding === 'mixed') && (
                     <div className="grid grid-cols-2 gap-4">
                         <Input
                             label="Длительность: с"
@@ -72,6 +82,15 @@ export const FeedingSection: React.FC<FeedingSectionProps> = ({ data, onChange }
                             placeholder="Дата или возраст"
                         />
                     </div>
+                )}
+
+                {(feedingData.breastfeeding === 'no' || feedingData.breastfeeding === 'mixed') && (
+                    <Input
+                        label="Молочная смесь"
+                        value={feedingData.formulaName || ''}
+                        onChange={(e) => handleChange('formulaName', e.target.value)}
+                        placeholder="Название молочной смеси"
+                    />
                 )}
 
                 <Input

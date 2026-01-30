@@ -36,9 +36,10 @@ export const BirthDataSchema = z.object({
 });
 
 export const FeedingDataSchema = z.object({
-  breastfeeding: z.boolean().optional().nullable(),
+  breastfeeding: z.enum(['yes', 'no', 'mixed']).optional().nullable(),
   breastfeedingFrom: z.string().optional().nullable(),
   breastfeedingTo: z.string().optional().nullable(),
+  formulaName: z.string().optional().nullable(),
   complementaryFoodAge: z.number().min(0).max(24).optional().nullable(),
   nutritionFeatures: z.string().optional().nullable(),
 });

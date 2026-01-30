@@ -6,6 +6,7 @@ import {
     PrintMode,
     PDFExportOptions,
 } from './types';
+import { logger } from '../../services/logger';
 
 /**
  * Основной сервис управления печатью документов
@@ -60,7 +61,7 @@ class PrintService {
 
             return { success: true };
         } catch (error) {
-            console.error('[PrintService] Print error:', error);
+            logger.error('[PrintService] Print error', { error, templateId, metadata });
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error',
@@ -110,7 +111,7 @@ class PrintService {
 
             return { success: true };
         } catch (error) {
-            console.error('[PrintService] Preview error:', error);
+            logger.error('[PrintService] Preview error', { error, templateId, metadata });
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error',

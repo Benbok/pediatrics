@@ -438,9 +438,10 @@ export interface BirthData {
 }
 
 export interface FeedingData {
-  breastfeeding?: boolean | null;
+  breastfeeding?: 'yes' | 'no' | 'mixed' | null;
   breastfeedingFrom?: string | null; // дата или возраст
   breastfeedingTo?: string | null;
+  formulaName?: string | null; // название молочной смеси
   complementaryFoodAge?: number | null; // месяцев
   nutritionFeatures?: string | null;
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PrintPreview } from './PrintPreview';
 import { DocumentMetadata, PrintOptions } from '../types';
+import { logger } from '../../../services/logger';
 
 interface PrintPreviewEvent {
     templateId: string;
@@ -50,7 +51,7 @@ export const PrintPreviewManager: React.FC = () => {
     };
 
     const handlePrint = () => {
-        console.log('[PrintPreviewManager] Initiating print...');
+        logger.info('[PrintPreviewManager] Initiating print', { templateId: previewState?.templateId });
     };
 
     if (!previewState) {

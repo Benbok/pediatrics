@@ -57,14 +57,25 @@ export const AnamnesisSection: React.FC<AnamnesisSectionProps> = ({
 
     const feedingData = useMemo(() => {
         if (!formData.feedingData) return null;
+        let parsed: FeedingData;
         if (typeof formData.feedingData === 'string') {
             try {
-                return JSON.parse(formData.feedingData) as FeedingData;
+                parsed = JSON.parse(formData.feedingData) as FeedingData;
             } catch {
                 return null;
             }
+        } else {
+            parsed = formData.feedingData as FeedingData;
         }
-        return formData.feedingData as FeedingData;
+        
+        // Обратная совместимость: преобразуем старые boolean значения в новые строковые
+        if (parsed.breastfeeding === true) {
+            parsed.breastfeeding = 'yes';
+        } else if (parsed.breastfeeding === false) {
+            parsed.breastfeeding = 'no';
+        }
+        
+        return parsed;
     }, [formData.feedingData]);
 
     const infectiousDiseasesData = useMemo(() => {

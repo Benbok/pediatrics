@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../../types';
 import { UserPlus, UserCheck, UserX, Key, Trash2 } from 'lucide-react';
+import { logger } from '../../services/logger';
 
 export const UserManagementModule: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
@@ -16,7 +17,7 @@ export const UserManagementModule: React.FC = () => {
             const allUsers = await window.electronAPI.getAllUsers();
             setUsers(allUsers);
         } catch (error) {
-            console.error('Failed to load users:', error);
+            logger.error('[UserManagement] Failed to load users', { error });
         } finally {
             setIsLoading(false);
         }
@@ -43,7 +44,7 @@ export const UserManagementModule: React.FC = () => {
                 alert(result.error || 'Ошибка при регистрации');
             }
         } catch (error) {
-            console.error('Registration error:', error);
+            logger.error('[UserManagement] Registration error', { error, username: data.username });
             alert('Ошибка при регистрации');
         }
     };
@@ -60,7 +61,7 @@ export const UserManagementModule: React.FC = () => {
                 alert(result.error || 'Ошибка');
             }
         } catch (error) {
-            console.error('Toggle active error:', error);
+            logger.error('[UserManagement] Toggle active error', { error, userId, isActive });
         }
     };
 
