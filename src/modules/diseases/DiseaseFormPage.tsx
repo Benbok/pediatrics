@@ -670,11 +670,12 @@ export const DiseaseFormPage: React.FC = () => {
                                     </div>
                                     <div className="flex flex-col gap-2 md:col-span-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Обоснование</label>
-                                        <Input
+                                        <textarea
                                             value={item.rationale || ''}
                                             onChange={e => updateDiagnosticPlanItem(idx, { rationale: e.target.value })}
                                             placeholder="Почему необходимо"
-                                            className="h-10"
+                                            rows={3}
+                                            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 resize-y min-h-[80px]"
                                         />
                                     </div>
                                 </div>
@@ -725,11 +726,12 @@ export const DiseaseFormPage: React.FC = () => {
                                     </div>
                                     <div className="flex flex-col gap-2 md:col-span-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Описание</label>
-                                        <Input
+                                        <textarea
                                             value={item.description || ''}
                                             onChange={e => updateTreatmentPlanItem(idx, { description: e.target.value })}
                                             placeholder="Описание этапа лечения"
-                                            className="h-10"
+                                            rows={3}
+                                            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 resize-y min-h-[80px]"
                                         />
                                     </div>
                                     <div className="flex flex-col gap-2">

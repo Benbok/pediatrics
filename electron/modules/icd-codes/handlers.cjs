@@ -31,12 +31,12 @@ const setupIcdCodeHandlers = () => {
     }));
 
     /**
-     * Поиск по коду или названию
+     * Поиск по коду или названию с опциональной фильтрацией по категории
      */
     ipcMain.handle('icd-codes:search', ensureAuthenticated(async (_, params) => {
         try {
-            const { query, limit = 100, offset = 0 } = params || {};
-            return await IcdCodeService.search(query, limit, offset);
+            const { query, limit = 100, offset = 0, category = null } = params || {};
+            return await IcdCodeService.search(query, limit, offset, category);
         } catch (error) {
             throw new Error(`Failed to search ICD codes: ${error.message}`);
         }

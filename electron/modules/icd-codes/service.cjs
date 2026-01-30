@@ -144,9 +144,9 @@ const IcdCodeService = {
     },
 
     /**
-     * Поиск по коду или названию
+     * Поиск по коду или названию с опциональной фильтрацией по категории
      */
-    async search(query, limit = 100, offset = 0) {
+    async search(query, limit = 100, offset = 0, category = null) {
         if (!this.indexed) {
             await this.load();
         }
@@ -161,10 +161,16 @@ const IcdCodeService = {
         }
 
         const searchQuery = query.trim().toLowerCase();
+        const normalizedCategory = category ? category.toUpperCase().charAt(0) : null;
         const results = [];
 
-        // Поиск по коду (точное совпадение или начало)
+        // Поиск по коду (точное совпадение или начало) с опциональной фильтрацией по категории
         for (const code of this.codes) {
+            // Если указана категория - проверяем соответствие
+            if (normalizedCategory && this.getCategory(code.code) !== normalizedCategory) {
+                continue;
+            }
+            
             if (code.code.toLowerCase().includes(searchQuery) || 
                 code.name.toLowerCase().includes(searchQuery)) {
                 results.push(code);

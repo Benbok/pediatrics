@@ -60,20 +60,21 @@ export const IcdCodesModule: React.FC = () => {
         try {
             let result;
             
-            if (selectedCategory) {
-                // Фильтр по категории
+            if (debouncedSearchQuery.trim()) {
+                // Поиск по запросу (с опциональной фильтрацией по категории)
+                result = await icdCodeService.searchCodes({
+                    query: debouncedSearchQuery,
+                    category: selectedCategory || undefined,
+                    limit: ITEMS_PER_PAGE,
+                    offset: 0
+                });
+            } else if (selectedCategory) {
+                // Только фильтр по категории (без поискового запроса)
                 result = await icdCodeService.getCodesByCategory(
                     selectedCategory,
                     ITEMS_PER_PAGE,
                     0
                 );
-            } else if (debouncedSearchQuery.trim()) {
-                // Поиск по запросу
-                result = await icdCodeService.searchCodes({
-                    query: debouncedSearchQuery,
-                    limit: ITEMS_PER_PAGE,
-                    offset: 0
-                });
             } else {
                 // Все коды
                 result = await icdCodeService.getAllCodes(ITEMS_PER_PAGE, 0);
@@ -98,19 +99,23 @@ export const IcdCodesModule: React.FC = () => {
             const nextPage = currentPage + 1;
             let result;
             
-            if (selectedCategory) {
+            if (debouncedSearchQuery.trim()) {
+                // Поиск по запросу (с опциональной фильтрацией по категории)
+                result = await icdCodeService.searchCodes({
+                    query: debouncedSearchQuery,
+                    category: selectedCategory || undefined,
+                    limit: ITEMS_PER_PAGE,
+                    offset: nextPage * ITEMS_PER_PAGE
+                });
+            } else if (selectedCategory) {
+                // Только фильтр по категории
                 result = await icdCodeService.getCodesByCategory(
                     selectedCategory,
                     ITEMS_PER_PAGE,
                     nextPage * ITEMS_PER_PAGE
                 );
-            } else if (debouncedSearchQuery.trim()) {
-                result = await icdCodeService.searchCodes({
-                    query: debouncedSearchQuery,
-                    limit: ITEMS_PER_PAGE,
-                    offset: nextPage * ITEMS_PER_PAGE
-                });
             } else {
+                // Все коды
                 result = await icdCodeService.getAllCodes(
                     ITEMS_PER_PAGE,
                     nextPage * ITEMS_PER_PAGE
@@ -129,7 +134,7 @@ export const IcdCodesModule: React.FC = () => {
 
     const handleCategorySelect = (category: string | null) => {
         setSelectedCategory(category);
-        setSearchQuery(''); // Очищаем поиск при выборе категории
+        // Не очищаем поиск - фильтр категории работает вместе с поиском
     };
 
     const handleCodeClick = async (code: IcdCode) => {
