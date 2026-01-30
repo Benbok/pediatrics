@@ -848,48 +848,6 @@ export const MedicationFormPage: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* Параметры инфузии (показывать если выбран iv_*) */}
-                                    {['iv_bolus', 'iv_infusion', 'iv_slow'].includes(rule.routeOfAdmin || 'oral') && (
-                                        <div className="md:col-span-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl space-y-4 border border-blue-200 dark:border-blue-800">
-                                            <h4 className="font-bold text-blue-900 dark:text-blue-100">Параметры инфузии</h4>
-                                            
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="flex flex-col gap-2">
-                                                    <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Концентрация</label>
-                                                    <Input
-                                                        value={rule.infusion?.concentration || ''}
-                                                        onChange={e => updateDosingRule(idx, { 
-                                                            infusion: { ...rule.infusion, concentration: e.target.value }
-                                                        })}
-                                                        placeholder="5 мг/мл"
-                                                        className="h-10"
-                                                    />
-                                                </div>
-                                                
-                                                <div className="flex flex-col gap-2">
-                                                    <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Скорость/Длительность</label>
-                                                    <Input
-                                                        value={rule.infusion?.duration || ''}
-                                                        onChange={e => updateDosingRule(idx, { 
-                                                            infusion: { ...rule.infusion, duration: e.target.value }
-                                                        })}
-                                                        placeholder="15-30 минут"
-                                                        className="h-10"
-                                                    />
-                                                </div>
-                                            </div>
-                                            
-                                            <textarea
-                                                placeholder="Развести в 50-100 мл 0.9% NaCl"
-                                                value={rule.infusion?.dilution || ''}
-                                                onChange={e => updateDosingRule(idx, { 
-                                                    infusion: { ...rule.infusion, dilution: e.target.value }
-                                                })}
-                                                className="w-full min-h-[60px] p-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900"
-                                            />
-                                        </div>
-                                    )}
-
                                     <div className="md:col-span-4 mt-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Инструкция / Комментарий</label>
                                         <Input

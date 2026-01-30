@@ -645,9 +645,21 @@ export const VisitFormPage: React.FC = () => {
                 return;
             }
 
-            const ageMonths = calculateAgeInMonths(child.birthDate, new Date());
-            const currentWeight = formData.currentWeight || (child.birthWeight / 1000);
-            const currentHeight = formData.currentHeight || null;
+            // Валидация данных пациента для расчета дозировки
+            const patientValidation = visitService.validatePatientForDosing(
+                child,
+                formData.currentWeight,
+                formData.visitDate,
+                formData.currentHeight
+            );
+
+            if (!patientValidation.isValid || !patientValidation.params) {
+                setValidationErrors(patientValidation.errors);
+                setIsErrorModalOpen(true);
+                return;
+            }
+
+            const { weight: currentWeight, ageMonths: patientAgeMonths, height: currentHeight } = patientValidation.params;
 
             // Загружаем препарат для модального окна
             let medication: Medication | null = recommendation?.medication || null;
@@ -668,7 +680,7 @@ export const VisitFormPage: React.FC = () => {
                 doseInfo = await medicationService.calculateDose(
                     medicationId,
                     currentWeight,
-                    ageMonths,
+                    patientAgeMonths,
                     currentHeight
                 );
             } catch (err) {
@@ -676,7 +688,7 @@ export const VisitFormPage: React.FC = () => {
                     error: err,
                     medicationId,
                     weight: currentWeight,
-                    ageMonths,
+                    ageMonths: patientAgeMonths,
                     height: currentHeight
                 });
             }
@@ -711,15 +723,27 @@ export const VisitFormPage: React.FC = () => {
             return;
         }
 
-        const ageMonths = calculateAgeInMonths(child.birthDate, new Date());
-        const currentWeight = formData.currentWeight || (child.birthWeight / 1000);
-        const currentHeight = formData.currentHeight || null;
+        // Валидация данных пациента для расчета дозировки
+        const patientValidation = visitService.validatePatientForDosing(
+            child,
+            formData.currentWeight,
+            formData.visitDate,
+            formData.currentHeight
+        );
+
+        if (!patientValidation.isValid || !patientValidation.params) {
+            setValidationErrors(patientValidation.errors);
+            setIsErrorModalOpen(true);
+            return;
+        }
+
+        const { weight: currentWeight, ageMonths: patientAgeMonths, height: currentHeight } = patientValidation.params;
 
         try {
             const doseInfo = await medicationService.calculateDose(
                 med.id!,
                 currentWeight,
-                ageMonths,
+                patientAgeMonths,
                 currentHeight
             );
 
@@ -797,10 +821,11 @@ export const VisitFormPage: React.FC = () => {
         setPendingMedicationId(null);
     };
 
-    // Вычисляем возраст ребенка для показателей жизнедеятельности
+    // Вычисляем возраст ребенка на дату приема (для показателей жизнедеятельности и дозировок)
+    const visitDateForCalculation = formData.visitDate ? new Date(formData.visitDate) : new Date();
     const ageMonths = child ? calculateAgeInMonths(
         child.birthDate,
-        new Date()
+        visitDateForCalculation
     ) : undefined;
 
     // Форматируем дату рождения для отображения
@@ -908,7 +933,7 @@ export const VisitFormPage: React.FC = () => {
                                         const items = await medicationTemplateService.prepareApplication({
                                             templateId: result.medicationTemplateId,
                                             childWeight: formData.currentWeight || (child.birthWeight / 1000),
-                                            childAgeMonths: calculateAgeInMonths(child.birthDate, new Date()),
+                                            childAgeMonths: ageMonths || 0,
                                             childHeight: formData.currentHeight || null,
                                         });
                                         setPendingTemplateItems(items);
@@ -1616,8 +1641,8 @@ export const VisitFormPage: React.FC = () => {
                     onConfirm={handleDoseConfirm}
                     medication={selectedMedicationForDose}
                     initialDoseData={calculatedDoseData || undefined}
-                    patientWeight={formData.currentWeight || (child.birthWeight / 1000)}
-                    patientAgeMonths={calculateAgeInMonths(child.birthDate, new Date())}
+                    patientWeight={formData.currentWeight || undefined}
+                    patientAgeMonths={ageMonths}
                     patientHeight={formData.currentHeight || null}
                 />
             )}
@@ -1643,7 +1668,7 @@ export const VisitFormPage: React.FC = () => {
                                     const items = await medicationTemplateService.prepareApplication({
                                         templateId,
                                         childWeight: formData.currentWeight || (child.birthWeight / 1000),
-                                        childAgeMonths: calculateAgeInMonths(child.birthDate, new Date()),
+                                        childAgeMonths: ageMonths || 0,
                                         childHeight: formData.currentHeight || null,
                                     });
                                     setPendingTemplateItems(items);
@@ -1705,7 +1730,7 @@ export const VisitFormPage: React.FC = () => {
                     }}
                     templateItems={pendingTemplateItems}
                     childWeight={formData.currentWeight || (child.birthWeight / 1000)}
-                    childAgeMonths={calculateAgeInMonths(child.birthDate, new Date())}
+                    childAgeMonths={ageMonths || 0}
                     childHeight={formData.currentHeight || null}
                 />
             )}

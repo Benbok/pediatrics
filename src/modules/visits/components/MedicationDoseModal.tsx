@@ -6,6 +6,7 @@ import { Medication } from '../../../types';
 import { getRouteLabel, requiresDilution, ROUTE_LABELS, RouteOfAdmin } from '../../../utils/routeOfAdmin';
 import { getDiluentLabel, DILUENT_LABELS, DiluentType } from '../../../utils/diluentTypes';
 import { calculateDilution, validateDilutionInput } from '../services/medicationDoseCalcService';
+import { formatAgeLabel } from '../../../utils/ageUtils';
 
 interface MedicationDoseModalProps {
     isOpen: boolean;
@@ -153,7 +154,6 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300"
-            onClick={onClose}
         >
             <div
                 className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] border dark:border-slate-800 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300"
@@ -186,11 +186,15 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                                         ))}
                                     </select>
                                 </div>
-                                {(patientWeight || patientAgeMonths) && (
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        {patientWeight && `Вес: ${patientWeight} кг`}
-                                        {patientAgeMonths && ` • Возраст: ${patientAgeMonths} мес.`}
-                                        {patientHeight && ` • Рост: ${patientHeight} см`}
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    {patientWeight ? `Вес: ${patientWeight} кг` : <span className="text-amber-600 dark:text-amber-400 font-medium">Вес не указан!</span>}
+                                    {patientAgeMonths !== undefined && patientAgeMonths !== null && ` • Возраст: ${formatAgeLabel(patientAgeMonths)}`}
+                                    {patientHeight && ` • Рост: ${patientHeight} см`}
+                                </p>
+                                {!patientWeight && (
+                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                                        <AlertCircle className="w-3 h-3" />
+                                        Укажите вес в разделе "Антропометрия" для корректного расчета
                                     </p>
                                 )}
                             </div>

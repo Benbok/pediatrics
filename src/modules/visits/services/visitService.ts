@@ -1,6 +1,25 @@
-import { Visit, DiagnosisSuggestion, MedicationRecommendation } from '../../../types';
+import { Visit, DiagnosisSuggestion, MedicationRecommendation, ChildProfile } from '../../../types';
 import { VisitSchema, AnalyzeVisitSchema } from '../../../validators/visit.validator';
 import { logger } from '../../../services/logger';
+import { calculateAgeInMonths } from '../../../utils/ageUtils';
+
+/**
+ * Данные пациента для расчета дозировки
+ */
+export interface PatientDoseParams {
+    weight: number;
+    ageMonths: number;
+    height?: number | null;
+}
+
+/**
+ * Результат валидации данных пациента
+ */
+export interface PatientValidationResult {
+    isValid: boolean;
+    params?: PatientDoseParams;
+    errors: string[];
+}
 
 export const visitService = {
     /**
@@ -137,5 +156,89 @@ export const visitService = {
         }
 
         return { isDuplicate: false };
+    },
+
+    /**
+     * Валидация данных пациента для расчета дозировки
+     * 
+     * Проверяет наличие обязательных полей:
+     * - Вес (из антропометрии или вес при рождении)
+     * - Дата рождения (для расчета возраста)
+     * 
+     * @param child - Профиль ребенка
+     * @param currentWeight - Текущий вес из антропометрии (может быть null)
+     * @param visitDate - Дата приема для расчета возраста
+     * @param currentHeight - Текущий рост (опционально)
+     * @returns Результат валидации с параметрами или ошибками
+     */
+    validatePatientForDosing(
+        child: ChildProfile | null,
+        currentWeight: number | null | undefined,
+        visitDate: string | Date | null | undefined,
+        currentHeight?: number | null
+    ): PatientValidationResult {
+        const errors: string[] = [];
+
+        // Проверка наличия данных ребенка
+        if (!child) {
+            return {
+                isValid: false,
+                errors: ['Данные пациента не загружены']
+            };
+        }
+
+        // Проверка даты рождения
+        if (!child.birthDate) {
+            errors.push('Не указана дата рождения пациента');
+        }
+
+        // Проверяем вес из Антропометрии (обязательное поле для расчета дозировки)
+        if (!currentWeight || currentWeight <= 0) {
+            errors.push('Укажите вес пациента в разделе "Антропометрия" для расчета дозировки');
+        }
+
+        // Если есть критические ошибки, возвращаем их
+        if (errors.length > 0) {
+            logger.warn('[VisitService] Patient validation failed for dosing', { errors });
+            return {
+                isValid: false,
+                errors
+            };
+        }
+
+        // Рассчитываем возраст на дату приема
+        const visitDateObj = visitDate ? new Date(visitDate) : new Date();
+        const ageMonths = calculateAgeInMonths(child.birthDate!, visitDateObj);
+
+        return {
+            isValid: true,
+            params: {
+                weight: currentWeight!,
+                ageMonths,
+                height: currentHeight || null
+            },
+            errors: []
+        };
+    },
+
+    /**
+     * Получение параметров пациента для расчета дозировки с валидацией
+     * Выбрасывает ошибку если данные невалидны
+     * 
+     * @throws Error если данные невалидны
+     */
+    getPatientDoseParamsOrThrow(
+        child: ChildProfile | null,
+        currentWeight: number | null | undefined,
+        visitDate: string | Date | null | undefined,
+        currentHeight?: number | null
+    ): PatientDoseParams {
+        const validation = this.validatePatientForDosing(child, currentWeight, visitDate, currentHeight);
+        
+        if (!validation.isValid || !validation.params) {
+            throw new Error(validation.errors.join('. '));
+        }
+
+        return validation.params;
     }
 };
