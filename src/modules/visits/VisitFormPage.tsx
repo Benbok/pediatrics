@@ -6,7 +6,7 @@ import { diseaseService } from '../diseases/services/diseaseService';
 import { patientService } from '../../services/patient.service';
 import { informedConsentService } from './services/informedConsentService';
 import { logger } from '../../services/logger';
-import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, InformedConsent } from '../../types';
+import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, InformedConsent, MedicationRecommendation } from '../../types';
 import { MedicationBrowser } from './components/MedicationBrowser';
 import { VisitTypeSelector, VisitType } from './components/VisitTypeSelector';
 import { AnamnesisSection } from './components/AnamnesisSection';
@@ -480,31 +480,128 @@ export const VisitFormPage: React.FC = () => {
         }
     };
 
-    const handlePrimaryDiagnosisSelect = (diagnosis: DiagnosisEntry | null) => {
+    /**
+     * Загрузка препаратов для всех выбранных диагнозов
+     * (основной + осложнения + сопутствующие)
+     */
+    const loadMedicationsForAllDiagnoses = async (
+        primary: DiagnosisEntry | null,
+        complicationsArr: DiagnosisEntry[],
+        comorbiditiesArr: DiagnosisEntry[]
+    ) => {
+        if (!childId) {
+            setMedicationRecommendations([]);
+            return;
+        }
+
+        // Собираем все диагнозы
+        const allDiagnoses: DiagnosisEntry[] = [
+            ...(primary ? [primary] : []),
+            ...complicationsArr,
+            ...comorbiditiesArr
+        ];
+
+        if (allDiagnoses.length === 0) {
+            setMedicationRecommendations([]);
+            return;
+        }
+
+        setIsLoadingMedications(true);
+        try {
+            // Загружаем препараты для каждого диагноза
+            const allRecommendations = await Promise.all(
+                allDiagnoses.map(async (diagnosis) => {
+                    try {
+                        if (diagnosis.diseaseId) {
+                            // Выбрано из базы знаний
+                            return await visitService.getMedicationsForDiagnosis(
+                                diagnosis.diseaseId,
+                                Number(childId)
+                            );
+                        } else if (diagnosis.code) {
+                            // Выбрано из МКБ напрямую
+                            return await visitService.getMedicationsByIcdCode(
+                                diagnosis.code,
+                                Number(childId)
+                            );
+                        }
+                        return [];
+                    } catch (err) {
+                        logger.error('[VisitFormPage] Failed to load medications for diagnosis', {
+                            error: err,
+                            diagnosis
+                        });
+                        return [];
+                    }
+                })
+            );
+
+            // Объединяем и дедуплицируем по medicationId, сохраняя наименьший priority
+            const medicationMap = new Map<number, MedicationRecommendation>();
+            
+            allRecommendations.flat().forEach(rec => {
+                const existing = medicationMap.get(rec.medication.id!);
+                if (!existing || (rec.priority && existing.priority && rec.priority < existing.priority)) {
+                    medicationMap.set(rec.medication.id!, rec);
+                }
+            });
+
+            // Преобразуем в массив и фильтруем с учетом аллергий
+            const uniqueRecommendations = Array.from(medicationMap.values());
+            
+            const filtered = uniqueRecommendations.filter(rec => {
+                const hasAllergyWarning = rec.warnings?.some(w =>
+                    w.toLowerCase().includes('аллергия') ||
+                    w.toLowerCase().includes('непереносимость')
+                );
+                return !hasAllergyWarning && rec.canUse;
+            });
+
+            // Сортируем по приоритету
+            filtered.sort((a, b) => (a.priority || 999) - (b.priority || 999));
+
+            setMedicationRecommendations(filtered);
+        } catch (err: any) {
+            logger.error('[VisitFormPage] Failed to load medications for all diagnoses', {
+                error: err,
+                childId
+            });
+            setError('Не удалось загрузить препараты для диагнозов');
+            setMedicationRecommendations([]);
+        } finally {
+            setIsLoadingMedications(false);
+        }
+    };
+
+    const handlePrimaryDiagnosisSelect = async (diagnosis: DiagnosisEntry | null) => {
         setFormData(prev => ({
             ...prev,
             primaryDiagnosis: diagnosis,
             primaryDiagnosisId: diagnosis?.diseaseId || null,
         }));
 
-        // Если выбран диагноз с diseaseId, загружаем препараты
-        if (diagnosis?.diseaseId && childId) {
-            selectDiagnosis({ id: diagnosis.diseaseId } as Disease);
-        }
+        // Перезагружаем препараты для всех диагнозов
+        await loadMedicationsForAllDiagnoses(diagnosis, complications, comorbidities);
     };
 
-    const handleComplicationsChange = (complications: DiagnosisEntry[]) => {
+    const handleComplicationsChange = async (newComplications: DiagnosisEntry[]) => {
         setFormData(prev => ({
             ...prev,
-            complications: complications.length > 0 ? complications : null,
+            complications: newComplications.length > 0 ? newComplications : null,
         }));
+
+        // Перезагружаем препараты для всех диагнозов
+        await loadMedicationsForAllDiagnoses(primaryDiagnosis, newComplications, comorbidities);
     };
 
-    const handleComorbiditiesChange = (comorbidities: DiagnosisEntry[]) => {
+    const handleComorbiditiesChange = async (newComorbidities: DiagnosisEntry[]) => {
         setFormData(prev => ({
             ...prev,
-            comorbidities: comorbidities.length > 0 ? comorbidities : null,
+            comorbidities: newComorbidities.length > 0 ? newComorbidities : null,
         }));
+
+        // Перезагружаем препараты для всех диагнозов
+        await loadMedicationsForAllDiagnoses(primaryDiagnosis, complications, newComorbidities);
     };
 
     const handleViewDisease = async (disease: Disease) => {
@@ -1419,11 +1516,12 @@ export const VisitFormPage: React.FC = () => {
                 onSelect={async (medication) => {
                     await addPrescription(medication);
                 }}
-                currentIcd10Codes={
-                    primaryDiagnosis?.code
-                        ? [primaryDiagnosis.code]
-                        : []
-                }
+                currentIcd10Codes={[
+                    // Собираем коды всех диагнозов (основной + осложнения + сопутствующие)
+                    ...(primaryDiagnosis?.code ? [primaryDiagnosis.code] : []),
+                    ...complications.map(c => c.code).filter(Boolean),
+                    ...comorbidities.map(c => c.code).filter(Boolean)
+                ]}
             />
 
             {/* ICD Code Search Modal */}

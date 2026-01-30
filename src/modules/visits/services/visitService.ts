@@ -98,6 +98,27 @@ export const visitService = {
     },
 
     /**
+     * Get medications by ICD code via DiseaseMedication links
+     * Used when diagnosis is selected directly from ICD directory (without diseaseId)
+     */
+    async getMedicationsByIcdCode(icdCode: string, childId: number): Promise<MedicationRecommendation[]> {
+        // Validate inputs
+        if (!icdCode || icdCode.trim() === '') {
+            throw new Error('Код МКБ обязателен');
+        }
+        if (!childId || childId < 1) {
+            throw new Error('ID пациента должен быть больше 0');
+        }
+
+        try {
+            return await window.electronAPI.getMedicationsByIcdCode({ icdCode, childId });
+        } catch (error: any) {
+            logger.error('[VisitService] Failed to get medications by ICD code', { error, icdCode, childId });
+            throw new Error(error.message || 'Ошибка при получении препаратов по коду МКБ');
+        }
+    },
+
+    /**
      * Check if medication is already in prescriptions list
      * Business logic helper - validates duplicate medications
      */

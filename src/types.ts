@@ -880,6 +880,8 @@ declare global {
       deleteVisit: (id: number) => Promise<boolean>;
       analyzeVisit: (visitId: number) => Promise<DiagnosisSuggestion[]>;
       getMedicationsForDiagnosis: (params: { diseaseId: number; childId: number }) => Promise<MedicationRecommendation[]>;
+      getMedicationsByIcdCode: (params: { icdCode: string; childId: number }) => Promise<MedicationRecommendation[]>;
+      getExpandedIcdCodes: (icdCodes: string[]) => Promise<string[]>;
 
       // ICD CODES MODULE API
       loadIcdCodes: () => Promise<{ success: boolean; count: number }>;

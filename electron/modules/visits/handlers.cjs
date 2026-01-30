@@ -1,5 +1,5 @@
 const { ipcMain } = require('electron');
-const { VisitService } = require('./service.cjs');
+const { VisitService, getExpandedIcdCodes } = require('./service.cjs');
 const { ensureAuthenticated } = require('../../auth.cjs');
 const { logAudit, logger } = require('../../logger.cjs');
 
@@ -92,6 +92,14 @@ const setupVisitHandlers = () => {
 
     ipcMain.handle('visits:get-medications-for-diagnosis', ensureAuthenticated(async (_, { diseaseId, childId }) => {
         return await VisitService.getMedicationsForDiagnosis(diseaseId, childId);
+    }));
+
+    ipcMain.handle('visits:get-medications-by-icd-code', ensureAuthenticated(async (_, { icdCode, childId }) => {
+        return await VisitService.getMedicationsByIcdCode(icdCode, childId);
+    }));
+
+    ipcMain.handle('visits:get-expanded-icd-codes', ensureAuthenticated(async (_, { icdCodes }) => {
+        return await getExpandedIcdCodes(icdCodes);
     }));
 };
 

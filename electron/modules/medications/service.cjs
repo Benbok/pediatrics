@@ -118,6 +118,8 @@ const MedicationService = {
 
     /**
      * Get medications that match any of the provided ICD-10 codes
+     * Поддерживает частичное совпадение: если препарат имеет код J10, 
+     * он подходит для диагноза J10.8
      */
     async getByIcd10Codes(icd10Codes) {
         logger.info(`[MedicationService] Searching medications for ICD codes:`, icd10Codes);
@@ -127,7 +129,19 @@ const MedicationService = {
 
         const matched = medications.filter(med => {
             const medCodes = safeJsonParse(med.icd10Codes, []);
-            const hasMatch = medCodes.some(code => icd10Codes.includes(code));
+            
+            const hasMatch = medCodes.some(medCode => {
+                return icd10Codes.some(diagnosisCode => {
+                    // Точное совпадение
+                    if (medCode === diagnosisCode) return true;
+                    
+                    // Частичное совпадение: код препарата - это префикс диагноза
+                    // Например, J10 подходит для J10.8
+                    if (diagnosisCode.startsWith(medCode + '.')) return true;
+                    
+                    return false;
+                });
+            });
             
             if (hasMatch) {
                 logger.info(`[MedicationService] Match found: ${med.nameRu}, codes:`, medCodes);

@@ -99,6 +99,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteVisit: (id) => ipcRenderer.invoke('visits:delete', id),
     analyzeVisit: (visitId) => ipcRenderer.invoke('visits:analyze', visitId),
     getMedicationsForDiagnosis: ({ diseaseId, childId }) => ipcRenderer.invoke('visits:get-medications-for-diagnosis', { diseaseId, childId }),
+    getMedicationsByIcdCode: ({ icdCode, childId }) => ipcRenderer.invoke('visits:get-medications-by-icd-code', { icdCode, childId }),
+    getExpandedIcdCodes: (icdCodes) => ipcRenderer.invoke('visits:get-expanded-icd-codes', { icdCodes }),
 
     // INFORMED CONSENT MODULE API
     getInformedConsent: (id) => ipcRenderer.invoke('informed-consent:get-by-id', id),

@@ -804,7 +804,257 @@ const VisitService = {
         }).sort((a, b) => a.priority - b.priority);
 
         return prioritized;
+    },
+
+    /**
+     * Получает препараты по коду МКБ через связи DiseaseMedication и по совпадению icd10Codes
+     * Используется когда диагноз выбран напрямую из справочника МКБ (без diseaseId)
+     * @param {string} icdCode - Код МКБ (например, J10.8)
+     * @param {number} childId - ID ребенка
+     * @returns {Promise<Array>} Массив препаратов с рекомендациями по дозировке
+     */
+    async getMedicationsByIcdCode(icdCode, childId) {
+        const { MedicationService } = require('../medications/service.cjs');
+        const { calculateAgeInMonths } = require('../../utils/ageUtils.cjs');
+
+        if (!icdCode) {
+            throw new Error('Код МКБ обязателен');
+        }
+
+        // Нормализуем код МКБ
+        const normalizedCode = icdCode.toUpperCase().trim();
+        logger.info(`[VisitService] getMedicationsByIcdCode: searching for code ${normalizedCode}`);
+
+        // Получаем данные ребенка
+        const child = await prisma.child.findUnique({
+            where: { id: Number(childId) }
+        });
+        if (!child) {
+            throw new Error('Ребенок не найден');
+        }
+
+        const allergies = await prisma.patientAllergy.findMany({
+            where: { childId: Number(childId) }
+        });
+
+        // Рассчитываем возраст
+        if (!child.birthDate) {
+            throw new Error(`У ребенка (id=${childId}) не указана дата рождения`);
+        }
+
+        const birthDate = decrypt(child.birthDate);
+        const now = new Date();
+        const ageMonths = calculateAgeInMonths(birthDate, now);
+
+        // Map для дедупликации по medicationId (сохраняем с наименьшим priority)
+        const medicationMap = new Map();
+
+        // 1. Находим ВСЕ заболевания, где данный код МКБ присутствует
+        // Получаем ВСЕ заболевания и фильтруем вручную, т.к. поиск по JSON полю через Prisma работает неправильно
+        const allDiseases = await prisma.disease.findMany({
+            include: {
+                medications: {
+                    include: { medication: true }
+                }
+            }
+        });
+
+        logger.info(`[VisitService] Checking ${allDiseases.length} diseases for ICD code ${normalizedCode}`);
+
+        // Фильтруем заболевания, у которых есть совпадение по коду МКБ
+        const diseases = allDiseases.filter(disease => {
+            // Собираем ВСЕ коды заболевания (основной + дополнительные)
+            const additionalCodes = safeJsonParse(disease.icd10Codes, []);
+            const allDiseaseCodes = [
+                disease.icd10Code,
+                ...additionalCodes
+            ].filter(Boolean); // Убираем null/undefined
+
+            // Проверяем, есть ли совпадение с любым из кодов заболевания
+            const hasMatch = allDiseaseCodes.some(diseaseCode => {
+                // Точное совпадение
+                if (diseaseCode === normalizedCode) return true;
+                
+                // Частичное совпадение: если код заболевания - это префикс диагноза
+                // Например, код заболевания J10 подходит для диагноза J10.8
+                if (normalizedCode.startsWith(diseaseCode + '.')) return true;
+                
+                // Обратное частичное совпадение: если диагноз - это префикс кода заболевания
+                // Например, диагноз J10 подходит для кода заболевания J10.8
+                if (diseaseCode.startsWith(normalizedCode + '.')) return true;
+                
+                return false;
+            });
+
+            if (hasMatch) {
+                logger.info(`[VisitService] Disease "${disease.nameRu}" matches code ${normalizedCode}, disease codes:`, allDiseaseCodes);
+            }
+
+            return hasMatch;
+        });
+
+        logger.info(`[VisitService] Found ${diseases.length} diseases matching ICD code ${normalizedCode}`);
+
+        // Собираем ВСЕ коды МКБ из всех найденных заболеваний
+        const allDiseaseIcdCodes = new Set();
+        for (const disease of diseases) {
+            const additionalCodes = safeJsonParse(disease.icd10Codes, []);
+            const allCodes = [disease.icd10Code, ...additionalCodes].filter(Boolean);
+            allCodes.forEach(code => allDiseaseIcdCodes.add(code));
+        }
+        
+        const uniqueDiseaseCodes = Array.from(allDiseaseIcdCodes);
+        logger.info(`[VisitService] All unique ICD codes from found diseases:`, uniqueDiseaseCodes);
+
+        // Собираем все препараты из DiseaseMedication для всех найденных заболеваний
+        for (const disease of diseases) {
+            for (const dm of disease.medications) {
+                const existingEntry = medicationMap.get(dm.medicationId);
+                
+                if (!existingEntry || (dm.priority < existingEntry.priority)) {
+                    medicationMap.set(dm.medicationId, {
+                        medication: dm.medication,
+                        priority: dm.priority || 50, // Явные связи имеют приоритет
+                        specificDosing: dm.dosing || null,
+                        duration: dm.duration || null,
+                        source: 'disease_link'
+                    });
+                }
+            }
+        }
+
+        logger.info(`[VisitService] Found ${medicationMap.size} medications via DiseaseMedication links`);
+
+        // 2. Также ищем препараты напрямую по их icd10Codes полю
+        // Ищем по ВСЕМ кодам найденных заболеваний, а не только по введенному коду
+        // Например, если введен J09 и найдено заболевание с кодами [J09, J10, J10.8],
+        // ищем препараты, которые имеют любой из этих кодов
+        const directMedications = await MedicationService.getByIcd10Codes(uniqueDiseaseCodes);
+        
+        logger.info(`[VisitService] Found ${directMedications.length} medications via direct ICD code match`);
+
+        // Добавляем в map с более низким приоритетом (если еще не добавлены через DiseaseMedication)
+        for (const medication of directMedications) {
+            if (!medicationMap.has(medication.id)) {
+                medicationMap.set(medication.id, {
+                    medication: medication,
+                    priority: 100, // Низкий приоритет для неявных связей
+                    specificDosing: null,
+                    duration: null,
+                    source: 'icd_match'
+                });
+            }
+        }
+
+        logger.info(`[VisitService] Total unique medications for ICD code ${normalizedCode}: ${medicationMap.size}`);
+
+        if (medicationMap.size === 0) {
+            return [];
+        }
+
+        // Для каждого препарата рассчитываем дозировку
+        const recommendations = await Promise.all(
+            Array.from(medicationMap.values()).map(async (entry) => {
+                try {
+                    // Получаем последний визит для текущего веса/роста
+                    const lastVisit = await prisma.visit.findFirst({
+                        where: { childId: Number(childId) },
+                        orderBy: { visitDate: 'desc' }
+                    });
+
+                    const weight = lastVisit?.currentWeight || (child.birthWeight / 1000);
+                    const height = lastVisit?.currentHeight || null;
+
+                    const doseInfo = await MedicationService.calculateDose(
+                        entry.medication.id,
+                        weight,
+                        ageMonths,
+                        height
+                    );
+
+                    const allergyWarnings = getAllergyWarnings(entry.medication, allergies);
+                    const combinedWarnings = [
+                        ...(doseInfo.warnings || []),
+                        ...allergyWarnings
+                    ];
+
+                    return {
+                        medication: entry.medication,
+                        recommendedDose: doseInfo,
+                        canUse: doseInfo.canUse !== false && allergyWarnings.length === 0,
+                        warnings: combinedWarnings.length > 0 ? combinedWarnings : [],
+                        priority: entry.priority,
+                        specificDosing: entry.specificDosing,
+                        duration: entry.duration
+                    };
+                } catch (error) {
+                    logger.warn(`[VisitService] Failed to calculate dose for medication ${entry.medication.id}:`, error);
+                    return {
+                        medication: entry.medication,
+                        recommendedDose: null,
+                        canUse: false,
+                        warnings: [`Ошибка расчета дозировки: ${error.message}`],
+                        priority: entry.priority,
+                        specificDosing: entry.specificDosing,
+                        duration: entry.duration
+                    };
+                }
+            })
+        );
+
+        // Сортируем по приоритету
+        return recommendations.sort((a, b) => a.priority - b.priority);
     }
 };
 
-module.exports = { VisitService, VisitSchema };
+/**
+ * Получает расширенный список кодов МКБ из всех заболеваний, 
+ * которые содержат хотя бы один из переданных кодов
+ * @param {string[]} icdCodes - Исходные коды МКБ
+ * @returns {Promise<string[]>} Расширенный список всех кодов
+ */
+async function getExpandedIcdCodes(icdCodes) {
+    if (!icdCodes || icdCodes.length === 0) {
+        return [];
+    }
+
+    const allDiseases = await prisma.disease.findMany();
+    const expandedCodes = new Set();
+
+    // Добавляем исходные коды
+    icdCodes.forEach(code => expandedCodes.add(code.toUpperCase().trim()));
+
+    // Для каждого заболевания проверяем, есть ли совпадение с любым из переданных кодов
+    for (const disease of allDiseases) {
+        const additionalCodes = safeJsonParse(disease.icd10Codes, []);
+        const allDiseaseCodes = [disease.icd10Code, ...additionalCodes].filter(Boolean);
+
+        // Проверяем, есть ли совпадение с любым из переданных кодов
+        const hasMatch = allDiseaseCodes.some(diseaseCode =>
+            icdCodes.some(inputCode => {
+                const normalizedInput = inputCode.toUpperCase().trim();
+                const normalizedDisease = diseaseCode.toUpperCase().trim();
+                
+                // Точное совпадение
+                if (normalizedDisease === normalizedInput) return true;
+                
+                // Частичное совпадение
+                if (normalizedInput.startsWith(normalizedDisease + '.')) return true;
+                if (normalizedDisease.startsWith(normalizedInput + '.')) return true;
+                
+                return false;
+            })
+        );
+
+        // Если есть совпадение, добавляем ВСЕ коды этого заболевания
+        if (hasMatch) {
+            allDiseaseCodes.forEach(code => expandedCodes.add(code.toUpperCase().trim()));
+        }
+    }
+
+    const result = Array.from(expandedCodes);
+    logger.info(`[VisitService] Expanded ICD codes from ${icdCodes.length} to ${result.length}:`, result);
+    return result;
+}
+
+module.exports = { VisitService, VisitSchema, getExpandedIcdCodes };

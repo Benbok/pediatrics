@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Medication } from '../../../types';
 import { medicationService } from '../../medications/services/medicationService';
+import { logger } from '../../../services/logger';
 import { Card } from '../../../components/ui/Card';
 import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
@@ -25,16 +26,18 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [filterByIcd10, setFilterByIcd10] = useState(false);
+    const [expandedIcdCodes, setExpandedIcdCodes] = useState<string[]>([]);
 
     useEffect(() => {
         if (isOpen) {
             loadMedications();
+            loadExpandedIcdCodes();
         }
-    }, [isOpen]);
+    }, [isOpen, currentIcd10Codes]);
 
     useEffect(() => {
         filterMedications();
-    }, [searchTerm, filterByIcd10, medications]);
+    }, [searchTerm, filterByIcd10, medications, expandedIcdCodes]);
 
     const loadMedications = async () => {
         setIsLoading(true);
@@ -42,9 +45,28 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
             const data = await medicationService.getMedications();
             setMedications(data);
         } catch (error) {
-            console.error('Failed to load medications:', error);
+            logger.error('[MedicationBrowser] Failed to load medications', { error });
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const loadExpandedIcdCodes = async () => {
+        if (currentIcd10Codes.length === 0) {
+            setExpandedIcdCodes([]);
+            return;
+        }
+        try {
+            // Получаем расширенный список кодов (все коды из заболеваний, содержащих выбранные диагнозы)
+            const expanded = await window.electronAPI.getExpandedIcdCodes(currentIcd10Codes);
+            setExpandedIcdCodes(expanded);
+            logger.info('[MedicationBrowser] Expanded ICD codes', { 
+                original: currentIcd10Codes, 
+                expanded 
+            });
+        } catch (error) {
+            logger.error('[MedicationBrowser] Failed to expand ICD codes', { error });
+            setExpandedIcdCodes(currentIcd10Codes); // Fallback to original codes
         }
     };
 
@@ -61,10 +83,26 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
             );
         }
 
-        // Фильтр по ICD-10 кодам
-        if (filterByIcd10 && currentIcd10Codes.length > 0) {
+        // Фильтр по ICD-10 кодам (используем расширенные коды из заболеваний)
+        // expandedIcdCodes содержит ВСЕ коды из заболеваний базы знаний,
+        // которые содержат выбранные диагнозы
+        if (filterByIcd10 && expandedIcdCodes.length > 0) {
             filtered = filtered.filter(med =>
-                med.icd10Codes.some(code => currentIcd10Codes.includes(code))
+                med.icd10Codes.some(medCode => 
+                    expandedIcdCodes.some(diseaseCode => {
+                        const normalizedMed = medCode.toUpperCase();
+                        const normalizedDisease = diseaseCode.toUpperCase();
+                        
+                        // Точное совпадение
+                        if (normalizedMed === normalizedDisease) return true;
+                        
+                        // Частичное совпадение в обе стороны
+                        if (normalizedMed.startsWith(normalizedDisease + '.')) return true;
+                        if (normalizedDisease.startsWith(normalizedMed + '.')) return true;
+                        
+                        return false;
+                    })
+                )
             );
         }
 
