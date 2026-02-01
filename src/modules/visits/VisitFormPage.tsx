@@ -32,6 +32,8 @@ import { DiagnosticTemplateSelector } from './components/DiagnosticTemplateSelec
 import { DiagnosticTemplateBatchEditor } from './components/DiagnosticTemplateBatchEditor';
 import { DiagnosticBrowser } from './components/DiagnosticBrowser';
 import { diagnosticTemplateService } from './services/diagnosticTemplateService';
+import { VisitFormNavigation, NavigationSection } from './components/VisitFormNavigation';
+import { useActiveSection } from './hooks/useActiveSection';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -1216,10 +1218,106 @@ export const VisitFormPage: React.FC = () => {
         return [...labTests, ...instrumentalTests];
     }, [(formData as any).laboratoryTests, (formData as any).instrumentalTests]);
 
+    // Navigation sections for floating TOC
+    const navigationSections: NavigationSection[] = useMemo(() => [
+        {
+            id: 'section-visit-type',
+            label: 'Тип приема',
+            icon: Stethoscope,
+            isComplete: !!formData.visitType,
+            isVisible: true,
+        },
+        {
+            id: 'section-datetime',
+            label: 'Дата и время',
+            icon: Calendar,
+            isComplete: !!formData.visitDate,
+            isVisible: true,
+        },
+        {
+            id: 'section-anthropometry',
+            label: 'Антропометрия',
+            icon: Scale,
+            isComplete: !!(formData.currentWeight && formData.currentHeight),
+            isVisible: true,
+        },
+        {
+            id: 'section-anamnesis-life',
+            label: 'Анамнез жизни',
+            icon: FileText,
+            isComplete: !!(formData.heredityData || formData.birthData || formData.feedingData),
+            isVisible: formData.visitType === 'primary' || formData.visitType === 'consultation',
+        },
+        {
+            id: 'section-anamnesis-disease',
+            label: 'Анамнез заболевания',
+            icon: ClipboardList,
+            isComplete: !!(formData.complaints && formData.complaints.length > 10),
+            isVisible: true,
+        },
+        {
+            id: 'section-vitals',
+            label: 'Витальные показатели',
+            icon: Activity,
+            isComplete: !!(formData.pulse || formData.bloodPressureSystolic),
+            isVisible: true,
+        },
+        {
+            id: 'section-physical-exam',
+            label: 'Физикальный осмотр',
+            icon: Stethoscope,
+            isComplete: !!(formData.physicalExam && formData.physicalExam.length > 10),
+            isVisible: true,
+        },
+        {
+            id: 'section-diagnosis',
+            label: 'Диагнозы',
+            icon: AlertCircle,
+            isComplete: !!primaryDiagnosis,
+            isVisible: true,
+        },
+        {
+            id: 'section-medications',
+            label: 'Препараты',
+            icon: Pill,
+            isComplete: !!(formData.prescriptions && formData.prescriptions.length > 0),
+            isVisible: true,
+        },
+        {
+            id: 'section-diagnostics',
+            label: 'Диагностика',
+            icon: Microscope,
+            isComplete: currentDiagnosticItems.length > 0,
+            isVisible: true,
+        },
+    ], [formData, primaryDiagnosis, currentDiagnosticItems]);
+
+    // Active section tracking for navigation
+    const sectionIds = useMemo(() => 
+        navigationSections.filter(s => s.isVisible).map(s => s.id),
+        [navigationSections]
+    );
+    const { activeSection, scrollToSection } = useActiveSection(sectionIds);
+
     return (
-        <div className={`p-6 max-w-7xl mx-auto space-y-6 pb-24 ${isDiseasePanelOpen ? 'mr-[50%]' : ''} transition-all duration-300`}>
+        <div
+            className={`p-6 pb-24 ${isDiseasePanelOpen ? 'mr-[50%]' : ''} transition-all duration-300`}
+        >
+            <div className="max-w-[1600px] mx-auto flex gap-4 xl:gap-6 items-start">
+                {/* Sticky Navigation Sidebar */}
+                <VisitFormNavigation
+                    sections={navigationSections}
+                    activeSection={activeSection}
+                    onNavigate={scrollToSection}
+                />
+
+                {/* Main Content Area */}
+                <div className="flex-1 min-w-0 space-y-6">
             {/* Header */}
-            <div className="sticky top-6 z-30 flex items-center justify-between bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-lg">
+            <div
+                data-visit-form-header
+                className="sticky top-6 z-30 flex items-center justify-between bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-lg"
+            >
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" onClick={() => navigate(`/patients/${childId}/visits`)} className="rounded-xl">
                         <ChevronLeft className="w-5 h-5 mr-1" />
@@ -1268,15 +1366,18 @@ export const VisitFormPage: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main content */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
                 {/* Main Form Area */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* Тип приема */}
+                    <div id="section-visit-type">
                     <VisitTypeSelector
                         value={formData.visitType as VisitType}
                         onChange={(type) => handleFieldChange('visitType', type)}
                         autoDetected={autoDetectedVisitType}
                     />
+                    </div>
 
                     {/* Шаблоны приемов */}
                     {formData.visitType && (
@@ -1308,7 +1409,7 @@ export const VisitFormPage: React.FC = () => {
                     )}
 
                     {/* Дата и время приема */}
-                    <Card className="p-6">
+                    <Card id="section-datetime" className="p-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -1351,7 +1452,7 @@ export const VisitFormPage: React.FC = () => {
                     </Card>
 
                     {/* Антропометрия */}
-                    <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl overflow-hidden">
+                    <Card id="section-anthropometry" className="p-6 rounded-[32px] border-slate-200 shadow-xl overflow-hidden">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                 <Scale className="w-5 h-5 text-blue-500" />
@@ -1437,37 +1538,45 @@ export const VisitFormPage: React.FC = () => {
 
                     {/* Анамнез жизни 025/у (только для primary/consultation) */}
                     {(formData.visitType === 'primary' || formData.visitType === 'consultation') && (
-                        <AnamnesisSection
-                            formData={formData}
-                            onChange={handleFieldChange}
-                            visitType={formData.visitType}
-                        />
+                        <div id="section-anamnesis-life">
+                            <AnamnesisSection
+                                formData={formData}
+                                onChange={handleFieldChange}
+                                visitType={formData.visitType}
+                            />
+                        </div>
                     )}
 
                     {/* Анамнез заболевания (для всех типов приема) */}
-                    <DiseaseHistorySection
-                        formData={formData}
-                        onChange={handleFieldChange}
-                        onAnalyze={() => runAnalysis()}
-                        isAnalyzing={isAnalyzing}
-                    />
+                    <div id="section-anamnesis-disease">
+                        <DiseaseHistorySection
+                            formData={formData}
+                            onChange={handleFieldChange}
+                            onAnalyze={() => runAnalysis()}
+                            isAnalyzing={isAnalyzing}
+                        />
+                    </div>
 
                     {/* Показатели жизнедеятельности */}
-                    <VitalSignsSection
-                        formData={formData}
-                        onChange={handleFieldChange}
-                        ageMonths={ageMonths}
-                    />
+                    <div id="section-vitals">
+                        <VitalSignsSection
+                            formData={formData}
+                            onChange={handleFieldChange}
+                            ageMonths={ageMonths}
+                        />
+                    </div>
 
                     {/* Объективный осмотр по системам */}
-                    <PhysicalExamBySystems
-                        formData={formData}
-                        onChange={handleFieldChange}
-                        userId={currentUser?.id}
-                    />
+                    <div id="section-physical-exam">
+                        <PhysicalExamBySystems
+                            formData={formData}
+                            onChange={handleFieldChange}
+                            userId={currentUser?.id}
+                        />
+                    </div>
 
                     {/* Диагнозы */}
-                    <div className="space-y-4">
+                    <div id="section-diagnosis" className="space-y-4">
                         <DiagnosisSelector
                             value={primaryDiagnosis}
                             onChange={handlePrimaryDiagnosisSelect}
@@ -1513,6 +1622,7 @@ export const VisitFormPage: React.FC = () => {
                     </div>
 
                     {/* Рекомендованные препараты - компактный вид */}
+                    <div id="section-medications" className="space-y-6">
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -1712,9 +1822,10 @@ export const VisitFormPage: React.FC = () => {
                             )}
                         </div>
                     </Card>
+                    </div>
 
                     {/* ==================== ДИАГНОСТИЧЕСКИЕ ИССЛЕДОВАНИЯ ==================== */}
-                    
+                    <div id="section-diagnostics" className="space-y-6">
                     {/* Рекомендованная диагностика (из базы знаний) - компактный вид */}
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
@@ -1944,6 +2055,7 @@ export const VisitFormPage: React.FC = () => {
                             </div>
                         )}
                     </Card>
+                    </div>
                 </div>
 
                 <div className="lg:col-span-1">
@@ -2081,6 +2193,8 @@ export const VisitFormPage: React.FC = () => {
                             </Card>
                         )}
                     </div>
+                </div>
+            </div>
                 </div>
             </div>
 
