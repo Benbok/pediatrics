@@ -189,6 +189,73 @@ Standardized modal for confirming user actions (deletions, critical operations).
   - Click inside dialog does not close it (`stopPropagation`).
   - Escape key handling should be implemented at component usage level if needed.
 
+### Compact Recommendation Cards (Browser Pattern)
+Used for displaying recommendations with quick access to full browser/reference. Examples: "Диагностика", "Препараты для лечения".
+
+- **Structure:**
+  - **Header:** Title + "Справочник" button in top-right corner.
+  - **Content:** Compact list showing first 2-3 items.
+  - **Overflow:** "+ ещё N..." link to open full browser.
+
+- **Header Layout:**
+```jsx
+<div className="flex items-center justify-between mb-4">
+    <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        <Icon className="w-5 h-5 text-{color}-500" />
+        Title
+    </h2>
+    <Button variant="secondary" size="sm" className="rounded-xl">
+        <Search className="w-4 h-4 mr-1" />
+        Справочник
+    </Button>
+</div>
+```
+
+- **Compact Item (List Style):**
+```jsx
+<div className={`p-2 rounded-lg flex items-center justify-between gap-2 cursor-pointer transition-all ${
+    isSelected 
+        ? 'bg-{color}-50 dark:bg-{color}-950/20 border border-{color}-200 dark:border-{color}-800' 
+        : 'bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800'
+}`}>
+    <div className="flex items-center gap-2 flex-1 min-w-0">
+        <Icon className="w-4 h-4 text-{color}-500 flex-shrink-0" />
+        <span className="text-sm text-slate-800 dark:text-white truncate font-medium">
+            {item.name}
+        </span>
+    </div>
+    {isSelected ? (
+        <CheckCircle2 className="w-4 h-4 text-{color}-500 flex-shrink-0" />
+    ) : (
+        <Plus className="w-4 h-4 text-slate-400 flex-shrink-0" />
+    )}
+</div>
+```
+
+- **Overflow Link:**
+```jsx
+{items.length > maxVisible && (
+    <button
+        onClick={openBrowser}
+        className="text-xs text-{color}-600 hover:text-{color}-700 dark:text-{color}-400 dark:hover:text-{color}-300 pl-6"
+    >
+        + ещё {items.length - maxVisible}...
+    </button>
+)}
+```
+
+- **Color Themes:**
+  - **Diagnostics (Lab):** `blue` - `bg-blue-50`, `text-blue-500`, etc.
+  - **Diagnostics (Instrumental):** `purple` - `bg-purple-50`, `text-purple-500`, etc.
+  - **Medications:** `teal` - `bg-teal-50`, `text-teal-500`, etc.
+
+- **Browser Modal (Full Reference):**
+  - **Animation:** `transition-all duration-300 ease-out`, `hover:scale-[1.02]`, `active:scale-[0.98]`.
+  - **Selected State:** Green border + background, changes to red on hover for removal.
+  - **Gradient Overlay:** Subtle gradient appears on hover (`bg-gradient-to-br from-{color}-50/50`).
+  - **Status Badges:** Smooth transition between "Добавлено" (green) and "Убрать" (red) using opacity/scale.
+  - **Icon Container:** Rounded background (`p-1.5 rounded-lg bg-{color}-100 dark:bg-{color}-900/40`).
+
 ### Filter Pills/Tags
 Used for filtering content by categories (e.g., pharmacological groups, status filters).
 - **Selected State (CRITICAL):**

@@ -1512,105 +1512,78 @@ export const VisitFormPage: React.FC = () => {
                         />
                     </div>
 
-                    {/* Рекомендованные препараты */}
+                    {/* Рекомендованные препараты - компактный вид */}
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
-                        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                            <Pill className="w-5 h-5 text-teal-500" />
-                            Препараты для лечения
-                        </h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <Pill className="w-5 h-5 text-teal-500" />
+                                Препараты для лечения
+                            </h2>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setIsMedicationBrowserOpen(true)}
+                                className="rounded-xl"
+                            >
+                                <Search className="w-4 h-4 mr-1" />
+                                Справочник
+                            </Button>
+                        </div>
 
                         {isLoadingMedications ? (
-                            <div className="flex items-center justify-center py-8">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+                            <div className="flex items-center justify-center py-4">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-500"></div>
                             </div>
                         ) : medicationRecommendations.length > 0 ? (
-                            <div className="space-y-3 mb-4">
-                                {medicationRecommendations.map((rec) => {
+                            <div className="space-y-2">
+                                {/* Компактный вид - показываем первые 3 препарата */}
+                                {medicationRecommendations.slice(0, 3).map((rec) => {
                                     const isSelected = formData.prescriptions?.some((p: any) => p.medicationId === rec.medication.id);
                                     return (
-                                        <div
+                                        <div 
                                             key={rec.medication.id}
-                                            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer ${isSelected
-                                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20'
-                                                : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-primary-300'
-                                                }`}
+                                            className={`p-2 rounded-lg flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                                                isSelected 
+                                                    ? 'bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800' 
+                                                    : 'bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
                                             onClick={() => toggleMedicationSelection(rec.medication.id)}
                                         >
-                                            <div className="flex items-start gap-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isSelected}
-                                                    onChange={() => toggleMedicationSelection(rec.medication.id)}
-                                                    className="mt-1 w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                                                />
-                                                <div className="flex-1">
-                                                    <div className="font-bold text-slate-800 dark:text-white mb-1">
+                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                <Pill className="w-4 h-4 text-teal-500 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <span className="text-sm text-slate-800 dark:text-white truncate block font-medium">
                                                         {rec.medication.nameRu}
-                                                    </div>
-                                                    <div className="text-xs text-slate-500 mb-2">
-                                                        {rec.medication.activeSubstance}
-                                                    </div>
-                                                    {rec.recommendedDose && rec.canUse && (
-                                                        <div className="text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg">
-                                                            <div className="font-semibold">Дозировка:</div>
-                                                            <div>{rec.recommendedDose.instruction}</div>
-                                                            {rec.recommendedDose.singleDoseMg && (
-                                                                <div className="text-xs text-slate-500 mt-1">
-                                                                    Разовая доза: {rec.recommendedDose.singleDoseMg} мг
-                                                                    {rec.recommendedDose.timesPerDay && ` × ${rec.recommendedDose.timesPerDay} раз в день`}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                    </span>
                                                     {rec.warnings && rec.warnings.length > 0 && (
-                                                        <div className="mt-2 text-xs text-red-600 dark:text-red-400">
-                                                            ⚠️ {rec.warnings.join(', ')}
-                                                        </div>
-                                                    )}
-                                                    {!rec.canUse && (
-                                                        <div className="mt-2 text-xs text-red-600 dark:text-red-400">
-                                                            ⚠️ {rec.recommendedDose?.message || 'Препарат не рекомендуется'}
-                                                        </div>
+                                                        <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                                            ⚠️ {rec.warnings[0]}
+                                                        </span>
                                                     )}
                                                 </div>
                                             </div>
+                                            {isSelected ? (
+                                                <CheckCircle2 className="w-4 h-4 text-teal-500 flex-shrink-0" />
+                                            ) : (
+                                                <Plus className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                                            )}
                                         </div>
                                     );
                                 })}
-                            </div>
-                        ) : !primaryDiagnosis ? (
-                            <div className="text-center py-8 text-slate-400">
-                                <Pill className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                <p>Выберите основной диагноз, чтобы увидеть рекомендованные препараты</p>
+                                {medicationRecommendations.length > 3 && (
+                                    <button
+                                        onClick={() => setIsMedicationBrowserOpen(true)}
+                                        className="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 pl-6"
+                                    >
+                                        + ещё {medicationRecommendations.length - 3} препаратов...
+                                    </button>
+                                )}
                             </div>
                         ) : (
-                            <div className="text-center py-8 text-slate-400">
-                                <Pill className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                <p>Для данного диагноза не найдено рекомендованных препаратов</p>
-                                <p className="text-xs mt-2 text-slate-500">Вы можете выбрать препарат вручную из справочника</p>
-                            </div>
+                            <p className="text-sm text-slate-400 text-center py-2">
+                                Выберите диагноз или откройте справочник препаратов
+                            </p>
                         )}
-
-                        <div className="flex gap-2">
-                            <Button
-                                variant="secondary"
-                                className="flex-1 h-12 rounded-xl group border-dashed"
-                                onClick={() => setIsMedicationBrowserOpen(true)}
-                            >
-                                <Plus className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
-                                Выбрать препарат
-                            </Button>
-                            {currentUser?.id && (
-                                <Button
-                                    variant="secondary"
-                                    className="h-12 rounded-xl group border-dashed"
-                                    onClick={() => setIsMedicationTemplateSelectorOpen(true)}
-                                >
-                                    <FileText className="w-4 h-4 mr-2 group-hover:scale-125 transition-transform" />
-                                    Шаблон
-                                </Button>
-                            )}
-                        </div>
                     </Card>
 
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
