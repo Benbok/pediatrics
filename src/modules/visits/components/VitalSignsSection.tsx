@@ -1,34 +1,25 @@
 import React, { useMemo } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Input } from '../../../components/ui/Input';
-import { Activity, Heart, Droplet, Thermometer, Wind } from 'lucide-react';
+import { Button } from '../../../components/ui/Button';
+import { Activity, Heart, Droplet, Thermometer, Wind, Eraser, CheckCircle } from 'lucide-react';
 import { Visit } from '../../../types';
-import { BP_NORMS, PULSE_NORMS, BPNorm, PulseNorm } from '../constants';
+import { getBPNormByAge, getPulseNormByAge } from '../constants';
 
 interface VitalSignsSectionProps {
     formData: Partial<Visit>;
     onChange: (field: keyof Visit, value: any) => void;
     errors?: Record<string, string>;
     ageMonths?: number;
+    onClear?: () => void;
+    onFillNorm?: () => void;
 }
-
-// Получить норму пульса для возраста
-const getPulseNorm = (ageMonths?: number): PulseNorm | null => {
-    if (ageMonths === undefined || ageMonths === null) return null;
-    return PULSE_NORMS.find(norm => ageMonths >= norm.minAgeMonths && ageMonths < norm.maxAgeMonths) || null;
-};
-
-// Получить норму АД для возраста
-const getBPNorm = (ageMonths?: number): BPNorm | null => {
-    if (ageMonths === undefined || ageMonths === null) return null;
-    return BP_NORMS.find(norm => ageMonths >= norm.minAgeMonths && ageMonths < norm.maxAgeMonths) || null;
-};
 
 // Валидация пульса
 const validatePulse = (pulse: number | null | undefined, ageMonths?: number): { status: 'normal' | 'warning' | 'abnormal'; label: string } | null => {
     if (pulse === null || pulse === undefined || ageMonths === undefined || ageMonths === null) return null;
 
-    const norm = getPulseNorm(ageMonths);
+    const norm = getPulseNormByAge(ageMonths);
     if (!norm) return null;
 
     if (pulse < norm.min) {
@@ -44,7 +35,7 @@ const validatePulse = (pulse: number | null | undefined, ageMonths?: number): { 
 const validateBP = (sys: number | null | undefined, dia: number | null | undefined, ageMonths?: number): { status: 'normal' | 'warning' | 'abnormal'; label: string } | null => {
     if ((sys === null || sys === undefined) && (dia === null || dia === undefined) || ageMonths === undefined || ageMonths === null) return null;
 
-    const norm = getBPNorm(ageMonths);
+    const norm = getBPNormByAge(ageMonths);
     if (!norm) return null;
 
     let hasAbnormal = false;
@@ -140,14 +131,25 @@ const StatusBadge: React.FC<{ status: 'normal' | 'warning' | 'abnormal'; label: 
     );
 };
 
+const VITALS_FIELDS: (keyof Visit)[] = [
+    'bloodPressureSystolic',
+    'bloodPressureDiastolic',
+    'pulse',
+    'temperature',
+    'respiratoryRate',
+    'oxygenSaturation',
+];
+
 export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
     formData,
     onChange,
     errors = {},
     ageMonths,
+    onClear,
+    onFillNorm,
 }) => {
-    const pulseNorm = getPulseNorm(ageMonths);
-    const bpNorm = getBPNorm(ageMonths);
+    const pulseNorm = getPulseNormByAge(ageMonths);
+    const bpNorm = getBPNormByAge(ageMonths);
     const pulseValidation = validatePulse(formData.pulse, ageMonths);
     const bpValidation = validateBP(formData.bloodPressureSystolic, formData.bloodPressureDiastolic, ageMonths);
     const spo2Validation = validateOxygenSaturation(formData.oxygenSaturation);
@@ -168,15 +170,46 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
         return null;
     }, [formData.bloodPressureSystolic, formData.bloodPressureDiastolic]);
 
+    const hasAnyValue = VITALS_FIELDS.some(
+        (key) => formData[key] !== undefined && formData[key] !== null && formData[key] !== ''
+    );
+
     return (
         <Card className="p-6 space-y-6">
-            <div className="flex items-center gap-3 mb-6">
-                <div className="p-2.5 bg-primary-100 dark:bg-primary-900/40 rounded-xl">
-                    <Activity className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-primary-100 dark:bg-primary-900/40 rounded-xl">
+                        <Activity className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                        Показатели жизнедеятельности
+                    </h3>
                 </div>
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                    Показатели жизнедеятельности
-                </h3>
+                <div className="flex items-center gap-2">
+                    {onFillNorm && (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={onFillNorm}
+                            className="rounded-xl"
+                            title={ageMonths != null ? 'Заполнить нормой по возрасту' : 'Заполнить температуру и SpO₂ нормой'}
+                        >
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Норма
+                        </Button>
+                    )}
+                    {onClear && hasAnyValue && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={onClear}
+                            className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        >
+                            <Eraser className="w-4 h-4 mr-1" />
+                            Очистить
+                        </Button>
+                    )}
+                </div>
             </div>
 
             <div className="grid grid-cols-12 gap-6">

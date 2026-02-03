@@ -52,3 +52,80 @@ export const BP_NORMS: BPNorm[] = [
     { minAgeMonths: 192, maxAgeMonths: 204, sysMin: 127, sysMax: 150, diaMin: 82, diaMax: 100 }, // 16-17 лет
     { minAgeMonths: 204, maxAgeMonths: 216, sysMin: 130, sysMax: 152, diaMin: 85, diaMax: 102 }, // 17-18 лет
 ];
+
+// Вспомогательные функции для получения норм по возрасту
+export const getPulseNormByAge = (ageMonths: number | undefined | null): PulseNorm | null => {
+    if (ageMonths === undefined || ageMonths === null) return null;
+    return PULSE_NORMS.find(norm => ageMonths >= norm.minAgeMonths && ageMonths < norm.maxAgeMonths) || null;
+};
+
+export const getBPNormByAge = (ageMonths: number | undefined | null): BPNorm | null => {
+    if (ageMonths === undefined || ageMonths === null) return null;
+    return BP_NORMS.find(norm => ageMonths >= norm.minAgeMonths && ageMonths < norm.maxAgeMonths) || null;
+};
+
+/** Случайное целое в диапазоне [min, max] включительно */
+function randomIntInclusive(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/** Случайное число с одним знаком после запятой в [min, max] */
+function randomFloat1(min: number, max: number): number {
+    return Math.round((Math.random() * (max - min) + min) * 10) / 10;
+}
+
+/** Диапазон ЧДД (мин–макс в минуту) по возрасту */
+function getRespiratoryRateRange(ageMonths: number): { min: number; max: number } {
+    if (ageMonths < 12) return { min: 30, max: 60 };
+    if (ageMonths < 24) return { min: 24, max: 40 };
+    if (ageMonths < 60) return { min: 22, max: 34 };
+    if (ageMonths < 120) return { min: 18, max: 30 };
+    return { min: 16, max: 24 };
+}
+
+/** Значения показателей жизнедеятельности в норме по возрасту (для подстановки по кнопке "Норма") */
+export interface DefaultVitals {
+    bloodPressureSystolic: number | null;
+    bloodPressureDiastolic: number | null;
+    pulse: number | null;
+    temperature: number;
+    respiratoryRate: number | null;
+    oxygenSaturation: number;
+}
+
+const TEMP_NORM_MIN = 36.2;
+const TEMP_NORM_MAX = 36.9;
+const SPO2_NORM_MIN = 96;
+const SPO2_NORM_MAX = 100;
+
+/** Средние значения в норме (для обратной совместимости) */
+export function getDefaultVitalsForAge(ageMonths: number | undefined | null): DefaultVitals {
+    const bpNorm = getBPNormByAge(ageMonths);
+    const pulseNorm = getPulseNormByAge(ageMonths);
+    const rrRange = ageMonths != null ? getRespiratoryRateRange(ageMonths) : null;
+
+    return {
+        bloodPressureSystolic: bpNorm ? Math.round((bpNorm.sysMin + bpNorm.sysMax) / 2) : null,
+        bloodPressureDiastolic: bpNorm ? Math.round((bpNorm.diaMin + bpNorm.diaMax) / 2) : null,
+        pulse: pulseNorm ? pulseNorm.average : null,
+        temperature: (TEMP_NORM_MIN + TEMP_NORM_MAX) / 2,
+        respiratoryRate: rrRange ? Math.round((rrRange.min + rrRange.max) / 2) : null,
+        oxygenSaturation: Math.round((SPO2_NORM_MIN + SPO2_NORM_MAX) / 2),
+    };
+}
+
+/** Случайные значения показателей в пределах возрастной нормы (при каждом вызове — новые) */
+export function getRandomVitalsInNormForAge(ageMonths: number | undefined | null): DefaultVitals {
+    const bpNorm = getBPNormByAge(ageMonths);
+    const pulseNorm = getPulseNormByAge(ageMonths);
+    const rrRange = ageMonths != null ? getRespiratoryRateRange(ageMonths) : null;
+
+    return {
+        bloodPressureSystolic: bpNorm ? randomIntInclusive(bpNorm.sysMin, bpNorm.sysMax) : null,
+        bloodPressureDiastolic: bpNorm ? randomIntInclusive(bpNorm.diaMin, bpNorm.diaMax) : null,
+        pulse: pulseNorm ? randomIntInclusive(pulseNorm.min, pulseNorm.max) : null,
+        temperature: randomFloat1(TEMP_NORM_MIN, TEMP_NORM_MAX),
+        respiratoryRate: rrRange ? randomIntInclusive(rrRange.min, rrRange.max) : null,
+        oxygenSaturation: randomIntInclusive(SPO2_NORM_MIN, SPO2_NORM_MAX),
+    };
+}

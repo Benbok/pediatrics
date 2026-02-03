@@ -76,6 +76,7 @@ import { calculateBMI, calculateBSA, getBMICategory, getBMICategoryLabel, format
 import { calculateAgeInMonths, getFormattedAge } from '../../utils/ageUtils';
 import { getRouteLabel } from '../../utils/routeOfAdmin';
 import { getDiluentLabel } from '../../utils/diluentTypes';
+import { getRandomVitalsInNormForAge } from './constants';
 
 export const VisitFormPage: React.FC = () => {
     const { childId, id } = useParams<{ childId: string; id?: string }>();
@@ -368,6 +369,19 @@ export const VisitFormPage: React.FC = () => {
     // Обработчик изменения полей формы
     const handleFieldChange = useCallback((field: keyof Visit, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+        setHasLocalChanges(true);
+    }, []);
+
+    const handleClearVitals = useCallback(() => {
+        setFormData(prev => ({
+            ...prev,
+            bloodPressureSystolic: null,
+            bloodPressureDiastolic: null,
+            pulse: null,
+            temperature: null,
+            respiratoryRate: null,
+            oxygenSaturation: null,
+        }));
         setHasLocalChanges(true);
     }, []);
 
@@ -1238,6 +1252,20 @@ export const VisitFormPage: React.FC = () => {
         visitDateForCalculation
     ) : undefined;
 
+    const handleFillVitalsNorm = useCallback(() => {
+        const defaults = getRandomVitalsInNormForAge(ageMonths);
+        setFormData(prev => ({
+            ...prev,
+            bloodPressureSystolic: defaults.bloodPressureSystolic,
+            bloodPressureDiastolic: defaults.bloodPressureDiastolic,
+            pulse: defaults.pulse,
+            temperature: defaults.temperature,
+            respiratoryRate: defaults.respiratoryRate,
+            oxygenSaturation: defaults.oxygenSaturation,
+        }));
+        setHasLocalChanges(true);
+    }, [ageMonths]);
+
     // Форматируем дату рождения для отображения
     const formatBirthDate = (dateStr: string): string => {
         const date = new Date(dateStr);
@@ -1707,6 +1735,8 @@ export const VisitFormPage: React.FC = () => {
                             formData={formData}
                             onChange={handleFieldChange}
                             ageMonths={ageMonths}
+                            onClear={handleClearVitals}
+                            onFillNorm={handleFillVitalsNorm}
                         />
                     </div>
 
@@ -1765,89 +1795,25 @@ export const VisitFormPage: React.FC = () => {
                         />
                     </div>
 
-                    {/* Рекомендованные препараты - компактный вид */}
                     <div id="section-medications" className="space-y-6">
-                    <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                <Pill className="w-5 h-5 text-teal-500" />
-                                Препараты для лечения
-                            </h2>
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setIsMedicationBrowserOpen(true)}
-                                className="rounded-xl"
-                            >
-                                <Search className="w-4 h-4 mr-1" />
-                                Справочник
-                            </Button>
-                        </div>
-
-                        {isLoadingMedications ? (
-                            <div className="flex items-center justify-center py-4">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-500"></div>
-                            </div>
-                        ) : medicationRecommendations.length > 0 ? (
-                            <div className="space-y-2">
-                                {/* Компактный вид - показываем первые 3 препарата */}
-                                {medicationRecommendations.slice(0, 3).map((rec) => {
-                                    const isSelected = formData.prescriptions?.some((p: any) => p.medicationId === rec.medication.id);
-                                    return (
-                                        <div 
-                                            key={rec.medication.id}
-                                            className={`p-2 rounded-lg flex items-center justify-between gap-2 cursor-pointer transition-all ${
-                                                isSelected 
-                                                    ? 'bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800' 
-                                                    : 'bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                            }`}
-                                            onClick={() => toggleMedicationSelection(rec.medication.id)}
-                                        >
-                                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                <Pill className="w-4 h-4 text-teal-500 flex-shrink-0" />
-                                                <div className="flex-1 min-w-0">
-                                                    <span className="text-sm text-slate-800 dark:text-white truncate block font-medium">
-                                                        {rec.medication.nameRu}
-                                                    </span>
-                                                    {rec.warnings && rec.warnings.length > 0 && (
-                                                        <span className="text-[10px] text-amber-600 dark:text-amber-400">
-                                                            ⚠️ {rec.warnings[0]}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {isSelected ? (
-                                                <CheckCircle2 className="w-4 h-4 text-teal-500 flex-shrink-0" />
-                                            ) : (
-                                                <Plus className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                                {medicationRecommendations.length > 3 && (
-                                    <button
-                                        onClick={() => setIsMedicationBrowserOpen(true)}
-                                        className="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 pl-6"
-                                    >
-                                        + ещё {medicationRecommendations.length - 3} препаратов...
-                                    </button>
-                                )}
-                            </div>
-                        ) : (
-                            <p className="text-sm text-slate-400 text-center py-2">
-                                Выберите диагноз или откройте справочник препаратов
-                            </p>
-                        )}
-                    </Card>
-
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                 <Pill className="w-5 h-5 text-teal-500" />
                                 Выбранные назначения
                             </h2>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setIsMedicationBrowserOpen(true)}
+                                    className="rounded-xl"
+                                >
+                                    <Search className="w-4 h-4 mr-1" />
+                                    Справочник
+                                </Button>
                             {currentUser?.id && (
-                                <div className="flex gap-2">
+                                <>
                                     {formData.prescriptions && formData.prescriptions.length > 0 && (
                                         <Button
                                             variant="ghost"
@@ -1870,8 +1836,9 @@ export const VisitFormPage: React.FC = () => {
                                         <FileText className="w-3 h-3 mr-1" />
                                         Выбрать шаблон
                                     </Button>
-                                </div>
+                                </>
                             )}
+                            </div>
                         </div>
 
                         <div className="space-y-3">
@@ -1961,7 +1928,7 @@ export const VisitFormPage: React.FC = () => {
                             ))}
                             {(!formData.prescriptions || formData.prescriptions.length === 0) && (
                                 <div className="text-center py-8 text-slate-400 italic">
-                                    Выберите препараты из рекомендованных выше или добавьте вручную
+                                    Добавьте препараты через справочник или выберите шаблон
                                 </div>
                             )}
                         </div>
@@ -1970,133 +1937,6 @@ export const VisitFormPage: React.FC = () => {
 
                     {/* ==================== ДИАГНОСТИЧЕСКИЕ ИССЛЕДОВАНИЯ ==================== */}
                     <div id="section-diagnostics" className="space-y-6">
-                    {/* Рекомендованная диагностика (из базы знаний) - компактный вид */}
-                    <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                <Microscope className="w-5 h-5 text-blue-500" />
-                                Диагностика
-                            </h2>
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setIsDiagnosticBrowserOpen(true)}
-                                className="rounded-xl"
-                            >
-                                <Search className="w-4 h-4 mr-1" />
-                                Справочник
-                            </Button>
-                        </div>
-
-                        {isLoadingDiagnostics ? (
-                            <div className="flex items-center justify-center py-4">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                            </div>
-                        ) : diagnosticRecommendations.length > 0 ? (
-                            <div className="space-y-3">
-                                {/* Компактный вид - показываем по 2 записи каждого типа */}
-                                {(() => {
-                                    const labItems = diagnosticRecommendations.filter(r => r.item.type === 'lab');
-                                    const instrItems = diagnosticRecommendations.filter(r => r.item.type === 'instrumental');
-                                    const maxVisible = 2;
-                                    
-                                    const renderCompactItem = (rec: import('../../types').DiagnosticRecommendation, idx: number, type: 'lab' | 'instrumental') => {
-                                        const isAdded = type === 'lab' 
-                                            ? ((formData as any).laboratoryTests || []).some(
-                                                (t: import('../../types').DiagnosticPlanItem) => 
-                                                    t.test.toLowerCase().trim() === rec.item.test.toLowerCase().trim()
-                                              )
-                                            : ((formData as any).instrumentalTests || []).some(
-                                                (t: import('../../types').DiagnosticPlanItem) => 
-                                                    t.test.toLowerCase().trim() === rec.item.test.toLowerCase().trim()
-                                              );
-                                        const colorClass = type === 'lab' ? 'blue' : 'purple';
-                                        
-                                        return (
-                                            <div 
-                                                key={`${type}-${idx}`}
-                                                className={`p-2 rounded-lg flex items-center justify-between gap-2 ${
-                                                    isAdded 
-                                                        ? `bg-${colorClass}-50 dark:bg-${colorClass}-950/20 border border-${colorClass}-200 dark:border-${colorClass}-800` 
-                                                        : 'bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                                }`}
-                                            >
-                                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                    {type === 'lab' ? (
-                                                        <FlaskConical className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                                                    ) : (
-                                                        <FileBarChart className="w-4 h-4 text-purple-500 flex-shrink-0" />
-                                                    )}
-                                                    <span className="text-sm text-slate-800 dark:text-white truncate">
-                                                        {rec.item.test}
-                                                    </span>
-                                                </div>
-                                                {isAdded ? (
-                                                    <CheckCircle2 className={`w-4 h-4 text-${colorClass}-500 flex-shrink-0`} />
-                                                ) : (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => handleAddDiagnosticTest(rec.item)}
-                                                        className="p-1 h-auto"
-                                                    >
-                                                        <Plus className="w-4 h-4" />
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        );
-                                    };
-                                    
-                                    return (
-                                        <>
-                                            {/* Лабораторные - первые 2 */}
-                                            {labItems.length > 0 && (
-                                                <div className="space-y-1">
-                                                    <div className="text-xs font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1">
-                                                        <FlaskConical className="w-3 h-3" />
-                                                        Лабораторные ({labItems.length})
-                                                    </div>
-                                                    {labItems.slice(0, maxVisible).map((rec, idx) => renderCompactItem(rec, idx, 'lab'))}
-                                                    {labItems.length > maxVisible && (
-                                                        <button
-                                                            onClick={() => setIsDiagnosticBrowserOpen(true)}
-                                                            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 pl-6"
-                                                        >
-                                                            + ещё {labItems.length - maxVisible}...
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                            
-                                            {/* Инструментальные - первые 2 */}
-                                            {instrItems.length > 0 && (
-                                                <div className="space-y-1">
-                                                    <div className="text-xs font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-1">
-                                                        <FileBarChart className="w-3 h-3" />
-                                                        Инструментальные ({instrItems.length})
-                                                    </div>
-                                                    {instrItems.slice(0, maxVisible).map((rec, idx) => renderCompactItem(rec, idx, 'instrumental'))}
-                                                    {instrItems.length > maxVisible && (
-                                                        <button
-                                                            onClick={() => setIsDiagnosticBrowserOpen(true)}
-                                                            className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 pl-6"
-                                                        >
-                                                            + ещё {instrItems.length - maxVisible}...
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </>
-                                    );
-                                })()}
-                            </div>
-                        ) : (
-                            <p className="text-sm text-slate-400 text-center py-2">
-                                Выберите диагноз или откройте справочник исследований
-                            </p>
-                        )}
-                    </Card>
-
                     {/* Выбранная диагностика */}
                     <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
@@ -2104,8 +1944,18 @@ export const VisitFormPage: React.FC = () => {
                                 <ClipboardList className="w-5 h-5 text-blue-500" />
                                 Выбранная диагностика
                             </h2>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setIsDiagnosticBrowserOpen(true)}
+                                    className="rounded-xl"
+                                >
+                                    <Search className="w-4 h-4 mr-1" />
+                                    Справочник
+                                </Button>
                             {currentUser?.id && (
-                                <div className="flex gap-2">
+                                <>
                                     {currentDiagnosticItems.length > 0 && (
                                         <Button
                                             variant="ghost"
@@ -2128,8 +1978,9 @@ export const VisitFormPage: React.FC = () => {
                                         <FileText className="w-3 h-3 mr-1" />
                                         Выбрать шаблон
                                     </Button>
-                                </div>
+                                </>
                             )}
+                            </div>
                         </div>
 
                         {/* Лабораторные исследования */}
@@ -2195,7 +2046,7 @@ export const VisitFormPage: React.FC = () => {
                         {(!(formData as any).laboratoryTests || (formData as any).laboratoryTests.length === 0) &&
                          (!(formData as any).instrumentalTests || (formData as any).instrumentalTests.length === 0) && (
                             <div className="text-center py-8 text-slate-400 italic">
-                                Добавьте исследования из раздела "Диагностика" или загрузите шаблон
+                                Добавьте исследования через справочник или загрузите шаблон
                             </div>
                         )}
                     </Card>
