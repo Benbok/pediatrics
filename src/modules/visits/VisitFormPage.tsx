@@ -32,6 +32,11 @@ import { DiagnosticTemplateSelector } from './components/DiagnosticTemplateSelec
 import { DiagnosticTemplateBatchEditor } from './components/DiagnosticTemplateBatchEditor';
 import { DiagnosticBrowser } from './components/DiagnosticBrowser';
 import { diagnosticTemplateService } from './services/diagnosticTemplateService';
+import { RecommendationsSection } from './components/RecommendationsSection';
+import { RecommendationTemplateSelector } from './components/RecommendationTemplateSelector';
+import { CreateRecommendationTemplateModal } from './components/CreateRecommendationTemplateModal';
+import { printService } from '../printing';
+import { VisitFormPrintData } from '../printing/templates/visit/types';
 import { VisitFormNavigation, NavigationSection } from './components/VisitFormNavigation';
 import { useActiveSection } from './hooks/useActiveSection';
 import { Card } from '../../components/ui/Card';
@@ -63,7 +68,9 @@ import {
     FlaskConical,
     FileBarChart,
     X,
-    Search
+    Search,
+    FileSignature,
+    Printer
 } from 'lucide-react';
 import { calculateBMI, calculateBSA, getBMICategory, getBMICategoryLabel, formatBMI, formatBSA, validateAnthropometry } from '../../utils/anthropometry';
 import { calculateAgeInMonths, getFormattedAge } from '../../utils/ageUtils';
@@ -128,6 +135,11 @@ export const VisitFormPage: React.FC = () => {
     const [diagnosticTemplateToEdit, setDiagnosticTemplateToEdit] = useState<import('../../types').DiagnosticTemplate | null>(null);
     const [isDiagnosticBrowserOpen, setIsDiagnosticBrowserOpen] = useState(false);
 
+    // Рекомендации
+    const [recommendations, setRecommendations] = useState<string[]>([]);
+    const [isRecommendationTemplateSelectorOpen, setIsRecommendationTemplateSelectorOpen] = useState(false);
+    const [isCreateRecommendationTemplateOpen, setIsCreateRecommendationTemplateOpen] = useState(false);
+
     // Модальные окна
     const [isIcdSearchOpen, setIsIcdSearchOpen] = useState(false);
     const [isDiseaseSearchOpen, setIsDiseaseSearchOpen] = useState(false);
@@ -154,6 +166,16 @@ export const VisitFormPage: React.FC = () => {
     // Ключ для черновика в localStorage
     const draftKey = draftService.getVisitDraftKey(Number(childId), id ? Number(id) : null);
     const tabId = id ? `visit-${childId}-${id}` : `visit-${childId}-new`;
+
+    // Обработчик выхода из формы
+    const handleBack = useCallback(() => {
+        // Сначала закрываем вкладку, затем навигируем
+        closeTab(tabId);
+        // Небольшая задержка чтобы TabsContext успел обработать закрытие
+        setTimeout(() => {
+            navigate(`/patients/${childId}/visits`);
+        }, 0);
+    }, [closeTab, tabId, navigate, childId]);
 
     // Регистрация вкладки ТОЛЬКО после загрузки данных ребенка
     useEffect(() => {
@@ -279,6 +301,20 @@ export const VisitFormPage: React.FC = () => {
 
                 setFormData(parsedData);
 
+                // Парсим рекомендации
+                if (visitData.recommendations) {
+                    try {
+                        const parsedRecommendations = typeof visitData.recommendations === 'string'
+                            ? JSON.parse(visitData.recommendations)
+                            : visitData.recommendations;
+                        if (Array.isArray(parsedRecommendations)) {
+                            setRecommendations(parsedRecommendations);
+                        }
+                    } catch (e) {
+                        logger.warn('[VisitFormPage] Failed to parse recommendations:', e);
+                    }
+                }
+
                 if (visitData.currentWeight && visitData.currentHeight) {
                     setCalculatedBMI(visitData.bmi || calculateBMI(visitData.currentWeight, visitData.currentHeight));
                     setCalculatedBSA(visitData.bsa || calculateBSA(visitData.currentWeight, visitData.currentHeight));
@@ -384,6 +420,32 @@ export const VisitFormPage: React.FC = () => {
         }
     };
 
+    // Печать формы приема
+    const handlePrint = useCallback(async () => {
+        if (!child) {
+            setError('Данные пациента не загружены');
+            return;
+        }
+
+        try {
+            const printData: VisitFormPrintData = {
+                visit: formData as Visit,
+                child: child,
+                doctorName: currentUser?.fullName || 'Врач',
+                recommendations: recommendations,
+            };
+
+            await printService.preview('visit-form', printData, {
+                title: `Прием: ${child.surname} ${child.name}`,
+                createdAt: new Date(),
+                author: currentUser?.fullName,
+            });
+        } catch (err: any) {
+            logger.error('[VisitFormPage] Print failed:', err);
+            setError('Не удалось открыть предпросмотр печати');
+        }
+    }, [child, formData, currentUser, recommendations]);
+
     const handleSave = async (status: 'draft' | 'completed' = 'draft') => {
         setIsSaving(true);
         setError(null);
@@ -444,6 +506,9 @@ export const VisitFormPage: React.FC = () => {
                 dataToSave.consultationRequests = JSON.stringify(dataToSave.consultationRequests);
             }
 
+            // Сериализуем рекомендации
+            dataToSave.recommendations = JSON.stringify(recommendations);
+
             const savedVisit = await visitService.upsertVisit(dataToSave as Visit);
             setSuccess(true);
             
@@ -466,7 +531,7 @@ export const VisitFormPage: React.FC = () => {
                 }
             }
 
-            setTimeout(() => navigate(`/patients/${childId}/visits`), 1500);
+            setTimeout(() => handleBack(), 1500);
         } catch (err: any) {
             const errorMessage = err.message || 'Ошибка сохранения';
             setError(errorMessage);
@@ -511,7 +576,7 @@ export const VisitFormPage: React.FC = () => {
             setFormData(prev => ({ ...prev, informedConsentId: savedConsent.id }));
             setShowConsentForm(false);
             setSuccess(true);
-            setTimeout(() => navigate(`/patients/${childId}/visits`), 1500);
+            setTimeout(() => handleBack(), 1500);
         } catch (err: any) {
             setError(err.message || 'Ошибка сохранения согласия');
             logger.error('[VisitFormPage] Consent save failed:', err);
@@ -1290,7 +1355,14 @@ export const VisitFormPage: React.FC = () => {
             isComplete: currentDiagnosticItems.length > 0,
             isVisible: true,
         },
-    ], [formData, primaryDiagnosis, currentDiagnosticItems]);
+        {
+            id: 'section-recommendations',
+            label: 'Рекомендации',
+            icon: FileSignature,
+            isComplete: recommendations.length > 0,
+            isVisible: true,
+        },
+    ], [formData, primaryDiagnosis, currentDiagnosticItems, recommendations]);
 
     // Active section tracking for navigation
     const sectionIds = useMemo(() => 
@@ -1301,69 +1373,141 @@ export const VisitFormPage: React.FC = () => {
 
     return (
         <div
-            className={`p-6 pb-24 ${isDiseasePanelOpen ? 'mr-[50%]' : ''} transition-all duration-300`}
+            className={`p-6 ${isDiseasePanelOpen ? 'mr-[50%]' : ''} transition-all duration-300`}
         >
-            <div className="max-w-[1600px] mx-auto flex gap-4 xl:gap-6 items-start">
-                {/* Sticky Navigation Sidebar */}
+            <div className="max-w-[1600px] mx-auto space-y-4">
+                {/* Main Content */}
+                <div className="space-y-4">
+            {/* Premium Header with Enhanced Layout */}
+            <div
+                data-visit-form-header
+                className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 shadow-xl shadow-slate-900/5"
+            >
+                {/* Top Row: Navigation & Actions */}
+                <div className="flex items-center justify-between p-4 pb-3 border-b border-slate-100 dark:border-slate-800/50">
+                    <div className="flex items-center gap-3">
+                        <Button 
+                            variant="ghost" 
+                            onClick={handleBack} 
+                            className="rounded-xl h-10 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        >
+                            <ChevronLeft className="w-5 h-5 mr-1" />
+                            Назад
+                        </Button>
+                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
+                        <Badge 
+                            variant={formData.status === 'completed' ? 'success' : 'default'} 
+                            className="px-3 py-1 text-xs font-bold uppercase tracking-wider"
+                        >
+                            {formData.status === 'completed' ? '✓ Завершен' : 'Черновик'}
+                        </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            variant="ghost" 
+                            onClick={handlePrint} 
+                            className="rounded-xl h-10 px-4 hover:bg-slate-100 dark:hover:bg-slate-800" 
+                            title="Печать формы приема"
+                        >
+                            <Printer className="w-4 h-4 mr-2" />
+                            Печать
+                        </Button>
+                        <Button 
+                            variant="secondary" 
+                            onClick={() => handleSave('draft')} 
+                            isLoading={isSaving} 
+                            className="rounded-xl h-10 px-5 font-semibold"
+                        >
+                            <Save className="w-4 h-4 mr-2" />
+                            Сохранить черновик
+                        </Button>
+                        <Button 
+                            variant="primary" 
+                            onClick={() => handleSave('completed')} 
+                            isLoading={isSaving} 
+                            className="rounded-xl h-10 px-6 !text-white font-bold shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30 transition-all"
+                        >
+                            <CheckCircle2 className="w-5 h-5 mr-2 !text-white" />
+                            Завершить прием
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Bottom Row: Patient Info & Visit Details */}
+                <div className="px-5 py-4 flex items-center justify-between min-w-0">
+                    {/* Left: Title & Patient */}
+                    <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                                <Stethoscope className="w-6 h-6 !text-white" strokeWidth={2.5} />
+                            </div>
+                            <div className="min-w-0">
+                                <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight truncate">
+                                    {isEdit ? 'Протокол приема (форма 025/у)' : 'Новый клинический прием'}
+                                </h1>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                                        Пациент:
+                                    </span>
+                                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                        {child?.surname} {child?.name} {child?.patronymic}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right: Patient Details */}
+                    {child && (
+                        <div className="flex items-center gap-4 flex-shrink-0">
+                            <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center gap-2">
+                                    <Calendar className="w-4 h-4 text-slate-400" />
+                                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                                        {formatBirthDate(child.birthDate)}
+                                    </span>
+                                </div>
+                                <div className="w-px h-4 bg-slate-300 dark:bg-slate-600" />
+                                <div className="flex items-center gap-2">
+                                    <Clock className="w-4 h-4 text-slate-400" />
+                                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                        {formattedAge || '—'}
+                                    </span>
+                                </div>
+                                <div className="w-px h-4 bg-slate-300 dark:bg-slate-600" />
+                                <Badge 
+                                    variant="default"
+                                    className={`text-xs font-bold ${
+                                        child.gender === 'male' 
+                                            ? 'bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900' 
+                                            : 'bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900'
+                                    }`}
+                                >
+                                    {formatGender(child.gender)}
+                                </Badge>
+                            </div>
+
+                            {formData.visitDate && (
+                                <div className="flex items-center gap-2 px-4 py-2 bg-primary-50 dark:bg-primary-950/20 rounded-xl border border-primary-200 dark:border-primary-900/40">
+                                    <FileText className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                                    <span className="text-xs font-semibold text-primary-700 dark:text-primary-400">
+                                        {new Date(formData.visitDate).toLocaleDateString('ru-RU')}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Sticky Navigation Bar - Same width as header */}
+            <div className="sticky top-6 z-30">
                 <VisitFormNavigation
                     sections={navigationSections}
                     activeSection={activeSection}
                     onNavigate={scrollToSection}
                 />
-
-                {/* Main Content Area */}
-                <div className="flex-1 min-w-0 space-y-6">
-            {/* Header */}
-            <div
-                data-visit-form-header
-                className="sticky top-6 z-30 flex items-center justify-between bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-lg"
-            >
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" onClick={() => navigate(`/patients/${childId}/visits`)} className="rounded-xl">
-                        <ChevronLeft className="w-5 h-5 mr-1" />
-                        Назад
-                    </Button>
-                    <div className="h-10 w-px bg-slate-200 dark:bg-slate-800" />
-                    <div>
-                        <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                            {isEdit ? 'Протокол приема (форма 025/у)' : 'Новый клинический прием'}
-                        </h1>
-                        <div className="flex items-center gap-3 mt-1">
-                            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                                Пациент: {child?.surname} {child?.name}
-                            </p>
-                            {child && (
-                                <>
-                                    <span className="text-slate-300 dark:text-slate-600">•</span>
-                                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                                        {formatBirthDate(child.birthDate)}
-                                    </p>
-                                    {formattedAge && (
-                                        <>
-                                            <span className="text-slate-300 dark:text-slate-600">•</span>
-                                            <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                                                {formattedAge}
-                                            </p>
-                                        </>
-                                    )}
-                                    <span className="text-slate-300 dark:text-slate-600">•</span>
-                                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                                        {formatGender(child.gender)}
-                                    </p>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <div className="flex gap-2">
-                    <Button variant="ghost" onClick={() => handleSave('draft')} isLoading={isSaving} className="rounded-xl font-bold">
-                        Сохранить черновик
-                    </Button>
-                    <Button variant="primary" onClick={() => handleSave('completed')} isLoading={isSaving} className="rounded-xl px-8 shadow-lg shadow-primary-500/20">
-                        <CheckCircle2 className="w-5 h-5 mr-2" />
-                        Завершить прием
-                    </Button>
-                </div>
             </div>
 
             {/* Main content */}
@@ -2056,6 +2200,16 @@ export const VisitFormPage: React.FC = () => {
                         )}
                     </Card>
                     </div>
+
+                    {/* ==================== РЕКОМЕНДАЦИИ ==================== */}
+                    <div id="section-recommendations">
+                        <RecommendationsSection
+                            items={recommendations}
+                            onChange={setRecommendations}
+                            onOpenTemplateSelector={() => setIsRecommendationTemplateSelectorOpen(true)}
+                            onOpenSaveTemplate={() => setIsCreateRecommendationTemplateOpen(true)}
+                        />
+                    </div>
                 </div>
 
                 <div className="lg:col-span-1">
@@ -2530,6 +2684,39 @@ export const VisitFormPage: React.FC = () => {
                 currentIcd10Codes={diagnosticBrowserIcdCodes}
                 selectedTests={currentDiagnosticItems}
             />
+
+            {/* ==================== RECOMMENDATION TEMPLATE MODALS ==================== */}
+
+            {/* Recommendation Template Selector Modal */}
+            {currentUser?.id && (
+                <RecommendationTemplateSelector
+                    isOpen={isRecommendationTemplateSelectorOpen}
+                    onClose={() => setIsRecommendationTemplateSelectorOpen(false)}
+                    userId={currentUser.id}
+                    onSelect={(items) => {
+                        // Добавляем выбранные рекомендации к текущим
+                        setRecommendations(prev => [...prev, ...items.filter(item => !prev.includes(item))]);
+                        setIsRecommendationTemplateSelectorOpen(false);
+                    }}
+                    onDelete={() => {
+                        // Перезагрузка шаблонов происходит автоматически в компоненте
+                    }}
+                />
+            )}
+
+            {/* Create Recommendation Template Modal */}
+            {currentUser?.id && (
+                <CreateRecommendationTemplateModal
+                    isOpen={isCreateRecommendationTemplateOpen}
+                    onClose={() => setIsCreateRecommendationTemplateOpen(false)}
+                    onSuccess={() => {
+                        setSuccess(true);
+                        setTimeout(() => setSuccess(false), 3000);
+                    }}
+                    items={recommendations}
+                    userId={currentUser.id}
+                />
+            )}
         </div>
     );
 };

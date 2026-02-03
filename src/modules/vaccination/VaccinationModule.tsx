@@ -634,19 +634,19 @@ export const VaccinationModule: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-3">
-                    <div className="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold">{child.surname.charAt(0)}</div>
+                    <div className="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0">{child.surname.charAt(0)}</div>
                     <div>
                         <h1 className="font-bold text-slate-900 dark:text-white leading-tight">{getFullName(child)}</h1>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
                             <span>{new Date(child.birthDate).toLocaleDateString('ru-RU')}</span>
                             <span>•</span>
                             <span>{stats.done}/{stats.total} готово</span>
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <button onClick={() => setIsRiskFactorsModalOpen(true)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Группы риска">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </button>
@@ -666,12 +666,12 @@ export const VaccinationModule: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                         </svg>
                     </button>
-                    <button onClick={() => navigate('/patients')} className="text-xs text-slate-500 hover:text-red-500 p-2 font-medium transition-colors">Закрыть</button>
+                    <button onClick={() => navigate(`/patients/${child.id}`)} className="text-xs text-slate-500 hover:text-red-500 p-2 font-medium transition-colors">Закрыть</button>
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl overflow-hidden p-2 flex gap-4 items-center">
-                <div className="flex-1 max-w-xs relative group">
+            <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl overflow-hidden p-2 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+                <div className="flex-1 sm:max-w-xs relative group">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -695,10 +695,10 @@ export const VaccinationModule: React.FC = () => {
                         </button>
                     )}
                 </div>
-                <div className="flex gap-1">
-                    <button onClick={() => setActiveTab('all')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'all' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>Все ({stats.total})</button>
-                    <button onClick={() => setActiveTab('due')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'due' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>План ({stats.due + stats.overdue})</button>
-                    <button onClick={() => setActiveTab('completed')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>Готово ({stats.done})</button>
+                <div className="flex gap-1 flex-wrap sm:flex-nowrap">
+                    <button onClick={() => setActiveTab('all')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeTab === 'all' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>Все ({stats.total})</button>
+                    <button onClick={() => setActiveTab('due')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeTab === 'due' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>План ({stats.due + stats.overdue})</button>
+                    <button onClick={() => setActiveTab('completed')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeTab === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>Готово ({stats.done})</button>
                 </div>
             </div>
 
@@ -706,9 +706,9 @@ export const VaccinationModule: React.FC = () => {
 
             <section className="bg-indigo-50 dark:bg-slate-900 rounded-xl p-4 border dark:border-slate-800">
                 <h2 className="font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-2 mb-3"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>AI Педиатр</h2>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                     <input type="text" value={chatQuery} onChange={(e) => setChatQuery(e.target.value)} placeholder="Напр: Можно ли гулять после АКДС?" className="flex-1 p-2 rounded-lg border dark:bg-slate-800 dark:text-white dark:border-slate-700 text-sm" />
-                    <button onClick={handleGeneralChat} disabled={isChatting} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">{isChatting ? '...' : 'Спросить'}</button>
+                    <button onClick={handleGeneralChat} disabled={isChatting} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm whitespace-nowrap">{isChatting ? '...' : 'Спросить'}</button>
                 </div>
                 {chatResponse && <div className="mt-3 bg-white dark:bg-slate-800 p-3 rounded-lg border dark:border-slate-700 text-sm prose dark:prose-invert max-w-none"><div dangerouslySetInnerHTML={{ __html: chatResponse.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br/>') }} /></div>}
             </section>
@@ -843,7 +843,7 @@ export const VaccinationModule: React.FC = () => {
 
             {isRiskFactorsModalOpen && vaccinationProfile && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full p-0 border dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-4xl p-0 border dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
                         <div className="p-6 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
                             <div>
                                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Настройка групп риска</h3>

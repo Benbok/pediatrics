@@ -106,7 +106,7 @@ export const PatientDetails: React.FC = () => {
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6">
             {/* Header / Patient Card */}
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 flex gap-2">

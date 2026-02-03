@@ -80,11 +80,39 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const navigate = useNavigate();
     const location = useLocation();
     
-    // Состояние вкладок - НЕ восстанавливаем из localStorage при старте
-    // Вкладки будут регистрироваться заново при навигации к формам приема
-    const [tabs, setTabs] = useState<TabData[]>([]);
+    // Состояние вкладок - восстанавливаем из localStorage при старте
+    const [tabs, setTabs] = useState<TabData[]>(() => {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                // Ensure all tabs have the required properties
+                return parsed.map((tab: any) => ({
+                    ...tab,
+                    createdAt: tab.createdAt || Date.now()
+                }));
+            }
+        } catch (error) {
+            logger.error('[TabsContext] Failed to restore tabs from localStorage', { error });
+        }
+        return [];
+    });
     
-    const [activeTabId, setActiveTabId] = useState<string | null>(null);
+    const [activeTabId, setActiveTabId] = useState<string | null>(() => {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed.length > 0) {
+                    // Return the ID of the last tab as the active one
+                    return parsed[parsed.length - 1]?.id || null;
+                }
+            }
+        } catch (error) {
+            logger.error('[TabsContext] Failed to restore active tab from localStorage', { error });
+        }
+        return null;
+    });
     const [showMaxTabsWarning, setShowMaxTabsWarning] = useState(false);
     const [pendingTabData, setPendingTabData] = useState<Omit<TabData, 'createdAt'> | null>(null);
     
@@ -101,10 +129,22 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const currentPath = location.pathname;
         const matchingTab = tabs.find(t => t.route === currentPath);
+        
+        // Если текущий путь соответствует какой-то вкладке, делаем её активной
         if (matchingTab) {
             setActiveTabId(matchingTab.id);
         }
-    }, [location.pathname, tabs]);
+        // Если нет активной вкладки, но есть открытые вкладки, 
+        // устанавливаем последнюю как активную (но не навигируем)
+        else if (tabs.length > 0 && !activeTabId) {
+            const lastTab = tabs[tabs.length - 1];
+            setActiveTabId(lastTab.id);
+        }
+        // ВАЖНО: Не делаем принудительную навигацию к активной вкладке,
+        // если пользователь находится на другой странице
+    }, [location.pathname, tabs, activeTabId]);
+
+
     
     /**
      * Получить только вкладки форм приема
@@ -174,19 +214,21 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setTabs(prev => {
             const newTabs = prev.filter(t => t.id !== tabId);
             
-            // Если закрываем активную вкладку, переключаемся на последнюю оставшуюся
-            if (activeTabId === tabId && newTabs.length > 0) {
-                const lastTab = newTabs[newTabs.length - 1];
-                setActiveTabId(lastTab.id);
-                navigate(lastTab.route);
-            } else if (newTabs.length === 0) {
-                setActiveTabId(null);
+            // Если закрываем активную вкладку, сбрасываем activeTabId
+            if (activeTabId === tabId) {
+                if (newTabs.length > 0) {
+                    // Устанавливаем последнюю оставшуюся вкладку как активную,
+                    // но НЕ навигируем к ней автоматически
+                    setActiveTabId(newTabs[newTabs.length - 1].id);
+                } else {
+                    setActiveTabId(null);
+                }
             }
             
             logger.info('[TabsContext] Tab closed', { tabId });
             return newTabs;
         });
-    }, [activeTabId, navigate]);
+    }, [activeTabId]);
     
     /**
      * Установить активную вкладку

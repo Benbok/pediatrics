@@ -74,6 +74,56 @@ For complex entity creation (e.g., New Patient), avoid modals. Use **Full-Page S
 
 ## 5. Components
 
+### Responsive Layout Principles (CRITICAL)
+All pages and components must be optimized to prevent horizontal scrolling and adapt to different screen sizes.
+
+**Core Rules:**
+1. **No Horizontal Overflow:** Pages must never cause horizontal scrolling. Use `overflow-x-hidden` on main containers.
+2. **Flexible Widths:** Replace fixed widths (`w-56`, `w-40`) with max-widths (`max-w-[14rem]`, `max-w-full`) for responsive behavior.
+3. **Min-Width Zero:** Add `min-w-0` to flex containers to allow proper text truncation and prevent overflow.
+4. **Text Wrapping:** Use `break-words` on text elements that may contain long content.
+5. **Responsive Flex:** Use `flex-col sm:flex-row` pattern for mobile-first responsive layouts.
+6. **Flex Wrap:** Add `flex-wrap` to button groups and badge containers to prevent overflow on small screens.
+
+**Implementation Pattern:**
+```tsx
+// Main container
+<div className="space-y-6"> {/* No restrictive max-width or padding */}
+  
+  // Header with responsive layout
+  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="shrink-0">{/* Avatar */}</div>
+      <div className="min-w-0">
+        <h1 className="break-words">{/* Title */}</h1>
+        <div className="flex-wrap">{/* Badges */}</div>
+      </div>
+    </div>
+    <div className="flex gap-2 flex-wrap">{/* Actions */}</div>
+  </div>
+  
+  // Content cards with proper constraints
+  <div className="overflow-hidden"> {/* Prevent content overflow */}
+    <div className="flex flex-col sm:flex-row gap-4 min-w-0">
+      <div className="flex-1 min-w-0">
+        <h3 className="break-words">{/* Long text */}</h3>
+      </div>
+      <div className="w-full max-w-full sm:max-w-[14rem]">
+        {/* Fixed-width controls on desktop, full-width on mobile */}
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+**Common Issues & Solutions:**
+- **Problem:** Cards with form controls cause horizontal scroll on mobile
+- **Solution:** Use `w-full max-w-full sm:max-w-[Xrem]` instead of `w-full sm:w-X`
+- **Problem:** Long text in flex containers causes overflow
+- **Solution:** Add `min-w-0` to parent flex container and `break-words` to text elements
+- **Problem:** Button groups wrap awkwardly
+- **Solution:** Use `flex-wrap` or `flex-col sm:flex-row` with `gap-2`
+
 ### Cards (The Core Container)
 Almost all content lives in cards.
 - **Bg:** White (Light) / Slate-900 (Dark).
@@ -138,6 +188,129 @@ Standardized component for all date-related entities.
 - **Inactive Item:**
   - Text: `text-slate-600`
   - Hover: `hover:bg-slate-100`
+
+### Collapsible Card Components
+For large sections that might clutter the interface, use collapsible cards that are collapsed by default.
+
+#### **Collapsible Card Structure**
+```tsx
+<Card className="p-0 space-y-0">
+  <button 
+    className="w-full flex items-center gap-3 p-6 cursor-pointer 
+               hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors"
+    onClick={() => setIsExpanded(!isExpanded)}
+    aria-expanded={isExpanded}
+  >
+    <div className="p-2 bg-primary-100 dark:bg-primary-900/40 rounded-xl">
+      <Icon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+    </div>
+    <h3 className="text-lg font-semibold text-slate-900 dark:text-white text-left flex-1">
+      Section Title
+    </h3>
+    {isExpanded ? (
+      <ChevronDown className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+    ) : (
+      <ChevronRight className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+    )}
+  </button>
+
+  {isExpanded && (
+    <div className="px-6 pb-6 space-y-6">
+      {/* Content */}
+    </div>
+  )}
+</Card>
+```
+
+**Key properties:**
+- **Default state**: `useState(false)` - collapsed by default
+- **Card styling**: `p-0 space-y-0` to avoid double padding
+- **Header button**: Full-width clickable area with hover effect
+- **Expand icon**: ChevronDown when expanded, ChevronRight when collapsed
+- **Smooth transition**: Hover effects with `transition-colors`
+- **Accessibility**: `aria-expanded` attribute for screen readers
+- **Visual separation**: Different background on hover for clear affordance
+
+**When to use:**
+- Large forms with multiple sections
+- Sections that are not always relevant
+- Content that can be grouped logically
+- Sections that take significant vertical space
+
+**Benefits:**
+- Reduces initial page clutter
+- Improves focus on main content
+- Saves vertical space initially
+- Allows users to expand only needed sections
+- **Active:** 
+  - Bg: `bg-blue-600` (solid color, not gradient)
+  - Text/Icon: `!text-white` (MUST use `!` modifier for Electron)
+  - Shadow: `shadow-lg shadow-blue-500/30`
+  - Icon strokeWidth: `2.5`
+  - Shows icon + label
+- **Inactive:**
+  - Bg: `bg-white dark:bg-slate-900`
+  - Border: `border border-slate-200 dark:border-slate-700`
+  - Text/Icon: `text-slate-600 dark:text-slate-400`
+  - Hover: `hover:bg-slate-100 dark:hover:bg-slate-800`
+  - Shows icon + label
+- **Completion Badge:**
+  - Small green dot: `w-2.5 h-2.5 bg-green-500 rounded-full`
+  - Positioned: `absolute -top-1 -right-1`
+
+#### **Progress Indicator:**
+- Positioned at end: `ml-auto` with `border-l` separator
+- Bar: `w-24 h-2` with rounded full
+- Background: `bg-slate-200 dark:bg-slate-700`
+- Progress fill: `bg-blue-600` (solid, not gradient)
+- Shows label: "Прогресс" + count (e.g., "5/10")
+
+### Page Animations (CRITICAL RULE)
+**DO NOT** use page-level animations (`animate-in`, `fade-in`, `slide-in-from-bottom`) on main page containers.
+
+**Rationale:**
+- Page animations create perceived latency and make the app feel slower
+- Users expect instant navigation between pages
+- Animations should be reserved for modals, tooltips, and contextual elements
+
+**Rule:**
+```tsx
+// ❌ BAD - Don't animate entire pages
+<div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+  {/* Page content */}
+</div>
+
+// ✅ GOOD - No animation on page container
+<div className="space-y-6">
+  {/* Page content */}
+</div>
+
+// ✅ GOOD - Animate individual cards if needed
+<Card className="animate-in fade-in duration-300">
+  {/* Card content */}
+</Card>
+```
+
+**Exceptions:**
+- Modals and dialogs: Use smooth fade-in + scale animations
+- Toast notifications: Use slide-in from appropriate edge
+- Dropdown menus: Use subtle fade + slide animations
+- Loading states: Use pulse or spin animations
+
+### Navigation Behavior
+**Back/Close Button Rules:**
+- Navigation buttons should return to the most contextually relevant page
+- "Close" buttons on detail pages (e.g., Vaccination, Visit History) should navigate to the parent detail page (Patient Details), not the top-level list
+- Example: Vaccination page "Close" → Patient Details (not Patients List)
+
+**Implementation:**
+```tsx
+// ❌ BAD - Returns to top-level list
+<button onClick={() => navigate('/patients')}>Закрыть</button>
+
+// ✅ GOOD - Returns to parent detail page
+<button onClick={() => navigate(`/patients/${child.id}`)}>Закрыть</button>
+```
 
 ### Tabs (Navigation Pills)
 Avoid rectangular standard tabs. Use the **Pill/Track** style for premium feel.
@@ -285,6 +458,72 @@ Used for filtering content by categories (e.g., pharmacological groups, status f
   - **Female:** Use `bg-rose-500` (Explicit).
   - **Text:** Always `text-white` with `font-black`.
 
+### Form Page Headers (Complex Forms)
+For complex multi-section forms (e.g., Visit Form, Patient Form), use a **two-row sticky header** with clear hierarchy.
+
+#### **Structure:**
+```tsx
+<div className="sticky top-6 z-30 bg-white/90 dark:bg-slate-900/90 
+                backdrop-blur-xl rounded-[32px] border border-slate-200/50 
+                shadow-xl">
+  {/* Top Row: Actions & Status */}
+  <div className="flex items-center justify-between p-4 pb-3 border-b">
+    <div className="flex items-center gap-3">
+      {/* Back button + Status badge */}
+    </div>
+    <div className="flex items-center gap-2">
+      {/* Action buttons: Ghost → Secondary → Primary */}
+    </div>
+  </div>
+  
+  {/* Bottom Row: Context & Identity */}
+  <div className="px-5 py-4 flex items-center justify-between min-w-0">
+    {/* Icon badge + Title + Entity info */}
+    {/* Metadata pills (date, age, status, etc.) */}
+  </div>
+</div>
+```
+
+#### **Top Row (Actions & Status):**
+- **Left:** Back button + Visual divider + Status badge
+- **Right:** Action buttons in hierarchy order (ghost → secondary → primary)
+- **Button Heights:** Consistent `h-10` for all header buttons
+- **Spacing:** `gap-2` between buttons, `gap-3` in left group
+
+#### **Bottom Row (Context & Identity):**
+- **Left:** 
+  - Icon badge: `w-12 h-12 rounded-2xl bg-blue-600` (use solid color, NOT gradient for Electron reliability)
+  - Icon with `strokeWidth={2.5}` for clarity
+  - **Icon color MUST be `!text-white`** (critical for Electron visibility)
+  - Shadow: `shadow-lg shadow-blue-500/25` for depth
+  - Title + semantic label for entity name
+- **Right:**
+  - Metadata pills with icons: `bg-slate-50 dark:bg-slate-800/50 rounded-xl border`
+  - Visual dividers between metadata items: `w-px h-4 bg-slate-300 dark:bg-slate-600`
+  - Color-coded badges for semantic data (gender, status, etc.)
+
+#### **Visual Properties:**
+- **Glassmorphism:** `bg-white/90` + `backdrop-blur-xl` for premium depth
+- **Rounded Corners:** `rounded-[32px]` for medical-grade polish
+- **Shadow:** `shadow-xl shadow-slate-900/5` for subtle elevation
+- **Border Opacity:** `border-slate-200/50` for soft definition
+
+#### **Responsive Behavior:**
+- Use `min-w-0` on flex containers to prevent overflow
+- Title truncates with `truncate` class
+- Metadata pills can wrap with `flex-wrap`
+- Action buttons maintain hierarchy even when wrapping
+
+#### **Status Badge:**
+- Completed: `variant="success"` with checkmark icon
+- Draft/In-Progress: `variant="default"` with appropriate text
+- Location: Left side of top row, after divider
+
+#### **Action Button Priority:**
+1. **Primary** (Complete/Submit): Blue with `!text-white`, `shadow-lg shadow-primary-500/25`
+2. **Secondary** (Save Draft): Outlined style, medium emphasis
+3. **Ghost** (Print, Additional actions): Minimal style, lowest emphasis
+
 ## 6. Implementation Strategy
 
 To create a consistent app, we will introduce a **Design System Component Library** in `src/components/ui/`.
@@ -298,6 +537,69 @@ New Components to Create:
 5. `Badge` (Status indicators)
 6. `Avatar` (User profiles)
 7. `ConfirmDialog` (Confirmation modal for user actions)
+
+### Layout System Architecture
+
+**AppShell Container Rules:**
+The main application shell (`AppShell.tsx`) must enforce overflow constraints to prevent horizontal scrolling.
+
+**Critical Classes:**
+```tsx
+// Root container
+<div className="min-h-screen ... overflow-x-hidden">
+  
+  // Main content area
+  <div className="flex-1 flex flex-col ... overflow-x-hidden min-w-0">
+    
+    // Content wrapper
+    <main className="flex-1 p-8 overflow-y-auto overflow-x-hidden">
+      
+      // Max-width container
+      <div className="max-w-7xl mx-auto min-w-0">
+        <Outlet /> {/* Page content */}
+      </div>
+    </main>
+  </div>
+</div>
+```
+
+**Key Points:**
+1. `overflow-x-hidden` must be applied at multiple levels to prevent cascade issues
+2. `min-w-0` on flex containers allows content to shrink below content size
+3. `max-w-7xl` provides reasonable content width while `min-w-0` allows shrinking
+4. `overflow-y-auto` on main allows vertical scrolling while blocking horizontal
+
+### Page Layout Consistency
+
+**Standard Page Structure:**
+All feature pages (Patients, Visits, Vaccination, etc.) should follow consistent spacing and container rules.
+
+```tsx
+// ✅ CORRECT - No extra containers or padding
+export const FeaturePage = () => {
+  return (
+    <div className="space-y-6"> {/* Only spacing between sections */}
+      <header>...</header>
+      <section>...</section>
+      <section>...</section>
+    </div>
+  );
+};
+
+// ❌ INCORRECT - Extra padding/container causes layout issues
+export const FeaturePage = () => {
+  return (
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      {/* This creates inconsistent layouts and potential overflow */}
+    </div>
+  );
+};
+```
+
+**Why:**
+- AppShell already provides `p-8` padding and `max-w-7xl` constraint
+- Additional containers create nested constraints that can cause overflow
+- Consistent `space-y-6` provides visual rhythm without layout issues
 
 ## 7. Motion & Aesthetics
 - **Transitions:** `transition-all duration-200` on hover states.
@@ -319,17 +621,25 @@ The visual language is defined via Tailwind **v4 CSS Tokens**.
 
 **Pro-Tip (v4 Visibility):** 
 1. If text in a primary button is invisible, ensure you use `!text-white` and consider wrapping the label in a `<span>` with the same class. This overrides the shadow-root/cascade issues in themed Electron environments.
-2. **Gradient vs Solid:** For critical colorful elements (like Gender Avatars), prefer **Explicit Solid Colors** (`bg-blue-600`) over theme gradients (`from-primary-500`). This avoids variable resolution issues in mixed dark/light contexts.
+2. **Gradient vs Solid (CRITICAL for Electron):** For critical colorful elements (like Icon Badges, Gender Avatars), **ALWAYS use Explicit Solid Colors** (`bg-blue-600`) instead of theme gradients (`bg-gradient-to-br from-primary-500 to-primary-600`). 
+   - **Rationale:** Gradients may not render properly in Electron environments due to variable resolution issues and theme conflicts.
+   - **Icons on colored backgrounds:** MUST use `!text-white` with solid background color (e.g., `bg-blue-600` + `!text-white`).
+   - **Verified working pattern:** `<div className="bg-blue-600"><Icon className="!text-white" /></div>`
 
 ### 8.4. Accessibility & Contrast Standards
 To avoid "blind" elements and unreadable text:
 1. **Never** use light text on light backgrounds (e.g., White on Primary-100).
 2. **Standard Buttons**: Primary buttons MUST use high-contrast text (`!text-white` on `bg-blue-600`). Always use the `!` important modifier for text color on colored button backgrounds.
 3. **Colored Button Text Rule**: ALL buttons with colored backgrounds (indigo, teal, purple, etc.) MUST use `!text-white` to prevent text from blending with the background. This is especially critical in Electron environments where theme cascading can cause visibility issues.
-4. **Filter Pills/Tags Rule**: Selected filter buttons with colored backgrounds (e.g., `bg-primary-600`) MUST use `!text-white` to ensure text visibility. This prevents the common issue where selected filter text becomes invisible due to CSS cascade conflicts in Electron themes.
-5. **Contrast Validation**: Always check contrast using tools or WCAG standards during development.
-6. **Visual Hierarchy**: Active states must be clearly distinguishable from inactive states through color contrast or borders.
-7. **Icon Visibility**: Icons must maintain a minimum contrast of 3:1 against their background.
+4. **Icon Visibility Rule (CRITICAL)**: ALL icons inside colored backgrounds (buttons, badges, gradient containers) MUST use `!text-white` (with `!` important modifier). This includes:
+   - Icons in primary/colored buttons: `<Icon className="w-4 h-4 !text-white" />`
+   - Icons in gradient badges: `<Icon className="w-6 h-6 !text-white" strokeWidth={2.5} />`
+   - Icons in colored pills/tags: `<Icon className="w-4 h-4 !text-white" />`
+   - **Rationale:** Electron's CSS cascade can override icon colors, making them invisible on colored backgrounds.
+5. **Filter Pills/Tags Rule**: Selected filter buttons with colored backgrounds (e.g., `bg-primary-600`) MUST use `!text-white` to ensure text visibility. This prevents the common issue where selected filter text becomes invisible due to CSS cascade conflicts in Electron themes.
+6. **Contrast Validation**: Always check contrast using tools or WCAG standards during development.
+7. **Visual Hierarchy**: Active states must be clearly distinguishable from inactive states through color contrast or borders.
+8. **Icon Minimum Contrast**: Icons must maintain a minimum contrast of 3:1 against their background.
 
 ### 8.2. Atomic Component Layer (Level 1)
 Located in `src/components/ui/`.
@@ -345,3 +655,73 @@ Located in `src/components/ui/`.
 - **V4 Requirement**: Requires the explicit `@custom-variant dark` directive in the main CSS file to enable `dark:` utility prefixes when the class is present.
 - **Implementation**: `AppShell` or a dedicated ThemeProvider toggles the `.dark` class on the `<html>` or `<body>` element.
 - **Consistency**: Use semantic tokens to ensure automatic adaptation between themes.
+
+### Sticky Navigation Panels (Form Navigation)
+For long forms with multiple sections (e.g., Visit Form), use **horizontal sticky navigation bar** positioned below the header with matching design style.
+
+#### **Horizontal Navigation Bar (Below Form Header)**
+```tsx
+{/* Header card - not sticky */}
+<div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl 
+                rounded-[32px] border border-slate-200/50 
+                dark:border-slate-800/50 shadow-xl shadow-slate-900/5">
+  {/* Header content */}
+</div>
+
+{/* Sticky navigation - same style, smaller radius and height */}
+<div className="sticky top-6 z-30">
+  <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl 
+                  rounded-[24px] border border-slate-200/50 
+                  dark:border-slate-800/50 shadow-lg shadow-slate-900/5">
+    <nav className="flex items-center gap-1 px-5 py-3 flex-wrap">
+      <button className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg">
+        <Icon className="w-3.5 h-3.5" />
+        <span className="text-xs hidden sm:inline-block">{label}</span>
+      </button>
+      <div className="ml-auto">{/* progress */}</div>
+    </nav>
+  </div>
+</div>
+```
+
+**Key properties:**
+- **Layout**: Place navigation AFTER header, wrapped in `sticky top-6 z-30` container
+- **Matching style**: Same glassmorphism, border, shadow as header
+- **Smaller scale**: `rounded-[24px]` (vs `rounded-[32px]` on header), lower padding `py-3`
+- **Same width**: No negative margins, naturally inherits parent width
+- **Responsive wrapping**: `flex-wrap` allows items to wrap to next line if needed
+- **Compact buttons**: `px-2 py-1.5` with `text-xs` and `w-3.5 h-3.5` icons
+- **Mobile-friendly**: Text hidden on small screens (`hidden sm:inline-block`)
+- **Progress at end**: `ml-auto` with visual separator
+
+**Why this pattern:**
+- Visual consistency with form header
+- Compact height (py-3) doesn't waste vertical space
+- Sticks to top-6 (same as header would stick)
+- Same glassmorphism creates cohesive design
+- No horizontal scroll - items wrap naturally
+- Responsive text visibility (hidden on small screens)
+
+**Navigation Button States:**
+- **Active:** 
+  - Bg: `bg-blue-600` (solid color, not gradient)
+  - Text/Icon: `!text-white` (MUST use `!` modifier for Electron)
+  - Shadow: `shadow-lg shadow-blue-500/30`
+  - Icon strokeWidth: `2.5`
+  - Shows icon + label
+- **Inactive:**
+  - Bg: `bg-white dark:bg-slate-900`
+  - Border: `border border-slate-200 dark:border-slate-700`
+  - Text/Icon: `text-slate-600 dark:text-slate-400`
+  - Hover: `hover:bg-slate-100 dark:hover:bg-slate-800`
+  - Shows icon + label
+- **Completion Badge:**
+  - Small green dot: `w-2.5 h-2.5 bg-green-500 rounded-full`
+  - Positioned: `absolute -top-1 -right-1`
+
+#### **Progress Indicator:**
+- Positioned at end: `ml-auto` with `border-l` separator
+- Bar: `w-24 h-2` with rounded full
+- Background: `bg-slate-200 dark:bg-slate-700`
+- Progress fill: `bg-blue-600` (solid, not gradient)
+- Shows label: "Прогресс" + count (e.g., "5/10")

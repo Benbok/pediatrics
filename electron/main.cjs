@@ -17,6 +17,7 @@ const { setupInformedConsentHandlers } = require('./modules/informed-consent/han
 const { setupVisitTemplateHandlers } = require('./modules/visits/template-handlers.cjs');
 const { setupMedicationTemplateHandlers } = require('./modules/medication-templates/handlers.cjs');
 const { setupDiagnosticTemplateHandlers } = require('./modules/diagnostic-templates/handlers.cjs');
+const { setupRecommendationTemplateHandlers } = require('./modules/recommendation-templates/handlers.cjs');
 const { setupExamTextTemplateHandlers } = require('./modules/exam-text-templates/handlers.cjs');
 const { initializeDatabase } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
@@ -84,6 +85,7 @@ app.whenReady().then(async () => {
     setupVisitTemplateHandlers();
     setupMedicationTemplateHandlers();
     setupDiagnosticTemplateHandlers();
+    setupRecommendationTemplateHandlers();
     setupExamTextTemplateHandlers();
 
     // Cache Service handlers

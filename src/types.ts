@@ -641,6 +641,18 @@ export interface DiagnosticRecommendation {
   sourceDiseaseId?: number;
 }
 
+// Шаблон рекомендаций
+export interface RecommendationTemplate {
+  id?: number;
+  name: string;
+  description?: string | null;
+  items: string | string[]; // JSON строка или парсированный массив текстовых рекомендаций
+  isPublic?: boolean;
+  createdById: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface DiagnosticRecommendationWithCodes extends DiagnosticRecommendation {
   icd10Codes: string[]; // Коды МКБ для фильтрации
 }
@@ -918,6 +930,12 @@ declare global {
       deleteDiagnosticTemplate: (id: number, userId: number) => Promise<boolean>;
       getDiagnosticsByIcdCode: (icdCode: string) => Promise<DiagnosticRecommendation[]>;
       getAllDiagnosticTests: () => Promise<DiagnosticRecommendationWithCodes[]>;
+
+      // RECOMMENDATION TEMPLATES API
+      getRecommendationTemplates: (userId: number) => Promise<RecommendationTemplate[]>;
+      getRecommendationTemplate: (id: number) => Promise<RecommendationTemplate | null>;
+      upsertRecommendationTemplate: (data: RecommendationTemplate) => Promise<RecommendationTemplate>;
+      deleteRecommendationTemplate: (id: number, userId: number) => Promise<boolean>;
 
       // ICD CODES MODULE API
       loadIcdCodes: () => Promise<{ success: boolean; count: number }>;

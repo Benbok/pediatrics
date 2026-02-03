@@ -131,6 +131,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getDiagnosticsByIcdCode: (icdCode) => ipcRenderer.invoke('visits:get-diagnostics-by-icd-code', icdCode),
     getAllDiagnosticTests: () => ipcRenderer.invoke('visits:get-all-diagnostic-tests'),
 
+    // RECOMMENDATION TEMPLATES MODULE API
+    getRecommendationTemplates: (userId) => ipcRenderer.invoke('recommendation-templates:get-all', userId),
+    getRecommendationTemplate: (id) => ipcRenderer.invoke('recommendation-templates:get-by-id', id),
+    upsertRecommendationTemplate: (data) => ipcRenderer.invoke('recommendation-templates:upsert', data),
+    deleteRecommendationTemplate: (id, userId) => ipcRenderer.invoke('recommendation-templates:delete', id, userId),
+
     // EXAM TEXT TEMPLATES MODULE API
     getExamTextTemplate: (id) => ipcRenderer.invoke('exam-text-templates:get-by-id', id),
     getExamTextTemplatesBySystem: (systemKey, userId) => ipcRenderer.invoke('exam-text-templates:get-by-system', systemKey, userId),

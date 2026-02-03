@@ -17,8 +17,9 @@ import { MedicationFormPage } from './modules/medications/MedicationFormPage';
 import { VisitsModule } from './modules/visits/VisitsModule';
 import { VisitFormPage } from './modules/visits/VisitFormPage';
 import { PrintPreviewManager } from './modules/printing/components/PrintPreviewManager';
-// Register vaccination certificate template
+// Register print templates
 import './modules/printing/templates/vaccination/register';
+import './modules/printing/templates/visit/register';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './modules/auth/LoginPage';
 import { ChildProvider } from './context/ChildContext';

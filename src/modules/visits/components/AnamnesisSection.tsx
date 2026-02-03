@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card } from '../../../components/ui/Card';
-import { FileText } from 'lucide-react';
+import { FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import { Visit, HeredityData, BirthData, FeedingData, InfectiousDiseasesData, AllergyStatusData } from '../../../types';
 import {
     HereditySection,
@@ -21,8 +21,10 @@ export const AnamnesisSection: React.FC<AnamnesisSectionProps> = ({
     formData,
     onChange,
     visitType,
-    errors = {},
+    errors = {}
 }) => {
+    const [isExpanded, setIsExpanded] = useState(false); // По умолчанию свернута
+    
     // Показывать только для первичного приема и консультации
     const shouldShow = visitType === 'primary' || visitType === 'consultation';
 
@@ -124,23 +126,36 @@ export const AnamnesisSection: React.FC<AnamnesisSectionProps> = ({
     };
 
     return (
-        <Card className="p-6 space-y-6">
-            <div className="flex items-center gap-3 mb-4">
+        <Card className="p-0 space-y-0">
+            <button
+                className="w-full flex items-center gap-3 p-6 mb-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors"
+                onClick={() => setIsExpanded(!isExpanded)}
+                aria-expanded={isExpanded}
+            >
                 <div className="p-2 bg-primary-100 dark:bg-primary-900/40 rounded-xl">
                     <FileText className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white text-left flex-1">
                     Анамнез жизни (форма 025/у)
                 </h3>
-            </div>
+                {isExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                ) : (
+                    <ChevronRight className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                )}
+            </button>
 
-            <div className="space-y-6">
-                <HereditySection data={heredityData} onChange={handleHeredityChange} />
-                <BirthSection data={birthData} onChange={handleBirthChange} />
-                <FeedingSection data={feedingData} onChange={handleFeedingChange} />
-                <InfectiousDiseasesSection data={infectiousDiseasesData} onChange={handleInfectiousDiseasesChange} />
-                <AllergyStatusSection data={allergyStatusData} onChange={handleAllergyStatusChange} />
-            </div>
+            {isExpanded && (
+                <div className="px-6 pb-6 space-y-6">
+                    <div className="pt-2 space-y-6">
+                        <HereditySection data={heredityData} onChange={handleHeredityChange} />
+                        <BirthSection data={birthData} onChange={handleBirthChange} />
+                        <FeedingSection data={feedingData} onChange={handleFeedingChange} />
+                        <InfectiousDiseasesSection data={infectiousDiseasesData} onChange={handleInfectiousDiseasesChange} />
+                        <AllergyStatusSection data={allergyStatusData} onChange={handleAllergyStatusChange} />
+                    </div>
+                </div>
+            )}
         </Card>
     );
 };

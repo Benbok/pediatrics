@@ -82,15 +82,26 @@ export const useActiveSection = (sectionIds: string[], options?: {
             return;
         }
 
-        // Find the scrollable container (AppShell's main)
-        const scrollContainer = document.querySelector('main');
+        // Try to find the scrollable container by ID first, then by selectors
+        let scrollContainer = document.getElementById('app-main-content') as HTMLElement;
         
-        if (scrollContainer) {
+        if (!scrollContainer) {
+            scrollContainer = document.querySelector('main[class*="overflow-y-auto"]') as HTMLElement;
+        }
+        
+        if (!scrollContainer) {
+            scrollContainer = document.querySelector('main') as HTMLElement;
+        }
+        
+        if (!scrollContainer) {
+            scrollContainer = document.querySelector('[role="main"]') as HTMLElement;
+        }
+        
+        if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
             // Get current scroll position
             const currentScrollTop = scrollContainer.scrollTop;
             
-            // Calculate element position relative to scrollContainer
-            const containerRect = scrollContainer.getBoundingClientRect();
+            // Calculate element position relative to viewport
             const elementRect = element.getBoundingClientRect();
             
             // Calculate offset for sticky header
@@ -99,25 +110,32 @@ export const useActiveSection = (sectionIds: string[], options?: {
             const extraOffset = 32; // Additional spacing below header
             
             // Calculate target scroll position
-            const targetScrollTop = currentScrollTop + (elementRect.top - containerRect.top) - headerHeight - extraOffset;
+            // elementRect.top is relative to viewport, add current scroll to get absolute position
+            const targetScrollTop = currentScrollTop + elementRect.top - headerHeight - extraOffset;
             
+            console.log('Scrolling to section:', sectionId, {
+                currentScrollTop,
+                targetScrollTop: Math.max(0, targetScrollTop),
+                headerHeight,
+                elementTop: elementRect.top,
+                scrollContainerId: scrollContainer.id,
+            });
+
             scrollContainer.scrollTo({
                 top: Math.max(0, targetScrollTop),
                 behavior: 'smooth',
             });
-            
-            console.log('Scrolling to section:', sectionId, {
-                currentScrollTop,
-                targetScrollTop,
-                headerHeight,
-                elementTop: elementRect.top,
-                containerTop: containerRect.top,
-            });
         } else {
-            console.warn('Scroll container (main) not found, using fallback');
-            element.scrollIntoView({
+            // Fallback: use window scroll
+            console.log('Using window scroll fallback for:', sectionId);
+            const header = document.querySelector('[data-visit-form-header]') as HTMLElement;
+            const headerHeight = header ? header.getBoundingClientRect().height : 0;
+            const elementRect = element.getBoundingClientRect();
+            const targetY = window.scrollY + elementRect.top - headerHeight - 32;
+            
+            window.scrollTo({
+                top: Math.max(0, targetY),
                 behavior: 'smooth',
-                block: 'start',
             });
         }
         

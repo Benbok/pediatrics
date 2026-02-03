@@ -30,7 +30,8 @@ model User {
   visitTemplates        VisitTemplate[]
   medicationTemplates   MedicationTemplate[]
   examTextTemplates     ExamTextTemplate[]
-  diagnosticTemplates   DiagnosticTemplate[]
+  diagnosticTemplates      DiagnosticTemplate[]
+  recommendationTemplates  RecommendationTemplate[]
 
   @@map("users")
 }
@@ -528,4 +529,25 @@ model DiagnosticTemplate {
   @@unique([createdById, name])
   @@index([createdById])
   @@map("diagnostic_templates")
+}
+
+// ============= RECOMMENDATION TEMPLATES =============
+
+model RecommendationTemplate {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+
+  items String @map("items") // JSON: string[] - массив текстовых рекомендаций
+
+  isPublic    Boolean  @default(false) @map("is_public")
+  createdById Int      @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  @@unique([createdById, name])
+  @@index([createdById])
+  @@map("recommendation_templates")
 }

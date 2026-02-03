@@ -57,7 +57,7 @@ export const AppShell: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex transition-colors duration-500 font-sans focus:outline-none">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex transition-colors duration-500 font-sans focus:outline-none overflow-x-hidden">
       {/* Sidebar */}
       <aside
         className={clsx(
@@ -129,7 +129,7 @@ export const AppShell: React.FC = () => {
       {/* Main Layout Area */}
       <div
         className={clsx(
-          "flex-1 flex flex-col transition-all duration-500 ease-in-out",
+          "flex-1 flex flex-col transition-all duration-500 ease-in-out overflow-x-hidden min-w-0",
           isSidebarOpen ? "pl-68" : "pl-22"
         )}
       >
@@ -191,8 +191,8 @@ export const AppShell: React.FC = () => {
           <TabBar />
 
           {/* Content Area */}
-          <main className="flex-1 p-8 overflow-y-auto">
-            <div className="max-w-7xl mx-auto">
+          <main id="app-main-content" className="flex-1 p-8 overflow-y-auto overflow-x-hidden">
+            <div className="max-w-7xl mx-auto min-w-0">
               <Outlet />
             </div>
           </main>

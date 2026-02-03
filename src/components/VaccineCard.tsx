@@ -173,11 +173,11 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
   return (
     <div
       id={data.id}
-      className={`relative border rounded-xl p-4 mb-3 transition-all duration-200 ${getStatusColor(data.status)} hover:shadow-md dark:hover:shadow-none scroll-mt-24`}
+      className={`relative border rounded-xl p-4 mb-3 transition-all duration-200 overflow-hidden ${getStatusColor(data.status)} hover:shadow-md dark:hover:shadow-none scroll-mt-24`}
     >
-      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 min-w-0">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full border ${data.status === VaccineStatus.COMPLETED
               ? 'bg-white/50 border-emerald-300 dark:bg-black/20 dark:border-emerald-700'
               : 'bg-white/50 border-slate-300 dark:bg-black/20 dark:border-slate-700'
@@ -195,8 +195,8 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
               </span>
             )}
           </div>
-          <h3 className={`font-bold text-lg leading-tight dark:text-slate-200 ${data.status === VaccineStatus.SKIPPED ? 'line-through opacity-70' : ''}`}>{data.name}</h3>
-          <p className="text-sm opacity-90 mt-1">От: {data.disease}</p>
+          <h3 className={`font-bold text-lg leading-tight dark:text-slate-200 break-words ${data.status === VaccineStatus.SKIPPED ? 'line-through opacity-70' : ''}`}>{data.name}</h3>
+          <p className="text-sm opacity-90 mt-1 break-words">От: {data.disease}</p>
 
           {/* ALERT MESSAGE */}
           {data.alertMessage && data.status !== VaccineStatus.COMPLETED && (
@@ -204,7 +204,7 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0 mt-0.5">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
-              <span>{data.alertMessage}</span>
+              <span className="break-words">{data.alertMessage}</span>
             </div>
           )}
 
@@ -253,11 +253,11 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
           )}
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 min-w-0">
           {data.status !== VaccineStatus.COMPLETED || isEditing ? (
-            <div className={`flex flex-col items-end gap-2 w-full sm:w-auto ${isActionDisabled && !isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`flex flex-col items-end gap-2 w-full ${isActionDisabled && !isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
               {data.availableBrands && data.availableBrands.length > 0 && (
-                <div className="w-full sm:w-56">
+                <div className="w-full max-w-full sm:max-w-[14rem]">
                   <select
                     value={selectedBrandName}
                     onChange={(e) => setSelectedBrandName(e.target.value)}
@@ -277,7 +277,7 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
               )}
 
               {/* Enhanced Inputs for Completion */}
-              <div className="w-full sm:w-56 grid grid-cols-2 gap-2">
+              <div className="w-full max-w-full sm:max-w-[14rem] grid grid-cols-2 gap-2">
                 <input
                   type="text"
                   value={dose}
@@ -316,17 +316,17 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
                 onChange={(e) => setUserNotes(e.target.value)}
                 placeholder="Заметки (реакция, клиника...)"
                 rows={1}
-                className="w-full sm:w-56 text-xs p-2 rounded border border-slate-300 bg-white/80 focus:ring-1 focus:ring-blue-400 outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200 resize-none overflow-hidden hover:overflow-auto focus:h-16 transition-all"
+                className="w-full max-w-full sm:max-w-[14rem] text-xs p-2 rounded border border-slate-300 bg-white/80 focus:ring-1 focus:ring-blue-400 outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200 resize-none overflow-hidden hover:overflow-auto focus:h-16 transition-all"
               />
 
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full">
                 <label className="text-xs font-medium opacity-80 sm:hidden">Дата:</label>
-                <div className="flex gap-2 w-full sm:w-auto">
+                <div className="flex gap-2 w-full">
                   <DatePicker
                     value={selectedDate}
                     min={child.birthDate}
                     onChange={setSelectedDate}
-                    className="flex-1 sm:w-40"
+                    className="flex-1 max-w-[10rem]"
                   />
                   <button
                     onClick={handleConfirm}
