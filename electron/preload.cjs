@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deactivateUser: (userId) => ipcRenderer.invoke('auth:deactivate-user', userId),
     activateUser: (userId) => ipcRenderer.invoke('auth:activate-user', userId),
     changePassword: (data) => ipcRenderer.invoke('auth:change-password', data),
+    updateUser: (data) => ipcRenderer.invoke('auth:update-user', data),
+    setUserRoles: (data) => ipcRenderer.invoke('auth:set-user-roles', data),
+    resetPassword: (data) => ipcRenderer.invoke('auth:reset-password', data),
 
     // PATIENT SHARING API
     sharePatient: (data) => ipcRenderer.invoke('db:share-patient', data),

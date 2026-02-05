@@ -7,6 +7,8 @@ interface AuthContextType {
     isLoading: boolean;
     login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => Promise<void>;
+    /** Обновить данные текущего пользователя из сессии (например, после редактирования своего профиля) */
+    refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -58,8 +60,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const refreshSession = async () => {
+        try {
+            const session: AuthSession = await window.electronAPI.checkSession();
+            setIsAuthenticated(session.isAuthenticated);
+            setCurrentUser(session.user);
+        } catch (error) {
+            console.error('Failed to refresh session:', error);
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ isAuthenticated, currentUser, isLoading, login, logout }}>
+        <AuthContext.Provider value={{ isAuthenticated, currentUser, isLoading, login, logout, refreshSession }}>
             {children}
         </AuthContext.Provider>
     );

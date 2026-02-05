@@ -1,5 +1,5 @@
 import React from 'react';
-import { DiseaseNote } from '../../../types';
+import { DiseaseNote, getFullName } from '../../../types';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
@@ -51,7 +51,7 @@ export const DiseaseNoteCard: React.FC<DiseaseNoteCardProps> = ({
                     <div className="flex items-center gap-3 text-xs text-slate-500">
                         <div className="flex items-center gap-1">
                             <UserIcon className="w-3 h-3" />
-                            <span>{note.author?.fullName || 'Врач'}</span>
+                            <span>{getFullName(note.author) || 'Врач'}</span>
                         </div>
                         <div className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />

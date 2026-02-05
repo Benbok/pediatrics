@@ -25,12 +25,12 @@ const VisitTemplateService = {
             where: { id: Number(id) },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 },
                 medicationTemplate: {
                     include: {
                         createdBy: {
-                            select: { fullName: true }
+                            select: { lastName: true, firstName: true, middleName: true }
                         }
                     }
                 }
@@ -51,7 +51,7 @@ const VisitTemplateService = {
             },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             },
             orderBy: [
@@ -75,7 +75,7 @@ const VisitTemplateService = {
             },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             },
             orderBy: [

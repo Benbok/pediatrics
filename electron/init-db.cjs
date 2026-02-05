@@ -40,22 +40,69 @@ async function initializeDatabase() {
                 logger.warn('[DB Init] Plain text password found in .env.local. Consider using bcrypt hash.');
             }
 
-            // Create first admin user
-            const admin = await prisma.user.create({
-                data: {
-                    username: adminLogin,
-                    passwordHash: passwordHash,
-                    fullName: 'Администратор',
-                    isAdmin: true,
-                    isActive: true
-                }
+            // Create first admin user and assign admin+doctor roles (in one transaction)
+            const admin = await prisma.$transaction(async (tx) => {
+                const created = await tx.user.create({
+                    data: {
+                        username: adminLogin,
+                        passwordHash: passwordHash,
+                        lastName: 'Администратор',
+                        firstName: '',
+                        middleName: '',
+                        isAdmin: true,
+                        isActive: true
+                    }
+                });
+
+                // Ensure roles exist and assign admin + doctor to first user
+                const roleAdmin = await tx.role.upsert({
+                    where: { key: 'admin' },
+                    update: {},
+                    create: { key: 'admin' }
+                });
+                const roleDoctor = await tx.role.upsert({
+                    where: { key: 'doctor' },
+                    update: {},
+                    create: { key: 'doctor' }
+                });
+
+                await tx.userRole.createMany({
+                    data: [
+                        { userId: created.id, roleId: roleAdmin.id },
+                        { userId: created.id, roleId: roleDoctor.id }
+                    ]
+                });
+
+                return created;
             });
 
-            logger.info(`[DB Init] First admin user created: ${admin.username} (ID: ${admin.id})`);
+            logger.info(`[DB Init] First admin user created: ${admin.username} (ID: ${admin.id}) with roles admin+doctor`);
 
             return { initialized: true, adminCreated: true };
         } else {
             logger.info(`[DB Init] Database already initialized (${userCount} users found)`);
+
+            // Ensure every user has roles (fix users created before role migration or without roles)
+            // NOTE: Use raw SQL to avoid relying on Prisma relation field presence in generated client.
+            const usersWithoutRoles = await prisma.$queryRawUnsafe(`
+                SELECT u.id as id, u.is_admin as isAdmin
+                FROM users u
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id
+                )
+            `);
+            if (usersWithoutRoles.length > 0) {
+                logger.info(`[DB Init] Assigning roles to ${usersWithoutRoles.length} user(s) that have no roles`);
+                const roleAdmin = await prisma.role.upsert({ where: { key: 'admin' }, update: {}, create: { key: 'admin' } });
+                const roleDoctor = await prisma.role.upsert({ where: { key: 'doctor' }, update: {}, create: { key: 'doctor' } });
+                for (const u of usersWithoutRoles) {
+                    const roles = Boolean(u.isAdmin) ? [roleAdmin.id, roleDoctor.id] : [roleDoctor.id];
+                    await prisma.userRole.createMany({
+                        data: roles.map(roleId => ({ userId: u.id, roleId }))
+                    });
+                }
+            }
+
             return { initialized: true, adminCreated: false };
         }
 

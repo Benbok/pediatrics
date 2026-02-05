@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../context/AuthContext';
+import { getFullName } from '../../types';
 import { Badge } from '../ui/Badge';
 import { TabsProvider } from '../../context/TabsContext';
 import { TabBar } from './TabBar';
@@ -47,13 +48,21 @@ export const AppShell: React.FC = () => {
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
+  const isAdmin = Boolean(currentUser?.roles?.includes('admin'));
+
+  const roleLabels: Record<string, string> = { admin: 'Администратор', doctor: 'Врач' };
+  const currentRoleLabels = (currentUser?.roles ?? [])
+    .map((r) => roleLabels[r])
+    .filter(Boolean);
+  const rolesDisplay = currentRoleLabels.length > 0 ? currentRoleLabels.join(', ') : 'Врач';
+
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Главная' },
     { to: '/patients', icon: Baby, label: 'Пациенты' },
     { to: '/diseases', icon: BookOpen, label: 'База знаний' },
     { to: '/icd-codes', icon: FileText, label: 'Коды МКБ' },
     { to: '/medications', icon: Pill, label: 'Препараты' },
-    ...(currentUser?.isAdmin ? [{ to: '/users', icon: Users, label: 'Пользователи' }] : []),
+    ...(isAdmin ? [{ to: '/users', icon: Users, label: 'Пользователи' }] : []),
   ];
 
   return (
@@ -171,10 +180,10 @@ export const AppShell: React.FC = () => {
                 <div className="flex items-center gap-3 pl-2 group cursor-pointer">
                   <div className="text-right hidden sm:block">
                     <div className="text-sm font-bold text-slate-900 dark:text-white leading-none mb-1">
-                      {currentUser.fullName}
+                      {getFullName(currentUser) || currentUser.username}
                     </div>
                     <div className="text-[10px] uppercase font-black text-primary-600 dark:text-primary-400 tracking-wider">
-                      {currentUser.isAdmin ? 'Администратор' : 'Врач'}
+                      {rolesDisplay}
                     </div>
                   </div>
                   <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary-500 to-indigo-600 p-0.5 shadow-lg shadow-primary-500/20 group-hover:scale-110 transition-transform duration-300">

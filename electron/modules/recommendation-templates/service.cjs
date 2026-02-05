@@ -40,7 +40,7 @@ const RecommendationTemplateService = {
             where: { id: Number(id) },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             }
         });
@@ -67,7 +67,7 @@ const RecommendationTemplateService = {
             },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             },
             orderBy: {

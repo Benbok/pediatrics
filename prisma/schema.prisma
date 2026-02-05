@@ -12,12 +12,15 @@ model User {
   id           Int      @id @default(autoincrement())
   username     String   @unique
   passwordHash String   @map("password_hash")
-  fullName     String   @map("full_name")
+  lastName     String   @map("last_name")
+  firstName    String   @map("first_name")
+  middleName   String   @map("middle_name")
   isAdmin      Boolean  @default(false) @map("is_admin")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
 
   // Relations
+  userRoles            UserRole[]
   createdChildren       Child[]
   createdRecords        VaccinationRecord[]
   sharedPatientsAsOwner PatientShare[]        @relation("SharedByUser")
@@ -34,6 +37,27 @@ model User {
   recommendationTemplates  RecommendationTemplate[]
 
   @@map("users")
+}
+
+model Role {
+  id  Int    @id @default(autoincrement())
+  key String @unique
+
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId Int @map("user_id")
+  roleId Int @map("role_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
 }
 
 // Patient Sharing Mechanism (for collaboration)

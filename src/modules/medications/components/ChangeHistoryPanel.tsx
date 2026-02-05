@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { History, User } from 'lucide-react';
 import { Card } from '../../../components/ui/Card';
+import { getFullName } from '../../../types';
 import { medicationService } from '../services/medicationService';
 
 export const ChangeHistoryPanel: React.FC<{ medicationId: number }> = ({
@@ -50,7 +51,7 @@ export const ChangeHistoryPanel: React.FC<{ medicationId: number }> = ({
                         <div key={log.id} className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
                             <div className="flex items-center gap-2 mb-2">
                                 <User className="w-4 h-4 text-slate-400" />
-                                <span className="text-sm font-bold">{log.user?.fullName || 'Система'}</span>
+                                <span className="text-sm font-bold">{getFullName(log.user) || 'Система'}</span>
                                 <span className="text-xs text-slate-400">
                                     {new Date(log.changedAt).toLocaleString('ru-RU')}
                                 </span>

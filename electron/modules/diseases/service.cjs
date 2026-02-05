@@ -794,7 +794,7 @@ const DiseaseService = {
                     select: {
                         id: true,
                         username: true,
-                        fullName: true
+                        lastName: true, firstName: true, middleName: true
                     }
                 }
             },

@@ -41,7 +41,7 @@ const ExamTextTemplateService = {
             where: { id: Number(id) },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             }
         });
@@ -66,7 +66,7 @@ const ExamTextTemplateService = {
             },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             },
             orderBy: {
@@ -91,7 +91,7 @@ const ExamTextTemplateService = {
             },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             },
             orderBy: {

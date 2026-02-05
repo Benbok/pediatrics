@@ -8,6 +8,8 @@ interface ConfirmDialogProps {
     message: string;
     confirmText?: string;
     cancelText?: string;
+    /** When false, only the confirm (OK) button is shown — for notifications */
+    showCancel?: boolean;
     variant?: 'danger' | 'warning' | 'info';
     onConfirm: () => void;
     onCancel: () => void;
@@ -19,6 +21,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     message,
     confirmText = 'OK',
     cancelText = 'Отмена',
+    showCancel = true,
     variant = 'info',
     onConfirm,
     onCancel
@@ -78,13 +81,15 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
                 {/* Footer */}
                 <div className="flex items-center justify-end gap-3 p-4 border-t border-slate-200 dark:border-slate-800">
-                    <Button
-                        variant="secondary"
-                        onClick={onCancel}
-                        className="rounded-xl"
-                    >
-                        {cancelText}
-                    </Button>
+                    {showCancel && (
+                        <Button
+                            variant="secondary"
+                            onClick={onCancel}
+                            className="rounded-xl"
+                        >
+                            {cancelText}
+                        </Button>
+                    )}
                     <Button
                         variant={variant === 'danger' ? 'danger' : 'primary'}
                         onClick={onConfirm}

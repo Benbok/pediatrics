@@ -51,7 +51,7 @@ const MedicationTemplateService = {
             where: { id: Number(id) },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             }
         });
@@ -75,7 +75,7 @@ const MedicationTemplateService = {
             },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             },
             orderBy: {

@@ -367,7 +367,7 @@ const VisitService = {
                 include: {
                     primaryDisease: true,
                     doctor: {
-                        select: { fullName: true }
+                        select: { lastName: true, firstName: true, middleName: true }
                     },
                     informedConsent: {
                         select: {

@@ -310,7 +310,7 @@ const setupDatabaseHandlers = async () => {
   ipcMain.handle('db:get-children', ensureAuthenticated(async () => {
     const session = getSession();
     const userId = session.user.id;
-    const isAdmin = session.user.isAdmin;
+    const isAdmin = Boolean(session.user.roles?.includes('admin'));
 
     // Ключ кеша зависит от пользователя
     const cacheKey = `user_${userId}_admin_${isAdmin}`;
@@ -344,7 +344,7 @@ const setupDatabaseHandlers = async () => {
           select: {
             canEdit: true,
             ownerUser: {
-              select: { fullName: true }
+              select: { lastName: true, firstName: true, middleName: true }
             }
           }
         }
@@ -360,7 +360,7 @@ const setupDatabaseHandlers = async () => {
       patronymic: decrypt(child.patronymic),
       birthDate: decrypt(child.birthDate),
       isShared: child.shares.length > 0, // Mark as shared
-      sharedBy: child.shares[0]?.ownerUser?.fullName || null,
+      sharedBy: child.shares[0]?.ownerUser ? [child.shares[0].ownerUser.lastName, child.shares[0].ownerUser.firstName, child.shares[0].ownerUser.middleName].filter(Boolean).join(' ') : null,
       canEdit: child.createdByUserId === userId || child.shares[0]?.canEdit || isAdmin
     }));
 
@@ -441,7 +441,7 @@ const setupDatabaseHandlers = async () => {
       CacheService.invalidate('children', `user_${userId}_admin_false`);
       CacheService.invalidate('children', `user_${userId}_admin_true`);
       // Также инвалидируем все списки админов (если текущий пользователь админ)
-      if (session.user.isAdmin) {
+      if (isAdmin) {
         // Нужно инвалидировать все кеши для админов - делаем через invalidate namespace для admin
         // Но проще всего - инвалидировать все кеши детей, так как админы видят всех
         CacheService.invalidate('children');
@@ -481,7 +481,7 @@ const setupDatabaseHandlers = async () => {
       CacheService.invalidate('children', `child_${id}`);
       CacheService.invalidate('children', `user_${session.user.id}_admin_false`);
       CacheService.invalidate('children', `user_${session.user.id}_admin_true`);
-      if (session.user.isAdmin) {
+      if (Boolean(session.user.roles?.includes('admin'))) {
         CacheService.invalidate('children');
       }
       
@@ -509,7 +509,7 @@ const setupDatabaseHandlers = async () => {
     CacheService.invalidate('children', `user_${session.user.id}_admin_true`);
     CacheService.invalidate('profiles', `child_${id}`);
     CacheService.invalidate('records', `child_${id}`);
-    if (session.user.isAdmin) {
+    if (Boolean(session.user.roles?.includes('admin'))) {
       CacheService.invalidate('children');
     }
     
@@ -533,7 +533,7 @@ const setupDatabaseHandlers = async () => {
         throw new Error('Пациент не найден');
       }
 
-      if (child.createdByUserId !== currentUserId && !session.user.isAdmin) {
+      if (child.createdByUserId !== currentUserId && !Boolean(session.user.roles?.includes('admin'))) {
         throw new Error('Вы можете делиться только своими пациентами');
       }
 
@@ -571,7 +571,7 @@ const setupDatabaseHandlers = async () => {
       // Инвалидируем кеш списка пациентов для обоих пользователей
       CacheService.invalidate('children', `user_${currentUserId}_admin_false`);
       CacheService.invalidate('children', `user_${userId}_admin_false`);
-      if (session.user.isAdmin) {
+      if (Boolean(session.user.roles?.includes('admin'))) {
         CacheService.invalidate('children');
       }
 
@@ -594,7 +594,7 @@ const setupDatabaseHandlers = async () => {
         where: { id: Number(childId) }
       });
 
-      if (child.createdByUserId !== session.user.id && !session.user.isAdmin) {
+      if (child.createdByUserId !== session.user.id && !Boolean(session.user.roles?.includes('admin'))) {
         throw new Error('Недостаточно прав');
       }
 
@@ -612,7 +612,7 @@ const setupDatabaseHandlers = async () => {
       // Инвалидируем кеш списка пациентов
       CacheService.invalidate('children', `user_${session.user.id}_admin_false`);
       CacheService.invalidate('children', `user_${userId}_admin_false`);
-      if (session.user.isAdmin) {
+      if (Boolean(session.user.roles?.includes('admin'))) {
         CacheService.invalidate('children');
       }
 

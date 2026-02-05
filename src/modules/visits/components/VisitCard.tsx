@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
-import { Visit } from '../../../types';
+import { Visit, getFullName } from '../../../types';
 import { Calendar, User, Stethoscope } from 'lucide-react';
 
 interface VisitCardProps {
@@ -55,7 +55,7 @@ export const VisitCard: React.FC<VisitCardProps> = ({ visit, onClick }) => {
 
             <div className="mt-4 flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 <User className="w-3 h-3" />
-                <span>{(visit as any).doctor?.fullName || 'Врач'}</span>
+                <span>{getFullName((visit as any).doctor) || 'Врач'}</span>
             </div>
         </Card>
     );

@@ -48,7 +48,7 @@ const DiagnosticTemplateService = {
             where: { id: Number(id) },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             }
         });
@@ -75,7 +75,7 @@ const DiagnosticTemplateService = {
             },
             include: {
                 createdBy: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             },
             orderBy: {

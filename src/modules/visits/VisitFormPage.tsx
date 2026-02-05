@@ -9,7 +9,7 @@ import { logger } from '../../services/logger';
 import { draftService } from '../../services/draftService';
 import { useTabs } from '../../context/TabsContext';
 import debounce from 'lodash/debounce';
-import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, InformedConsent, MedicationRecommendation } from '../../types';
+import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, InformedConsent, MedicationRecommendation, getFullName } from '../../types';
 import { MedicationBrowser } from './components/MedicationBrowser';
 import { VisitTypeSelector, VisitType } from './components/VisitTypeSelector';
 import { AnamnesisSection } from './components/AnamnesisSection';
@@ -445,14 +445,14 @@ export const VisitFormPage: React.FC = () => {
             const printData: VisitFormPrintData = {
                 visit: formData as Visit,
                 child: child,
-                doctorName: currentUser?.fullName || 'Врач',
+                doctorName: getFullName(currentUser) || 'Врач',
                 recommendations: recommendations,
             };
 
             await printService.preview('visit-form', printData, {
                 title: `Прием: ${child.surname} ${child.name}`,
                 createdAt: new Date(),
-                author: currentUser?.fullName,
+                author: getFullName(currentUser) || undefined,
             });
         } catch (err: any) {
             logger.error('[VisitFormPage] Print failed:', err);

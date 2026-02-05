@@ -729,13 +729,23 @@ export interface PdfNote {
 
 // ============= USER MANAGEMENT =============
 
+export type UserRoleKey = 'admin' | 'doctor';
+
 export interface User {
   id: number;
   username: string;
-  fullName: string;
-  isAdmin: boolean;
+  lastName: string;
+  firstName: string;
+  middleName: string;
   isActive: boolean;
+  roles: UserRoleKey[];
   createdAt?: string;
+}
+
+/** ФИО в порядке: Фамилия Имя Отчество */
+export function getFullName(user: Pick<User, 'lastName' | 'firstName' | 'middleName'> | null | undefined): string {
+  if (!user) return '';
+  return [user.lastName, user.firstName, user.middleName].filter(Boolean).join(' ').trim() || '';
 }
 
 export interface AuthSession {
@@ -795,11 +805,14 @@ declare global {
       checkSession: () => Promise<AuthSession>;
 
       // USER MANAGEMENT API (Admin only)
-      registerUser: (data: { username: string; password: string; fullName: string; isAdmin: boolean }) => Promise<{ success: boolean; user?: User; error?: string }>;
+      registerUser: (data: { username: string; password: string; lastName: string; firstName?: string; middleName?: string; isAdmin: boolean }) => Promise<{ success: boolean; user?: User; error?: string }>;
       getAllUsers: () => Promise<User[]>;
       deactivateUser: (userId: number) => Promise<{ success: boolean; error?: string }>;
       activateUser: (userId: number) => Promise<{ success: boolean; error?: string }>;
       changePassword: (data: { userId: number; oldPassword?: string; newPassword: string }) => Promise<{ success: boolean; error?: string }>;
+      updateUser: (data: { userId: number; username: string; lastName: string; firstName?: string; middleName?: string; isActive: boolean }) => Promise<{ success: boolean; user?: User; error?: string }>;
+      setUserRoles: (data: { userId: number; roles: UserRoleKey[] }) => Promise<{ success: boolean; error?: string }>;
+      resetPassword: (data: { userId: number; newPassword: string }) => Promise<{ success: boolean; error?: string }>;
 
       // PATIENT SHARING API
       sharePatient: (data: { childId: number; userId: number; canEdit: boolean }) => Promise<{ success: boolean; error?: string }>;

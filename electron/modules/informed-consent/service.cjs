@@ -42,7 +42,7 @@ const InformedConsentService = {
                 visit: true,
                 child: true,
                 doctor: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             }
         });
@@ -58,7 +58,7 @@ const InformedConsentService = {
                 visit: true,
                 child: true,
                 doctor: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             }
         });
@@ -75,7 +75,7 @@ const InformedConsentService = {
                     select: { id: true, visitDate: true }
                 },
                 doctor: {
-                    select: { fullName: true }
+                    select: { lastName: true, firstName: true, middleName: true }
                 }
             },
             orderBy: { consentDate: 'desc' }

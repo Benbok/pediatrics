@@ -21,19 +21,19 @@ const IcdCodeSchema = z.string()
     .regex(/^[A-Z]\d{2}\.?\d{0,2}$/, 'Неверный формат кода МКБ (например: J45.0)');
 
 export const VisitTypeSchema = z.enum(['primary', 'followup', 'consultation', 'emergency', 'urgent'], {
-    errorMap: () => ({ message: 'Тип приема должен быть: primary, followup, consultation, emergency или urgent' })
+    message: 'Тип приема должен быть: primary, followup, consultation, emergency или urgent'
 });
 
 export const VisitPlaceSchema = z.enum(['clinic', 'home', 'other'], {
-    errorMap: () => ({ message: 'Место приема должно быть: clinic, home или other' })
+    message: 'Место приема должно быть: clinic, home или other'
 });
 
 export const VisitOutcomeSchema = z.enum(['recovery', 'improvement', 'no_change', 'worsening'], {
-    errorMap: () => ({ message: 'Исход должен быть: recovery, improvement, no_change или worsening' })
+    message: 'Исход должен быть: recovery, improvement, no_change или worsening'
 });
 
 export const PatientRouteSchema = z.enum(['ambulatory', 'hospitalization', 'consultation', 'other'], {
-    errorMap: () => ({ message: 'Маршрут должен быть: ambulatory, hospitalization, consultation или other' })
+    message: 'Маршрут должен быть: ambulatory, hospitalization, consultation или other'
 });
 
 export const VisitSchema = z.object({
@@ -101,18 +101,18 @@ export const VisitSchema = z.object({
     pulse: z.number()
         .int()
         .min(0, 'Пульс должен быть положительным числом')
-        .max(300, 'Пульс не должен превышать 200 уд/мин')
+        .max(250, 'Пульс не должен превышать 250 уд/мин')
         .nullable()
         .optional(),
     respiratoryRate: z.number()
         .int()
         .min(0, 'ЧДД должна быть положительным числом')
-        .max(100, 'ЧДД не должна превышать 150 в минуту')
+        .max(150, 'ЧДД не должна превышать 150 в минуту')
         .nullable()
         .optional(),
     temperature: z.number()
         .min(20.0, 'Температура не должна быть ниже 20°C')
-        .max(50.0, 'Температура не должна превышать 50°C')
+        .max(45.0, 'Температура не должна превышать 45°C')
         .nullable()
         .optional(),
     oxygenSaturation: z.number()
@@ -210,9 +210,19 @@ export const VisitSchema = z.object({
             });
         });
     }
-// Убрана проверка САД > ДАД: эта проверка теперь только на уровне UI (визуальная подсказка)
-// Врач должен иметь возможность сохранить запись даже с некорректными значениями
-// для фиксации ошибки измерения или экстренной ситуации
+
+    // Если указаны оба значения АД — САД должно быть >= ДАД
+    if (
+        typeof data.bloodPressureSystolic === 'number' &&
+        typeof data.bloodPressureDiastolic === 'number' &&
+        data.bloodPressureSystolic < data.bloodPressureDiastolic
+    ) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Систолическое АД не может быть меньше диастолического',
+            path: ['bloodPressureSystolic'],
+        });
+    }
 }).refine((data) => {
     // Валидация уникальности кодов в осложнениях и сопутствующих
     if (data.complications) {
