@@ -1,10 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { visitService } from './services/visitService';
+import { patientService } from '../../services/patient.service';
+import { logger } from '../../services/logger';
 import { Visit, ChildProfile } from '../../types';
+
+function getPrimaryDiagnosisName(primaryDiagnosis: Visit['primaryDiagnosis']): string {
+    if (primaryDiagnosis == null) return '';
+    if (typeof primaryDiagnosis === 'string') return primaryDiagnosis;
+    return primaryDiagnosis.nameRu ?? '';
+}
 import { VisitCard } from './components/VisitCard';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { useTabs } from '../../context/TabsContext';
 import {
     Plus,
     ChevronLeft,
@@ -18,12 +28,15 @@ import {
 export const VisitsModule: React.FC = () => {
     const { childId } = useParams<{ childId: string }>();
     const navigate = useNavigate();
+    const { getVisitTabs, closeTab } = useTabs();
 
     const [visits, setVisits] = useState<Visit[]>([]);
     const [child, setChild] = useState<ChildProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [visitIdToDelete, setVisitIdToDelete] = useState<number | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         if (childId) {
@@ -31,19 +44,20 @@ export const VisitsModule: React.FC = () => {
         }
     }, [childId]);
 
-    const loadData = async () => {
+    const loadData = async (): Promise<void> => {
+        if (!childId) return;
         setIsLoading(true);
         try {
             const [visitsData, childData] = await Promise.all([
                 visitService.getVisits(Number(childId)),
-                window.electronAPI.getChild(Number(childId))
+                patientService.getChildById(Number(childId))
             ]);
             setVisits(visitsData);
-            setChild(childData);
+            setChild(childData ?? null);
             setError(null);
         } catch (err) {
             setError('Не удалось загрузить историю посещений');
-            console.error(err);
+            logger.error('[VisitsModule] Failed to load visits and child', { error: err, childId });
         } finally {
             setIsLoading(false);
         }
@@ -51,8 +65,27 @@ export const VisitsModule: React.FC = () => {
 
     const filteredVisits = visits.filter(v =>
         v.complaints.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (v as any).primaryDiagnosis?.nameRu?.toLowerCase().includes(searchQuery.toLowerCase())
+        getPrimaryDiagnosisName(v.primaryDiagnosis).toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    const handleConfirmDelete = async (): Promise<void> => {
+        if (visitIdToDelete == null || !childId) return;
+        setIsDeleting(true);
+        try {
+            await visitService.deleteVisit(visitIdToDelete);
+            const tabId = `visit-${childId}-${visitIdToDelete}`;
+            const openTabs = getVisitTabs();
+            if (openTabs.some(t => t.id === tabId)) closeTab(tabId);
+            setVisitIdToDelete(null);
+            await loadData();
+        } catch (err) {
+            setError('Не удалось удалить приём');
+            setVisitIdToDelete(null);
+            logger.error('[VisitsModule] Failed to delete visit', { error: err, visitId: visitIdToDelete });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     if (isLoading) {
         return (
@@ -129,6 +162,7 @@ export const VisitsModule: React.FC = () => {
                             key={visit.id}
                             visit={visit}
                             onClick={(id) => navigate(`/patients/${childId}/visits/${id}`)}
+                            onDelete={() => setVisitIdToDelete(visit.id!)}
                         />
                     ))}
                 </div>
