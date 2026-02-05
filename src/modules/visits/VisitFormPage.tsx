@@ -37,6 +37,7 @@ import { RecommendationTemplateSelector } from './components/RecommendationTempl
 import { CreateRecommendationTemplateModal } from './components/CreateRecommendationTemplateModal';
 import { printService } from '../printing';
 import { VisitFormPrintData } from '../printing/templates/visit/types';
+import { buildVisitPayload } from './utils/buildVisitPayload';
 import { VisitFormNavigation, NavigationSection } from './components/VisitFormNavigation';
 import { useActiveSection } from './hooks/useActiveSection';
 import { Card } from '../../components/ui/Card';
@@ -162,21 +163,38 @@ export const VisitFormPage: React.FC = () => {
     const tabRegistered = useRef(false);
 
     // Tabs integration
-    const { openTab, closeTab, markDirty } = useTabs();
+    const { openTab, closeTab, markDirty, registerSaveHandler, unregisterSaveHandler } = useTabs();
 
     // Ключ для черновика в localStorage
     const draftKey = draftService.getVisitDraftKey(Number(childId), id ? Number(id) : null);
     const tabId = id ? `visit-${childId}-${id}` : `visit-${childId}-new`;
 
-    // Обработчик выхода из формы
-    const handleBack = useCallback(() => {
-        // Сначала закрываем вкладку, затем навигируем
+    // Обработчик выхода из формы: при наличии изменений сохраняем черновик (localStorage + бэкенд), затем закрываем
+    const handleBack = useCallback(async () => {
+        if (hasLocalChanges && formData) {
+            draftService.saveDraft(draftKey, formData);
+            const childIdNum = formData.childId ?? (childId ? Number(childId) : 0);
+            const doctorIdNum = formData.doctorId ?? currentUser?.id;
+            const visitDateStr = formData.visitDate;
+            if (childIdNum && doctorIdNum && visitDateStr) {
+                try {
+                    const payload = buildVisitPayload(
+                        { ...formData, childId: childIdNum, doctorId: doctorIdNum },
+                        recommendations,
+                        'draft'
+                    );
+                    await visitService.upsertVisit(payload);
+                    draftService.removeDraft(draftKey);
+                } catch (err: any) {
+                    logger.warn('[VisitFormPage] Draft save on exit failed', { error: err?.message });
+                }
+            }
+        }
         closeTab(tabId);
-        // Небольшая задержка чтобы TabsContext успел обработать закрытие
         setTimeout(() => {
             navigate(`/patients/${childId}/visits`);
         }, 0);
-    }, [closeTab, tabId, navigate, childId]);
+    }, [closeTab, tabId, navigate, childId, hasLocalChanges, formData, draftKey, recommendations, currentUser?.id]);
 
     // Регистрация вкладки ТОЛЬКО после загрузки данных ребенка
     useEffect(() => {
@@ -209,26 +227,89 @@ export const VisitFormPage: React.FC = () => {
         markDirty(tabId, isDirty);
     }, [markDirty, tabId]);
 
-    // Debounced автосохранение черновика
+    /** Единая точка обновления формы при действиях пользователя — всегда помечает форму как изменённую для автосохранения черновика */
+    const updateFormData = useCallback((updater: (prev: Partial<Visit>) => Partial<Visit>) => {
+        setFormData(updater);
+        setHasLocalChanges(true);
+    }, []);
+
+    // Debounced автосохранение черновика в localStorage
     const debouncedSaveDraft = useMemo(
         () => debounce((data: Partial<Visit>) => {
             if (!initialLoadDone.current) return;
             draftService.saveDraft(draftKey, data);
             setDirty(true);
-            logger.info('[VisitFormPage] Draft auto-saved', { draftKey });
-        }, 3000),
+            logger.info('[VisitFormPage] Draft auto-saved to localStorage', { draftKey });
+        }, 800),
         [draftKey, setDirty]
     );
 
-    // Автосохранение при изменении formData
+    // Debounced автосохранение черновика на бэкенд
+    const debouncedBackendSave = useMemo(
+        () => debounce(async (data: Partial<Visit>, recs: string[]) => {
+            if (!initialLoadDone.current) return;
+            const childIdNum = data.childId ?? (childId ? Number(childId) : 0);
+            const doctorIdNum = data.doctorId ?? currentUser?.id;
+            const visitDateStr = data.visitDate;
+            if (!childIdNum || !doctorIdNum || !visitDateStr) return;
+            try {
+                const payload = buildVisitPayload(
+                    { ...data, childId: childIdNum, doctorId: doctorIdNum },
+                    recs,
+                    'draft'
+                );
+                const savedVisit = await visitService.upsertVisit(payload);
+                if (!data.id && savedVisit.id) {
+                    setFormData(prev => (prev ? { ...prev, id: savedVisit.id } : prev));
+                }
+                logger.info('[VisitFormPage] Draft auto-saved to backend', { visitId: savedVisit.id });
+            } catch (err: any) {
+                logger.warn('[VisitFormPage] Draft backend save failed', { error: err?.message });
+            }
+        }, 2500),
+        [draftKey, childId, currentUser?.id]
+    );
+
+    // Автосохранение при изменении formData (localStorage + бэкенд)
     useEffect(() => {
         if (hasLocalChanges && initialLoadDone.current) {
             debouncedSaveDraft(formData);
+            debouncedBackendSave(formData, recommendations);
         }
         return () => {
             debouncedSaveDraft.cancel();
+            debouncedBackendSave.cancel();
         };
-    }, [formData, hasLocalChanges, debouncedSaveDraft]);
+    }, [formData, hasLocalChanges, recommendations, debouncedSaveDraft, debouncedBackendSave]);
+
+    // Регистрация обработчика сохранения черновика при закрытии вкладки (для модалки «Сохранить черновик» в TabBar)
+    const saveDraftForCloseRef = useRef<() => Promise<void>>(async () => {});
+    useEffect(() => {
+        saveDraftForCloseRef.current = async () => {
+            if (!formData || !initialLoadDone.current) return;
+            const childIdNum = formData.childId ?? (childId ? Number(childId) : 0);
+            const doctorIdNum = formData.doctorId ?? currentUser?.id;
+            const visitDateStr = formData.visitDate;
+            if (!childIdNum || !doctorIdNum || !visitDateStr) return;
+            try {
+                const payload = buildVisitPayload(
+                    { ...formData, childId: childIdNum, doctorId: doctorIdNum },
+                    recommendations,
+                    'draft'
+                );
+                await visitService.upsertVisit(payload);
+                draftService.removeDraft(draftKey);
+                setDirty(false);
+                setHasLocalChanges(false);
+            } catch (err: any) {
+                logger.warn('[VisitFormPage] Save draft on close failed', { error: err?.message });
+            }
+        };
+    }, [formData, recommendations, childId, currentUser?.id, draftKey, setDirty]);
+    useEffect(() => {
+        registerSaveHandler(tabId, async () => { await saveDraftForCloseRef.current?.(); });
+        return () => unregisterSaveHandler(tabId);
+    }, [tabId, registerSaveHandler, unregisterSaveHandler]);
 
     // Проверка черновика при загрузке
     useEffect(() => {
@@ -264,6 +345,20 @@ export const VisitFormPage: React.FC = () => {
     useEffect(() => {
         loadData();
     }, [id, childId]);
+
+    // Подстраховка: сохранение в localStorage при закрытии вкладки/окна (beforeunload ненадёжен на мобильных)
+    const draftSnapshotRef = useRef({ draftKey, hasLocalChanges: false, formData: null as Partial<Visit> | null });
+    draftSnapshotRef.current = { draftKey, hasLocalChanges, formData };
+    useEffect(() => {
+        const onBeforeUnload = () => {
+            const { draftKey: key, hasLocalChanges: dirty, formData: data } = draftSnapshotRef.current;
+            if (dirty && data) {
+                draftService.saveDraft(key, data);
+            }
+        };
+        window.addEventListener('beforeunload', onBeforeUnload);
+        return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    }, []);
 
     const loadData = async () => {
         try {
@@ -334,7 +429,7 @@ export const VisitFormPage: React.FC = () => {
             } else {
                 // Для нового приема определяем тип автоматически
                 const autoType = await determineVisitType();
-                setFormData(prev => ({ ...prev, visitType: autoType }));
+                updateFormData(prev => ({ ...prev, visitType: autoType }));
                 setAutoDetectedVisitType(autoType);
             }
             
@@ -368,12 +463,11 @@ export const VisitFormPage: React.FC = () => {
 
     // Обработчик изменения полей формы
     const handleFieldChange = useCallback((field: keyof Visit, value: any) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
-        setHasLocalChanges(true);
-    }, []);
+        updateFormData(prev => ({ ...prev, [field]: value }));
+    }, [updateFormData]);
 
     const handleClearVitals = useCallback(() => {
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             bloodPressureSystolic: null,
             bloodPressureDiastolic: null,
@@ -382,19 +476,18 @@ export const VisitFormPage: React.FC = () => {
             respiratoryRate: null,
             oxygenSaturation: null,
         }));
-        setHasLocalChanges(true);
-    }, []);
+    }, [updateFormData]);
 
     const loadLastAnthropometry = async () => {
         try {
             const visits = await visitService.getVisits(Number(childId));
             const lastVisit = visits.find(v => v.currentWeight && v.currentHeight);
             if (lastVisit) {
-                setFormData({
-                    ...formData,
+                updateFormData(prev => ({
+                    ...prev,
                     currentWeight: lastVisit.currentWeight,
                     currentHeight: lastVisit.currentHeight
-                });
+                }));
                 if (lastVisit.currentWeight && lastVisit.currentHeight) {
                     setCalculatedBMI(calculateBMI(lastVisit.currentWeight, lastVisit.currentHeight));
                     setCalculatedBSA(calculateBSA(lastVisit.currentWeight, lastVisit.currentHeight));
@@ -407,8 +500,7 @@ export const VisitFormPage: React.FC = () => {
 
     const handleAnthropometryChange = (field: 'currentWeight' | 'currentHeight', value: string) => {
         const numValue = value === '' ? null : parseFloat(value);
-        const newData = { ...formData, [field]: numValue };
-        setFormData(newData);
+        updateFormData(prev => ({ ...prev, [field]: numValue }));
 
         // Автоматический расчет BMI и BSA
         const weight = field === 'currentWeight' ? numValue : formData.currentWeight;
@@ -495,35 +587,8 @@ export const VisitFormPage: React.FC = () => {
         }
 
         try {
-            // Подготовка данных для сохранения: сериализация JSON полей диагнозов
-            const dataToSave = { ...formData, status };
-
-            // Сериализуем диагнозы в JSON строки, если они объекты
-            if (dataToSave.primaryDiagnosis && typeof dataToSave.primaryDiagnosis === 'object') {
-                dataToSave.primaryDiagnosis = JSON.stringify(dataToSave.primaryDiagnosis);
-            }
-            if (dataToSave.complications && Array.isArray(dataToSave.complications)) {
-                dataToSave.complications = JSON.stringify(dataToSave.complications);
-            }
-            if (dataToSave.comorbidities && Array.isArray(dataToSave.comorbidities)) {
-                dataToSave.comorbidities = JSON.stringify(dataToSave.comorbidities);
-            }
-
-            // Сериализуем другие JSON поля
-            if (Array.isArray(dataToSave.laboratoryTests)) {
-                dataToSave.laboratoryTests = JSON.stringify(dataToSave.laboratoryTests);
-            }
-            if (Array.isArray(dataToSave.instrumentalTests)) {
-                dataToSave.instrumentalTests = JSON.stringify(dataToSave.instrumentalTests);
-            }
-            if (Array.isArray(dataToSave.consultationRequests)) {
-                dataToSave.consultationRequests = JSON.stringify(dataToSave.consultationRequests);
-            }
-
-            // Сериализуем рекомендации
-            dataToSave.recommendations = JSON.stringify(recommendations);
-
-            const savedVisit = await visitService.upsertVisit(dataToSave as Visit);
+            const dataToSave = buildVisitPayload(formData, recommendations, status);
+            const savedVisit = await visitService.upsertVisit(dataToSave);
             setSuccess(true);
             
             // Очищаем черновик и помечаем вкладку как "чистую" после успешного сохранения
@@ -660,7 +725,7 @@ export const VisitFormPage: React.FC = () => {
             diseaseId: disease.id,
         };
 
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             primaryDiagnosis: diagnosisEntry,
             primaryDiagnosisId: disease.id,
@@ -875,7 +940,7 @@ export const VisitFormPage: React.FC = () => {
     }, [isEdit, formData.primaryDiagnosis, formData.complications, formData.comorbidities]);
 
     const handlePrimaryDiagnosisSelect = async (diagnosis: DiagnosisEntry | null) => {
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             primaryDiagnosis: diagnosis,
             primaryDiagnosisId: diagnosis?.diseaseId || null,
@@ -889,7 +954,7 @@ export const VisitFormPage: React.FC = () => {
     };
 
     const handleComplicationsChange = async (newComplications: DiagnosisEntry[]) => {
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             complications: newComplications.length > 0 ? newComplications : null,
         }));
@@ -902,7 +967,7 @@ export const VisitFormPage: React.FC = () => {
     };
 
     const handleComorbiditiesChange = async (newComorbidities: DiagnosisEntry[]) => {
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             comorbidities: newComorbidities.length > 0 ? newComorbidities : null,
         }));
@@ -934,10 +999,10 @@ export const VisitFormPage: React.FC = () => {
 
         if (isSelected) {
             // Удаление из списка
-            setFormData({
-                ...formData,
+            updateFormData(prev => ({
+                ...prev,
                 prescriptions: currentPrescriptions.filter((p: any) => p.medicationId !== medicationId)
-            });
+            }));
         } else {
             // Проверка дубликатов перед добавлением
             const duplicateCheck = visitService.checkDuplicateMedication(currentPrescriptions, medicationId);
@@ -1104,16 +1169,10 @@ export const VisitFormPage: React.FC = () => {
             // Обновляем существующее назначение
             const updated = [...currentPrescriptions];
             updated[existingIndex] = updatedPrescription;
-            setFormData({
-                ...formData,
-                prescriptions: updated
-            });
+            updateFormData(prev => ({ ...prev, prescriptions: updated }));
         } else {
             // Добавляем новое назначение
-            setFormData({
-                ...formData,
-                prescriptions: [...currentPrescriptions, updatedPrescription]
-            });
+            updateFormData(prev => ({ ...prev, prescriptions: [...currentPrescriptions, updatedPrescription] }));
         }
 
         // Закрываем модальное окно и очищаем состояние
@@ -1145,11 +1204,10 @@ export const VisitFormPage: React.FC = () => {
             return; // Уже добавлено
         }
         
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             [fieldName]: [...currentTests, item]
         }));
-        setHasLocalChanges(true);
     };
 
     // Удалить исследование из выбранной диагностики по индексу
@@ -1157,11 +1215,10 @@ export const VisitFormPage: React.FC = () => {
         const fieldName = type === 'lab' ? 'laboratoryTests' : 'instrumentalTests';
         const currentTests = (formData as any)[fieldName] || [];
         
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             [fieldName]: currentTests.filter((_: any, i: number) => i !== index)
         }));
-        setHasLocalChanges(true);
     };
 
     // Удалить исследование из выбранной диагностики по названию (для справочника)
@@ -1169,13 +1226,12 @@ export const VisitFormPage: React.FC = () => {
         const fieldName = type === 'lab' ? 'laboratoryTests' : 'instrumentalTests';
         const currentTests = (formData as any)[fieldName] || [];
         
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             [fieldName]: currentTests.filter((t: any) => 
                 t.test.toLowerCase().trim() !== testName.toLowerCase().trim()
             )
         }));
-        setHasLocalChanges(true);
     };
 
     // Сохранить текущий набор исследований как шаблон
@@ -1197,7 +1253,7 @@ export const VisitFormPage: React.FC = () => {
         const currentLabTests = (formData as any).laboratoryTests || [];
         const currentInstrumentalTests = (formData as any).instrumentalTests || [];
         
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             laboratoryTests: [
                 ...currentLabTests,
@@ -1216,7 +1272,6 @@ export const VisitFormPage: React.FC = () => {
                 )
             ]
         }));
-        setHasLocalChanges(true);
         setIsDiagnosticTemplateSelectorOpen(false);
     };
 
@@ -1254,7 +1309,7 @@ export const VisitFormPage: React.FC = () => {
 
     const handleFillVitalsNorm = useCallback(() => {
         const defaults = getRandomVitalsInNormForAge(ageMonths);
-        setFormData(prev => ({
+        updateFormData(prev => ({
             ...prev,
             bloodPressureSystolic: defaults.bloodPressureSystolic,
             bloodPressureDiastolic: defaults.bloodPressureDiastolic,
@@ -1263,8 +1318,7 @@ export const VisitFormPage: React.FC = () => {
             respiratoryRate: defaults.respiratoryRate,
             oxygenSaturation: defaults.oxygenSaturation,
         }));
-        setHasLocalChanges(true);
-    }, [ageMonths]);
+    }, [ageMonths, updateFormData]);
 
     // Форматируем дату рождения для отображения
     const formatBirthDate = (dateStr: string): string => {
@@ -1556,7 +1610,7 @@ export const VisitFormPage: React.FC = () => {
                         <VisitTemplateSelector
                             visitType={formData.visitType}
                             onSelect={(templateData) => {
-                                setFormData(prev => ({ ...prev, ...templateData }));
+                                updateFormData(prev => ({ ...prev, ...templateData }));
                             }}
                             onTemplateApplied={async (result) => {
                                 // Если шаблон содержит ссылку на шаблон назначений, применяем его
@@ -1914,10 +1968,10 @@ export const VisitFormPage: React.FC = () => {
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            onClick={() => setFormData({
-                                                ...formData,
-                                                prescriptions: formData.prescriptions?.filter((_, i) => i !== idx)
-                                            })}
+                                            onClick={() => updateFormData(prev => ({
+                                                ...prev,
+                                                prescriptions: prev.prescriptions?.filter((_, i) => i !== idx)
+                                            }))}
                                             className="text-slate-400 hover:text-red-500"
                                             title="Удалить назначение"
                                         >
@@ -2450,10 +2504,10 @@ export const VisitFormPage: React.FC = () => {
                             return;
                         }
 
-                        setFormData({
-                            ...formData,
-                            prescriptions: [...currentPrescriptions, ...prescriptions]
-                        });
+                        updateFormData(prev => ({
+                            ...prev,
+                            prescriptions: [...(prev.prescriptions || []), ...prescriptions]
+                        }));
                         setIsBatchEditorOpen(false);
                         setPendingTemplateItems([]);
                     }}

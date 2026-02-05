@@ -2,14 +2,15 @@ import React from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
 import { Visit, getFullName } from '../../../types';
-import { Calendar, User, Stethoscope } from 'lucide-react';
+import { Calendar, User, Stethoscope, Trash2 } from 'lucide-react';
 
 interface VisitCardProps {
     visit: Visit;
     onClick: (id: number) => void;
+    onDelete?: (id: number) => void;
 }
 
-export const VisitCard: React.FC<VisitCardProps> = ({ visit, onClick }) => {
+export const VisitCard: React.FC<VisitCardProps> = ({ visit, onClick, onDelete }) => {
     const formattedDate = new Date(visit.visitDate).toLocaleDateString('ru-RU', {
         day: 'numeric',
         month: 'long',
@@ -28,9 +29,24 @@ export const VisitCard: React.FC<VisitCardProps> = ({ visit, onClick }) => {
                     </div>
                     <span className="font-bold text-slate-900 dark:text-white">{formattedDate}</span>
                 </div>
-                <Badge variant={visit.status === 'completed' ? 'success' : 'warning'}>
-                    {visit.status === 'completed' ? 'Завершен' : 'Черновик'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                    <Badge variant={visit.status === 'completed' ? 'success' : 'warning'}>
+                        {visit.status === 'completed' ? 'Завершен' : 'Черновик'}
+                    </Badge>
+                    {onDelete && visit.id && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(visit.id!);
+                            }}
+                            className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            title="Удалить приём"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="space-y-2">

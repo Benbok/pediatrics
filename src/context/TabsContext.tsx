@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { logger } from '../services/logger';
 
@@ -49,6 +49,11 @@ interface TabsContextType {
     
     // Методы для работы с состоянием "грязности"
     markDirty: (tabId: string, isDirty: boolean) => void;
+    
+    // Сохранение черновика при закрытии вкладки (форма приёма регистрирует обработчик)
+    registerSaveHandler: (tabId: string, handler: () => Promise<void>) => void;
+    unregisterSaveHandler: (tabId: string) => void;
+    requestSave: (tabId: string) => Promise<void>;
     
     // Геттеры
     getTab: (tabId: string) => TabData | undefined;
@@ -115,6 +120,7 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     const [showMaxTabsWarning, setShowMaxTabsWarning] = useState(false);
     const [pendingTabData, setPendingTabData] = useState<Omit<TabData, 'createdAt'> | null>(null);
+    const saveHandlersRef = useRef<Map<string, () => Promise<void>>>(new Map());
     
     // Сохранение в localStorage при изменении вкладок
     useEffect(() => {
@@ -252,6 +258,19 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ));
     }, []);
     
+    const registerSaveHandler = useCallback((tabId: string, handler: () => Promise<void>): void => {
+        saveHandlersRef.current.set(tabId, handler);
+    }, []);
+    
+    const unregisterSaveHandler = useCallback((tabId: string): void => {
+        saveHandlersRef.current.delete(tabId);
+    }, []);
+    
+    const requestSave = useCallback(async (tabId: string): Promise<void> => {
+        const handler = saveHandlersRef.current.get(tabId);
+        if (handler) await handler();
+    }, []);
+    
     /**
      * Получить данные вкладки по ID
      */
@@ -266,6 +285,9 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         closeTab,
         setActiveTab,
         markDirty,
+        registerSaveHandler,
+        unregisterSaveHandler,
+        requestSave,
         getTab,
         getVisitTabs,
         canOpenVisitTab,

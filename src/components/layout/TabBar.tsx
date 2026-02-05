@@ -16,6 +16,7 @@ export const TabBar: React.FC = () => {
         setActiveTab, 
         closeTab, 
         getVisitTabs,
+        requestSave,
         showMaxTabsWarning,
         setShowMaxTabsWarning,
         pendingTabData,
@@ -75,7 +76,7 @@ export const TabBar: React.FC = () => {
     /**
      * Обработка результата модального окна несохраненных изменений
      */
-    const handleUnsavedModalResult = (result: UnsavedChangesResult) => {
+    const handleUnsavedModalResult = async (result: UnsavedChangesResult) => {
         if (!tabToClose) {
             setShowUnsavedModal(false);
             return;
@@ -83,16 +84,13 @@ export const TabBar: React.FC = () => {
         
         switch (result) {
             case 'save':
-                // Сохранение будет выполнено в VisitFormPage через контекст
-                // Здесь просто закрываем вкладку (черновик уже сохранен)
+                await requestSave(tabToClose.id);
                 closeTab(tabToClose.id);
                 break;
             case 'discard':
-                // Закрываем без сохранения и удаляем черновик
                 closeTabAndCleanup(tabToClose);
                 break;
             case 'cancel':
-                // Ничего не делаем
                 break;
         }
         

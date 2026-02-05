@@ -150,6 +150,17 @@ export const VisitsModule: React.FC = () => {
                     </Button>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={visitIdToDelete != null}
+                title="Удалить приём?"
+                message="Приём будет удалён без возможности восстановления."
+                confirmText="Удалить"
+                cancelText="Отмена"
+                variant="danger"
+                onConfirm={handleConfirmDelete}
+                onCancel={() => setVisitIdToDelete(null)}
+            />
         </div>
     );
 };
