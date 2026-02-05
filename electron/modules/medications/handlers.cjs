@@ -114,8 +114,9 @@ const setupMedicationHandlers = () => {
         return await MedicationService.linkToDisease(data);
     }));
 
-    ipcMain.handle('medications:calculate-dose', ensureAuthenticated(async (_, { medicationId, weight, ageMonths, height }) => {
-        return await MedicationService.calculateDose(medicationId, weight, ageMonths, height || null);
+    ipcMain.handle('medications:calculate-dose', ensureAuthenticated(async (_, params) => {
+        const { medicationId, weight, ageMonths, height, ruleIndex } = params || {};
+        return await MedicationService.calculateDose(medicationId, weight, ageMonths, height ?? null, ruleIndex);
     }));
 
     ipcMain.handle('medications:get-by-disease', ensureAuthenticated(async (_, diseaseId) => {

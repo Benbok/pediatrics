@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, AlertCircle, Pill, Beaker } from 'lucide-react';
+import { X, AlertCircle, Pill, Beaker, Calculator } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Medication } from '../../../types';
+import type { MatchingRuleSummary, CalculationBreakdown } from '../../../types/medication.types';
 import { getRouteLabel, requiresDilution, ROUTE_LABELS, RouteOfAdmin } from '../../../utils/routeOfAdmin';
 import { getDiluentLabel, DILUENT_LABELS, DiluentType } from '../../../utils/diluentTypes';
 import { calculateDilution, validateDilutionInput } from '../services/medicationDoseCalcService';
@@ -17,6 +18,14 @@ interface MedicationDoseModalProps {
     patientWeight?: number;
     patientAgeMonths?: number;
     patientHeight?: number | null;
+    /** Подходящие правила для выбора (если несколько) */
+    matchingRulesSummary?: MatchingRuleSummary[];
+    /** Индекс применённого правила */
+    appliedRuleIndex?: number;
+    /** Пошаговый расчёт для отображения */
+    calculationBreakdown?: CalculationBreakdown | null;
+    /** Вызов при смене правила (родитель пересчитает дозу) */
+    onRuleChange?: (ruleIndex: number) => void;
 }
 
 export interface DoseData {
@@ -45,6 +54,10 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
     patientWeight,
     patientAgeMonths,
     patientHeight,
+    matchingRulesSummary,
+    appliedRuleIndex,
+    calculationBreakdown,
+    onRuleChange,
 }) => {
     const [dosing, setDosing] = useState(initialDoseData?.dosing || '');
     const [duration, setDuration] = useState(initialDoseData?.duration || '5-7 дней');
@@ -210,6 +223,55 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {/* Выбор правила при нескольких подходящих */}
+                    {matchingRulesSummary && matchingRulesSummary.length > 1 && onRuleChange && (
+                        <div className="space-y-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                Выберите правило дозирования
+                            </label>
+                            <div className="space-y-2">
+                                {matchingRulesSummary.map(({ ruleIndex, label }) => (
+                                    <label
+                                        key={ruleIndex}
+                                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                                            appliedRuleIndex === ruleIndex
+                                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30'
+                                                : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                                        }`}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="dosingRule"
+                                            checked={appliedRuleIndex === ruleIndex}
+                                            onChange={() => onRuleChange(ruleIndex)}
+                                            className="mt-1 text-primary-600"
+                                        />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Как рассчитана доза */}
+                    {calculationBreakdown?.steps?.length ? (
+                        <div className="space-y-2 p-4 bg-primary-50 dark:bg-primary-950/20 rounded-xl border border-primary-200 dark:border-primary-900/40">
+                            <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                                <Calculator className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                                Как рассчитана доза
+                            </div>
+                            <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-none">
+                                {calculationBreakdown.steps.map((step, i) => (
+                                    <li key={i}>{step}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : matchingRulesSummary?.length ? (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                            Итоговые значения можно скорректировать вручную.
+                        </p>
+                    ) : null}
+
                     {/* Дозировка */}
                     <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">

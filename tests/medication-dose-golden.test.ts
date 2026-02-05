@@ -390,4 +390,32 @@ describe('Golden dose tests (medication dosing)', () => {
         const result = calculateDoseForMedication(oseltamivir, patients.child4m.weightKg, patients.child4m.ageMonths, patients.child4m.heightCm);
         expect(result.canUse).toBe(false);
     });
+
+    it('when multiple rules match, first rule in array is applied (backend returns matchingRuleIndices and supports ruleIndex)', () => {
+        const medicationTwoMatchingRules = {
+            nameRu: 'Test',
+            pediatricDosing: [
+                {
+                    minAgeMonths: 12,
+                    maxAgeMonths: 144,
+                    dosing: { type: 'weight_based' as const, mgPerKg: 10 },
+                    timesPerDay: 2,
+                    instruction: 'First rule 10 mg/kg'
+                },
+                {
+                    minAgeMonths: 12,
+                    maxAgeMonths: 144,
+                    dosing: { type: 'weight_based' as const, mgPerKg: 12 },
+                    timesPerDay: 2,
+                    instruction: 'Second rule 12 mg/kg'
+                }
+            ]
+        };
+        const weight = 20;
+        const ageMonths = 36;
+        const result = calculateDoseForMedication(medicationTwoMatchingRules, weight, ageMonths, null);
+        expect(result.canUse).toBe(true);
+        expect(result.singleDoseMg).toBe(200);
+        expect(result.instruction).toContain('First rule');
+    });
 });

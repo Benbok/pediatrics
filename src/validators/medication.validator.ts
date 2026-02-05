@@ -127,6 +127,7 @@ export const CalculateDoseSchema = z.object({
     weight: z.number().min(0.5, 'Вес должен быть не менее 0.5 кг').max(200, 'Вес должен быть не более 200 кг'),
     ageMonths: z.number().min(0, 'Возраст в месяцах не может быть отрицательным').max(216, 'Возраст не должен превышать 18 лет'),
     height: z.number().min(30, 'Рост должен быть не менее 30 см').max(250, 'Рост должен быть не более 250 см').nullable().optional(),
+    ruleIndex: z.number().int().min(0, 'Индекс правила не может быть отрицательным').optional(),
 });
 
 export type CalculateDoseInput = z.infer<typeof CalculateDoseSchema>;

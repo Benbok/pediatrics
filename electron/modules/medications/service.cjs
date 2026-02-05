@@ -305,13 +305,67 @@ const MedicationService = {
     },
 
     /**
+     * Build short label for a dosing rule (for rule selector UI)
+     */
+    _buildRuleLabel(rule, ruleIndex) {
+        const minA = rule.minAgeMonths != null ? rule.minAgeMonths : 0;
+        const maxA = rule.maxAgeMonths != null ? rule.maxAgeMonths : 999;
+        const ageStr = `${minA}–${maxA} мес`;
+        const weightParts = [];
+        if (rule.minWeightKg != null) weightParts.push(`от ${rule.minWeightKg} кг`);
+        if (rule.maxWeightKg != null) weightParts.push(`до ${rule.maxWeightKg} кг`);
+        const weightStr = weightParts.length ? weightParts.join(', ') + ', ' : '';
+        let doseStr = '';
+        if (rule.dosing) {
+            const d = rule.dosing;
+            if (d.type === 'weight_based' && d.mgPerKg != null) doseStr = `по весу ${d.mgPerKg} мг/кг`;
+            else if (d.type === 'bsa_based' && d.mgPerM2 != null) doseStr = `по ППТ ${d.mgPerM2} мг/м²`;
+            else if (d.type === 'fixed' && d.fixedDose) {
+                const min = d.fixedDose.min != null ? d.fixedDose.min : 0;
+                const max = d.fixedDose.max;
+                doseStr = max != null ? `фикс. ${min}–${max} мг` : `фикс. ${min} мг`;
+            } else if (d.type === 'age_based' && d.ageBasedDose?.dose != null) doseStr = `по возрасту ${d.ageBasedDose.dose} мг`;
+        } else if (rule.mgPerKg != null) doseStr = `по весу ${rule.mgPerKg} мг/кг`;
+        return `${ageStr}${weightStr ? ', ' + weightStr : ''}${doseStr ? ', ' + doseStr : ''}`;
+    },
+
+    /**
+     * Build calculation breakdown steps for transparency
+     */
+    _buildBreakdownSteps(rule, formulaType, childWeight, bsa, rawSingleMg, singleAfterCap, maxSingleLimit, timesPerDay, rawDailyMg, dailyAfterCap, maxDailyLimit) {
+        const steps = [];
+        steps.push(`Вес пациента: ${childWeight} кг`);
+        const label = this._buildRuleLabel(rule, 0);
+        steps.push(`По правилу: ${label}`);
+        if (formulaType === 'weight_based' && rule.dosing?.mgPerKg != null) {
+            const mgPerKg = rule.dosing.mgPerKg;
+            steps.push(`Разовая доза: ${childWeight} × ${mgPerKg} = ${rawSingleMg} мг`);
+        } else if (formulaType === 'bsa_based' && bsa != null) {
+            steps.push(`ППТ: ${bsa} м²`);
+            steps.push(`Разовая доза: ${bsa} × ${rule.dosing?.mgPerM2} = ${rawSingleMg} мг`);
+        } else if (formulaType === 'fixed' || formulaType === 'age_based') {
+            steps.push(`Разовая доза: ${rawSingleMg} мг`);
+        }
+        if (maxSingleLimit != null) {
+            steps.push(`Ограничение макс. разовая ${Math.round(maxSingleLimit)} мг: ${singleAfterCap} мг`);
+        }
+        steps.push(`Кратность: ${timesPerDay} раз в день`);
+        steps.push(`Суточная доза: ${rawSingleMg} × ${timesPerDay} = ${rawDailyMg} мг`);
+        if (maxDailyLimit != null) {
+            steps.push(`Ограничение макс. суточная ${Math.round(maxDailyLimit)} мг: ${dailyAfterCap} мг`);
+        }
+        return steps;
+    },
+
+    /**
      * Calculate dosage based on child's age/weight/height
      * @param {number} medicationId - ID препарата
      * @param {number} childWeight - вес в кг (текущий, не при рождении!)
      * @param {number} childAgeMonths - возраст в месяцах
      * @param {number} [childHeight] - рост в см (опционально, для расчета ППТ)
+     * @param {number} [ruleIndex] - индекс правила в pediatricDosing для явного выбора (если несколько подходят)
      */
-    async calculateDose(medicationId, childWeight, childAgeMonths, childHeight = null) {
+    async calculateDose(medicationId, childWeight, childAgeMonths, childHeight = null, ruleIndex = undefined) {
         const medication = await this.getById(medicationId);
         if (!medication) throw new Error('Препарат не найден');
 
@@ -322,21 +376,37 @@ const MedicationService = {
             ? medication.forms
             : safeJsonParse(medication.forms, []);
 
-        // Find matching rule by age and weight
-        const rule = dosingRules.find(r => {
-            const ageMatch = childAgeMonths >= (r.minAgeMonths || 0) &&
-                            childAgeMonths <= (r.maxAgeMonths || 999);
+        const ruleMatches = (r) => {
+            const ageMatch = childAgeMonths >= (r.minAgeMonths != null ? r.minAgeMonths : 0) && childAgeMonths <= (r.maxAgeMonths != null ? r.maxAgeMonths : 999);
             const weightMatch = !r.minWeightKg || childWeight >= r.minWeightKg;
             const weightMaxMatch = !r.maxWeightKg || childWeight <= r.maxWeightKg;
             return ageMatch && weightMatch && weightMaxMatch;
-        });
+        };
 
-        if (!rule) {
+        const matchingRuleIndices = dosingRules
+            .map((r, idx) => (ruleMatches(r) ? idx : -1))
+            .filter((idx) => idx >= 0);
+
+        if (matchingRuleIndices.length === 0) {
+            logger.warn('[MedicationService] No dosing rule matched', { medicationId, childWeight, childAgeMonths });
             return {
                 canUse: false,
                 message: 'Нет данных по дозированию для данного возраста и веса'
             };
         }
+
+        let appliedRuleIndex;
+        if (ruleIndex != null && ruleIndex >= 0 && matchingRuleIndices.includes(ruleIndex)) {
+            appliedRuleIndex = ruleIndex;
+        } else {
+            appliedRuleIndex = matchingRuleIndices[0];
+        }
+        const rule = dosingRules[appliedRuleIndex];
+
+        const matchingRulesSummary = matchingRuleIndices.map((idx) => ({
+            ruleIndex: idx,
+            label: this._buildRuleLabel(dosingRules[idx], idx)
+        }));
 
         const { calculateBSA } = require('../../utils/anthropometry.cjs');
         let bsa = null;
@@ -348,7 +418,7 @@ const MedicationService = {
             }
         }
 
-        // Determine dosing type and calculate
+        let formulaType = 'weight_based';
         let singleDoseMg = null;
         let dailyDoseMg = null;
         let instruction = '';
@@ -357,54 +427,40 @@ const MedicationService = {
 
         if (rule.dosing) {
             const dosing = rule.dosing;
-
+            formulaType = dosing.type || 'weight_based';
             if (rule.formId) {
-                selectedForm = forms.find(form => form.id === rule.formId) || null;
+                selectedForm = forms.find((f) => f.id === rule.formId) || null;
             }
-            
             if (dosing.type === 'weight_based' && dosing.mgPerKg) {
-                // Дозирование по весу (мг/кг)
                 singleDoseMg = childWeight * dosing.mgPerKg;
-                if (dosing.maxMgPerKg) {
-                    singleDoseMg = Math.min(singleDoseMg, childWeight * dosing.maxMgPerKg);
-                }
+                if (dosing.maxMgPerKg) singleDoseMg = Math.min(singleDoseMg, childWeight * dosing.maxMgPerKg);
             } else if (dosing.type === 'bsa_based' && dosing.mgPerM2 && bsa) {
-                // Дозирование по площади тела (мг/м²)
                 singleDoseMg = bsa * dosing.mgPerM2;
             } else if (dosing.type === 'fixed' && dosing.fixedDose) {
-                // Фиксированная доза
                 if (dosing.fixedDose.unit === 'ml') {
                     singleDoseMl = dosing.fixedDose.min || dosing.fixedDose.max || 0;
-                    if (selectedForm?.mgPerMl) {
-                        singleDoseMg = singleDoseMl * selectedForm.mgPerMl;
-                    }
+                    if (selectedForm?.mgPerMl) singleDoseMg = singleDoseMl * selectedForm.mgPerMl;
                 } else {
-                    singleDoseMg = dosing.fixedDose.min || dosing.fixedDose.max || 0;
+                    singleDoseMg = dosing.fixedDose.min != null ? dosing.fixedDose.min : (dosing.fixedDose.max != null ? dosing.fixedDose.max : 0);
                 }
             } else if (dosing.type === 'age_based' && dosing.ageBasedDose) {
-                // Дозирование только по возрасту
                 singleDoseMg = dosing.ageBasedDose.dose;
             }
         } else if (rule.mgPerKg) {
-            // Старый формат (backward compatibility)
             singleDoseMg = childWeight * rule.mgPerKg;
         }
 
-        if (singleDoseMg !== null) {
-            dailyDoseMg = singleDoseMg * (rule.timesPerDay || 1);
-            
-            // Проверка ограничений
-            const maxSingleDoseLimit = rule.maxSingleDose ?? (rule.maxSingleDosePerKg ? rule.maxSingleDosePerKg * childWeight : null);
-            const maxDailyDoseLimit = rule.maxDailyDose ?? (rule.maxDailyDosePerKg ? rule.maxDailyDosePerKg * childWeight : null);
-            if (maxSingleDoseLimit) {
-                singleDoseMg = Math.min(singleDoseMg, maxSingleDoseLimit);
-            }
-            if (maxDailyDoseLimit) {
-                dailyDoseMg = Math.min(dailyDoseMg, maxDailyDoseLimit);
-            }
+        const timesPerDay = rule.timesPerDay || 1;
+        const maxSingleDoseLimit = rule.maxSingleDose != null ? rule.maxSingleDose : (rule.maxSingleDosePerKg ? rule.maxSingleDosePerKg * childWeight : null);
+        const maxDailyDoseLimit = rule.maxDailyDose != null ? rule.maxDailyDose : (rule.maxDailyDosePerKg ? rule.maxDailyDosePerKg * childWeight : null);
 
-            instruction = rule.instruction || 
-                (singleDoseMg ? `По ${Math.round(singleDoseMg)}мг ${rule.timesPerDay || 1} раза в день` : 'См. инструкцию');
+        let rawSingleMg = singleDoseMg;
+        let rawDailyMg = singleDoseMg != null ? singleDoseMg * timesPerDay : null;
+        if (singleDoseMg != null) {
+            dailyDoseMg = singleDoseMg * timesPerDay;
+            if (maxSingleDoseLimit) singleDoseMg = Math.min(singleDoseMg, maxSingleDoseLimit);
+            if (maxDailyDoseLimit) dailyDoseMg = Math.min(dailyDoseMg, maxDailyDoseLimit);
+            instruction = rule.instruction || (singleDoseMg ? `По ${Math.round(singleDoseMg)}мг ${timesPerDay} раза в день` : 'См. инструкцию');
         } else {
             instruction = rule.instruction || 'См. инструкцию';
         }
@@ -413,9 +469,9 @@ const MedicationService = {
             singleDoseMl = singleDoseMg / selectedForm.mgPerMl;
         }
 
+        const maxSingleDoseWarn = rule.maxSingleDose != null ? rule.maxSingleDose : (rule.maxSingleDosePerKg ? rule.maxSingleDosePerKg * childWeight : null);
+        const maxDailyDoseWarn = rule.maxDailyDose != null ? rule.maxDailyDose : (rule.maxDailyDosePerKg ? rule.maxDailyDosePerKg * childWeight : null);
         const warnings = [];
-        const maxSingleDoseWarn = rule.maxSingleDose ?? (rule.maxSingleDosePerKg ? rule.maxSingleDosePerKg * childWeight : null);
-        const maxDailyDoseWarn = rule.maxDailyDose ?? (rule.maxDailyDosePerKg ? rule.maxDailyDosePerKg * childWeight : null);
         if (maxSingleDoseWarn && singleDoseMg && singleDoseMg > maxSingleDoseWarn) {
             warnings.push(`Превышена максимальная разовая доза (${Math.round(maxSingleDoseWarn)}мг)`);
         }
@@ -423,7 +479,18 @@ const MedicationService = {
             warnings.push(`Превышена максимальная суточная доза (${Math.round(maxDailyDoseWarn)}мг)`);
         }
 
-        // Добавить информацию об инфузии
+        let calculationBreakdown = null;
+        if (rawSingleMg != null && rawDailyMg != null) {
+            calculationBreakdown = {
+                formulaType,
+                steps: this._buildBreakdownSteps(
+                    rule, formulaType, childWeight, bsa,
+                    rawSingleMg, singleDoseMg, maxSingleDoseLimit, timesPerDay,
+                    rawDailyMg, dailyDoseMg, maxDailyDoseLimit
+                )
+            };
+        }
+
         let infusionDetails = null;
         if (rule.infusion) {
             infusionDetails = {
@@ -436,23 +503,34 @@ const MedicationService = {
             };
         }
 
+        logger.info('[MedicationService] Dose calculated', {
+            medicationId,
+            appliedRuleIndex,
+            matchingCount: matchingRuleIndices.length,
+            singleDoseMg: singleDoseMg != null ? Math.round(singleDoseMg * 10) / 10 : null
+        });
+
         return {
             canUse: true,
-            singleDoseMg: singleDoseMg ? Math.round(singleDoseMg * 10) / 10 : null,
-            singleDoseMl: singleDoseMl ? Math.round(singleDoseMl * 100) / 100 : null,
-            dailyDoseMg: dailyDoseMg ? Math.round(dailyDoseMg * 10) / 10 : null,
-            timesPerDay: rule.timesPerDay || 1,
-            intervalHours: rule.intervalHours || null,
-            maxSingleDose: maxSingleDoseWarn || null,
-            maxDailyDose: maxDailyDoseWarn || null,
-            minInterval: medication.minInterval || null,
-            maxDosesPerDay: medication.maxDosesPerDay || null,
-            routeOfAdmin: rule.routeOfAdmin || medication.routeOfAdmin || null,
+            singleDoseMg: singleDoseMg != null ? Math.round(singleDoseMg * 10) / 10 : null,
+            singleDoseMl: singleDoseMl != null ? Math.round(singleDoseMl * 100) / 100 : null,
+            dailyDoseMg: dailyDoseMg != null ? Math.round(dailyDoseMg * 10) / 10 : null,
+            timesPerDay,
+            intervalHours: rule.intervalHours != null ? rule.intervalHours : null,
+            maxSingleDose: maxSingleDoseWarn != null ? maxSingleDoseWarn : null,
+            maxDailyDose: maxDailyDoseWarn != null ? maxDailyDoseWarn : null,
+            minInterval: medication.minInterval != null ? medication.minInterval : null,
+            maxDosesPerDay: medication.maxDosesPerDay != null ? medication.maxDosesPerDay : null,
+            routeOfAdmin: rule.routeOfAdmin || (medication.routeOfAdmin != null ? medication.routeOfAdmin : null),
             form: selectedForm,
             infusion: infusionDetails,
             instruction,
             warnings: warnings.length > 0 ? warnings : null,
-            bsa: bsa ? Math.round(bsa * 100) / 100 : null
+            bsa: bsa != null ? Math.round(bsa * 100) / 100 : null,
+            matchingRuleIndices,
+            appliedRuleIndex,
+            matchingRulesSummary,
+            calculationBreakdown,
         };
     },
 

@@ -1,3 +1,5 @@
+import type { DoseCalculationResult } from './types/medication.types';
+
 // ============= PATIENTS MODULE TYPES =============
 // Basic patient information ONLY - no vaccination logic
 
@@ -695,7 +697,7 @@ export interface DilutionInfo {
 
 export interface MedicationRecommendation {
   medication: Medication;
-  recommendedDose: any; // DoseCalculationResult
+  recommendedDose: DoseCalculationResult | null;
   canUse: boolean;
   warnings: string[];
   priority?: number;
@@ -882,7 +884,7 @@ declare global {
       upsertMedication: (data: Medication) => Promise<Medication>;
       deleteMedication: (id: number) => Promise<boolean>;
       linkMedicationToDisease: (data: { diseaseId: number; medicationId: number; priority?: number; dosing?: string; duration?: string }) => Promise<any>;
-      calculateDose: (params: { medicationId: number; weight: number; ageMonths: number; height?: number | null }) => Promise<any>;
+      calculateDose: (params: { medicationId: number; weight: number; ageMonths: number; height?: number | null; ruleIndex?: number }) => Promise<DoseCalculationResult>;
       getMedicationsByDisease: (diseaseId: number) => Promise<Medication[]>;
       checkDuplicateMedication: (nameRu: string, excludeId?: number) => Promise<{
         success: boolean;

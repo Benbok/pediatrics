@@ -22,6 +22,7 @@ import { DiseaseSearchModal } from './components/DiseaseSearchModal';
 import { DiseaseSidePanel } from './components/DiseaseSidePanel';
 import { InformedConsentForm } from './components/InformedConsentForm';
 import { VisitTemplateSelector } from './components/VisitTemplateSelector';
+import type { DoseCalculationResult } from '../../types/medication.types';
 import { MedicationDoseModal, DoseData } from './components/MedicationDoseModal';
 import { MedicationTemplateSelector } from './components/MedicationTemplateSelector';
 import { MedicationTemplateBatchEditor } from './components/MedicationTemplateBatchEditor';
@@ -122,6 +123,8 @@ export const VisitFormPage: React.FC = () => {
     const [selectedMedicationForDose, setSelectedMedicationForDose] = useState<Medication | null>(null);
     const [calculatedDoseData, setCalculatedDoseData] = useState<Partial<DoseData> | null>(null);
     const [pendingMedicationId, setPendingMedicationId] = useState<number | null>(null);
+    const [lastDoseResult, setLastDoseResult] = useState<DoseCalculationResult | null>(null);
+    const [doseCalcParams, setDoseCalcParams] = useState<{ weight: number; ageMonths: number; height: number | null } | null>(null);
 
     // Шаблоны назначений
     const [isMedicationTemplateSelectorOpen, setIsMedicationTemplateSelectorOpen] = useState(false);
@@ -1050,13 +1053,13 @@ export const VisitFormPage: React.FC = () => {
             }
 
             // Рассчитываем дозировку
-            let doseInfo: any = null;
+            let doseInfo: DoseCalculationResult | null = null;
             try {
                 doseInfo = await medicationService.calculateDose(
                     medicationId,
                     currentWeight,
                     patientAgeMonths,
-                    currentHeight
+                    currentHeight ?? undefined
                 );
             } catch (err) {
                 logger.error('[VisitFormPage] Dose calc failed on selection', {
@@ -1068,20 +1071,20 @@ export const VisitFormPage: React.FC = () => {
                 });
             }
 
-            // Подготавливаем начальные данные для модального окна
             const initialDoseData: Partial<DoseData> = {
-                dosing: doseInfo?.instruction || recommendation?.recommendedDose?.instruction || '',
-                duration: recommendation?.duration || '5-7 дней',
-                singleDoseMg: doseInfo?.singleDoseMg ?? recommendation?.recommendedDose?.singleDoseMg,
-                timesPerDay: doseInfo?.timesPerDay ?? recommendation?.recommendedDose?.timesPerDay,
-                routeOfAdmin: medication?.routeOfAdmin || null,
-                dilution: null // Разведение настраивается вручную в модальном окне
+                dosing: doseInfo?.instruction ?? recommendation?.recommendedDose?.instruction ?? '',
+                duration: recommendation?.duration ?? '5-7 дней',
+                singleDoseMg: doseInfo?.singleDoseMg ?? recommendation?.recommendedDose?.singleDoseMg ?? null,
+                timesPerDay: doseInfo?.timesPerDay ?? recommendation?.recommendedDose?.timesPerDay ?? null,
+                routeOfAdmin: medication?.routeOfAdmin ?? null,
+                dilution: null
             };
 
-            // Открываем модальное окно для редактирования дозировки
             setSelectedMedicationForDose(medication);
             setCalculatedDoseData(initialDoseData);
             setPendingMedicationId(medicationId);
+            setLastDoseResult(doseInfo ?? null);
+            setDoseCalcParams({ weight: currentWeight, ageMonths: patientAgeMonths, height: currentHeight ?? null });
             setIsDoseModalOpen(true);
         }
     };
@@ -1119,26 +1122,26 @@ export const VisitFormPage: React.FC = () => {
                 med.id!,
                 currentWeight,
                 patientAgeMonths,
-                currentHeight
+                currentHeight ?? undefined
             );
 
-            // Подготавливаем начальные данные для модального окна
             const initialDoseData: Partial<DoseData> = {
                 dosing: doseInfo.canUse ? doseInfo.instruction : '',
                 duration: '5-7 дней',
-                singleDoseMg: doseInfo.singleDoseMg,
-                timesPerDay: doseInfo.timesPerDay,
-                routeOfAdmin: med?.routeOfAdmin || null,
-                dilution: null // Разведение настраивается вручную в модальном окне
+                singleDoseMg: doseInfo.singleDoseMg ?? null,
+                timesPerDay: doseInfo.timesPerDay ?? null,
+                routeOfAdmin: med?.routeOfAdmin ?? null,
+                dilution: null
             };
 
-            // Открываем модальное окно для редактирования дозировки
             setSelectedMedicationForDose(med);
             setCalculatedDoseData(initialDoseData);
             setPendingMedicationId(med.id!);
+            setLastDoseResult(doseInfo);
+            setDoseCalcParams({ weight: currentWeight, ageMonths: patientAgeMonths, height: currentHeight ?? null });
             setIsDoseModalOpen(true);
         } catch (err) {
-            logger.error('[VisitFormPage] Dose calc failed', { error: err, medicationId: med.id, weight: currentWeight, ageMonths, height: currentHeight });
+            logger.error('[VisitFormPage] Dose calc failed', { error: err, medicationId: med.id, weight: currentWeight, ageMonths: patientAgeMonths, height: currentHeight });
             setError('Не удалось рассчитать дозировку');
             setValidationErrors(['Не удалось рассчитать дозировку для препарата']);
             setIsErrorModalOpen(true);
@@ -1188,7 +1191,38 @@ export const VisitFormPage: React.FC = () => {
         setSelectedMedicationForDose(null);
         setCalculatedDoseData(null);
         setPendingMedicationId(null);
+        setLastDoseResult(null);
+        setDoseCalcParams(null);
     };
+
+    // Смена правила дозирования в модалке (пересчёт и обновление полей)
+    const handleDoseRuleChange = useCallback(async (ruleIndex: number) => {
+        if (!selectedMedicationForDose?.id || !doseCalcParams) return;
+        try {
+            const result = await medicationService.calculateDose(
+                selectedMedicationForDose.id,
+                doseCalcParams.weight,
+                doseCalcParams.ageMonths,
+                doseCalcParams.height ?? undefined,
+                ruleIndex
+            );
+            setLastDoseResult(result);
+            setCalculatedDoseData({
+                dosing: result.instruction,
+                duration: calculatedDoseData?.duration ?? '5-7 дней',
+                singleDoseMg: result.singleDoseMg ?? null,
+                timesPerDay: result.timesPerDay ?? null,
+                routeOfAdmin: result.routeOfAdmin ?? selectedMedicationForDose.routeOfAdmin ?? null,
+                dilution: null
+            });
+        } catch (err) {
+            logger.error('[VisitFormPage] Dose recalc on rule change failed', {
+                error: err,
+                medicationId: selectedMedicationForDose.id,
+                ruleIndex
+            });
+        }
+    }, [selectedMedicationForDose?.id, doseCalcParams, calculatedDoseData?.duration]);
 
     // ==================== ОБРАБОТЧИКИ ДИАГНОСТИЧЕСКИХ ИССЛЕДОВАНИЙ ====================
 
@@ -1945,6 +1979,8 @@ export const VisitFormPage: React.FC = () => {
                                                 // Редактирование дозировки
                                                 try {
                                                     const med = await medicationService.getMedication(p.medicationId);
+                                                    setLastDoseResult(null);
+                                                    setDoseCalcParams(null);
                                                     setSelectedMedicationForDose(med);
                                                     setCalculatedDoseData({
                                                         dosing: p.dosing || '',
@@ -2427,6 +2463,10 @@ export const VisitFormPage: React.FC = () => {
                     patientWeight={formData.currentWeight || undefined}
                     patientAgeMonths={ageMonths}
                     patientHeight={formData.currentHeight || null}
+                    matchingRulesSummary={lastDoseResult?.matchingRulesSummary}
+                    appliedRuleIndex={lastDoseResult?.appliedRuleIndex}
+                    calculationBreakdown={lastDoseResult?.calculationBreakdown ?? null}
+                    onRuleChange={handleDoseRuleChange}
                 />
             )}
 

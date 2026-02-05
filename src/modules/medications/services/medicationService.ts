@@ -1,4 +1,5 @@
 import { Medication } from '../../../types';
+import type { DoseCalculationResult } from '../../../types/medication.types';
 import { dataEvents } from '../../../services/dataEvents';
 import { MedicationSchema, CalculateDoseSchema, LinkMedicationToDiseaseSchema } from '../../../validators/medication.validator';
 import { normalizeMedicationRoutes } from '../../../utils/routeOfAdmin';
@@ -68,21 +69,41 @@ export const medicationService = {
     },
 
     /**
-     * Calculate dosage for child
+     * Calculate dosage for child. Optionally pass ruleIndex to use a specific matching rule.
      */
-    async calculateDose(medicationId: number, weight: number, ageMonths: number, height?: number | null): Promise<any> {
-        // Validate input using Zod
-        const validation = CalculateDoseSchema.safeParse({ medicationId, weight, ageMonths, height });
+    async calculateDose(
+        medicationId: number,
+        weight: number,
+        ageMonths: number,
+        height?: number | null,
+        ruleIndex?: number
+    ): Promise<DoseCalculationResult> {
+        const validation = CalculateDoseSchema.safeParse({
+            medicationId,
+            weight,
+            ageMonths,
+            height: height ?? undefined,
+            ruleIndex,
+        });
         if (!validation.success) {
-            const errorMsg = validation.error.issues.map(i => i.message).join(', ');
+            const errorMsg = validation.error.issues.map((i) => i.message).join(', ');
             throw new Error(`Ошибка валидации: ${errorMsg}`);
         }
 
         try {
             return await window.electronAPI.calculateDose(validation.data);
-        } catch (error: any) {
-            logger.error('[MedicationService] Dose calculation failed', { error, medicationId, weight, ageMonths, height });
-            throw new Error(error.message || 'Ошибка при расчете дозировки');
+        } catch (error: unknown) {
+            logger.error('[MedicationService] Dose calculation failed', {
+                error,
+                medicationId,
+                weight,
+                ageMonths,
+                height,
+                ruleIndex,
+            });
+            throw new Error(
+                error instanceof Error ? error.message : 'Ошибка при расчете дозировки'
+            );
         }
     },
 

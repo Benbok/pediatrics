@@ -75,6 +75,22 @@ export interface AdultDosingRule {
 }
 
 /**
+ * Краткое описание правила для выбора в UI
+ */
+export interface MatchingRuleSummary {
+  ruleIndex: number;
+  label: string;
+}
+
+/**
+ * Пошаговый расчёт дозы для отображения пользователю
+ */
+export interface CalculationBreakdown {
+  formulaType: 'weight_based' | 'bsa_based' | 'fixed' | 'age_based';
+  steps: string[];
+}
+
+/**
  * Результат расчета дозировки
  */
 export interface DoseCalculationResult {
@@ -90,4 +106,12 @@ export interface DoseCalculationResult {
   warnings?: string[] | null;
   bsa?: number | null; // Площадь тела, если использовалась
   message?: string; // Сообщение об ошибке, если canUse = false
+  /** Индексы правил в pediatricDosing, подходящих под возраст/вес */
+  matchingRuleIndices?: number[];
+  /** Индекс правила в pediatricDosing, по которому посчитана доза */
+  appliedRuleIndex?: number;
+  /** Краткие подписи для выбора правила в модалке */
+  matchingRulesSummary?: MatchingRuleSummary[];
+  /** Пошаговый расчёт для прозрачности */
+  calculationBreakdown?: CalculationBreakdown;
 }

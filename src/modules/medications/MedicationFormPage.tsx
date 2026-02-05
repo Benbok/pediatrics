@@ -636,225 +636,225 @@ export const MedicationFormPage: React.FC = () => {
                         </Button>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                         {(formData.pediatricDosing as any[] || []).map((rule, idx) => (
-                            <div key={idx} className="p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 relative group animate-in slide-in-from-right-2">
+                            <div key={idx} className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 relative group animate-in slide-in-from-right-2">
                                 <button
                                     type="button"
                                     onClick={() => removeDosingRule(idx)}
-                                    className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                    className="absolute top-4 right-4 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                    title="Удалить правило"
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
 
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Возраст (мес)</label>
-                                            <div className="flex items-center gap-2">
+                                <div className="space-y-6 pr-8">
+                                    {/* Критерии применения: возраст и вес */}
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Критерии применения</h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Возраст, мес</label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        value={rule.minAgeMonths ?? ''}
+                                                        onChange={e => updateDosingRule(idx, { minAgeMonths: e.target.value === '' ? 0 : Number(e.target.value) })}
+                                                        placeholder="От"
+                                                        className="h-10 text-center flex-1 min-w-0"
+                                                    />
+                                                    <span className="text-slate-400 shrink-0">—</span>
+                                                    <Input
+                                                        type="number"
+                                                        value={rule.maxAgeMonths ?? ''}
+                                                        onChange={e => updateDosingRule(idx, { maxAgeMonths: e.target.value === '' ? 216 : Number(e.target.value) })}
+                                                        placeholder="До"
+                                                        className="h-10 text-center flex-1 min-w-0"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Вес от, кг</label>
                                                 <Input
                                                     type="number"
-                                                    value={rule.minAgeMonths || 0}
-                                                    onChange={e => updateDosingRule(idx, { minAgeMonths: Number(e.target.value) })}
-                                                    placeholder="От"
-                                                    className="h-10 text-center"
+                                                    step="0.1"
+                                                    value={rule.minWeightKg ?? ''}
+                                                    onChange={e => updateDosingRule(idx, { minWeightKg: e.target.value === '' ? null : Number(e.target.value) })}
+                                                    placeholder="не ограничено"
+                                                    className="h-10"
                                                 />
-                                                <span className="text-slate-300">-</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Вес до, кг</label>
                                                 <Input
                                                     type="number"
-                                                    value={rule.maxAgeMonths || 216}
-                                                    onChange={e => updateDosingRule(idx, { maxAgeMonths: Number(e.target.value) })}
-                                                    placeholder="До"
-                                                    className="h-10 text-center"
+                                                    step="0.1"
+                                                    value={rule.maxWeightKg ?? ''}
+                                                    onChange={e => updateDosingRule(idx, { maxWeightKg: e.target.value === '' ? null : Number(e.target.value) })}
+                                                    placeholder="не ограничено"
+                                                    className="h-10"
                                                 />
                                             </div>
                                         </div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">Пустые поля веса — правило только по возрасту. Пример: до 20 кг → «Вес до» = 20.</p>
+                                    </div>
 
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Путь введения</label>
-                                            <select
-                                                value={rule.routeOfAdmin || ''}
-                                                onChange={e => updateDosingRule(idx, { routeOfAdmin: e.target.value || null })}
-                                                className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-                                            >
-                                                <option value="">Не указано</option>
-                                                <option value="oral">Перорально</option>
-                                                <option value="rectal">Ректально</option>
-                                                <option value="iv_bolus">В/В болюсно</option>
-                                                <option value="iv_infusion">В/В капельно</option>
-                                                <option value="iv_slow">В/В медленно</option>
-                                                <option value="im">В/М</option>
-                                                <option value="sc">П/К</option>
-                                                <option value="sublingual">Сублингвально</option>
-                                                <option value="topical">Наружно</option>
-                                                <option value="inhalation">Ингаляционно</option>
-                                                <option value="intranasal">Интраназально</option>
-                                                <option value="transdermal">Трансдермально</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Тип дозирования</label>
-                                            <select
-                                                value={rule.dosing?.type || 'weight_based'}
-                                                onChange={e => updateDosingRule(idx, { 
-                                                    dosing: { 
-                                                        ...rule.dosing, 
-                                                        type: e.target.value 
-                                                    } 
-                                                })}
-                                                className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-                                            >
-                                                <option value="weight_based">По весу (мг/кг)</option>
-                                                <option value="bsa_based">По ППТ (мг/м²)</option>
-                                                <option value="fixed">Фиксированная доза</option>
-                                                <option value="age_based">По возрасту</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">
-                                                {rule.dosing?.type === 'weight_based' ? 'мг/кг' : 
-                                                 rule.dosing?.type === 'bsa_based' ? 'мг/м²' : 
-                                                 rule.dosing?.type === 'fixed' ? 'Доза (мг)' : 
-                                                 rule.dosing?.type === 'age_based' ? 'Доза (мг)' : 'мг/кг'}
-                                            </label>
-                                            {rule.dosing?.type === 'weight_based' && (
-                                                <Input
-                                                    type="number"
-                                                    step="0.1"
-                                                    value={rule.dosing?.mgPerKg || 0}
-                                                    onChange={e => updateDosingRule(idx, { 
-                                                        dosing: { 
-                                                            ...rule.dosing, 
-                                                            mgPerKg: Number(e.target.value) 
-                                                        } 
-                                                    })}
-                                                    className="h-10"
-                                                />
-                                            )}
-                                            {rule.dosing?.type === 'bsa_based' && (
-                                                <Input
-                                                    type="number"
-                                                    step="0.1"
-                                                    value={rule.dosing?.mgPerM2 || 0}
-                                                    onChange={e => updateDosingRule(idx, { 
-                                                        dosing: { 
-                                                            ...rule.dosing, 
-                                                            mgPerM2: Number(e.target.value) 
-                                                        } 
-                                                    })}
-                                                    className="h-10"
-                                                />
-                                            )}
-                                            {rule.dosing?.type === 'age_based' && (
-                                                <Input
-                                                    type="number"
-                                                    step="0.1"
-                                                    value={rule.dosing?.ageBasedDose?.dose || 0}
-                                                    onChange={e => updateDosingRule(idx, { 
-                                                        dosing: { 
-                                                            ...rule.dosing, 
-                                                            ageBasedDose: {
-                                                                dose: Number(e.target.value),
-                                                                unit: 'mg'
-                                                            }
-                                                        } 
-                                                    })}
-                                                    className="h-10"
-                                                />
-                                            )}
-                                            {rule.dosing?.type === 'fixed' && (
-                                                <div className="flex gap-2">
+                                    {/* Способ введения и тип дозы */}
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Способ введения и доза</h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Путь введения</label>
+                                                <select
+                                                    value={rule.routeOfAdmin || ''}
+                                                    onChange={e => updateDosingRule(idx, { routeOfAdmin: e.target.value || null })}
+                                                    className="h-10 w-full min-w-0 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
+                                                >
+                                                    <option value="">Не указано</option>
+                                                    <option value="oral">Перорально</option>
+                                                    <option value="rectal">Ректально</option>
+                                                    <option value="iv_bolus">В/В болюсно</option>
+                                                    <option value="iv_infusion">В/В капельно</option>
+                                                    <option value="iv_slow">В/В медленно</option>
+                                                    <option value="im">В/М</option>
+                                                    <option value="sc">П/К</option>
+                                                    <option value="sublingual">Сублингвально</option>
+                                                    <option value="topical">Наружно</option>
+                                                    <option value="inhalation">Ингаляционно</option>
+                                                    <option value="intranasal">Интраназально</option>
+                                                    <option value="transdermal">Трансдермально</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Тип дозирования</label>
+                                                <select
+                                                    value={rule.dosing?.type || 'weight_based'}
+                                                    onChange={e => updateDosingRule(idx, { dosing: { ...rule.dosing, type: e.target.value } })}
+                                                    className="h-10 w-full min-w-0 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
+                                                >
+                                                    <option value="weight_based">По весу (мг/кг)</option>
+                                                    <option value="bsa_based">По ППТ (мг/м²)</option>
+                                                    <option value="fixed">Фиксированная доза</option>
+                                                    <option value="age_based">По возрасту</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                    {rule.dosing?.type === 'weight_based' ? 'мг/кг' :
+                                                     rule.dosing?.type === 'bsa_based' ? 'мг/м²' :
+                                                     rule.dosing?.type === 'fixed' ? 'Доза, мг (мин — макс)' : 'Доза, мг'}
+                                                </label>
+                                                {rule.dosing?.type === 'weight_based' && (
                                                     <Input
                                                         type="number"
-                                                        value={rule.dosing?.fixedDose?.min || 0}
-                                                        onChange={e => updateDosingRule(idx, { 
-                                                            dosing: { 
-                                                                ...rule.dosing, 
-                                                                fixedDose: { 
-                                                                    ...rule.dosing?.fixedDose,
-                                                                    min: Number(e.target.value),
-                                                                    unit: 'mg'
-                                                                } 
-                                                            } 
-                                                        })}
-                                                        placeholder="От"
+                                                        step="0.1"
+                                                        value={rule.dosing?.mgPerKg ?? ''}
+                                                        onChange={e => updateDosingRule(idx, { dosing: { ...rule.dosing, mgPerKg: Number(e.target.value) } })}
                                                         className="h-10"
                                                     />
+                                                )}
+                                                {rule.dosing?.type === 'bsa_based' && (
                                                     <Input
                                                         type="number"
-                                                        value={rule.dosing?.fixedDose?.max || 0}
-                                                        onChange={e => updateDosingRule(idx, { 
-                                                            dosing: { 
-                                                                ...rule.dosing, 
-                                                                fixedDose: { 
-                                                                    ...rule.dosing?.fixedDose,
-                                                                    max: Number(e.target.value),
-                                                                    unit: 'mg'
-                                                                } 
-                                                            } 
-                                                        })}
-                                                        placeholder="До"
+                                                        step="0.1"
+                                                        value={rule.dosing?.mgPerM2 ?? ''}
+                                                        onChange={e => updateDosingRule(idx, { dosing: { ...rule.dosing, mgPerM2: Number(e.target.value) } })}
                                                         className="h-10"
                                                     />
-                                                </div>
-                                            )}
+                                                )}
+                                                {rule.dosing?.type === 'age_based' && (
+                                                    <Input
+                                                        type="number"
+                                                        step="0.1"
+                                                        value={rule.dosing?.ageBasedDose?.dose ?? ''}
+                                                        onChange={e => updateDosingRule(idx, {
+                                                            dosing: { ...rule.dosing, ageBasedDose: { dose: Number(e.target.value), unit: 'mg' } }
+                                                        })}
+                                                        className="h-10"
+                                                    />
+                                                )}
+                                                {rule.dosing?.type === 'fixed' && (
+                                                    <div className="flex gap-2 items-center">
+                                                        <Input
+                                                            type="number"
+                                                            value={rule.dosing?.fixedDose?.min ?? ''}
+                                                            onChange={e => updateDosingRule(idx, {
+                                                                dosing: { ...rule.dosing, fixedDose: { ...rule.dosing?.fixedDose, min: Number(e.target.value), unit: 'mg' } }
+                                                            })}
+                                                            placeholder="мин"
+                                                            className="h-10 flex-1 min-w-0"
+                                                        />
+                                                        <span className="text-slate-400">—</span>
+                                                        <Input
+                                                            type="number"
+                                                            value={rule.dosing?.fixedDose?.max ?? ''}
+                                                            onChange={e => updateDosingRule(idx, {
+                                                                dosing: { ...rule.dosing, fixedDose: { ...rule.dosing?.fixedDose, max: Number(e.target.value), unit: 'mg' } }
+                                                            })}
+                                                            placeholder="макс"
+                                                            className="h-10 flex-1 min-w-0"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Раз в день</label>
-                                            <Input
-                                                type="number"
-                                                value={rule.timesPerDay || 1}
-                                                onChange={e => updateDosingRule(idx, { timesPerDay: Number(e.target.value) })}
-                                                className="h-10"
-                                            />
-                                        </div>
-
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Макс. разовая (мг)</label>
-                                            <Input
-                                                type="number"
-                                                value={rule.maxSingleDose || ''}
-                                                onChange={e => updateDosingRule(idx, { maxSingleDose: Number(e.target.value) || null })}
-                                                placeholder="Неогранич."
-                                                className="h-10"
-                                            />
-                                        </div>
-
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Макс. суточная (мг)</label>
-                                            <Input
-                                                type="number"
-                                                value={rule.maxDailyDose || ''}
-                                                onChange={e => updateDosingRule(idx, { maxDailyDose: Number(e.target.value) || null })}
-                                                placeholder="Неогранич."
-                                                className="h-10"
-                                            />
-                                        </div>
-
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Интервал (часы)</label>
-                                            <Input
-                                                type="number"
-                                                value={rule.intervalHours || ''}
-                                                onChange={e => updateDosingRule(idx, { intervalHours: Number(e.target.value) || null })}
-                                                placeholder="Неогранич."
-                                                className="h-10"
-                                            />
+                                    {/* Кратность и лимиты */}
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Кратность и лимиты</h4>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Раз в день</label>
+                                                <Input
+                                                    type="number"
+                                                    value={rule.timesPerDay ?? ''}
+                                                    onChange={e => updateDosingRule(idx, { timesPerDay: Number(e.target.value) })}
+                                                    className="h-10"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Макс. разовая, мг</label>
+                                                <Input
+                                                    type="number"
+                                                    value={rule.maxSingleDose ?? ''}
+                                                    onChange={e => updateDosingRule(idx, { maxSingleDose: e.target.value === '' ? null : Number(e.target.value) })}
+                                                    placeholder="—"
+                                                    className="h-10"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Макс. суточная, мг</label>
+                                                <Input
+                                                    type="number"
+                                                    value={rule.maxDailyDose ?? ''}
+                                                    onChange={e => updateDosingRule(idx, { maxDailyDose: e.target.value === '' ? null : Number(e.target.value) })}
+                                                    placeholder="—"
+                                                    className="h-10"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Интервал, ч</label>
+                                                <Input
+                                                    type="number"
+                                                    value={rule.intervalHours ?? ''}
+                                                    onChange={e => updateDosingRule(idx, { intervalHours: e.target.value === '' ? null : Number(e.target.value) })}
+                                                    placeholder="—"
+                                                    className="h-10"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="md:col-span-4 mt-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Инструкция / Комментарий</label>
-                                        <Input
-                                            value={rule.instruction || ''}
+                                    {/* Инструкция */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Инструкция / комментарий</label>
+                                        <textarea
+                                            value={rule.instruction ?? ''}
                                             onChange={e => updateDosingRule(idx, { instruction: e.target.value })}
-                                            placeholder="Например: После еды, для детей весом от 5кг..."
-                                            className="h-11 mt-1"
+                                            placeholder="Например: Внутрь, после еды. Детям 6–9 лет: по ½ таблетки до 4 раз в сутки..."
+                                            rows={3}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-y min-h-[80px]"
                                         />
                                     </div>
                                 </div>

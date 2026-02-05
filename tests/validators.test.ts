@@ -193,6 +193,35 @@ describe('Medication Validators', () => {
             const result = CalculateDoseSchema.safeParse(invalidParams);
             expect(result.success).toBe(false);
         });
+
+        it('should accept optional ruleIndex (non-negative integer)', () => {
+            const withRuleIndex0 = CalculateDoseSchema.safeParse({
+                medicationId: 1,
+                weight: 20,
+                ageMonths: 36,
+                ruleIndex: 0,
+            });
+            expect(withRuleIndex0.success).toBe(true);
+            expect((withRuleIndex0 as { data: { ruleIndex?: number } }).data?.ruleIndex).toBe(0);
+
+            const withRuleIndex1 = CalculateDoseSchema.safeParse({
+                medicationId: 1,
+                weight: 15,
+                ageMonths: 24,
+                ruleIndex: 1,
+            });
+            expect(withRuleIndex1.success).toBe(true);
+        });
+
+        it('should reject negative ruleIndex', () => {
+            const result = CalculateDoseSchema.safeParse({
+                medicationId: 1,
+                weight: 20,
+                ageMonths: 36,
+                ruleIndex: -1,
+            });
+            expect(result.success).toBe(false);
+        });
     });
 
     describe('LinkMedicationToDiseaseSchema', () => {
