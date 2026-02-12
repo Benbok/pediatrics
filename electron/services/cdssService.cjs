@@ -3,7 +3,9 @@
  * Используется для парсинга жалоб и ранжирования диагнозов
  */
 
-const { logger } = require('../logger.cjs');
+const { logger, logDegradation } = require('../logger.cjs');
+const { normalizeWithAI } = require('./aiSymptomNormalizer.cjs');
+const { normalizeSymptoms } = require('../utils/cdssVocabulary.cjs');
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
@@ -205,17 +207,45 @@ ${childWeight ? `Вес ребенка: ${childWeight} кг` : ''}
         }
 
         logger.info(`[CDSSService] Parsed ${parsed.symptoms.length} symptoms, severity: ${parsed.severity}`);
+        logDegradation('parse', 'AI');
         return parsed;
 
     } catch (error) {
-        logger.error('[CDSSService] Failed to parse complaints:', error);
-        // Fallback: простой парсинг по запятым
-        const symptoms = complaintsText.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        logger.warn('[CDSSService] AI parsing failed, using split + normalization');
+        const rawSymptoms = complaintsText.split(/[,;]/).map(s => s.trim()).filter(s => s.length > 0);
+        const { normalized } = await normalizeWithAI(rawSymptoms);
+        logDegradation('parse', 'Fallback');
         return {
-            symptoms,
-            severity: 'medium'
+            symptoms: normalized.length > 0 ? normalized : rawSymptoms,
+            severity: 'medium',
+            fallback: true
         };
     }
+}
+
+/**
+ * Enhanced fallback ranking: canonical symptom matching via vocabulary, confidence cap 0.9.
+ * @private
+ */
+function _enhancedFallbackRanking(symptoms, diseases, patientContext = {}) {
+    const queryCanonical = new Set(normalizeSymptoms(symptoms).map(n => n.toLowerCase().trim()));
+
+    return diseases
+        .map((d) => {
+            const dSymptoms = Array.isArray(d.symptoms) ? d.symptoms : JSON.parse(d.symptoms || '[]');
+            const dCanonical = new Set(normalizeSymptoms(dSymptoms).map(n => n.toLowerCase().trim()));
+            const matchedSymptoms = [...queryCanonical].filter((qs) => dCanonical.has(qs));
+            let confidence = matchedSymptoms.length / Math.max(symptoms.length, 1);
+            confidence = Math.min(0.9, confidence);
+            return {
+                diseaseId: d.id,
+                confidence,
+                reasoning: `Совпало ${matchedSymptoms.length} из ${symptoms.length} симптомов (словарь)`,
+                matchedSymptoms
+            };
+        })
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 5);
 }
 
 /**
@@ -324,30 +354,18 @@ reasoning (краткое объяснение на русском) и matchedSy
         if (validated.length > 0) {
             logger.debug('[CDSSService] Top result:', validated[0]);
         }
+        logDegradation('rank', 'AI');
         return validated;
 
     } catch (error) {
-        logger.error('[CDSSService] Failed to rank diagnoses:', error);
-        logger.error('[CDSSService] Error stack:', error.stack);
-        // Fallback: простое ранжирование по количеству совпавших симптомов
-        return diseases.map((d, idx) => {
-            const dSymptoms = Array.isArray(d.symptoms) ? d.symptoms : JSON.parse(d.symptoms || '[]');
-            const matched = symptoms.filter(s =>
-                dSymptoms.some(ds => ds.toLowerCase().includes(s.toLowerCase()))
-            );
-            return {
-                diseaseId: d.id,
-                confidence: Math.min(0.9, matched.length / Math.max(symptoms.length, 1)),
-                reasoning: `Совпало ${matched.length} из ${symptoms.length} симптомов`,
-                matchedSymptoms: matched
-            };
-        })
-            .sort((a, b) => b.confidence - a.confidence)
-            .slice(0, 5);
+        logger.warn('[CDSSService] AI ranking failed, using enhanced scoring');
+        logDegradation('rank', 'Simple');
+        return _enhancedFallbackRanking(symptoms, diseases, patientContext);
     }
 }
 
 module.exports = {
+    callGeminiAPI,
     parseComplaints,
     rankDiagnoses
 };

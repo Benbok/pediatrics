@@ -91,4 +91,30 @@ function logAudit(action, details = {}) {
     });
 }
 
-module.exports = { logger, auditLogger, logAudit };
+/**
+ * CDSS degradation stats (in-memory, for monitoring which fallbacks are used)
+ */
+const degradationStats = {
+    parseAI: 0,
+    parseFallback: 0,
+    normalizeAI: 0,
+    normalizeDictionary: 0,
+    searchSemantic: 0,
+    searchKeyword: 0,
+    rankAI: 0,
+    rankSimple: 0,
+};
+
+function logDegradation(step, method) {
+    const key = step + method; // e.g. 'parse' + 'AI' => parseAI, 'search' + 'Keyword' => searchKeyword
+    if (degradationStats[key] !== undefined) {
+        degradationStats[key]++;
+    }
+    logger.info(`[CDSS Degradation] ${step} using ${method}`);
+}
+
+function getDegradationStats() {
+    return { ...degradationStats };
+}
+
+module.exports = { logger, auditLogger, logAudit, logDegradation, getDegradationStats };

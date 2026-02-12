@@ -13,6 +13,7 @@
     "test:vaccination": "node tests/vaccination-records.test.cjs",
     "test:revaccination": "node tests/polio-hib-revaccination.test.cjs",
     "test:vidal": "node tests/vidal-parser-test.cjs",
+    "test:cdss-cli": "node scripts/run-cdss-cli.cjs",
     "test": "vitest",
     "test:ui": "vitest --ui"
   },

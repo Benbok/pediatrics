@@ -98,12 +98,16 @@ pediatrics/
 │   ├── init-db.cjs            # Database initialization (auto-create first admin)
 │   ├── prisma-client.cjs      # Shared Prisma Client instance
 │   ├── crypto.cjs             # AES-256-GCM encryption/decryption
-│   ├── logger.cjs             # Winston logging & audit trail
+│   ├── logger.cjs             # Winston logging, audit trail, logDegradation (CDSS)
 │   ├── backup.cjs             # Automated backup service
+│   ├── utils/
+│   │   ├── cdssVocabulary.cjs # Словарь симптомов/противопоказаний, getVersion
+│   │   └── vocabularyLearner.cjs # Автообучение словаря из AI-нормализаций
 │   ├── services/
 │   │   ├── cacheService.cjs   # ⚡ Centralized caching service (TTL, namespaces)
 │   │   ├── embeddingService.cjs # AI embeddings with LRU cache
-│   │   └── cdssService.cjs    # Clinical Decision Support
+│   │   ├── cdssService.cjs    # Clinical Decision Support (parse, rank)
+│   │   └── aiSymptomNormalizer.cjs # Нормализация симптомов: словарь + batch AI, circuit breaker
 │   ├── modules/
 │   │   ├── medications/
 │   │   │   ├── service.cjs    # Medication business logic
@@ -112,6 +116,10 @@ pediatrics/
 │   │   │   ├── validator.cjs  # Data validation for safety
 │   │   │   └── dilutionCalculator.cjs # Infusion calculator
 │   │   └── ...
+│   ├── constants/
+│   │   ├── cdssVocabulary.json        # Канонические симптомы и варианты
+│   │   ├── cdssVocabularySuggestions.json # Кандидаты для автообучения
+│   │   └── vocabularyVersion.json     # Версия словаря (инвалидация кеша)
 │   └── preload.cjs            # Secure IPC bridge
 
 ├── src/
@@ -235,7 +243,11 @@ npm test              # Run all unit tests
 npm run test:ui       # Interactive test UI
 npm run test:vaccination  # Integration tests
 npm run test:vidal    # Test Vidal parser (dry run)
+npm run test:cdss-cli # CLI тест CDSS: ввод жалоб → поиск карточек из Базы знаний (как в модуле Приемы)
 ```
+
+**Тест CDSS из терминала** (`npm run test:cdss-cli`): запрос ввода клинических симптомов в свободной форме, затем выполняется тот же пайплайн, что и в модуле Приемы (парсинг жалоб → нормализация симптомов → semantic/keyword search → ранжирование). Удобно для проверки интеграции ИИ и поиска по карточкам без запуска полного приложения. Флаг `--force-fallback` отключает AI-нормализацию (circuit breaker).  
+**Unit-тесты CDSS** (`tests/ai-symptom-normalizer.test.ts`): контракт `normalizeWithAI`, circuit breaker, `setCircuitOpen`, `getVersion` — запускаются через `npm test`.
 
 ---
 
@@ -338,6 +350,40 @@ npm run test:vidal    # Test Vidal parser (dry run)
 - ✅ **AI-парсинг Видаль** - автоматическое извлечение данных о препаратах
 - ✅ **Структурные планы диагностики/лечения** из базы знаний заболеваний
 - ✅ **GuidelinePlan API** - нормализованный план с fallback на текст рекомендаций
+
+#### CDSS: нормализация симптомов и устойчивость (Graceful Degradation)
+
+Пайплайн поддержки решений (CDSS) при поиске по жалобам построен так, чтобы корректно находить диагнозы даже при расхождении формулировок («болезненность при глотании» ↔ «боль при глотании», «температура» ↔ «лихорадка») и при сбоях AI/embeddings.
+
+**Этапы (каждый со своим fallback):**
+
+1. **Парсинг жалоб** (`parseComplaints`)  
+   - AI (Gemini) извлекает список симптомов и severity.  
+   - При ошибке: разбор по запятым/точке с запятой + нормализация через словарь/AI.
+
+2. **Нормализация симптомов** (`normalizeWithAI`)  
+   - Сначала всегда применяется **словарь** (`cdssVocabulary.json`): синонимы → канонические формы.  
+   - При доступном AI — **batch-нормализация** одним запросом (все симптомы сразу).  
+   - Результаты AI попадают в **версионированный кеш** (ключ включает версию словаря) и при необходимости в **автообучение словаря**.  
+   - **Circuit breaker**: после 3 подряд ошибок AI нормализация отключается на 5 минут (без лишних запросов к API).
+
+3. **Поиск по базе знаний** (`searchBySymptoms`)  
+   - Используются уже нормализованные симптомы.  
+   - Сначала **semantic search** (embeddings), при 0 результатах или ошибке — **keyword search** с учётом того же словаря.
+
+4. **Ранжирование** (`rankDiagnoses`)  
+   - AI ранжирует кандидатов по симптомам и контексту.  
+   - При ошибке: **enhanced fallback** — совпадение по каноническим симптомам из словаря, confidence до 0.9.
+
+**Автообучение словаря (Vocabulary Learner):**  
+AI-нормализации (original → canonical) сохраняются в `cdssVocabularySuggestions.json`. При достижении порога (≥3 упоминаний) запись переносится в основной `cdssVocabulary.json`, версия словаря увеличивается и кеш нормализаций инвалидируется. Со временем система меньше зависит от AI для одних и тех же формулировок.
+
+**Мониторинг:**  
+В `logger.cjs` добавлены `logDegradation(step, method)` и `getDegradationStats()` — в памяти ведётся счётчик использования AI vs fallback по шагам (parse, normalize, search, rank). По логам видно, когда срабатывает упрощённый путь.
+
+**CLI для проверки CDSS:**  
+`npm run test:cdss-cli` запускает интерактивный ввод жалоб и тот же пайплайн. Флаг `--force-fallback` отключает AI-нормализацию (открывает circuit breaker), например:  
+`npx electron scripts/cdss-test-cli.cjs "температура, кашель" --force-fallback`
 
 ### ⚡ Система кеширования (Performance Optimization)
 - ✅ Трехслойная архитектура кеширования (Backend → IPC → Frontend)

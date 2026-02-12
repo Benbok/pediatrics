@@ -57,7 +57,7 @@ function getBaseUrl() {
  */
 function _generateEmbeddingWithKey(apiKey, text) {
     const baseUrl = getBaseUrl() || 'https://generativelanguage.googleapis.com';
-    const model = 'text-embedding-004';
+    const model = 'gemini-embedding-001';
     
     // Формируем URL для embeddings API
     const urlPath = `/v1beta/models/${model}:embedContent?key=${apiKey}`;
@@ -127,7 +127,7 @@ function _generateEmbeddingWithKey(apiKey, text) {
 
 /**
  * Генерирует embedding для текста через Gemini API
- * Использует модель text-embedding-004 (самая новая)
+ * Использует модель gemini-embedding-001 (Gemini API v1beta)
  * @param {string} text - Текст для генерации embedding
  * @returns {Promise<number[]>} Массив чисел (вектор embedding)
  */

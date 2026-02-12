@@ -9,6 +9,8 @@ const util = require('util');
 const execPromise = util.promisify(exec);
 const { generateEmbedding, cosineSimilarity, getCachedSearch, cacheSearch } = require('../../services/embeddingService.cjs');
 const { normalizeSymptoms } = require('../../utils/cdssVocabulary.cjs');
+const { normalizeWithAI } = require('../../services/aiSymptomNormalizer.cjs');
+const { logDegradation } = require('../../logger.cjs');
 const { normalizeDiseaseData } = require('../../utils/diseaseNormalization.cjs');
 
 // Upload job queue
@@ -669,8 +671,12 @@ const DiseaseService = {
             return [];
         }
 
-        // Объединяем симптомы в один текст
-        const symptomsText = symptoms.join(', ');
+        // 1. Нормализация (словарь + опционально batch AI)
+        const { normalized, source, aiUsed } = await normalizeWithAI(symptoms);
+        logger.debug(`[DiseaseService] Normalization: ${source}, AI used: ${aiUsed}`);
+
+        const symptomsToUse = normalized.length > 0 ? normalized : symptoms;
+        const symptomsText = symptomsToUse.join(', ');
 
         // Проверяем кэш
         const cached = getCachedSearch(symptomsText);
@@ -696,7 +702,8 @@ const DiseaseService = {
 
             if (diseases.length === 0) {
                 logger.warn('[DiseaseService] No diseases with embeddings found, falling back to keyword matching');
-                return this._fallbackKeywordSearch(symptoms);
+                logDegradation('search', 'Keyword');
+                return this._fallbackKeywordSearch(symptomsToUse);
             }
 
             // Вычисляем similarity для каждого заболевания
@@ -728,6 +735,14 @@ const DiseaseService = {
 
             const finalResults = results.map(r => r.disease);
 
+            // Если semantic search не дал ни одного результата (все embeddings битые или не совпали) — fallback на поиск по ключам
+            if (finalResults.length === 0) {
+                logger.warn('[DiseaseService] Semantic search returned 0 results, falling back to keyword matching');
+                logDegradation('search', 'Keyword');
+                return this._fallbackKeywordSearch(symptomsToUse);
+            }
+
+            logDegradation('search', 'Semantic');
             // Сохраняем в кэш
             cacheSearch(symptomsText, finalResults);
 
@@ -742,30 +757,40 @@ const DiseaseService = {
 
         } catch (error) {
             logger.error('[DiseaseService] Semantic search failed, falling back to keyword matching:', error);
-            return this._fallbackKeywordSearch(symptoms);
+            logDegradation('search', 'Keyword');
+            return this._fallbackKeywordSearch(symptomsToUse);
         }
     },
 
     /**
-     * Fallback метод для поиска по ключевым словам (если embeddings недоступны)
+     * Fallback метод для поиска по ключевым словам (если embeddings недоступны).
+     * Учитывает синонимы из cdssVocabulary: «температура» ≈ «лихорадка», «одинофагия» ≈ «боль при глотании» и т.д.
      * @private
      */
     async _fallbackKeywordSearch(symptoms) {
         const diseases = await prisma.disease.findMany();
+        const queryCanonical = new Set(normalizeSymptoms(symptoms).map(n => n.toLowerCase().trim()));
+        const queryRaw = symptoms.map(s => s.toLowerCase().trim());
+
         const results = diseases
             .map(d => {
                 const dSymptoms = JSON.parse(d.symptoms || '[]');
-                const matches = symptoms.filter(s =>
-                    dSymptoms.some(ds => ds.toLowerCase().includes(s.toLowerCase())) ||
-                    d.nameRu.toLowerCase().includes(s.toLowerCase())
-                );
+                const dCanonical = new Set(normalizeSymptoms(dSymptoms).map(n => n.toLowerCase().trim()));
+
+                const matchByCanonical = [...queryCanonical].filter(qc => dCanonical.has(qc)).length;
+                const matchBySubstring = queryRaw.filter(s =>
+                    dSymptoms.some(ds => ds.toLowerCase().includes(s)) ||
+                    d.nameRu.toLowerCase().includes(s)
+                ).length;
+                const matchesCount = Math.max(matchByCanonical, matchBySubstring);
+
                 return {
                     disease: {
                         ...d,
                         symptoms: dSymptoms,
                         icd10Codes: JSON.parse(d.icd10Codes || '[]')
                     },
-                    score: matches.length / Math.max(symptoms.length, 1)
+                    score: matchesCount / Math.max(symptoms.length, 1)
                 };
             })
             .filter(r => r.score > 0)

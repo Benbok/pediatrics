@@ -5,7 +5,7 @@ const { logger } = require('../logger.cjs');
 let cachedVocabulary = null;
 
 function loadVocabulary() {
-    if (cachedVocabulary) return cachedVocabulary;
+    if (cachedVocabulary !== null) return cachedVocabulary;
 
     try {
         const vocabPath = path.join(__dirname, '..', 'constants', 'cdssVocabulary.json');
@@ -17,6 +17,10 @@ function loadVocabulary() {
         cachedVocabulary = { symptoms: [], contraindications: [] };
         return cachedVocabulary;
     }
+}
+
+function invalidateVocabularyCache() {
+    cachedVocabulary = null;
 }
 
 function normalizeText(value) {
@@ -104,10 +108,31 @@ function getCanonicalSet(category) {
     return new Set(entries.map(entry => normalizeText(entry.canonical)).filter(Boolean));
 }
 
+let cachedVersion = null;
+
+function getVersion() {
+    if (cachedVersion !== null) return cachedVersion;
+    try {
+        const versionFile = path.join(__dirname, '..', 'constants', 'vocabularyVersion.json');
+        const raw = fs.readFileSync(versionFile, 'utf8');
+        cachedVersion = JSON.parse(raw).version;
+    } catch {
+        cachedVersion = 1;
+    }
+    return cachedVersion;
+}
+
+function invalidateVersionCache() {
+    cachedVersion = null;
+}
+
 module.exports = {
     loadVocabulary,
     normalizeText,
     normalizeSymptoms,
     normalizeContraindicationsText,
-    getCanonicalSet
+    getCanonicalSet,
+    getVersion,
+    invalidateVersionCache,
+    invalidateVocabularyCache
 };
