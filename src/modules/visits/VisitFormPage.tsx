@@ -2467,6 +2467,7 @@ export const VisitFormPage: React.FC = () => {
                     appliedRuleIndex={lastDoseResult?.appliedRuleIndex}
                     calculationBreakdown={lastDoseResult?.calculationBreakdown ?? null}
                     onRuleChange={handleDoseRuleChange}
+                    notSuitableForPatient={lastDoseResult?.canUse === false ? (lastDoseResult.message ?? null) : null}
                 />
             )}
 

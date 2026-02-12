@@ -202,14 +202,10 @@ export const MedicationsModule: React.FC = () => {
             )}
 
             {/* Stats Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card className="p-4 border-slate-100 dark:border-slate-800 flex flex-col items-center">
+            <div className="grid grid-cols-1 gap-4">
+                <Card className="p-4 border-slate-100 dark:border-slate-800 flex flex-col items-center max-w-xs">
                     <span className="text-2xl font-black text-slate-900 dark:text-white">{medications.length}</span>
                     <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Всего препаратов</span>
-                </Card>
-                <Card className="p-4 border-slate-100 dark:border-slate-800 flex flex-col items-center">
-                    <span className="text-2xl font-black text-secondary-600">{medications.filter(m => m.pediatricDosing.length > 0).length}</span>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">С дозировками</span>
                 </Card>
             </div>
 

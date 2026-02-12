@@ -26,6 +26,8 @@ interface MedicationDoseModalProps {
     calculationBreakdown?: CalculationBreakdown | null;
     /** Вызов при смене правила (родитель пересчитает дозу) */
     onRuleChange?: (ruleIndex: number) => void;
+    /** Текст предупреждения, когда препарат не подходит по возрасту/весу (canUse === false) */
+    notSuitableForPatient?: string | null;
 }
 
 export interface DoseData {
@@ -58,6 +60,7 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
     appliedRuleIndex,
     calculationBreakdown,
     onRuleChange,
+    notSuitableForPatient,
 }) => {
     const [dosing, setDosing] = useState(initialDoseData?.dosing || '');
     const [duration, setDuration] = useState(initialDoseData?.duration || '5-7 дней');
@@ -223,6 +226,16 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {/* Предупреждение: препарат не подходит для пациента */}
+                    {notSuitableForPatient && (
+                        <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-800 dark:text-red-200">
+                            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                            <div className="text-sm font-medium">
+                                Препарат не подходит для данного пациента: {notSuitableForPatient}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Выбор правила при нескольких подходящих */}
                     {matchingRulesSummary && matchingRulesSummary.length > 1 && onRuleChange && (
                         <div className="space-y-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">

@@ -383,30 +383,40 @@ const MedicationService = {
             return ageMatch && weightMatch && weightMaxMatch;
         };
 
-        const matchingRuleIndices = dosingRules
+        let matchingRuleIndices = dosingRules
             .map((r, idx) => (ruleMatches(r) ? idx : -1))
             .filter((idx) => idx >= 0);
 
+        let noMatchUseFirstRule = false;
         if (matchingRuleIndices.length === 0) {
-            logger.warn('[MedicationService] No dosing rule matched', { medicationId, childWeight, childAgeMonths });
-            return {
-                canUse: false,
-                message: 'Нет данных по дозированию для данного возраста и веса'
-            };
+            if (dosingRules.length === 0) {
+                logger.warn('[MedicationService] No dosing rule matched', { medicationId, childWeight, childAgeMonths });
+                return {
+                    canUse: false,
+                    message: 'Нет данных по дозированию для данного возраста и веса'
+                };
+            }
+            logger.warn('[MedicationService] No rule matched, returning first rule as reference', { medicationId, childAgeMonths, childWeight });
+            noMatchUseFirstRule = true;
+            matchingRuleIndices = [];
         }
 
         let appliedRuleIndex;
-        if (ruleIndex != null && ruleIndex >= 0 && matchingRuleIndices.includes(ruleIndex)) {
+        if (noMatchUseFirstRule) {
+            appliedRuleIndex = 0;
+        } else if (ruleIndex != null && ruleIndex >= 0 && matchingRuleIndices.includes(ruleIndex)) {
             appliedRuleIndex = ruleIndex;
         } else {
             appliedRuleIndex = matchingRuleIndices[0];
         }
         const rule = dosingRules[appliedRuleIndex];
 
-        const matchingRulesSummary = matchingRuleIndices.map((idx) => ({
-            ruleIndex: idx,
-            label: this._buildRuleLabel(dosingRules[idx], idx)
-        }));
+        const matchingRulesSummary = noMatchUseFirstRule
+            ? [{ ruleIndex: 0, label: this._buildRuleLabel(dosingRules[0], 0) }]
+            : matchingRuleIndices.map((idx) => ({
+                ruleIndex: idx,
+                label: this._buildRuleLabel(dosingRules[idx], idx)
+            }));
 
         const { calculateBSA } = require('../../utils/anthropometry.cjs');
         let bsa = null;
@@ -507,11 +517,15 @@ const MedicationService = {
             medicationId,
             appliedRuleIndex,
             matchingCount: matchingRuleIndices.length,
+            noMatchUseFirstRule,
             singleDoseMg: singleDoseMg != null ? Math.round(singleDoseMg * 10) / 10 : null
         });
 
         return {
-            canUse: true,
+            canUse: !noMatchUseFirstRule,
+            message: noMatchUseFirstRule
+                ? `Нет подходящего правила для возраста ${childAgeMonths} мес и веса ${childWeight} кг. Показана первая инструкция из справочника.`
+                : undefined,
             singleDoseMg: singleDoseMg != null ? Math.round(singleDoseMg * 10) / 10 : null,
             singleDoseMl: singleDoseMl != null ? Math.round(singleDoseMl * 100) / 100 : null,
             dailyDoseMg: dailyDoseMg != null ? Math.round(dailyDoseMg * 10) / 10 : null,
