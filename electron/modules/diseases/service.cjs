@@ -12,6 +12,7 @@ const { normalizeSymptoms } = require('../../utils/cdssVocabulary.cjs');
 const { normalizeWithAI } = require('../../services/aiSymptomNormalizer.cjs');
 const { logDegradation } = require('../../logger.cjs');
 const { normalizeDiseaseData } = require('../../utils/diseaseNormalization.cjs');
+const { ChunkIndexService } = require('../../services/chunkIndexService.cjs');
 
 // Upload job queue
 const uploadQueue = {
@@ -26,6 +27,18 @@ function generateJobId() {
 }
 
 function sendProgressEvent(jobId, data) {
+    // Keep in-memory job status in sync for polling clients
+    try {
+        const job = uploadQueue.jobs.get(jobId);
+        if (job) {
+            if (data.status) job.status = data.status;
+            if (typeof data.progress === 'number') job.progress = data.progress;
+            if (data.error) job.error = data.error;
+        }
+    } catch (_) {
+        // noop
+    }
+
     const mainWindow = BrowserWindow.getAllWindows()[0];
     if (mainWindow) {
         mainWindow.webContents.send('guideline:upload-progress', { jobId, ...data });
@@ -412,10 +425,40 @@ const DiseaseService = {
         // Сохраняем diseaseId перед удалением
         const diseaseId = guideline.diseaseId;
 
-        // Удаляем запись из БД
+        // Delete chunks first, then guideline (no FTS triggers — FTS is rebuilt programmatically)
+        await prisma.guidelineChunk.deleteMany({
+            where: { guidelineId: Number(guidelineId) }
+        });
         await prisma.clinicalGuideline.delete({
             where: { id: Number(guidelineId) }
         });
+
+        // Rebuild FTS and refresh in-memory index
+        try {
+            await ChunkIndexService.rebuildFts();
+            if (ChunkIndexService.isLoaded()) {
+                const diseaseChunks = await prisma.guidelineChunk.findMany({
+                    where: {
+                        diseaseId: Number(diseaseId),
+                        embeddingJson: { not: null }
+                    },
+                    select: {
+                        id: true,
+                        diseaseId: true,
+                        guidelineId: true,
+                        type: true,
+                        pageStart: true,
+                        pageEnd: true,
+                        sectionTitle: true,
+                        text: true,
+                        embeddingJson: true,
+                    }
+                });
+                ChunkIndexService.updateForGuideline(diseaseId, diseaseChunks);
+            }
+        } catch (e) {
+            logger.warn('[DiseaseService] Failed to refresh indexes after delete:', e.message);
+        }
 
         // Возвращаем объект с diseaseId для инвалидации кеша
         return { diseaseId };
@@ -468,12 +511,14 @@ const DiseaseService = {
 
             try {
                 job.status = 'processing';
+                job.progress = 0;
                 sendProgressEvent(jobId, { status: 'processing', fileName: job.fileName, progress: 0 });
 
                 // Process the file
                 const guideline = await this.uploadGuidelineSingle(job.diseaseId, job.pdfPath, jobId);
 
                 job.status = 'completed';
+                job.progress = 100;
                 job.result = guideline;
                 sendProgressEvent(jobId, { status: 'completed', fileName: job.fileName, progress: 100, guidelineId: guideline.id });
 
@@ -553,14 +598,25 @@ const DiseaseService = {
             // 1. Get Metadata (title, codes, symptoms) - Fast
             if (jobId) sendProgressEvent(jobId, { progress: 10, step: 'Extracting metadata' });
             const metadataScript = path.join(process.cwd(), 'scripts', 'parse_pdf.py');
-            const { stdout: metaStdout } = await execPromise(`python "${metadataScript}" "${pdfPath}"`);
-            const metadata = JSON.parse(metaStdout);
+            let metadata = { title: path.basename(pdfPath) };
+            try {
+                const { stdout: metaStdout } = await execPromise(`python "${metadataScript}" "${pdfPath}"`);
+                metadata = JSON.parse(metaStdout);
+            } catch (e) {
+                // Degrade gracefully if AI/unavailable: continue with minimal metadata
+                logger.warn('[DiseaseService] Metadata extraction failed, continuing without it:', e.message);
+            }
 
             // 2. Create Chunks (for search) - Fast
             if (jobId) sendProgressEvent(jobId, { progress: 40, step: 'Creating chunks' });
-            const chunksScript = path.join(process.cwd(), 'scripts', 'create_chunks.py');
-            const { stdout: chunksStdout } = await execPromise(`python "${chunksScript}" "${pdfPath}"`);
-            const chunks = JSON.parse(chunksStdout);
+            const legacyChunksScript = path.join(process.cwd(), 'scripts', 'create_chunks.py');
+            const { stdout: legacyChunksStdout } = await execPromise(`python "${legacyChunksScript}" "${pdfPath}"`);
+            const legacyChunks = JSON.parse(legacyChunksStdout);
+
+            // Clinical chunks with type + overlap (for CDSS search)
+            const clinicalChunksScript = path.join(process.cwd(), 'scripts', 'create_clinical_chunks.py');
+            const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${pdfPath}" 700 100`);
+            const clinicalChunks = JSON.parse(clinicalChunksStdout);
 
             // 3. Copy file to permanent storage
             if (jobId) sendProgressEvent(jobId, { progress: 70, step: 'Saving file' });
@@ -582,10 +638,104 @@ const DiseaseService = {
                     title: metadata.title || path.basename(pdfPath),
                     pdfPath: destPath,
                     content: metadata.description || 'Документ в формате PDF',
-                    chunks: JSON.stringify(chunks),
+                    // Keep legacy JSON chunks for backward compatibility
+                    chunks: JSON.stringify(legacyChunks),
                     source: 'Минздрав РФ',
                 },
             });
+
+            // 5. Save clinical chunks into normalized table (GuidelineChunk) for FTS and (optional) embeddings
+            if (Array.isArray(clinicalChunks) && clinicalChunks.length > 0) {
+                if (jobId) sendProgressEvent(jobId, { progress: 95, step: 'Indexing guideline chunks' });
+
+                const rows = [];
+                const canEmbed = Boolean(process.env.VITE_GEMINI_API_KEY);
+                let embedEnabled = canEmbed;
+
+                for (const chunk of clinicalChunks) {
+                    const text = (chunk && chunk.text) ? String(chunk.text).trim() : '';
+                    if (!text) continue;
+
+                    const page = Number(chunk.page) || null;
+                    const sectionTitle = (chunk && chunk.sectionTitle) ? String(chunk.sectionTitle).trim() : null;
+                    const type = (chunk && chunk.type) ? String(chunk.type).trim() : 'other';
+
+                    let embeddingJson = null;
+                    if (embedEnabled) {
+                        try {
+                            const emb = await generateEmbedding(text, { rotation: 'none' });
+                            if (Array.isArray(emb) && emb.length > 0) {
+                                embeddingJson = JSON.stringify(emb);
+                            }
+                        } catch (e) {
+                            // Degrade gracefully: still keep chunk for FTS.
+                            embeddingJson = null;
+
+                            // If API is blocked/limited - stop trying for remaining chunks in this upload
+                            const msg = String(e && e.message ? e.message : '');
+                            if (
+                                msg.includes('location is not supported') ||
+                                msg.includes('RESOURCE_EXHAUSTED') ||
+                                msg.includes('Quota exceeded') ||
+                                msg.includes('429')
+                            ) {
+                                embedEnabled = false;
+                            }
+                        }
+                    }
+
+                    rows.push({
+                        guidelineId: guideline.id,
+                        diseaseId: Number(diseaseId),
+                        type,
+                        pageStart: page,
+                        pageEnd: page,
+                        sectionTitle,
+                        text,
+                        embeddingJson
+                    });
+                }
+
+                if (rows.length > 0) {
+                    // Make idempotent for re-uploads in the future: remove existing chunks for this guideline
+                    await prisma.guidelineChunk.deleteMany({
+                        where: { guidelineId: guideline.id }
+                    });
+
+                    await prisma.guidelineChunk.createMany({
+                        data: rows
+                    });
+
+                    // Rebuild FTS from scratch (no triggers — programmatic rebuild)
+                    await ChunkIndexService.rebuildFts();
+
+                    // Refresh in-memory chunk index (if loaded)
+                    try {
+                        if (ChunkIndexService.isLoaded()) {
+                            const diseaseChunks = await prisma.guidelineChunk.findMany({
+                                where: {
+                                    diseaseId: Number(diseaseId),
+                                    embeddingJson: { not: null }
+                                },
+                                select: {
+                                    id: true,
+                                    diseaseId: true,
+                                    guidelineId: true,
+                                    type: true,
+                                    pageStart: true,
+                                    pageEnd: true,
+                                    sectionTitle: true,
+                                    text: true,
+                                    embeddingJson: true,
+                                }
+                            });
+                            ChunkIndexService.updateForGuideline(diseaseId, diseaseChunks);
+                        }
+                    } catch (e) {
+                        logger.warn('[DiseaseService] Failed to refresh ChunkIndexService after upload:', e.message);
+                    }
+                }
+            }
 
             // Update disease metadata ONLY if fields are empty (prevent overwriting existing data)
             await this._updateDiseaseMetadataIfEmpty(diseaseId, metadata);
@@ -595,6 +745,91 @@ const DiseaseService = {
             logger.error('[DiseaseService] Failed to process/upload guideline:', error);
             throw error;
         }
+    },
+
+    /**
+     * Rebuild normalized guideline chunks (GuidelineChunk + FTS triggers) for all guidelines.
+     * Safe to run when AI is unavailable: embeddings will be stored only if key exists.
+     */
+    async reindexGuidelineChunks() {
+        logger.info('[DiseaseService] Reindexing guideline chunks...');
+        const canEmbed = Boolean(process.env.VITE_GEMINI_API_KEY);
+
+        const guidelines = await prisma.clinicalGuideline.findMany({
+            select: {
+                id: true,
+                diseaseId: true,
+                pdfPath: true,
+            }
+        });
+
+        for (const g of guidelines) {
+            if (!g.pdfPath) continue;
+
+            try {
+                const clinicalChunksScript = path.join(process.cwd(), 'scripts', 'create_clinical_chunks.py');
+                const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${g.pdfPath}" 700 100`);
+                const clinicalChunks = JSON.parse(clinicalChunksStdout);
+
+                await prisma.guidelineChunk.deleteMany({
+                    where: { guidelineId: g.id }
+                });
+
+                if (!Array.isArray(clinicalChunks) || clinicalChunks.length === 0) {
+                    continue;
+                }
+
+                const rows = [];
+                for (const chunk of clinicalChunks) {
+                    const text = (chunk && chunk.text) ? String(chunk.text).trim() : '';
+                    if (!text) continue;
+
+                    const page = Number(chunk.page) || null;
+                    const sectionTitle = (chunk && chunk.sectionTitle) ? String(chunk.sectionTitle).trim() : null;
+                    const type = (chunk && chunk.type) ? String(chunk.type).trim() : 'other';
+
+                    let embeddingJson = null;
+                    if (canEmbed) {
+                        try {
+                            const emb = await generateEmbedding(text, { rotation: 'none' });
+                            if (Array.isArray(emb) && emb.length > 0) {
+                                embeddingJson = JSON.stringify(emb);
+                            }
+                        } catch (_) {
+                            embeddingJson = null;
+                        }
+                    }
+
+                    rows.push({
+                        guidelineId: g.id,
+                        diseaseId: Number(g.diseaseId),
+                        type,
+                        pageStart: page,
+                        pageEnd: page,
+                        sectionTitle,
+                        text,
+                        embeddingJson,
+                    });
+                }
+
+                if (rows.length > 0) {
+                    await prisma.guidelineChunk.createMany({ data: rows });
+                }
+            } catch (error) {
+                logger.warn(`[DiseaseService] Failed to reindex guideline ${g.id}:`, error.message);
+            }
+        }
+
+        // Rebuild FTS and reload in-memory index
+        try {
+            await ChunkIndexService.rebuildFts();
+            await ChunkIndexService.loadOnStartup();
+        } catch (error) {
+            logger.warn('[DiseaseService] Failed to reload indexes after reindex:', error.message);
+        }
+
+        logger.info('[DiseaseService] Reindex guideline chunks completed');
+        return true;
     },
 
     /**

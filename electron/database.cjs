@@ -404,6 +404,7 @@ const setupDatabaseHandlers = async () => {
     try {
       const session = getSession();
       const userId = session.user.id;
+      const isAdmin = Boolean(session.user.roles?.includes('admin'));
 
       const validatedChild = ChildProfileSchema.parse(child);
       const { name, surname, patronymic, birthDate, birthWeight, gender } = validatedChild;

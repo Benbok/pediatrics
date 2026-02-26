@@ -236,6 +236,50 @@ electron/modules/visits/
 - Семантический поиск в базе знаний заболеваний
 - Ранжирование диагнозов по релевантности
 
+#### Диагностический поиск по клиническим рекомендациям (PDF)
+
+CDSS использует не только симптомы заболевания, но и текст из многостраничных PDF клинических рекомендаций (модуль `diseases`).
+
+Основные источники кандидатов:
+
+1. **Симптомный поиск** (семантический, если доступен Gemini embeddings)
+2. **Поиск по клиническим чанкам `GuidelineChunk`**
+   - лексический: SQLite FTS5 (`guideline_chunks_fts`)
+   - семантический (опционально): in-memory `ChunkIndexService` по `embeddingJson`
+
+#### Новый пайплайн `analyzeVisit()` (backend)
+
+Реализация: `electron/modules/visits/service.cjs` → `analyzeVisit()`.
+
+Пайплайн:
+
+1. **Сбор клинического контекста**
+   - жалобы + анамнез заболевания
+   - анамнез жизни (через `AnamnesisFormatter`)
+   - витальные показатели и отклонения
+
+2. **Извлечение симптомов**
+   - `cdssService.parseComplaints()`
+
+3. **Clinical Query Builder**
+   - `electron/services/clinicalQueryBuilder.cjs` → `buildClinicalQuery(visit)`
+   - формирует компактный запрос, включая аномальные витальные показатели
+
+4. **Candidate Search (dual-path)**
+   - `electron/services/cdssSearchService.cjs` → `CDSSSearchService.searchByClinicalData(clinicalQuery, symptoms)`
+   - включает structured pre-filter, FTS5 поиск по чанкам и опциональную семантику
+
+5. **Ranking**
+   - `electron/services/cdssRankingService.cjs` → `rankDiagnosesWithContext(symptoms, candidates, patientContext, clinicalQuery)`
+   - AI-ранжирование опционально, с graceful fallback
+
+#### Offline-first и деградация
+
+- При недоступности Gemini (квоты/geo/сеть) система продолжает работать за счёт:
+  - FTS5 (`GuidelineChunk.text`)
+  - keyword/symptom fallback
+- Embeddings являются опциональными: при их отсутствии semantic path пропускается.
+
 #### Форматирование данных для AI
 - `AnamnesisFormatter` преобразует структурированный анамнез жизни (JSON) в читаемый текст
 - Включает все разделы: наследственность, перинатальный анамнез, вскармливание, инфекции, аллергии

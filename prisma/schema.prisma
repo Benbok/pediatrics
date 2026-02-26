@@ -180,6 +180,7 @@ model Disease {
 
   // Relations
   guidelines  ClinicalGuideline[]
+  guidelineChunks GuidelineChunk[]
   medications DiseaseMedication[]
   visits      Visit[]             @relation("PrimaryDiagnosis")
   notes       DiseaseNote[]
@@ -232,7 +233,29 @@ model ClinicalGuideline {
 
   disease Disease @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
 
+  guidelineChunks GuidelineChunk[]
+
   @@map("clinical_guidelines")
+}
+
+model GuidelineChunk {
+  id          Int      @id @default(autoincrement())
+  guidelineId Int      @map("guideline_id")
+  diseaseId   Int      @map("disease_id")
+  type        String   @default("other")
+  pageStart   Int?     @map("page_start")
+  pageEnd     Int?     @map("page_end")
+  sectionTitle String? @map("section_title")
+  text        String
+  embeddingJson String? @map("embedding_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  guideline ClinicalGuideline @relation(fields: [guidelineId], references: [id], onDelete: Cascade)
+  disease   Disease           @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+
+  @@index([guidelineId])
+  @@index([diseaseId])
+  @@map("guideline_chunks")
 }
 
 model PdfNote {

@@ -514,6 +514,9 @@ const VisitService = {
         if (!visit) throw new Error('Прием не найден');
 
         const { AnamnesisFormatter } = require('./anamnesis-formatter.cjs');
+        const { buildClinicalQuery } = require('../../services/clinicalQueryBuilder.cjs');
+        const { CDSSSearchService } = require('../../services/cdssSearchService.cjs');
+        const { rankDiagnosesWithContext } = require('../../services/cdssRankingService.cjs');
 
         // Собираем все клинические данные для анализа
         const clinicalData = [];
@@ -603,36 +606,35 @@ const VisitService = {
             }
 
             // 3. Semantic search по симптомам (получаем топ-20 кандидатов)
-            logger.info(`[VisitService] Searching diseases by symptoms: ${parsed.symptoms.join(', ')}`);
-            const candidateDiseases = await DiseaseService.searchBySymptoms(parsed.symptoms);
+            const clinicalQuery = buildClinicalQuery(visit);
+            logger.info('[VisitService] Searching diseases by clinical query + symptoms');
+            const candidates = await CDSSSearchService.searchByClinicalData(clinicalQuery, parsed.symptoms);
 
-            if (candidateDiseases.length === 0) {
-                logger.warn('[VisitService] No diseases found for symptoms');
+            if (!Array.isArray(candidates) || candidates.length === 0) {
+                logger.warn('[VisitService] No diseases found for clinical data');
                 return [];
             }
 
-            // Ограничиваем до топ-20 для ранжирования
-            const topCandidates = candidateDiseases.slice(0, 20);
-
-            // 4. Ранжируем через Gemini с учетом всех данных
-            logger.info(`[VisitService] Ranking ${topCandidates.length} candidate diseases`);
-            const rankings = await rankDiagnoses(
+            logger.info(`[VisitService] Ranking ${Math.min(candidates.length, 8)} candidate diseases`);
+            const rankings = await rankDiagnosesWithContext(
                 parsed.symptoms,
-                topCandidates,
+                candidates,
                 {
                     ageMonths,
                     weight: visit.currentWeight || null,
                     height: visit.currentHeight || null,
                     temperature: visit.temperature || null,
                     vitalSigns: vitalSigns.join(', ')
-                }
+                },
+                clinicalQuery
             );
 
             // 5. Формируем результат с полными данными заболеваний
             logger.info(`[VisitService] Mapping ${rankings.length} rankings to diseases`);
 
             const suggestions = rankings.map(ranking => {
-                const disease = topCandidates.find(d => d.id === ranking.diseaseId);
+                const candidate = candidates.find(c => c.disease && c.disease.id === ranking.diseaseId);
+                const disease = candidate ? candidate.disease : null;
                 if (!disease) {
                     logger.warn(`[VisitService] Disease ID ${ranking.diseaseId} not found in candidates`);
                     return null;

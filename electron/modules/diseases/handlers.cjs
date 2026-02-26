@@ -164,6 +164,15 @@ const setupDiseaseHandlers = () => {
         return await DiseaseService.getGuidelinePlan(diseaseId);
     }));
 
+    ipcMain.handle('diseases:reindex-guideline-chunks', ensureAuthenticated(async () => {
+        const ok = await DiseaseService.reindexGuidelineChunks();
+        logAudit('GUIDELINE_CHUNKS_REINDEXED', { ok });
+
+        // Invalidate diseases cache because guideline-derived search may change
+        CacheService.invalidate('diseases', 'all');
+        return ok;
+    }));
+
     // ============= DISEASE NOTES HANDLERS =============
 
     ipcMain.handle('diseases:notes-list', ensureAuthenticated(async (_, diseaseId) => {

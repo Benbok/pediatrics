@@ -67,6 +67,15 @@ app.whenReady().then(async () => {
     await initializeDatabase();
     logger.info('[Main] Database initialization completed');
 
+    // Initialize CDSS indexes (FTS rebuild + in-memory embeddings)
+    try {
+        const { ChunkIndexService } = require('./services/chunkIndexService.cjs');
+        await ChunkIndexService.rebuildFts();
+        await ChunkIndexService.loadOnStartup();
+    } catch (error) {
+        logger.warn('[Main] ChunkIndexService initialization failed:', error.message);
+    }
+
     logger.info('[Main] Calling setupDatabaseHandlers...');
     await setupDatabaseHandlers();
     logger.info('[Main] setupDatabaseHandlers completed');

@@ -228,9 +228,14 @@ function getActiveKey() {
 function shouldRotateKey(error) {
     const errorMsg = (error?.message || String(error) || '').toLowerCase();
     
-    // Rate limit (429)
+    // Rate limit / quota (429): not a key-specific problem. Rotating burns keys.
     if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('resource_exhausted')) {
-        return true;
+        return false;
+    }
+
+    // Location / policy restrictions: also not a key problem.
+    if (errorMsg.includes('location is not supported') || errorMsg.includes('failed_precondition')) {
+        return false;
     }
     
     // Auth errors (401, 403)

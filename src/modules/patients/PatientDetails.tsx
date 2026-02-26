@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { ChildProfile } from '../../types';
 import { patientService } from '../../services/patient.service';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 export const PatientDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -10,6 +11,7 @@ export const PatientDetails: React.FC = () => {
     const [child, setChild] = useState<ChildProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [editForm, setEditForm] = useState({
         name: '',
         surname: '',
@@ -73,10 +75,11 @@ export const PatientDetails: React.FC = () => {
     const handleDeleteChild = async () => {
         if (!child || !child.id) return;
 
-        const fullName = getFullName(child);
-        const confirmed = window.confirm(`Вы уверены, что хотите полностью удалить карточку пациента "${fullName}"? Это действие необратимо, все данные о прививках будут потеряны.`);
+        setIsDeleteConfirmOpen(true);
+    };
 
-        if (!confirmed) return;
+    const confirmDeleteChild = async () => {
+        if (!child || !child.id) return;
 
         try {
             await patientService.deleteChild(child.id);
@@ -84,6 +87,8 @@ export const PatientDetails: React.FC = () => {
         } catch (error) {
             console.error('Failed to delete child:', error);
             alert('Не удалось удалить профиль пациента');
+        } finally {
+            setIsDeleteConfirmOpen(false);
         }
     };
 
@@ -367,6 +372,17 @@ export const PatientDetails: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={isDeleteConfirmOpen}
+                title="Удаление пациента"
+                message={`Вы уверены, что хотите полностью удалить карточку пациента "${getFullName(child)}"? Это действие необратимо, все данные о прививках будут потеряны.`}
+                confirmText="Удалить"
+                cancelText="Отмена"
+                variant="danger"
+                onConfirm={confirmDeleteChild}
+                onCancel={() => setIsDeleteConfirmOpen(false)}
+            />
         </div>
     );
 };

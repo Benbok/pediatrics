@@ -131,7 +131,7 @@ function _generateEmbeddingWithKey(apiKey, text) {
  * @param {string} text - Текст для генерации embedding
  * @returns {Promise<number[]>} Массив чисел (вектор embedding)
  */
-async function generateEmbedding(text) {
+async function generateEmbedding(text, options = null) {
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
         throw new Error('Текст для embedding не может быть пустым');
     }
@@ -146,8 +146,13 @@ async function generateEmbedding(text) {
     const manager = getApiKeyManager();
     let embedding;
 
-    // Используем apiKeyManager с ротацией, если доступен
-    if (manager) {
+    const rotationMode = options && typeof options === 'object' ? options.rotation : null;
+
+    // Если явно запрещаем ротацию (например, при bulk indexing), делаем 1 попытку на активном ключе
+    if (manager && rotationMode === 'none') {
+        const apiKey = manager.getActiveKey();
+        embedding = await _generateEmbeddingWithKey(apiKey, text);
+    } else if (manager) {
         try {
             embedding = await manager.retryWithRotation(async (apiKey) => {
                 return await _generateEmbeddingWithKey(apiKey, text);

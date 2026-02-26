@@ -1,0 +1,21 @@
+module.exports = {
+    CHUNK_SIZE: 700,
+    CHUNK_OVERLAP: 100,
+
+    PREFILTER_TOKEN_MIN_LEN: 3,
+    PREFILTER_SCORE_THRESHOLD: 0.1,
+
+    MERGE_SYMPTOM_WEIGHT: 0.4,
+    MERGE_CHUNK_WEIGHT: 0.6,
+
+    MAX_CANDIDATES_BEFORE_RANK: 15,
+    MAX_CANDIDATES_FOR_AI_RANK: 8,
+    EVIDENCE_CHUNKS_PER_DISEASE: 2,
+
+    FTS_LIMIT: 60,
+
+    ABNORMAL_VITALS: {
+        temperatureC: 37.5,
+        oxygenSaturation: 95,
+    },
+};
