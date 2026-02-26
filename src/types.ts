@@ -232,6 +232,13 @@ export interface TreatmentPlanItem {
   priority?: 'low' | 'medium' | 'high';
 }
 
+export type SymptomCategory = 'clinical' | 'physical' | 'other';
+
+export interface CategorizedSymptom {
+  text: string;
+  category: SymptomCategory;
+}
+
 export interface Disease {
   id: number;
   icd10Code: string; // Primary code
@@ -239,7 +246,7 @@ export interface Disease {
   nameRu: string;
   nameEn?: string | null;
   description: string;
-  symptoms: string[];
+  symptoms: CategorizedSymptom[];
   diagnosticPlan?: DiagnosticPlanItem[];
   treatmentPlan?: TreatmentPlanItem[];
   differentialDiagnosis?: string[];

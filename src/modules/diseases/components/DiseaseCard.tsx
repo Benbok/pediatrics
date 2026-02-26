@@ -64,7 +64,7 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, onSelect, onD
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-medium text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
                             >
                                 <Activity className="w-3 h-3 text-primary-500" />
-                                {symptom}
+                                {typeof symptom === 'object' && symptom !== null && 'text' in symptom ? symptom.text : String(symptom)}
                             </span>
                         ))}
                         {disease.symptoms.length > 4 && (

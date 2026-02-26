@@ -141,19 +141,18 @@ class DiseaseValidator {
     }
 
     /**
-     * Проверка симптомов
+     * Проверка симптомов. Поддерживает формат string[] (старый) и {text, category}[] (новый).
      */
     validateSymptoms(data) {
         if (data.symptoms !== undefined && data.symptoms !== null) {
             if (!Array.isArray(data.symptoms)) {
                 this.errors.push({
                     field: 'symptoms',
-                    message: 'Поле symptoms должно быть массивом строк'
+                    message: 'Поле symptoms должно быть массивом'
                 });
                 return;
             }
 
-            // Проверка пустого массива симптомов
             if (data.symptoms.length === 0) {
                 this.warnings.push({
                     field: 'symptoms',
@@ -163,37 +162,44 @@ class DiseaseValidator {
             }
 
             const canonicalSymptoms = getCanonicalSet('symptoms');
+            const texts = [];
 
-            // Проверка каждого симптома
             data.symptoms.forEach((symptom, idx) => {
-                if (typeof symptom !== 'string') {
+                const text = typeof symptom === 'string' ? symptom : (symptom && symptom.text != null ? String(symptom.text) : '');
+                if (typeof symptom !== 'string' && (!symptom || typeof symptom !== 'object' || typeof symptom.text !== 'string')) {
+                    if (typeof symptom === 'object' && symptom !== null && symptom.text != null) {
+                        // object with text
+                    } else if (typeof symptom !== 'string') {
+                        this.errors.push({
+                            field: `symptoms[${idx}]`,
+                            message: 'Элемент симптома должен быть строкой или объектом {text, category}'
+                        });
+                        return;
+                    }
+                }
+                if (text.trim().length === 0) {
                     this.errors.push({
                         field: `symptoms[${idx}]`,
-                        message: 'Каждый симптом должен быть строкой'
+                        message: 'Текст симптома не может быть пустым'
                     });
-                } else if (symptom.trim().length === 0) {
-                    this.errors.push({
-                        field: `symptoms[${idx}]`,
-                        message: 'Симптом не может быть пустой строкой'
-                    });
-                } else if (symptom.trim().length < 3) {
+                } else if (text.trim().length < 3) {
                     this.warnings.push({
                         field: `symptoms[${idx}]`,
-                        message: `Симптом слишком короткий: "${symptom}"`,
+                        message: `Симптом слишком короткий: "${text}"`,
                         severity: 'low'
                     });
-                } else if (canonicalSymptoms.size > 0 && !canonicalSymptoms.has(normalizeText(symptom))) {
+                } else if (canonicalSymptoms.size > 0 && !canonicalSymptoms.has(normalizeText(text))) {
                     this.warnings.push({
                         field: `symptoms[${idx}]`,
-                        message: `Симптом не найден в словаре (будет сохранен как есть): "${symptom}"`,
+                        message: `Симптом не найден в словаре (будет сохранен как есть): "${text}"`,
                         severity: 'low'
                     });
                 }
+                texts.push(text.trim().toLowerCase());
             });
 
-            // Проверка на дубликаты симптомов
-            const uniqueSymptoms = [...new Set(data.symptoms.map(s => s.trim().toLowerCase()))];
-            if (uniqueSymptoms.length !== data.symptoms.length) {
+            const uniqueSymptoms = [...new Set(texts)];
+            if (uniqueSymptoms.length !== texts.length) {
                 this.warnings.push({
                     field: 'symptoms',
                     message: 'Обнаружены дублирующиеся симптомы (с учетом регистра)',

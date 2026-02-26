@@ -153,6 +153,12 @@ function buildGuidelinePlan(disease, guideline) {
     };
 }
 
+// Symptom schema: { text, category } with backward compatibility for string[]
+const SymptomSchema = z.object({
+    text: z.string().min(1),
+    category: z.enum(['clinical', 'physical', 'other']).default('other'),
+});
+
 // Disease Validation Schema
 const DiseaseSchema = z.object({
     id: z.number().optional(),
@@ -161,12 +167,27 @@ const DiseaseSchema = z.object({
     nameRu: z.string().min(2),
     nameEn: z.string().optional().nullable(),
     description: z.string(),
-    symptoms: z.array(z.string()).default([]),
+    symptoms: z.array(SymptomSchema).default([]),
     diagnosticPlan: z.array(DiagnosticPlanItemSchema).optional().default([]),
     treatmentPlan: z.array(TreatmentPlanItemSchema).optional().default([]),
     differentialDiagnosis: z.array(z.string()).optional().default([]),
     redFlags: z.array(z.string()).optional().default([]),
 });
+
+/**
+ * Parse symptoms from DB JSON. Supports old format (string[]) and new format ({text, category}[]).
+ */
+function _parseSymptoms(symptomsJson) {
+    const parsed = safeJsonParse(symptomsJson, []);
+    if (parsed.length === 0) return [];
+    if (typeof parsed[0] === 'string') {
+        return parsed.map(text => ({ text: String(text).trim(), category: 'other' }));
+    }
+    return parsed.map(s => ({
+        text: (s && s.text) ? String(s.text).trim() : '',
+        category: (s && s.category && ['clinical', 'physical', 'other'].includes(s.category)) ? s.category : 'other',
+    })).filter(s => s.text.length > 0);
+}
 
 const DiseaseService = {
     /**
@@ -231,12 +252,16 @@ const DiseaseService = {
             differentialDiagnosis: ____,
             redFlags: _____,
             symptomsEmbedding: ______,
+            symptoms: _____symptoms,
             ...diseaseWithoutJsonFields
         } = disease;
+
+        const parsedSymptoms = _parseSymptoms(disease.symptoms);
 
         return {
             ...diseaseWithoutJsonFields,
             icd10Codes: diseaseIcd10Codes,
+            symptoms: parsedSymptoms,
             diagnosticPlan: parsedDiagnosticPlan,
             treatmentPlan: parsedTreatmentPlan,
             differentialDiagnosis: parsedDifferentialDiagnosis,
@@ -253,19 +278,36 @@ const DiseaseService = {
         const validated = DiseaseSchema.parse(normalizedInput);
         const { id, ...rest } = validated;
 
-        const normalizedSymptoms = normalizeSymptoms(rest.symptoms || []);
-        rest.symptoms = normalizedSymptoms;
+        const symptomTexts = (rest.symptoms || []).map(s => (typeof s === 'string' ? s : s.text));
+        const symptomsTextForEmbedding = symptomTexts.join(', ');
 
-        // Генерируем embedding для симптомов
+        let shouldRegenerateEmbedding = true;
         let symptomsEmbedding = null;
-        if (rest.symptoms && Array.isArray(rest.symptoms) && rest.symptoms.length > 0) {
+
+        if (id) {
+            const existingDisease = await prisma.disease.findUnique({
+                where: { id },
+            });
+            if (existingDisease && existingDisease.symptoms) {
+                const oldParsed = _parseSymptoms(existingDisease.symptoms);
+                const oldTexts = oldParsed.map(s => s.text).sort().join('|');
+                const newTexts = symptomTexts.slice().sort().join('|');
+                shouldRegenerateEmbedding = oldTexts !== newTexts;
+                logger.debug(`[DiseaseService] Embedding regeneration: ${shouldRegenerateEmbedding ? 'YES' : 'NO (category-only change)'}`);
+            }
+        }
+
+        if (shouldRegenerateEmbedding && symptomTexts.length > 0) {
             try {
-                const symptomsText = rest.symptoms.join(', ');
-                symptomsEmbedding = await generateEmbedding(symptomsText);
+                symptomsEmbedding = await generateEmbedding(symptomsTextForEmbedding);
                 logger.info(`[DiseaseService] Generated embedding for disease: ${rest.nameRu}`);
             } catch (error) {
                 logger.warn('[DiseaseService] Failed to generate embedding, continuing without it:', error.message);
-                // Продолжаем без embedding - это не критично
+            }
+        } else if (id) {
+            const existingDisease = await prisma.disease.findUnique({ where: { id } });
+            if (existingDisease && existingDisease.symptomsEmbedding) {
+                symptomsEmbedding = existingDisease.symptomsEmbedding;
             }
         }
 
@@ -277,7 +319,7 @@ const DiseaseService = {
             treatmentPlan: JSON.stringify(rest.treatmentPlan || []),
             differentialDiagnosis: JSON.stringify(rest.differentialDiagnosis || []),
             redFlags: JSON.stringify(rest.redFlags || []),
-            symptomsEmbedding: symptomsEmbedding ? JSON.stringify(symptomsEmbedding) : null,
+            symptomsEmbedding: symptomsEmbedding ? (typeof symptomsEmbedding === 'string' ? symptomsEmbedding : JSON.stringify(symptomsEmbedding)) : null,
         };
 
         logger.debug(`[DiseaseService] Saving disease with plans:`, {
@@ -288,15 +330,17 @@ const DiseaseService = {
         });
 
         if (id) {
-            return await prisma.disease.update({
+            const updated = await prisma.disease.update({
                 where: { id },
                 data: dbData,
             });
+            return { ...updated, symptoms: _parseSymptoms(updated.symptoms) };
         }
 
-        return await prisma.disease.create({
+        const created = await prisma.disease.create({
             data: dbData,
         });
+        return { ...created, symptoms: _parseSymptoms(created.symptoms) };
     },
 
     /**
@@ -576,11 +620,14 @@ const DiseaseService = {
 
         const updateData = {};
 
-        // Обновляем симптомы ТОЛЬКО если поле пустое
+        // Обновляем симптомы ТОЛЬКО если поле пустое (сохраняем в формате {text, category})
         const existingSymptoms = safeJsonParse(disease.symptoms, []);
         if (existingSymptoms.length === 0 && metadata.symptoms && metadata.symptoms.length > 0) {
-            updateData.symptoms = JSON.stringify(metadata.symptoms);
-            logger.info(`[DiseaseService] Adding ${metadata.symptoms.length} symptoms from PDF (field was empty)`);
+            const categorized = metadata.symptoms.map(s =>
+                ({ text: String(s).trim(), category: 'other' })
+            ).filter(s => s.text.length > 0);
+            updateData.symptoms = JSON.stringify(categorized);
+            logger.info(`[DiseaseService] Adding ${categorized.length} symptoms from PDF (field was empty)`);
         } else if (existingSymptoms.length > 0) {
             logger.debug(`[DiseaseService] Skipping symptoms update - field already has ${existingSymptoms.length} items`);
         }
@@ -645,12 +692,17 @@ const DiseaseService = {
                 }
             }
 
+            const extractedSymptoms = Array.isArray(parsedData.symptoms) ? parsedData.symptoms : [];
+            const symptomsCategorized = extractedSymptoms.map(text =>
+                ({ text: String(text).trim(), category: 'other' })
+            ).filter(s => s.text.length > 0);
+
             return {
                 icd10Code: firstCode || '',
                 allIcd10Codes: parsedData.icd10_codes || [],
                 nameRu, // Теперь из справочника МКБ
                 description: 'Извлечено из клинических рекомендаций',
-                symptoms: [], // User will enter symptoms manually
+                symptoms: symptomsCategorized,
                 aiUsed: !aiWarning,
                 aiWarning,
                 pdfPath
@@ -667,15 +719,18 @@ const DiseaseService = {
      * @returns {Promise<Array>} Массив заболеваний, отсортированных по релевантности
      */
     async searchBySymptoms(symptoms) {
-        if (!symptoms || !Array.isArray(symptoms) || symptoms.length === 0) {
+        const symptomTexts = Array.isArray(symptoms)
+            ? symptoms.map(s => (typeof s === 'string' ? s : (s && s.text) ? s.text : '')).filter(Boolean)
+            : [];
+        if (symptomTexts.length === 0) {
             return [];
         }
 
         // 1. Нормализация (словарь + опционально batch AI)
-        const { normalized, source, aiUsed } = await normalizeWithAI(symptoms);
+        const { normalized, source, aiUsed } = await normalizeWithAI(symptomTexts);
         logger.debug(`[DiseaseService] Normalization: ${source}, AI used: ${aiUsed}`);
 
-        const symptomsToUse = normalized.length > 0 ? normalized : symptoms;
+        const symptomsToUse = normalized.length > 0 ? normalized : symptomTexts;
         const symptomsText = symptomsToUse.join(', ');
 
         // Проверяем кэш
@@ -719,7 +774,7 @@ const DiseaseService = {
                         return {
                             disease: {
                                 ...disease,
-                                symptoms: JSON.parse(disease.symptoms || '[]'),
+                                symptoms: _parseSymptoms(disease.symptoms),
                                 icd10Codes: JSON.parse(disease.icd10Codes || '[]')
                             },
                             similarity
@@ -774,12 +829,13 @@ const DiseaseService = {
 
         const results = diseases
             .map(d => {
-                const dSymptoms = JSON.parse(d.symptoms || '[]');
-                const dCanonical = new Set(normalizeSymptoms(dSymptoms).map(n => n.toLowerCase().trim()));
+                const dParsed = _parseSymptoms(d.symptoms);
+                const dTexts = dParsed.map(s => s.text);
+                const dCanonical = new Set(normalizeSymptoms(dTexts).map(n => n.toLowerCase().trim()));
 
                 const matchByCanonical = [...queryCanonical].filter(qc => dCanonical.has(qc)).length;
                 const matchBySubstring = queryRaw.filter(s =>
-                    dSymptoms.some(ds => ds.toLowerCase().includes(s)) ||
+                    dTexts.some(ds => ds.toLowerCase().includes(s)) ||
                     d.nameRu.toLowerCase().includes(s)
                 ).length;
                 const matchesCount = Math.max(matchByCanonical, matchBySubstring);
@@ -787,7 +843,7 @@ const DiseaseService = {
                 return {
                     disease: {
                         ...d,
-                        symptoms: dSymptoms,
+                        symptoms: dParsed,
                         icd10Codes: JSON.parse(d.icd10Codes || '[]')
                     },
                     score: matchesCount / Math.max(symptoms.length, 1)

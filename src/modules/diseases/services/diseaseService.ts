@@ -1,4 +1,4 @@
-import { Disease, ClinicalGuideline, GuidelinePlan } from '../../../types';
+import { Disease, ClinicalGuideline, GuidelinePlan, CategorizedSymptom, SymptomCategory } from '../../../types';
 import { dataEvents } from '../../../services/dataEvents';
 
 /**
@@ -19,12 +19,23 @@ const safeJsonParse = <T>(value: any, fallback: T): T => {
     }
 };
 
+export function parseSymptoms(symptoms: any): CategorizedSymptom[] {
+    const parsed = Array.isArray(symptoms) ? symptoms : safeJsonParse<any[]>(symptoms, []);
+    if (parsed.length === 0) return [];
+    if (typeof parsed[0] === 'string') {
+        return parsed.map((text: string) => ({ text: String(text).trim(), category: 'other' as SymptomCategory }));
+    }
+    return parsed.map((s: any) => ({
+        text: (s && s.text) ? String(s.text).trim() : '',
+        category: (s && s.category && ['clinical', 'physical', 'other'].includes(s.category)) ? s.category as SymptomCategory : 'other' as SymptomCategory
+    })).filter((s: CategorizedSymptom) => s.text.length > 0);
+}
+
 const normalizeDisease = <T extends Disease>(data: T): T => {
     return {
         ...data,
-        // Backend already returns parsed arrays, so only parse if it's still a string
         icd10Codes: Array.isArray(data.icd10Codes) ? data.icd10Codes : safeJsonParse<string[]>(data.icd10Codes, []),
-        symptoms: Array.isArray(data.symptoms) ? data.symptoms : safeJsonParse<string[]>(data.symptoms, []),
+        symptoms: parseSymptoms(data.symptoms),
         diagnosticPlan: Array.isArray(data.diagnosticPlan) ? data.diagnosticPlan : safeJsonParse<any[]>(data.diagnosticPlan as any, []),
         treatmentPlan: Array.isArray(data.treatmentPlan) ? data.treatmentPlan : safeJsonParse<any[]>(data.treatmentPlan as any, []),
         differentialDiagnosis: Array.isArray(data.differentialDiagnosis) ? data.differentialDiagnosis : safeJsonParse<string[]>(data.differentialDiagnosis as any, []),

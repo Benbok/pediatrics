@@ -65,7 +65,9 @@ function normalizeSymptomsWithPhrases(symptoms) {
     const normalized = [];
 
     symptoms.forEach(symptom => {
-        const raw = String(symptom || '').trim();
+        const raw = typeof symptom === 'object' && symptom !== null && typeof symptom.text === 'string'
+            ? String(symptom.text || '').trim()
+            : String(symptom || '').trim();
         if (!raw) return;
         const text = normalizeText(raw);
 
@@ -81,6 +83,35 @@ function normalizeSymptomsWithPhrases(symptoms) {
     });
 
     return Array.from(new Set(normalized.map(item => item.trim()).filter(Boolean)));
+}
+
+/**
+ * Normalize symptoms to CategorizedSymptom[]. Accepts string[] (old) or {text, category}[] (new).
+ */
+function normalizeSymptomsToCategorized(symptoms) {
+    if (!Array.isArray(symptoms)) return [];
+    const isNewFormat = symptoms.length > 0 && typeof symptoms[0] === 'object' && symptoms[0] !== null && 'category' in symptoms[0];
+    if (isNewFormat) {
+        const seen = new Set();
+        return symptoms
+            .filter(s => s && typeof s.text === 'string' && String(s.text).trim())
+            .map(s => {
+                const raw = String(s.text).trim();
+                const normalizedTexts = normalizeSymptomsWithPhrases([raw]);
+                return {
+                    text: normalizedTexts[0] != null ? normalizedTexts[0] : raw,
+                    category: ['clinical', 'physical', 'other'].includes(s.category) ? s.category : 'other',
+                };
+            })
+            .filter(item => {
+                const key = item.text.toLowerCase();
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+    }
+    const phraseNormalized = normalizeSymptomsWithPhrases(symptoms);
+    return phraseNormalized.map(text => ({ text, category: 'other' }));
 }
 
 function normalizeDiseaseData(diseaseData) {
@@ -109,10 +140,9 @@ function normalizeDiseaseData(diseaseData) {
 
     const normalized = {
         ...diseaseData,
-        symptoms: normalizeSymptomsWithPhrases(diseaseData.symptoms || []),
+        symptoms: normalizeSymptomsToCategorized(diseaseData.symptoms || []),
         diagnosticPlan: normalizedDiagnosticPlan,
         treatmentPlan: normalizedTreatmentPlan,
-        // Preserve differentialDiagnosis and redFlags arrays
         differentialDiagnosis: diseaseData.differentialDiagnosis || [],
         redFlags: diseaseData.redFlags || []
     };
@@ -125,5 +155,6 @@ module.exports = {
     normalizeTreatmentCategory,
     normalizeDiagnosticType,
     normalizeSymptomsWithPhrases,
+    normalizeSymptomsToCategorized,
     normalizeIcd10Codes
 };

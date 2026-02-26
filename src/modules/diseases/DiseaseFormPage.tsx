@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { diseaseService } from './services/diseaseService';
 import { icdCodeService } from '../../services/icdCode.service';
-import { Disease } from '../../types';
+import { Disease, SymptomCategory, CategorizedSymptom } from '../../types';
 import { Card } from '../../components/ui/Card';
+import { SymptomsList } from './components/SymptomsList';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -46,6 +47,7 @@ export const DiseaseFormPage: React.FC = () => {
     const [importedPdfPath, setImportedPdfPath] = useState<string | null>(null);
 
     const [newSymptom, setNewSymptom] = useState('');
+    const [newSymptomCategory, setNewSymptomCategory] = useState<SymptomCategory>('other');
     const [newDifferential, setNewDifferential] = useState('');
     const [newRedFlag, setNewRedFlag] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -79,11 +81,11 @@ export const DiseaseFormPage: React.FC = () => {
             const data = await diseaseService.getDisease(Number(id));
             console.log('[DiseaseFormPage] Raw data from backend:', data);
 
-            // Parse JSON strings from SQLite
+            // Backend returns parsed data; ensure symptoms are CategorizedSymptom[]
             const parsed = {
                 ...data,
-                symptoms: typeof data.symptoms === 'string' ? JSON.parse(data.symptoms) : (data.symptoms || []),
-                icd10Codes: typeof data.icd10Codes === 'string' ? JSON.parse(data.icd10Codes) : (data.icd10Codes || []),
+                symptoms: data.symptoms || [],
+                icd10Codes: Array.isArray(data.icd10Codes) ? data.icd10Codes : (typeof data.icd10Codes === 'string' ? JSON.parse(data.icd10Codes) : []),
                 diagnosticPlan: typeof data.diagnosticPlan === 'string' ? JSON.parse(data.diagnosticPlan) : (data.diagnosticPlan || []),
                 treatmentPlan: typeof data.treatmentPlan === 'string' ? JSON.parse(data.treatmentPlan) : (data.treatmentPlan || []),
                 differentialDiagnosis: typeof data.differentialDiagnosis === 'string' ? JSON.parse(data.differentialDiagnosis) : (data.differentialDiagnosis || []),
@@ -128,11 +130,22 @@ export const DiseaseFormPage: React.FC = () => {
     const addSymptom = () => {
         if (!newSymptom.trim()) return;
 
-        // Split by comma or semicolon and trim each symptom
-        const symptomsToAdd = newSymptom
+        const inputSymptoms = newSymptom
             .split(/[,;]/)
             .map(s => s.trim())
-            .filter(s => s.length > 0 && !formData.symptoms?.includes(s));
+            .filter(s => s.length > 0);
+
+        const existingTextsLower = (formData.symptoms || []).map(s => s.text.toLowerCase());
+        const symptomsToAdd = inputSymptoms
+            .filter(text => {
+                const isDuplicate = existingTextsLower.includes(text.toLowerCase());
+                if (isDuplicate) {
+                    setError(`Симптом "${text}" уже добавлен`);
+                    setTimeout(() => setError(null), 3000);
+                }
+                return !isDuplicate;
+            })
+            .map(text => ({ text, category: newSymptomCategory }));
 
         if (symptomsToAdd.length > 0) {
             setFormData({
@@ -143,10 +156,41 @@ export const DiseaseFormPage: React.FC = () => {
         }
     };
 
-    const removeSymptom = (symptom: string) => {
+    const removeSymptom = (symptom: CategorizedSymptom) => {
         setFormData({
             ...formData,
-            symptoms: formData.symptoms?.filter(s => s !== symptom)
+            symptoms: formData.symptoms?.filter(s => s.text !== symptom.text) || []
+        });
+    };
+
+    const updateSymptomCategory = (symptomText: string, newCategory: SymptomCategory) => {
+        setFormData({
+            ...formData,
+            symptoms: formData.symptoms?.map(s =>
+                s.text === symptomText ? { ...s, category: newCategory } : s
+            ) || []
+        });
+    };
+
+    const updateSymptom = (oldText: string, newText: string, newCategory: SymptomCategory) => {
+        if (!newText.trim()) {
+            removeSymptom({ text: oldText, category: newCategory });
+            return;
+        }
+        const trimmedNewText = newText.trim();
+        const isDuplicate = formData.symptoms?.some(
+            s => s.text.toLowerCase() === trimmedNewText.toLowerCase() && s.text !== oldText
+        );
+        if (isDuplicate) {
+            setError(`Симптом "${trimmedNewText}" уже существует`);
+            setTimeout(() => setError(null), 3000);
+            return;
+        }
+        setFormData({
+            ...formData,
+            symptoms: formData.symptoms?.map(s =>
+                s.text === oldText ? { text: trimmedNewText, category: newCategory } : s
+            ) || []
         });
     };
 
@@ -576,40 +620,36 @@ export const DiseaseFormPage: React.FC = () => {
                         Симптомы и клинические признаки
                     </h2>
 
-                    <div className="flex gap-2 mb-4">
+                    <div className="flex gap-2 mb-4 flex-wrap">
                         <Input
                             value={newSymptom}
                             onChange={e => setNewSymptom(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addSymptom())}
                             placeholder="Введите симптом или несколько через запятую..."
-                            className="h-12 rounded-xl"
+                            className="h-12 rounded-xl flex-1 min-w-[200px]"
                         />
+                        <select
+                            value={newSymptomCategory}
+                            onChange={e => setNewSymptomCategory(e.target.value as SymptomCategory)}
+                            className="h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-bold text-slate-700 dark:text-slate-200"
+                        >
+                            <option value="other">Другое</option>
+                            <option value="clinical">Клинические</option>
+                            <option value="physical">Физикальные</option>
+                        </select>
                         <Button type="button" onClick={addSymptom} variant="secondary" className="h-12 w-12 rounded-xl p-0">
                             <Plus className="w-6 h-6" />
                         </Button>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                        {formData.symptoms?.map((symptom, idx) => (
-                            <Badge
-                                key={idx}
-                                variant="primary"
-                                className="pl-3 pr-1 py-1.5 rounded-xl flex items-center gap-2 group border-none shadow-sm"
-                            >
-                                <span>{symptom}</span>
-                                <button
-                                    type="button"
-                                    onClick={() => removeSymptom(symptom)}
-                                    className="p-1 hover:bg-white/20 rounded-lg transition-colors"
-                                >
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
-                            </Badge>
-                        ))}
-                        {(!formData.symptoms || formData.symptoms.length === 0) && (
-                            <p className="text-sm text-slate-400 italic">Симптомы еще не добавлены</p>
-                        )}
-                    </div>
+                    <SymptomsList
+                        symptoms={formData.symptoms || []}
+                        onRemove={removeSymptom}
+                        onCategoryChange={updateSymptomCategory}
+                        onUpdate={updateSymptom}
+                        onError={msg => { setError(msg); setTimeout(() => setError(null), 3000); }}
+                        editable={true}
+                    />
                 </Card>
 
                 {/* Diagnostic Plan Section */}
@@ -1071,7 +1111,9 @@ export const DiseaseFormPage: React.FC = () => {
                                     <h3 className="text-lg font-bold mb-3">Симптомы</h3>
                                     <div className="flex flex-wrap gap-2">
                                         {previewData.symptoms.map((symptom, idx) => (
-                                            <Badge key={idx} variant="primary">{symptom}</Badge>
+                                            <Badge key={idx} variant="primary">
+                                                {typeof symptom === 'object' && symptom !== null && 'text' in symptom ? symptom.text : String(symptom)}
+                                            </Badge>
                                         ))}
                                     </div>
                                 </div>

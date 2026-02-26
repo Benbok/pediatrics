@@ -93,7 +93,10 @@ export const DiseasesModule: React.FC = () => {
     const filteredDiseases = diseases.filter(d =>
         d.nameRu.toLowerCase().includes(searchQuery.toLowerCase()) ||
         d.icd10Code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.symptoms.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()))
+        (d.symptoms || []).some(s => {
+            const text = typeof s === 'object' && s !== null && 'text' in s ? (s as { text: string }).text : String(s);
+            return text.toLowerCase().includes(searchQuery.toLowerCase());
+        })
     );
 
     return (

@@ -34,17 +34,7 @@ export const DiseaseDetailPage: React.FC = () => {
         try {
             const data = await diseaseService.getDisease(Number(id));
             if (data) {
-                // Parse symptoms and icd10Codes if they are strings
-                const parsed = {
-                    ...data,
-                    symptoms: typeof data.symptoms === 'string' ? JSON.parse(data.symptoms) : data.symptoms,
-                    icd10Codes: typeof data.icd10Codes === 'string' ? JSON.parse(data.icd10Codes) : data.icd10Codes,
-                    diagnosticPlan: typeof data.diagnosticPlan === 'string' ? JSON.parse(data.diagnosticPlan) : (data.diagnosticPlan || []),
-                    treatmentPlan: typeof data.treatmentPlan === 'string' ? JSON.parse(data.treatmentPlan) : (data.treatmentPlan || []),
-                    differentialDiagnosis: typeof data.differentialDiagnosis === 'string' ? JSON.parse(data.differentialDiagnosis) : (data.differentialDiagnosis || []),
-                    redFlags: typeof data.redFlags === 'string' ? JSON.parse(data.redFlags) : (data.redFlags || []),
-                };
-                setDisease(parsed as Disease);
+                setDisease(data as Disease);
             } else {
                 setError('Заболевание не найдено');
             }

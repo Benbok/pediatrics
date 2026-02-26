@@ -211,6 +211,12 @@ const setupDiseaseHandlers = () => {
                 };
             }
 
+            // Поддержка старого формата symptoms: string[] при импорте
+            if (Array.isArray(diseaseData.symptoms) && diseaseData.symptoms.length > 0 && typeof diseaseData.symptoms[0] === 'string') {
+                logger.info('[Diseases] Converting old format symptoms to new format');
+                diseaseData.symptoms = diseaseData.symptoms.map(text => ({ text: String(text).trim(), category: 'other' })).filter(s => s.text.length > 0);
+            }
+
             diseaseData = normalizeDiseaseData(diseaseData);
 
             // Валидация через DiseaseValidator

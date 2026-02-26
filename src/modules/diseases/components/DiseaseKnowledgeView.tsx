@@ -18,11 +18,13 @@ import {
     CheckCircle,
     MessageSquare,
     ChevronDown,
-    Check
+    Check,
+    Activity
 } from 'lucide-react';
 import { DiseaseNotesList } from './DiseaseNotesList';
 import { DiseaseMedicationsTab } from './DiseaseMedicationsTab';
 import { GuidelinesList } from './GuidelinesList';
+import { SymptomsList } from './SymptomsList';
 import { clsx } from 'clsx';
 
 interface DiseaseKnowledgeViewProps {
@@ -98,6 +100,9 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
         },
         {
             id: 'search', label: 'Поиск в PDF', icon: Search, isSearch: true
+        },
+        {
+            id: 'symptoms', label: 'Симптомы', icon: Activity, isSymptoms: true
         },
         {
             id: 'diagnosis', label: 'Диагностика', icon: Stethoscope, content: []
@@ -335,7 +340,16 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                             </div>
                         </TabsContent>
 
-                        {sections.filter(s => !s.isSearch && !s.isFiles && s.content).map(s => (
+                        <TabsContent value="symptoms" className="mt-0 focus-visible:outline-none">
+                            <div className="mb-6">
+                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
+                                    Симптомы и клинические признаки
+                                </h3>
+                                <SymptomsList symptoms={disease.symptoms || []} editable={false} />
+                            </div>
+                        </TabsContent>
+
+                        {sections.filter(s => !s.isSearch && !s.isFiles && !s.isSymptoms && s.content).map(s => (
                             <TabsContent key={s.id} value={s.id} className="mt-0 focus-visible:outline-none">
                                 <div className="space-y-8">
                                     {/* Guideline content */}
