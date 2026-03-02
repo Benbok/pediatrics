@@ -158,6 +158,8 @@
   "minInterval": 4,
   "maxDosesPerDay": 4,
   "maxDurationDays": 7,
+  "routeOfAdmin": "oral",
+  "vidalUrl": null,
   "icd10Codes": [
     "R50",
     "R51",

@@ -85,7 +85,17 @@ export const MedicationSchema = z.object({
     interactions: z.string().nullable().optional(),
     pregnancy: z.string().nullable().optional(),
     lactation: z.string().nullable().optional(),
-    indications: z.array(z.any()).default([]),
+    indications: z
+        .union([z.array(z.any()), z.string()])
+        .default([])
+        .transform((val) => {
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string') {
+                const trimmed = val.trim();
+                return trimmed ? trimmed.split(/\s*[;\n]\s*/).map((s) => s.trim()).filter(Boolean) : [];
+            }
+            return [];
+        }),
     vidalUrl: z.string().url().nullable().optional(),
     clinicalPharmGroup: z.string().nullable().optional(),
     pharmTherapyGroup: z.string().nullable().optional(),

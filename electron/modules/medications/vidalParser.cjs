@@ -95,15 +95,18 @@ async function parseVidalWithAI(html) {
 
 ${relevantHtml}
 
-JSON: {nameRu, activeSubstance, atcCode, manufacturer, clinicalPharmGroup, pharmTherapyGroup, packageDescription, forms: [{type, concentration, description}], pediatricDosing: [{minAgeMonths, maxAgeMonths, dosing: {type: "weight_based"/"fixed", mgPerKg или fixedDose: {min, max, unit}}, routeOfAdmin, timesPerDay, maxSingleDose, maxDailyDose, instruction}], adultDosing: [], indications, contraindications, sideEffects, pregnancy, lactation, cautionConditions, interactions, minInterval, maxDosesPerDay, maxDurationDays, routeOfAdmin, icd10Codes: []}
+JSON: {nameRu, activeSubstance, atcCode, manufacturer, clinicalPharmGroup, pharmTherapyGroup, packageDescription, forms: [{id, type, concentration, description}], pediatricDosing: [{minAgeMonths, maxAgeMonths, formId, dosing: {type: "weight_based"/"fixed", mgPerKg или fixedDose: {min, max, unit}}, routeOfAdmin, timesPerDay, maxSingleDose, maxDailyDose, instruction}], adultDosing: [], indications, contraindications, sideEffects, pregnancy, lactation, cautionConditions, interactions, minInterval, maxDosesPerDay, maxDurationDays, routeOfAdmin, icd10Codes: []}
 
 КРИТИЧНО:
 1. atcCode - найди код формата N02BE01 (буква-2цифры-буквы-2цифры). Ищи в тексте "АТХ", "ATX", "Код ATC"
 2. icd10Codes - массив кодов МКБ-10 из секции "Показания". Формат: R50, R51.0, J06.9 и т.д. Ищи "МКБ-10", "код по МКБ", упоминания болезней с кодами
 3. indications - текст показаний (ОБЯЗАТЕЛЬНО)
-4. pediatricDosing - все правила из "Дозирование" для детей
-5. Дозы в мг (1г=1000мг), возраст в месяцах
-6. Экранируй ", валидный JSON`;
+4. forms - у КАЖДОЙ формы ОБЯЗАТЕЛЬНО поле id: уникальный slug на латинице (например "tablet_500mg", "solution_24mgml"). Генерируй из type и concentration.
+5. contraindications - ОБЯЗАТЕЛЬНО. Полный текст из секции "Противопоказания к применению". Не оставляй пустым.
+6. pediatricDosing - все правила из "Дозирование" для детей. Для каждого правила: maxSingleDose - верхнее значение из "Разовые дозы для детей X-Y лет - A-B мг" (B в мг). maxDailyDose = maxSingleDose × timesPerDay, если не указано иначе.
+7. minInterval - интервал между приёмами в ЧАСАХ (не минуты!). Если в тексте "интервал не менее 4 ч" - пиши 4, не 240.
+8. Дозы в мг (1г=1000мг), возраст в месяцах
+9. Экранируй ", валидный JSON`;
 
     try {
         const result = await ai.models.generateContent({
@@ -165,6 +168,42 @@ JSON: {nameRu, activeSubstance, atcCode, manufacturer, clinicalPharmGroup, pharm
                 }
                 return rule;
             });
+        }
+
+        // minInterval: если AI вернул минуты (значение > 24), переводим в часы
+        if (parsed.minInterval != null && parsed.minInterval > 24) {
+            parsed.minInterval = Math.round(parsed.minInterval / 60);
+            logger.info('[VidalParser] minInterval converted from minutes to hours:', parsed.minInterval);
+        }
+
+        // Автогенерация id для форм, если AI не заполнил
+        if (Array.isArray(parsed.forms)) {
+            parsed.forms = parsed.forms.map((form, i) => {
+                if (!form.id || typeof form.id !== 'string' || form.id.trim() === '') {
+                    const base = (form.type || 'form') + '_' + (form.concentration || String(i));
+                    const slug = base.toString().replace(/[^a-zA-Z0-9\u0400-\u04FF]/g, '_').toLowerCase().slice(0, 40) || `form_${i}`;
+                    form.id = slug;
+                    logger.info('[VidalParser] Auto-generated form id:', form.id);
+                }
+                return form;
+            });
+        }
+
+        // Fallback: подставить глобальные макс. дозы из текста, если в правилах не указаны
+        const globalMaxes = extractMaxDoses(relevantHtml);
+        if (Array.isArray(parsed.pediatricDosing)) {
+            parsed.pediatricDosing = parsed.pediatricDosing.map(rule => {
+                if (!rule.maxSingleDose && globalMaxes.maxSingleDose) {
+                    rule.maxSingleDose = globalMaxes.maxSingleDose;
+                }
+                if (!rule.maxDailyDose && globalMaxes.maxDailyDose) {
+                    rule.maxDailyDose = globalMaxes.maxDailyDose;
+                }
+                return rule;
+            });
+        }
+        if (!parsed.maxDurationDays && globalMaxes.maxDurationDays) {
+            parsed.maxDurationDays = globalMaxes.maxDurationDays;
         }
         
         logger.info('[VidalParser] Successfully parsed medication:', parsed.nameRu);
