@@ -29,6 +29,11 @@ export const VaccinationProfileSchema = z.object({
     hpvRiskFactors: z.array(z.nativeEnum(HpvRiskFactor)).optional(),
     tbeRiskFactors: z.array(z.nativeEnum(TbeRiskFactor)).optional(),
     rotaRiskFactors: z.array(z.nativeEnum(RotavirusRiskFactor)).optional(),
+    birthWeight: z.number()
+        .min(500, 'Вес при рождении должен быть не менее 500 г')
+        .max(8000, 'Вес при рождении должен быть не более 8000 г')
+        .nullable()
+        .optional(),
     mantouxDate: z.string().nullable().optional()
         .refine((date) => !date || (new Date(date) <= new Date()), 'Дата Манту не может быть в будущем'),
     mantouxResult: z.boolean().nullable().optional(),

@@ -4,7 +4,6 @@ import { VACCINE_SCHEDULE } from '../../constants';
 import { ChildProfile, VaccinationProfile, UserVaccineRecord, AugmentedVaccine, VaccineStatus, VaccineDefinition, HepBRiskFactor } from '../../types';
 import { VaccineCard } from '../../components/VaccineCard';
 import { VisualStats } from '../../components/VisualStats';
-import { getGeneralAdvice } from '../../services/geminiService';
 import { LECTURES } from '../../lectures';
 import { getHepBRiskFactorLabel, getHepBCatchUpPlan, getHBIGInstructions } from '../../utils/hepatitisBLogic';
 import { getPneumoRiskFactorLabel, getPneumoSpecificInstructions } from '../../utils/pneumoLogic';
@@ -50,9 +49,6 @@ export const VaccinationModule: React.FC = () => {
 
     // UI state
     const [activeTab, setActiveTab] = useState<'all' | 'due' | 'completed'>('all');
-    const [chatQuery, setChatQuery] = useState('');
-    const [chatResponse, setChatResponse] = useState('');
-    const [isChatting, setIsChatting] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isRiskFactorsModalOpen, setIsRiskFactorsModalOpen] = useState(false);
     const [editingVaccine, setEditingVaccine] = useState<VaccineDefinition | null>(null);
@@ -214,6 +210,7 @@ export const VaccinationModule: React.FC = () => {
                 hpvRiskFactors,
                 tbeRiskFactors,
                 rotaRiskFactors,
+                birthWeight: formData.get('birthWeight') ? parseInt(formData.get('birthWeight') as string) : null,
                 mantouxDate: tempMantouxDate || vaccinationProfile.mantouxDate,
                 mantouxResult: formData.get('mantouxResult') === 'true'
             };
@@ -394,15 +391,6 @@ export const VaccinationModule: React.FC = () => {
                 setTimeout(() => element.classList.remove('ring-2', 'ring-blue-500'), 2000);
             }
         }, 100);
-    };
-
-    const handleGeneralChat = async () => {
-        if (!chatQuery.trim() || !child) return;
-        setIsChatting(true);
-        setChatResponse('');
-        const resp = await getGeneralAdvice(chatQuery, child, vaccinationProfile || undefined);
-        setChatResponse(resp);
-        setIsChatting(false);
     };
 
     const handlePrintCertificate = async () => {
@@ -650,11 +638,6 @@ export const VaccinationModule: React.FC = () => {
                     <button onClick={() => setIsRiskFactorsModalOpen(true)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Группы риска">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </button>
-                    <button onClick={() => navigate(`/patients/${child.id}`)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Назад к пациенту">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-                        </svg>
-                    </button>
                     <button onClick={handlePrintCertificate} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Печать сертификата">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" /></svg>
                     </button>
@@ -703,15 +686,6 @@ export const VaccinationModule: React.FC = () => {
             </div>
 
             {activeTab === 'all' && <VisualStats schedule={filteredVaccines} onVaccineClick={scrollToVaccine} birthDate={child.birthDate} />}
-
-            <section className="bg-indigo-50 dark:bg-slate-900 rounded-xl p-4 border dark:border-slate-800">
-                <h2 className="font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-2 mb-3"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>AI Педиатр</h2>
-                <div className="flex flex-col sm:flex-row gap-2">
-                    <input type="text" value={chatQuery} onChange={(e) => setChatQuery(e.target.value)} placeholder="Напр: Можно ли гулять после АКДС?" className="flex-1 p-2 rounded-lg border dark:bg-slate-800 dark:text-white dark:border-slate-700 text-sm" />
-                    <button onClick={handleGeneralChat} disabled={isChatting} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm whitespace-nowrap">{isChatting ? '...' : 'Спросить'}</button>
-                </div>
-                {chatResponse && <div className="mt-3 bg-white dark:bg-slate-800 p-3 rounded-lg border dark:border-slate-700 text-sm prose dark:prose-invert max-w-none"><div dangerouslySetInnerHTML={{ __html: chatResponse.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br/>') }} /></div>}
-            </section>
 
             <section>
                 <div className="flex justify-between items-center mb-4">
@@ -857,6 +831,26 @@ export const VaccinationModule: React.FC = () => {
                         </div>
 
                         <form id="risk-factors-form" onSubmit={handleUpdateRiskFactors} className="flex-1 overflow-y-auto p-6 space-y-8">
+                            {/* Birth Weight */}
+                            <div className="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                                <label className="block text-sm font-bold text-emerald-600 dark:text-emerald-400 mb-2">
+                                    Вес при рождении (граммы)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="birthWeight"
+                                    min="500"
+                                    max="8000"
+                                    step="50"
+                                    defaultValue={vaccinationProfile.birthWeight || ''}
+                                    placeholder="3500"
+                                    className="w-full px-4 py-2 rounded-lg border dark:bg-slate-800 dark:text-white dark:border-slate-700 text-emerald-700 placeholder-emerald-300"
+                                />
+                                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
+                                    Опционально. Используется для расчетов БЦЖ (&lt;2000г) и Полио (&lt;2500г)
+                                </p>
+                            </div>
+
                             <div>
                                 <h4 className="flex items-center gap-2 font-bold text-sm uppercase text-blue-600 dark:text-blue-400 mb-4 px-1">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">

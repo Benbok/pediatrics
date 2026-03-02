@@ -10,16 +10,17 @@ import {
     Pill,
     FileText,
     Search,
+    X,
     ExternalLink,
     Download,
     Info,
+    Activity,
     AlertTriangle,
     AlertCircle,
     CheckCircle,
     MessageSquare,
     ChevronDown,
     Check,
-    Activity
 } from 'lucide-react';
 import { DiseaseNotesList } from './DiseaseNotesList';
 import { DiseaseMedicationsTab } from './DiseaseMedicationsTab';
@@ -155,13 +156,13 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
             <Card className="rounded-[32px] border-slate-200 overflow-hidden shadow-2xl bg-white dark:bg-slate-900 border-none">
                 <Tabs defaultValue="files" className="w-full">
                     <div className="px-8 py-5 border-b border-slate-100 dark:border-slate-800">
-                        <TabsList className="bg-slate-100/80 dark:bg-slate-800/40 p-1.5 rounded-[22px] inline-flex h-auto border border-slate-200/50 dark:border-slate-700/50">
+                        <TabsList className="bg-slate-100/80 dark:bg-slate-800/40 p-1.5 rounded-[22px] inline-flex h-auto border border-slate-200/50 dark:border-slate-700/50 justify-start flex-wrap gap-1.5">
                             {sections.map(s => (
                                 <TabsTrigger
                                     key={s.id}
                                     value={s.id}
                                     className={clsx(
-                                        "px-6 py-2.5 rounded-2xl font-black text-[12px] uppercase tracking-widest transition-all duration-300 flex items-center gap-2.5 border-none",
+                                        "px-6 py-2.5 rounded-2xl font-black text-[12px] uppercase tracking-widest transition-all duration-300 flex items-center gap-2.5 border-none whitespace-nowrap",
                                         "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
                                         "data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary-600 data-[state=active]:shadow-xl data-[state=active]:shadow-primary-500/10"
                                     )}
@@ -197,8 +198,16 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         placeholder="Поиск по тексту..."
-                                        className="w-full h-14 pl-12 pr-4 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 focus:border-primary-500 outline-none transition-all text-lg"
+                                        className="w-full h-14 pl-12 pr-12 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 focus:border-primary-500 outline-none transition-all text-lg"
                                     />
+                                    {searchTerm && (
+                                        <button
+                                            onClick={() => setSearchTerm('')}
+                                            className="absolute right-4 top-0 bottom-0 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                                        >
+                                            <X className="w-5 h-5" />
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="relative min-w-[260px] md:max-w-xs">
                                     <button

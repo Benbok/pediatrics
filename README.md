@@ -154,39 +154,7 @@ pediatrics/
 
 ├── prisma/
 │   ├── schema.prisma          # Database schema (User, Child, VaccinationProfile, PatientShare)
-│   └── migrations/            # Prisma migration history
-│   │   ├── settings/          # App configuration & security
-│   │   └── auth/              # Login page
-│   │
-│   ├── services/              # Service Layer (Business Logic)
-│   │   ├── patient.service.ts
-│   │   ├── vaccination.service.ts
-│   │   ├── geminiService.ts
-│   │   └── logger.ts          # Centralized logging (IPC-based)
-│   │
-│   ├── validators/            # Zod Schemas (Client-side)
-│   │   ├── child.validator.ts
-│   │   ├── visit.validator.ts
-│   │   ├── medication.validator.ts
-│   │   ├── vaccination.validator.ts
-│   │   └── record.validator.ts
-│   │
-│   ├── context/               # React Context (Auth, Child)
-│   │   ├── AuthContext.tsx
-│   │   └── ChildContext.tsx
-│   │
-│   ├── logic/vax/             # Medical Logic (Pure Functions)
-│   │   ├── index.ts           # Main calculation engine
-│   │   ├── rules.ts           # Rule types & context
-│   │   ├── bcg.ts, dtp.ts,... # Vaccine-specific rules
-│   │   └── vax.test.ts        # Unit Tests
-│   │
-│   ├── components/            # Reusable UI components
-│   ├── constants.ts           # Vaccine schedule (RF Order 1122n)
-│   └── types.ts               # TypeScript interfaces
-│
-├── prisma/
-│   ├── schema.prisma          # Database schema
+│   ├── migrations/            # Prisma migration history
 │   └── dev.db                 # Development database
 │
 ├── tests/                     # Integration tests
@@ -319,71 +287,18 @@ npm run test:cdss-cli # CLI тест CDSS: ввод жалоб → поиск к
 
 ## 🎯 Функциональные модули
 
-### 📅 Vaccination Module (ATS Engine)
-- Автоматический расчет графиков вакцинации по Приказу 1122н
-- Учет факторов риска и противопоказаний
-- Поддержка combined вакцин (Пентаксим, Инфанрикс Гекса)
-- Догоняющая иммунизация (catch-up schedules)
+Каждый модуль имеет собственную документацию. Обратитесь к README в папке модуля для получения подробной информации:
 
-### 🏥 Patient Management
-- Электронная медицинская карта
-- Антропометрические данные
-- История осмотров и диагнозов
-- Field-level encryption для ПДн
-- **Multi-user access control**: врач видит только своих пациентов
-- Учет аллергий пациента для фильтрации назначений
-
-### 👥 User Management (NEW v2.0)
-- **Admin Panel**: управление пользователями клиники
-- Регистрация новых врачей (только для администраторов)
-- Активация/деактивация учетных записей
-- Разделение доступа: каждый врач видит только своих пациентов
-- **Patient Sharing**: механизм передачи доступа к пациенту коллеге
-- Отображение текущего пользователя и роли в интерфейсе
-
-### 🤖 AI Diagnostic Assistant
-- ✅ Интеграция с Google Gemini Pro 1.5
-- ✅ Консультации по вакцинации
-- ✅ Ответы на вопросы родителей
-- ✅ **Анализ жалоб и симптомов** - парсинг жалоб в структурированные симптомы
-- ✅ **Дифференциальная диагностика** - ранжирование диагнозов с confidence scores
-- ✅ **AI-парсинг Видаль** - автоматическое извлечение данных о препаратах
-- ✅ **Структурные планы диагностики/лечения** из базы знаний заболеваний
-- ✅ **GuidelinePlan API** - нормализованный план с fallback на текст рекомендаций
-
-#### CDSS: нормализация симптомов и устойчивость (Graceful Degradation)
-
-Пайплайн поддержки решений (CDSS) при поиске по жалобам построен так, чтобы корректно находить диагнозы даже при расхождении формулировок («болезненность при глотании» ↔ «боль при глотании», «температура» ↔ «лихорадка») и при сбоях AI/embeddings.
-
-**Этапы (каждый со своим fallback):**
-
-1. **Парсинг жалоб** (`parseComplaints`)  
-   - AI (Gemini) извлекает список симптомов и severity.  
-   - При ошибке: разбор по запятым/точке с запятой + нормализация через словарь/AI.
-
-2. **Нормализация симптомов** (`normalizeWithAI`)  
-   - Сначала всегда применяется **словарь** (`cdssVocabulary.json`): синонимы → канонические формы.  
-   - При доступном AI — **batch-нормализация** одним запросом (все симптомы сразу).  
-   - Результаты AI попадают в **версионированный кеш** (ключ включает версию словаря) и при необходимости в **автообучение словаря**.  
-   - **Circuit breaker**: после 3 подряд ошибок AI нормализация отключается на 5 минут (без лишних запросов к API).
-
-3. **Поиск по базе знаний** (`searchBySymptoms`)  
-   - Используются уже нормализованные симптомы.  
-   - Сначала **semantic search** (embeddings), при 0 результатах или ошибке — **keyword search** с учётом того же словаря.
-
-4. **Ранжирование** (`rankDiagnoses`)  
-   - AI ранжирует кандидатов по симптомам и контексту.  
-   - При ошибке: **enhanced fallback** — совпадение по каноническим симптомам из словаря, confidence до 0.9.
-
-**Автообучение словаря (Vocabulary Learner):**  
-AI-нормализации (original → canonical) сохраняются в `cdssVocabularySuggestions.json`. При достижении порога (≥3 упоминаний) запись переносится в основной `cdssVocabulary.json`, версия словаря увеличивается и кеш нормализаций инвалидируется. Со временем система меньше зависит от AI для одних и тех же формулировок.
-
-**Мониторинг:**  
-В `logger.cjs` добавлены `logDegradation(step, method)` и `getDegradationStats()` — в памяти ведётся счётчик использования AI vs fallback по шагам (parse, normalize, search, rank). По логам видно, когда срабатывает упрощённый путь.
-
-**CLI для проверки CDSS:**  
-`npm run test:cdss-cli` запускает интерактивный ввод жалоб и тот же пайплайн. Флаг `--force-fallback` отключает AI-нормализацию (открывает circuit breaker), например:  
-`npx electron scripts/cdss-test-cli.cjs "температура, кашель" --force-fallback`
+| Модуль | Описание | Документация |
+|--------|---------|--------------|
+| 📅 **Vaccination** | Автоматический расчет графиков вакцинации по Приказу 1122н | `src/modules/vaccination/README.md` |
+| 🏥 **Patients** | Электронная медицинская карта, управление пациентами | [`src/modules/patients/README.md`](./src/modules/patients/README.md) |
+| 👥 **Users** | Многопользовательская система с ролями и управлением доступом | [`src/modules/users/README.md`](./src/modules/users/README.md) |
+| 🤖 **Diseases** | AI-ассистент диагностики с CDSS и базой знаний | [`src/modules/diseases/README.md`](./src/modules/diseases/README.md) |
+| 💊 **Medications** | База препаратов, дозировки, калькулятор разведения | [`src/modules/medications/README.md`](./src/modules/medications/README.md) |
+| 📄 **Printing** | Генерация медицинских документов и сертификатов | [`src/modules/printing/README.md`](./src/modules/printing/README.md) |
+| 🏷️ **ICD Codes** | Справочник кодов МКБ-10 | [`src/modules/icd-codes/README.md`](./src/modules/icd-codes/README.md) |
+| 📋 **Visits** | История посещений и осмотров | [`src/modules/visits/README.md`](./src/modules/visits/README.md) |
 
 ### ⚡ Система кеширования (Performance Optimization)
 - ✅ Трехслойная архитектура кеширования (Backend → IPC → Frontend)
@@ -394,27 +309,6 @@ AI-нормализации (original → canonical) сохраняются в `
 - ✅ Мониторинг производительности в Settings (hit rate, размер кеша)
 - ✅ Снижение нагрузки на БД до 70%
 - ✅ Ускорение загрузки данных в 20-50 раз (с 200ms до 5-10ms)
-
-### 💊 Medication Management
-- ✅ **Автоподбор препаратов по диагнозу** (по кодам МКБ-10)
-- ✅ **Расчет детских дозировок** (по весу, возрасту, площади тела)
-- ✅ **Импорт из Видаль** - автоматический парсинг данных о препаратах через AI
-- ✅ **Расширенное дозирование** - поддержка инфузионных форм (в/в, в/м, п/к)
-- ✅ **Валидация данных** - проверка безопасности AI-парсинга
-- ✅ **Структурные JSON-шаблоны** - формы выпуска и дозировки связаны через `formId` для точных конвертаций
-- ✅ **Конвертация mg↔ml** - расчет дозы по концентрации формы выпуска
-- ✅ **Избранное и теги** - организация часто используемых препаратов
-- ✅ **Поиск по группам** - фильтрация по клинико-фармакологическим группам
-- ✅ **История изменений** - полный audit trail всех модификаций
-- ✅ **Калькулятор разведения** - расчет параметров инфузий
-- 📋 Roadmap: Проверка лекарственных взаимодействий
-
-### 📄 Document Generation
-- Медицинские сертификаты (форма 63)
-- Выписки из медицинской карты
-- Направления на обследование
-- Perfect PDF rendering
-- Встроенный PDF viewer с превью страниц, оглавлением, поиском и заметками
 
 ---
 
@@ -509,6 +403,20 @@ model PatientShare {
 3. **Используйте bcrypt hashes** для ADMIN_PASSWORD в production
 4. **Регулярно проверяйте** `audit.log` на подозрительную активность
 5. **Делайте ручные бэкапы** перед критическими операциями
+
+---
+
+## 📖 Документация модулей
+
+Детальная документация для каждого функционального модуля:
+
+- 📖 [**Patients** - Управление пациентами](./src/modules/patients/README.md)
+- 📖 [**Medications** - База препаратов и дозировки](./src/modules/medications/README.md)
+- 📖 [**Diseases** - AI-диагностика и CDSS](./src/modules/diseases/README.md)
+- 📖 [**Users** - Многопользовательская система](./src/modules/users/README.md)
+- 📖 [**Printing** - Генерация документов](./src/modules/printing/README.md)
+- 📖 [**ICD Codes** - Справочник МКБ-10](./src/modules/icd-codes/README.md)
+- 📖 [**Visits** - История посещений](./src/modules/visits/README.md)
 
 ---
 

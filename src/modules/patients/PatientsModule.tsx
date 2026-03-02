@@ -149,10 +149,6 @@ export const PatientsModule: React.FC = () => {
                                         <Calendar size={14} className="opacity-70" />
                                         {new Date(child.birthDate).toLocaleDateString('ru-RU')}
                                     </div>
-                                    <div className="flex items-center gap-2 text-[13px] font-bold text-slate-500 dark:text-slate-400">
-                                        <Weight size={14} className="opacity-70" />
-                                        {child.birthWeight} г
-                                    </div>
                                 </div>
                             </div>
 

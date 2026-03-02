@@ -16,7 +16,7 @@ export const polioRules: VaxRule = (vaccine, context) => {
     // 1. Identify Risk Group Path
     const isRiskGroup = (profile.polioRiskFactors && profile.polioRiskFactors.length > 0) ||
         (profile.pneumoRiskFactors?.includes('pneumo-premature' as any)) ||
-        (child.birthWeight > 0 && child.birthWeight < 2500);
+        ((profile.birthWeight || 0) > 0 && (profile.birthWeight || 0) < 2500);
 
     // 2. Count existing IPV doses
     const ipvCount = records.filter(r => {

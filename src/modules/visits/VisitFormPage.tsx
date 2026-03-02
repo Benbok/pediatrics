@@ -1648,11 +1648,11 @@ export const VisitFormPage: React.FC = () => {
                             }}
                             onTemplateApplied={async (result) => {
                                 // Если шаблон содержит ссылку на шаблон назначений, применяем его
-                                if (result.medicationTemplateId && child) {
+                                if (result.medicationTemplateId && child && formData.currentWeight) {
                                     try {
                                         const items = await medicationTemplateService.prepareApplication({
                                             templateId: result.medicationTemplateId,
-                                            childWeight: formData.currentWeight || (child.birthWeight / 1000),
+                                            childWeight: formData.currentWeight,
                                             childAgeMonths: ageMonths || 0,
                                             childHeight: formData.currentHeight || null,
                                         });
@@ -2487,11 +2487,11 @@ export const VisitFormPage: React.FC = () => {
                         <MedicationTemplateSelector
                             userId={currentUser.id}
                             onApply={async (templateId) => {
-                                if (!child) return;
+                                if (!child || !formData.currentWeight) return;
                                 try {
                                     const items = await medicationTemplateService.prepareApplication({
                                         templateId,
-                                        childWeight: formData.currentWeight || (child.birthWeight / 1000),
+                                        childWeight: formData.currentWeight,
                                         childAgeMonths: ageMonths || 0,
                                         childHeight: formData.currentHeight || null,
                                     });
@@ -2553,7 +2553,7 @@ export const VisitFormPage: React.FC = () => {
                         setPendingTemplateItems([]);
                     }}
                     templateItems={pendingTemplateItems}
-                    childWeight={formData.currentWeight || (child.birthWeight / 1000)}
+                    childWeight={formData.currentWeight || 0}
                     childAgeMonths={ageMonths || 0}
                     childHeight={formData.currentHeight || null}
                 />

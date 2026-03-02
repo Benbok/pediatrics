@@ -104,11 +104,13 @@ export const patientService = {
 
     /**
      * Calculate age label helper
-     * 
+     *
+     * Returns formatted age as "X лет Y месяцев" (e.g., "2 года 3 месяца")
+     *
      * @param birthDate - Дата рождения
-     * @returns Отформатированная строка возраста
+     * @returns Отформатированная строка возраста (полный формат)
      */
     getAgeLabel(birthDate: string): string {
-        return getFormattedAge(birthDate, new Date(), 'short');
+        return getFormattedAge(birthDate, new Date(), 'full');
     }
 };

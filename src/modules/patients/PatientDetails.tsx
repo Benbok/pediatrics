@@ -17,7 +17,6 @@ export const PatientDetails: React.FC = () => {
         surname: '',
         patronymic: '',
         birthDate: '',
-        birthWeight: '',
         gender: 'male' as 'male' | 'female'
     });
 
@@ -45,7 +44,6 @@ export const PatientDetails: React.FC = () => {
             surname: child.surname,
             patronymic: child.patronymic,
             birthDate: child.birthDate,
-            birthWeight: String(child.birthWeight),
             gender: child.gender
         });
         setIsEditModalOpen(true);
@@ -61,7 +59,6 @@ export const PatientDetails: React.FC = () => {
                 surname: editForm.surname,
                 patronymic: editForm.patronymic,
                 birthDate: editForm.birthDate,
-                birthWeight: parseInt(editForm.birthWeight) || 0,
                 gender: editForm.gender
             });
             setIsEditModalOpen(false);
@@ -178,12 +175,6 @@ export const PatientDetails: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
-                            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
-                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Вес при рождении</div>
-                                <div className="font-bold text-slate-900 dark:text-white">{child.birthWeight} г</div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -294,7 +285,7 @@ export const PatientDetails: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4">
                                 <div className="space-y-1">
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Дата рождения</label>
                                     <input
@@ -302,15 +293,6 @@ export const PatientDetails: React.FC = () => {
                                         type="date"
                                         value={editForm.birthDate}
                                         onChange={e => setEditForm({ ...editForm, birthDate: e.target.value })}
-                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Вес при рождении (г)</label>
-                                    <input
-                                        type="number"
-                                        value={editForm.birthWeight}
-                                        onChange={e => setEditForm({ ...editForm, birthWeight: e.target.value })}
                                         className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>

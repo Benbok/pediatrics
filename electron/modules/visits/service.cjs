@@ -755,7 +755,10 @@ const VisitService = {
                         orderBy: { visitDate: 'desc' }
                     });
 
-                    const weight = lastVisit?.currentWeight || (child.birthWeight / 1000);
+                    const weight = lastVisit?.currentWeight;
+                    if (!weight) {
+                        throw new Error('Для расчета дозировки требуется вес ребенка в текущем приеме');
+                    }
                     const height = lastVisit?.currentHeight || null;
 
                     const doseInfo = await MedicationService.calculateDose(
@@ -964,7 +967,10 @@ const VisitService = {
                         orderBy: { visitDate: 'desc' }
                     });
 
-                    const weight = lastVisit?.currentWeight || (child.birthWeight / 1000);
+                    const weight = lastVisit?.currentWeight;
+                    if (!weight) {
+                        throw new Error('Для расчета дозировки требуется вес ребенка в текущем приеме');
+                    }
                     const height = lastVisit?.currentHeight || null;
 
                     const doseInfo = await MedicationService.calculateDose(

@@ -5,6 +5,7 @@ const { normalizeDiseaseData } = require('../../utils/diseaseNormalization.cjs')
 const { logAudit, logger } = require('../../logger.cjs');
 const { CacheService } = require('../../services/cacheService.cjs');
 const { DiseaseValidator } = require('./validator.cjs');
+const { z } = require('zod');
 
 function safeJsonParse(value, defaultValue = []) {
     if (!value || value === null) return defaultValue;
@@ -117,9 +118,20 @@ const setupDiseaseHandlers = () => {
 
     // Async upload handlers
     ipcMain.handle('diseases:upload-guidelines-async', ensureAuthenticated(async (_, { diseaseId, pdfPaths }) => {
-        const jobIds = await DiseaseService.uploadGuidelinesAsync(diseaseId, pdfPaths);
-        logAudit('GUIDELINES_ASYNC_QUEUED', { diseaseId, count: pdfPaths.length });
-        return jobIds;
+        try {
+            const schema = z.object({
+                diseaseId: z.number().or(z.string().transform(Number)),
+                pdfPaths: z.array(z.string()).min(1),
+            });
+            const validated = schema.parse({ diseaseId, pdfPaths });
+
+            const result = await DiseaseService.uploadGuidelinesAsync(validated.diseaseId, validated.pdfPaths);
+            logAudit('GUIDELINES_ASYNC_QUEUED', { diseaseId: validated.diseaseId, count: validated.pdfPaths.length });
+            return result;
+        } catch (error) {
+            logger.error('[Diseases] Failed to queue async guideline upload:', error);
+            throw error;
+        }
     }));
 
     ipcMain.handle('diseases:get-upload-status', ensureAuthenticated(async (_, jobIds) => {

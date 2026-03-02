@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ClinicalGuideline, UploadProgress } from '../../../types';
+import { ClinicalGuideline, UploadBatchFinishedEvent, UploadProgress } from '../../../types';
 import { diseaseService } from '../services/diseaseService';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload, Edit3, Check, X } from 'lucide-react';
+import { useToast } from '../../../context/ToastContext';
 
 interface GuidelinesListProps {
     diseaseId: number;
@@ -16,6 +17,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     diseaseId,
     onGuidelineAdded
 }) => {
+    const { showToast } = useToast();
     const [guidelines, setGuidelines] = useState<ClinicalGuideline[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
@@ -24,6 +26,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     const [editingTitle, setEditingTitle] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<Map<string, UploadProgress>>(new Map());
+    const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; guidelineId: number | null }>({
         isOpen: false,
         guidelineId: null
@@ -37,6 +40,20 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
 
         return () => unsubscribe();
     }, []);
+
+    // Subscribe to batch finished event (reload guidelines when batch completes)
+    useEffect(() => {
+        const unsubscribe = window.electronAPI.onUploadBatchFinished((event: any, data: UploadBatchFinishedEvent) => {
+            if (!activeBatchId || data.batchId !== activeBatchId) return;
+
+            // Toast notification is now handled globally in ToastProvider
+            // Here we only handle local state cleanup and data reload
+            setActiveBatchId(null);
+            loadGuidelines();
+        });
+
+        return () => unsubscribe();
+    }, [activeBatchId, diseaseId]);
 
     useEffect(() => {
         loadGuidelines();
@@ -63,7 +80,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                 onGuidelineAdded(loadedGuidelines);
             }
         } catch (error) {
-            console.error('Failed to load guidelines:', error);
+            showToast('Ошибка при загрузке файлов', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -81,11 +98,10 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
         setDeletingId(guidelineId);
 
         try {
-            await window.electronAPI.deleteGuideline(guidelineId);
+            await diseaseService.deleteGuideline(guidelineId);
             await loadGuidelines();
         } catch (error) {
-            console.error('Failed to delete guideline:', error);
-            alert('Ошибка при удалении файла');
+            showToast('Ошибка при удалении файла', 'error');
         } finally {
             setDeletingId(null);
         }
@@ -134,8 +150,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
             setEditingId(null);
             setEditingTitle('');
         } catch (error) {
-            console.error('Failed to update guideline name:', error);
-            alert('Ошибка при обновлении названия файла');
+            showToast('Ошибка при обновлении названия файла', 'error');
         } finally {
             setIsUpdating(false);
         }
@@ -153,7 +168,8 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
 
                 try {
                     // Используем async upload для неблокирующей загрузки
-                    const jobs = await window.electronAPI.uploadGuidelinesAsync(diseaseId, result.filePaths);
+                    const { batchId, jobs } = await diseaseService.uploadGuidelinesAsync(diseaseId, result.filePaths);
+                    setActiveBatchId(batchId);
 
                     // Initialize progress tracking
                     const progressMap = new Map<string, UploadProgress>();
@@ -168,15 +184,13 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                     setUploadProgress(progressMap);
 
                 } catch (error: any) {
-                    console.error('Failed to upload guideline:', error);
-                    alert(error.message || 'Ошибка при загрузке или обработке PDF');
+                    showToast(error?.message || 'Ошибка при загрузке или обработке PDF', 'error');
                 } finally {
                     setIsUploading(false);
                 }
             }
         } catch (error: any) {
-            console.error('File dialog error:', error);
-            alert(error.message || 'Ошибка при выборе файлов');
+            showToast(error?.message || 'Ошибка при выборе файлов', 'error');
         }
     };
 

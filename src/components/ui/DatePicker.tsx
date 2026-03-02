@@ -83,11 +83,25 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const raw = e.target.value;
-        setInputValue(raw);
+        let raw = e.target.value;
 
-        // Validation for DD.MM.YYYY
-        const match = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        // Remove all non-digit characters
+        const digitsOnly = raw.replace(/\D/g, '');
+
+        // Apply input mask: DD.MM.YYYY
+        let masked = '';
+        for (let i = 0; i < Math.min(digitsOnly.length, 8); i++) {
+            if (i === 2 || i === 4) {
+                masked += '.' + digitsOnly[i];
+            } else {
+                masked += digitsOnly[i];
+            }
+        }
+
+        setInputValue(masked);
+
+        // Validation for DD.MM.YYYY (only when complete)
+        const match = masked.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
         if (match) {
             const day = parseInt(match[1], 10);
             const month = parseInt(match[2], 10) - 1;

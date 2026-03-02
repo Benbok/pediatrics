@@ -9,7 +9,6 @@ export interface ChildProfile {
   surname: string;
   patronymic?: string;
   birthDate: string; // ISO string YYYY-MM-DD
-  birthWeight: number; // in grams
   gender: 'male' | 'female';
 }
 
@@ -134,6 +133,7 @@ export interface VaccinationProfile {
   hpvRiskFactors?: HpvRiskFactor[]; // HPV specific risks
   tbeRiskFactors?: TbeRiskFactor[]; // TBE specific risks
   rotaRiskFactors?: RotavirusRiskFactor[]; // Rotavirus specific risks
+  birthWeight?: number | null; // Birth weight in grams, optional
   mantouxDate?: string | null;
   mantouxResult?: boolean | null;
   customVaccines?: VaccineDefinition[];
@@ -295,6 +295,14 @@ export interface UploadProgress {
   step?: string;
   error?: string;
   guidelineId?: number;
+}
+
+export interface UploadBatchFinishedEvent {
+  batchId: string;
+  diseaseId: number;
+  totalFiles: number;
+  successCount: number;
+  errorCount: number;
 }
 
 export interface GuidelinePlan {
@@ -840,9 +848,10 @@ declare global {
       deleteDisease: (id: number) => Promise<boolean>;
       uploadGuideline: (diseaseId: number, pdfPath: string) => Promise<ClinicalGuideline>;
       uploadGuidelinesBatch: (diseaseId: number, pdfPaths: string[]) => Promise<{ success: ClinicalGuideline[]; errors: Array<{ path: string; error: string }> | null }>;
-      uploadGuidelinesAsync: (diseaseId: number, pdfPaths: string[]) => Promise<UploadJob[]>;
+      uploadGuidelinesAsync: (diseaseId: number, pdfPaths: string[]) => Promise<{ batchId: string; jobs: UploadJob[] }>;
       getUploadStatus: (jobIds: string[]) => Promise<UploadProgress[]>;
       onUploadProgress: (callback: (event: any, progress: UploadProgress) => void) => () => void;
+      onUploadBatchFinished: (callback: (event: any, data: UploadBatchFinishedEvent) => void) => () => void;
       updateGuideline: (id: number, data: Partial<ClinicalGuideline>) => Promise<ClinicalGuideline>;
       deleteGuideline: (guidelineId: number) => Promise<boolean>;
       searchDiseases: (symptoms: string[]) => Promise<Disease[]>;

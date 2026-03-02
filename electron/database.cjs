@@ -31,9 +31,6 @@ const ChildProfileSchema = z.object({
       const d = new Date(date);
       return !isNaN(d.getTime()) && d <= new Date();
     }, 'Дата рождения не может быть в будущем'),
-  birthWeight: z.number()
-    .min(500, 'Вес при рождении должен быть не менее 500 г')
-    .max(8000, 'Вес при рождении должен быть не более 8000 г'),
   gender: z.enum(['male', 'female']),
 });
 
@@ -52,6 +49,11 @@ const VaccinationProfileSchema = z.object({
   hpvRiskFactors: z.array(z.string()).optional(),
   tbeRiskFactors: z.array(z.string()).optional(),
   rotaRiskFactors: z.array(z.string()).optional(),
+  birthWeight: z.number()
+    .min(500, 'Вес при рождении должен быть не менее 500 г')
+    .max(8000, 'Вес при рождении должен быть не более 8000 г')
+    .nullable()
+    .optional(),
   mantouxDate: z.string().nullable().optional(),
   mantouxResult: z.boolean().nullable().optional(),
   customVaccines: z.array(z.any()).optional(),
@@ -407,7 +409,7 @@ const setupDatabaseHandlers = async () => {
       const isAdmin = Boolean(session.user.roles?.includes('admin'));
 
       const validatedChild = ChildProfileSchema.parse(child);
-      const { name, surname, patronymic, birthDate, birthWeight, gender } = validatedChild;
+      const { name, surname, patronymic, birthDate, gender } = validatedChild;
 
       const newChild = await prisma.child.create({
         data: {
@@ -415,7 +417,6 @@ const setupDatabaseHandlers = async () => {
           surname: encrypt(surname),
           patronymic: encrypt(patronymic),
           birthDate: encrypt(String(birthDate)),
-          birthWeight: Number(birthWeight) || 0,
           gender,
           createdByUserId: userId, // Auto-assign current user
           vaccinationProfile: {
@@ -461,7 +462,7 @@ const setupDatabaseHandlers = async () => {
   ipcMain.handle('db:update-child', ensureAuthenticated(async (_, id, updates) => {
     try {
       const validatedUpdates = ChildProfileSchema.partial().parse(updates);
-      const { name, surname, patronymic, birthDate, gender, birthWeight } = validatedUpdates;
+      const { name, surname, patronymic, birthDate, gender } = validatedUpdates;
 
       const dataToUpdate = {};
       if (name) dataToUpdate.name = encrypt(name);
@@ -469,7 +470,6 @@ const setupDatabaseHandlers = async () => {
       if (patronymic) dataToUpdate.patronymic = encrypt(patronymic);
       if (birthDate) dataToUpdate.birthDate = encrypt(String(birthDate));
       if (gender) dataToUpdate.gender = gender;
-      if (birthWeight !== undefined) dataToUpdate.birthWeight = birthWeight;
 
       await prisma.child.update({
         where: { id: Number(id) },
@@ -655,6 +655,8 @@ const setupDatabaseHandlers = async () => {
           fluRiskFactors: JSON.stringify([]),
           hpvRiskFactors: JSON.stringify([]),
           tbeRiskFactors: JSON.stringify([]),
+          rotaRiskFactors: JSON.stringify([]),
+          birthWeight: null,
           customVaccines: JSON.stringify([]),
         },
       });
@@ -675,6 +677,7 @@ const setupDatabaseHandlers = async () => {
       hpvRiskFactors: JSON.parse(profile.hpvRiskFactors || '[]'),
       tbeRiskFactors: JSON.parse(profile.tbeRiskFactors || '[]'),
       rotaRiskFactors: JSON.parse(profile.rotaRiskFactors || '[]'),
+      birthWeight: profile.birthWeight,
       customVaccines: JSON.parse(profile.customVaccines || '[]'),
       mantouxDate: profile.mantouxDate,
       mantouxResult: profile.mantouxResult,
@@ -696,6 +699,7 @@ const setupDatabaseHandlers = async () => {
         pneumoRiskFactors,
         pertussisContraindications,
         polioRiskFactors,
+        birthWeight,
         mantouxDate,
         mantouxResult
       } = validatedProfile;
@@ -715,16 +719,42 @@ const setupDatabaseHandlers = async () => {
           hpvRiskFactors: JSON.stringify(validatedProfile.hpvRiskFactors || []),
           tbeRiskFactors: JSON.stringify(validatedProfile.tbeRiskFactors || []),
           rotaRiskFactors: JSON.stringify(validatedProfile.rotaRiskFactors || []),
+          birthWeight,
           mantouxDate,
           mantouxResult,
           customVaccines: JSON.stringify(validatedProfile.customVaccines || []),
         },
       });
       logAudit('VACCINATION_PROFILE_UPDATED', { childId });
-      
-      // Инвалидируем кеш профиля
-      CacheService.invalidate('profiles', `child_${childId}`);
-      
+
+      const updated = await prisma.vaccinationProfile.findUnique({
+        where: { childId: Number(childId) },
+      });
+      if (updated) {
+        const parsedUpdated = {
+          id: updated.id,
+          childId: updated.childId,
+          hepBRiskFactors: JSON.parse(updated.hepBRiskFactors || '[]'),
+          pneumoRiskFactors: JSON.parse(updated.pneumoRiskFactors || '[]'),
+          pertussisContraindications: JSON.parse(updated.pertussisContraindications || '[]'),
+          polioRiskFactors: JSON.parse(updated.polioRiskFactors || '[]'),
+          mmrContraindications: JSON.parse(updated.mmrContraindications || '[]'),
+          meningRiskFactors: JSON.parse(updated.meningRiskFactors || '[]'),
+          varicellaRiskFactors: JSON.parse(updated.varicellaRiskFactors || '[]'),
+          hepaRiskFactors: JSON.parse(updated.hepaRiskFactors || '[]'),
+          fluRiskFactors: JSON.parse(updated.fluRiskFactors || '[]'),
+          hpvRiskFactors: JSON.parse(updated.hpvRiskFactors || '[]'),
+          tbeRiskFactors: JSON.parse(updated.tbeRiskFactors || '[]'),
+          rotaRiskFactors: JSON.parse(updated.rotaRiskFactors || '[]'),
+          birthWeight: updated.birthWeight,
+          customVaccines: JSON.parse(updated.customVaccines || '[]'),
+          mantouxDate: updated.mantouxDate,
+          mantouxResult: updated.mantouxResult,
+          createdAt: updated.createdAt,
+        };
+        CacheService.set('profiles', `child_${childId}`, parsedUpdated);
+      }
+
       return true;
     } catch (error) {
       logger.error('[Database] Failed to update vaccination profile:', error);
@@ -857,10 +887,17 @@ const setupDatabaseHandlers = async () => {
         },
       });
       logAudit('VACCINATION_RECORD_SAVED', { childId, vaccineId, isCompleted });
-      
-      // Инвалидируем кеш записей для данного ребенка
-      CacheService.invalidate('records', `child_${childId}`);
-      
+
+      const freshRecords = await prisma.vaccinationRecord.findMany({
+        where: { childId: Number(childId) },
+      });
+      const decryptedFresh = freshRecords.map(r => ({
+        ...r,
+        vaccineBrand: decrypt(r.vaccineBrand),
+        notes: decrypt(r.notes),
+      }));
+      CacheService.set('records', `child_${childId}`, decryptedFresh);
+
       return true;
     } catch (error) {
       logger.error('[Database] Failed to save vaccination record:', error);
@@ -882,10 +919,17 @@ const setupDatabaseHandlers = async () => {
         },
       });
       logAudit('VACCINATION_RECORD_DELETED', { childId, vaccineId });
-      
-      // Инвалидируем кеш записей
-      CacheService.invalidate('records', `child_${childId}`);
-      
+
+      const freshRecords = await prisma.vaccinationRecord.findMany({
+        where: { childId: Number(childId) },
+      });
+      const decryptedFresh = freshRecords.map(r => ({
+        ...r,
+        vaccineBrand: decrypt(r.vaccineBrand),
+        notes: decrypt(r.notes),
+      }));
+      CacheService.set('records', `child_${childId}`, decryptedFresh);
+
       return true;
     } catch (error) {
       logger.error('[Database] Failed to delete vaccination record:', error);

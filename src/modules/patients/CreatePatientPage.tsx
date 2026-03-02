@@ -24,7 +24,6 @@ export const CreatePatientPage: React.FC = () => {
         name: '',
         patronymic: '',
         birthDate: '',
-        birthWeight: '',
         gender: 'male' as 'male' | 'female'
     });
 
@@ -51,7 +50,6 @@ export const CreatePatientPage: React.FC = () => {
             surname: formData.surname,
             patronymic: formData.patronymic || undefined,
             birthDate: formData.birthDate,
-            birthWeight: parseInt(formData.birthWeight) || 0,
             gender: formData.gender,
         };
 
@@ -187,18 +185,6 @@ export const CreatePatientPage: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <Input
-                                    label="Вес при рождении (г) *"
-                                    required
-                                    type="number"
-                                    min="500"
-                                    max="6000"
-                                    value={formData.birthWeight}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, birthWeight: e.target.value }))}
-                                    placeholder="3500"
-                                    leftIcon={<Weight size={18} />}
-                                    className="h-14 bg-slate-50/50 dark:bg-slate-800/50 shadow-none focus:bg-white transition-all"
-                                />
                             </div>
                         </div>
                     </div>

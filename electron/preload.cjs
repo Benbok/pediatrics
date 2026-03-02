@@ -58,6 +58,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('guideline:upload-progress', callback);
         return () => ipcRenderer.removeListener('guideline:upload-progress', callback);
     },
+    onUploadBatchFinished: (callback) => {
+        ipcRenderer.on('guideline:upload-batch-finished', callback);
+        return () => ipcRenderer.removeListener('guideline:upload-batch-finished', callback);
+    },
     updateGuideline: (id, data) => ipcRenderer.invoke('diseases:update-guideline', { id, data }),
     deleteGuideline: (guidelineId) => ipcRenderer.invoke('diseases:delete-guideline', guidelineId),
     searchDiseases: (symptoms) => ipcRenderer.invoke('diseases:search', symptoms),

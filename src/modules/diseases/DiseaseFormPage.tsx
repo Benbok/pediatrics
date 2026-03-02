@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { diseaseService } from './services/diseaseService';
+import { diseaseService, parseSymptoms } from './services/diseaseService';
+import { useToast } from '../../context/ToastContext';
 import { icdCodeService } from '../../services/icdCode.service';
 import { Disease, SymptomCategory, CategorizedSymptom } from '../../types';
+import { logger } from '../../services/logger';
 import { Card } from '../../components/ui/Card';
 import { SymptomsList } from './components/SymptomsList';
 import { Input } from '../../components/ui/Input';
@@ -29,6 +31,7 @@ import {
 import DISEASE_JSON_TEMPLATE from './templates/diseaseJsonTemplate.json';
 
 export const DiseaseFormPage: React.FC = () => {
+    const { showToast } = useToast();
     const { id } = useParams<{ id?: string }>();
     const navigate = useNavigate();
     const isEdit = !!id;
@@ -79,7 +82,7 @@ export const DiseaseFormPage: React.FC = () => {
     const loadDisease = async () => {
         try {
             const data = await diseaseService.getDisease(Number(id));
-            console.log('[DiseaseFormPage] Raw data from backend:', data);
+            logger.debug('[DiseaseFormPage] Raw data from backend', { id: Number(id), data });
 
             // Backend returns parsed data; ensure symptoms are CategorizedSymptom[]
             const parsed = {
@@ -92,11 +95,12 @@ export const DiseaseFormPage: React.FC = () => {
                 redFlags: typeof data.redFlags === 'string' ? JSON.parse(data.redFlags) : (data.redFlags || []),
             };
 
-            console.log('[DiseaseFormPage] Parsed formData:', {
+            logger.debug('[DiseaseFormPage] Parsed formData', {
                 diagnosticPlan: parsed.diagnosticPlan?.length || 0,
                 treatmentPlan: parsed.treatmentPlan?.length || 0,
                 differentialDiagnosis: parsed.differentialDiagnosis?.length || 0,
                 redFlags: parsed.redFlags?.length || 0,
+                symptoms: parsed.symptoms?.length || 0,
             });
 
             setFormData(parsed);
@@ -307,20 +311,18 @@ export const DiseaseFormPage: React.FC = () => {
                 setIsSaving(true);
                 setError(null);
 
-                // Если выбран один файл - используем старый метод, если несколько - batch
-                if (result.filePaths.length === 1) {
-                    await diseaseService.uploadGuideline(Number(id), result.filePaths[0]);
-                    setSuccess(true);
-                } else {
-                    const batchResult = await diseaseService.uploadGuidelinesBatch(Number(id), result.filePaths);
-                    if (batchResult.errors && batchResult.errors.length > 0) {
-                        setError(`Загружено ${batchResult.success.length} из ${result.filePaths.length} файлов. Ошибки: ${batchResult.errors.map(e => e.path).join(', ')}`);
-                    } else {
-                        setSuccess(true);
-                    }
-                }
+                // Неблокирующая загрузка (async queue): toast показывается глобально в ToastProvider
+                const { batchId } = await diseaseService.uploadGuidelinesAsync(Number(id), result.filePaths);
+                showToast(`Файлы добавлены в очередь: ${result.filePaths.length}`, 'info');
 
-                loadDisease();
+                // Reload disease data when batch completes (toast handled globally)
+                const unsubscribe = window.electronAPI.onUploadBatchFinished((event: any, data: any) => {
+                    if (!data || data.batchId !== batchId) return;
+                    unsubscribe();
+                    loadDisease();
+                });
+
+                setSuccess(true);
             }
         } catch (err: any) {
             setError(err.message || 'Ошибка при загрузке или обработке PDF');
@@ -349,7 +351,7 @@ export const DiseaseFormPage: React.FC = () => {
                     icd10Code: parsedData.icd10Code,
                     icd10Codes: parsedData.allIcd10Codes,
                     description: parsedData.description,
-                    symptoms: parsedData.symptoms,
+                    symptoms: parseSymptoms(parsedData.symptoms),
                 }));
                 setImportedPdfPath(pdfPath);
 
@@ -362,14 +364,14 @@ export const DiseaseFormPage: React.FC = () => {
                 // Log all found ICD codes
                 if (parsedData.allIcd10Codes && parsedData.allIcd10Codes.length > 1) {
                     const allCodes = parsedData.allIcd10Codes.join(', ');
-                    console.info(`[PDF Import] Найдено кодов МКБ-10: ${allCodes}. Использован: ${parsedData.icd10Code}`);
+                    logger.info('[PDF Import] Найдено кодов МКБ-10', { allCodes, used: parsedData.icd10Code });
                 }
 
                 // Show success with AI status
                 const successMsg = parsedData.aiUsed
                     ? '✨ PDF успешно обработан с помощью AI!'
                     : 'PDF обработан (базовый парсер)';
-                console.info(successMsg);
+                logger.info('[PDF Import] Parse completed', { aiUsed: Boolean(parsedData.aiUsed), message: successMsg });
 
                 setSuccess(true);
                 setTimeout(() => setSuccess(false), 3000);
@@ -397,7 +399,7 @@ export const DiseaseFormPage: React.FC = () => {
             }
         } catch (err) {
             // Если не удалось найти код в справочнике - просто обновляем код, название не трогаем
-            console.warn(`[DiseaseForm] Failed to get ICD name for ${code}:`, err);
+            logger.warn('[DiseaseForm] Failed to get ICD name', { code, error: err });
         }
     };
 
@@ -417,7 +419,7 @@ export const DiseaseFormPage: React.FC = () => {
                     }
                 } catch (err) {
                     // Игнорируем ошибки - пользователь может ввести название вручную
-                    console.warn(`[DiseaseForm] Failed to get ICD name for ${code}:`, err);
+                    logger.warn('[DiseaseForm] Failed to get ICD name', { code, error: err });
                 }
             }
         }

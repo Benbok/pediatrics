@@ -17,13 +17,18 @@ const { ChunkIndexService } = require('../../services/chunkIndexService.cjs');
 // Upload job queue
 const uploadQueue = {
     jobs: new Map(), // jobId -> { status, diseaseId, fileName, progress, error }
-    processing: false
+    processing: false,
+    batches: new Map(), // batchId -> { diseaseId, total, completed, failed }
 };
 
 let jobIdCounter = 0;
 
 function generateJobId() {
     return `upload-${Date.now()}-${++jobIdCounter}`;
+}
+
+function generateBatchId() {
+    return `batch-${Date.now()}-${++jobIdCounter}`;
 }
 
 function sendProgressEvent(jobId, data) {
@@ -42,6 +47,13 @@ function sendProgressEvent(jobId, data) {
     const mainWindow = BrowserWindow.getAllWindows()[0];
     if (mainWindow) {
         mainWindow.webContents.send('guideline:upload-progress', { jobId, ...data });
+    }
+}
+
+function sendBatchFinishedEvent(batchId, data) {
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (mainWindow) {
+        mainWindow.webContents.send('guideline:upload-batch-finished', { batchId, ...data });
     }
 }
 
@@ -470,6 +482,14 @@ const DiseaseService = {
     async uploadGuidelinesAsync(diseaseId, pdfPaths) {
         const jobIds = [];
 
+        const batchId = generateBatchId();
+        uploadQueue.batches.set(batchId, {
+            diseaseId: Number(diseaseId),
+            total: Array.isArray(pdfPaths) ? pdfPaths.length : 0,
+            completed: 0,
+            failed: 0,
+        });
+
         for (const pdfPath of pdfPaths) {
             const jobId = generateJobId();
             const fileName = path.basename(pdfPath);
@@ -480,7 +500,8 @@ const DiseaseService = {
                 fileName,
                 pdfPath,
                 progress: 0,
-                error: null
+                error: null,
+                batchId,
             });
 
             jobIds.push({ jobId, fileName });
@@ -492,7 +513,7 @@ const DiseaseService = {
             this.processUploadQueue();
         }
 
-        return jobIds;
+        return { batchId, jobs: jobIds };
     },
 
     /**
@@ -522,6 +543,22 @@ const DiseaseService = {
                 job.result = guideline;
                 sendProgressEvent(jobId, { status: 'completed', fileName: job.fileName, progress: 100, guidelineId: guideline.id });
 
+                if (job.batchId && uploadQueue.batches.has(job.batchId)) {
+                    const b = uploadQueue.batches.get(job.batchId);
+                    b.completed += 1;
+                    uploadQueue.batches.set(job.batchId, b);
+
+                    if (b.completed + b.failed >= b.total) {
+                        sendBatchFinishedEvent(job.batchId, {
+                            diseaseId: Number(b.diseaseId),
+                            totalFiles: Number(b.total),
+                            successCount: Number(b.completed),
+                            errorCount: Number(b.failed),
+                        });
+                        uploadQueue.batches.delete(job.batchId);
+                    }
+                }
+
                 // Invalidate cache to trigger UI refresh
                 CacheService.invalidate('diseases', `id_${job.diseaseId}`);
 
@@ -530,6 +567,22 @@ const DiseaseService = {
                 job.status = 'failed';
                 job.error = error.message;
                 sendProgressEvent(jobId, { status: 'failed', fileName: job.fileName, error: error.message });
+
+                if (job.batchId && uploadQueue.batches.has(job.batchId)) {
+                    const b = uploadQueue.batches.get(job.batchId);
+                    b.failed += 1;
+                    uploadQueue.batches.set(job.batchId, b);
+
+                    if (b.completed + b.failed >= b.total) {
+                        sendBatchFinishedEvent(job.batchId, {
+                            diseaseId: Number(b.diseaseId),
+                            totalFiles: Number(b.total),
+                            successCount: Number(b.completed),
+                            errorCount: Number(b.failed),
+                        });
+                        uploadQueue.batches.delete(job.batchId);
+                    }
+                }
 
                 logger.error(`[DiseaseService] Failed upload job ${jobId}:`, error);
             }

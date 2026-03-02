@@ -5,6 +5,16 @@ export const PDF_THUMBNAIL_CACHE_LIMIT = 200;
 export const PDF_THUMBNAIL_SCALE_DEFAULT = 0.2;
 export const PDF_THUMBNAIL_ITEM_HEIGHT = 280;
 
+// Toast notifications
+export const TOAST_CONSTANTS = {
+  DEFAULT_DURATION: 5000,
+  SUCCESS_DURATION: 3000,
+  ERROR_DURATION: 8000,
+  MAX_TOASTS: 3,
+  ANIMATION_DURATION: 300,
+  POSITION: 'top-right',
+} as const;
+
 // Based on the National Vaccination Calendar of the Russian Federation
 export const VACCINE_SCHEDULE: VaccineDefinition[] = [
   {

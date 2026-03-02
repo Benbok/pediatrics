@@ -1,5 +1,6 @@
 import { Disease, ClinicalGuideline, GuidelinePlan, CategorizedSymptom, SymptomCategory } from '../../../types';
 import { dataEvents } from '../../../services/dataEvents';
+import { logger } from '../../../services/logger';
 
 /**
  * Сервис для работы с заболеваниями
@@ -52,7 +53,7 @@ export const diseaseService = {
             const data = await window.electronAPI.getDiseases();
             return data.map(disease => normalizeDisease(disease));
         } catch (error) {
-            console.error('[DiseaseService] Failed to fetch diseases:', error);
+            logger.error('[DiseaseService] Failed to fetch diseases', { error });
             throw error;
         }
     },
@@ -65,7 +66,7 @@ export const diseaseService = {
             const data = await window.electronAPI.getDisease(id);
             return data ? normalizeDisease(data) : data;
         } catch (error) {
-            console.error('[DiseaseService] Failed to fetch disease details:', error);
+            logger.error('[DiseaseService] Failed to fetch disease details', { error });
             throw error;
         }
     },
@@ -80,7 +81,7 @@ export const diseaseService = {
             dataEvents.notifyUpdated('diseases', result.id);
             return result;
         } catch (error) {
-            console.error('[DiseaseService] Failed to save disease:', error);
+            logger.error('[DiseaseService] Failed to save disease', { error });
             throw error;
         }
     },
@@ -95,7 +96,7 @@ export const diseaseService = {
             dataEvents.notifyDeleted('diseases', id);
             return result;
         } catch (error) {
-            console.error('[DiseaseService] Failed to delete disease:', error);
+            logger.error('[DiseaseService] Failed to delete disease', { error });
             throw error;
         }
     },
@@ -107,7 +108,7 @@ export const diseaseService = {
         try {
             return await window.electronAPI.uploadGuideline(diseaseId, pdfPath);
         } catch (error) {
-            console.error('[DiseaseService] Failed to upload guideline:', error);
+            logger.error('[DiseaseService] Failed to upload guideline', { error });
             throw error;
         }
     },
@@ -119,7 +120,22 @@ export const diseaseService = {
         try {
             return await window.electronAPI.uploadGuidelinesBatch(diseaseId, pdfPaths);
         } catch (error) {
-            console.error('[DiseaseService] Failed to upload guidelines batch:', error);
+            logger.error('[DiseaseService] Failed to upload guidelines batch', { error });
+            throw error;
+        }
+    },
+
+    /**
+     * Async upload multiple guidelines (non-blocking)
+     */
+    async uploadGuidelinesAsync(diseaseId: number, pdfPaths: string[]): Promise<{ batchId: string; jobs: Array<{ jobId: string; fileName: string }> }> {
+        try {
+            if (!Array.isArray(pdfPaths) || pdfPaths.length === 0) {
+                throw new Error('Необходимо выбрать хотя бы один файл');
+            }
+            return await window.electronAPI.uploadGuidelinesAsync(diseaseId, pdfPaths);
+        } catch (error) {
+            logger.error('[DiseaseService] Failed to upload guidelines async', { error });
             throw error;
         }
     },
@@ -131,7 +147,7 @@ export const diseaseService = {
         try {
             return await window.electronAPI.updateGuideline(guidelineId, { title });
         } catch (error) {
-            console.error('[DiseaseService] Failed to update guideline:', error);
+            logger.error('[DiseaseService] Failed to update guideline', { error });
             throw error;
         }
     },
@@ -146,7 +162,7 @@ export const diseaseService = {
             dataEvents.notifyUpdated('diseases');
             return result;
         } catch (error) {
-            console.error('[DiseaseService] Failed to delete guideline:', error);
+            logger.error('[DiseaseService] Failed to delete guideline', { error });
             throw error;
         }
     },
@@ -158,7 +174,7 @@ export const diseaseService = {
         try {
             return await window.electronAPI.searchDiseases(symptoms);
         } catch (error) {
-            console.error('[DiseaseService] Search failed:', error);
+            logger.error('[DiseaseService] Search failed', { error });
             throw error;
         }
     },
@@ -170,7 +186,7 @@ export const diseaseService = {
         try {
             return await window.electronAPI.getGuidelinePlan(diseaseId);
         } catch (error) {
-            console.error('[DiseaseService] Failed to fetch guideline plan:', error);
+            logger.error('[DiseaseService] Failed to fetch guideline plan', { error });
             throw error;
         }
     },
@@ -196,7 +212,7 @@ export const diseaseService = {
             }
             return result;
         } catch (error: any) {
-            console.error('[DiseaseService] Failed to import from JSON', { error });
+            logger.error('[DiseaseService] Failed to import from JSON', { error });
             return {
                 success: false,
                 error: error.message || 'Не удалось импортировать данные из JSON'

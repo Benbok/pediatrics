@@ -27,9 +27,6 @@ export const ChildProfileSchema = z.object({
             eighteenYearsAgo.setFullYear(eighteenYearsAgo.getFullYear() - 18);
             return d >= eighteenYearsAgo;
         }, 'Пациент должен быть младше 18 лет'),
-    birthWeight: z.number()
-        .min(500, 'Вес при рождении должен быть не менее 500 г')
-        .max(8000, 'Вес при рождении должен быть не более 8000 г'),
     gender: z.enum(['male', 'female'], 'Выберите пол (мужской или женский)'),
 });
 

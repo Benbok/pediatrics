@@ -83,7 +83,6 @@ model Child {
   surname         String
   patronymic      String?
   birthDate       String   @map("birth_date")
-  birthWeight     Int      @default(0) @map("birth_weight") // in grams
   gender          String
   createdByUserId Int      @map("created_by_user_id")
   createdAt       DateTime @default(now()) @map("created_at")
@@ -132,6 +131,7 @@ model VaccinationProfile {
   hpvRiskFactors             String?  @map("hpv_risk_factors") // Stored as JSON string
   tbeRiskFactors             String?  @map("tbe_risk_factors") // Stored as JSON string
   rotaRiskFactors            String?  @map("rota_risk_factors") // Stored as JSON string
+  birthWeight                Int?     @map("birth_weight") // in grams, optional
   mantouxDate                String?  @map("mantoux_date")
   mantouxResult              Boolean? @map("mantoux_result")
   customVaccines             String?  @map("custom_vaccines") // Stored as JSON string

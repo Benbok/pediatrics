@@ -26,6 +26,8 @@ import { ChildProvider } from './context/ChildContext';
 import { DataCacheProvider } from './context/DataCacheContext';
 import { PdfViewerPage } from './pages/PdfViewerPage';
 import { ApiKeyWarningToast } from './components/ApiKeyWarningToast';
+import { ToastProvider } from './context/ToastContext';
+import { ToastContainer } from './components/ui/ToastContainer';
 
 const router = createHashRouter([
     {
@@ -133,9 +135,12 @@ const AppContent: React.FC = () => {
     return (
         <DataCacheProvider>
             <ChildProvider>
-                <RouterProvider router={router} />
-                <PrintPreviewManager />
-                <ApiKeyWarningToast />
+                <ToastProvider>
+                    <RouterProvider router={router} />
+                    <PrintPreviewManager />
+                    <ApiKeyWarningToast />
+                    <ToastContainer />
+                </ToastProvider>
             </ChildProvider>
         </DataCacheProvider>
     );
