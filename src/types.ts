@@ -426,7 +426,7 @@ export interface Medication {
 }
 
 export interface DiagnosisEntry {
-  code: string; // Код МКБ
+  code?: string; // Код МКБ (необязателен при ручном вводе)
   nameRu: string; // Название диагноза на русском
   diseaseId?: number; // Опциональная связь с Disease (база знаний)
 }

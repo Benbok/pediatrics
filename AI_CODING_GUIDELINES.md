@@ -190,6 +190,16 @@ ipcMain.handle('db:create-feature', ensureAuthenticated(async (_, data) => {
 }));
 ```
 
+### Caching (Backend)
+
+При добавлении новых IPC handlers, работающих с часто читаемыми данными, подключайте **CacheService** (`electron/services/cacheService.cjs`):
+
+- **Чтение (GET):** в начале handler — `CacheService.get(namespace, key)`; при промахе — запрос к Prisma, приведение к формату API, `CacheService.set(namespace, key, parsed)`, возврат.
+- **Запись (CREATE/UPDATE/DELETE):** после мутации либо **invalidate-only** — `CacheService.invalidate(namespace, key)` (и связанные ключи, например списки), либо **write-through** — перечитать данные из БД и вызвать `CacheService.set(...)`.
+- **Namespace и ключи:** используйте существующий namespace из `NAMESPACE_CONFIG` или добавьте новый с TTL; ключи — по соглашениям (например `entity_${id}`, `user_${userId}_admin_${bool}`). При инвалидации используйте тот же формат ключа, что и при `set`.
+
+Подробно: [electron/services/README-cache-service.md](electron/services/README-cache-service.md) — карта namespace, паттерны read-through/write-through, соглашения по ключам, как добавить кеш в новый handler.
+
 ---
 
 ## 📂 FILE STRUCTURE
@@ -245,6 +255,7 @@ When writing new code, ensure:
 - [ ] Transactions for related DB operations
 - [ ] No magic numbers (use `constants.ts`)
 - [ ] Code in correct layer (Component/Service/IPC/DB)
+- [ ] Новые GET/mutation handlers с частыми чтениями — кеширование через CacheService (см. [README-cache-service.md](electron/services/README-cache-service.md))
 
 ---
 

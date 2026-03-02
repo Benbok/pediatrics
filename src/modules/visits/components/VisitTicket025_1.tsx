@@ -157,7 +157,10 @@ export const VisitTicket025_1: React.FC<VisitTicket025_1Props> = ({
                     <div className="border-b border-slate-900 min-h-[40px] mt-1">
                         {primaryDiagnosis ? (
                             <div>
-                                <span className="font-mono">{primaryDiagnosis.code}</span> - {primaryDiagnosis.nameRu}
+                                {primaryDiagnosis.code ? (
+                                    <><span className="font-mono">{primaryDiagnosis.code}</span> - </>
+                                ) : null}
+                                {primaryDiagnosis.nameRu}
                             </div>
                         ) : (
                             '—'

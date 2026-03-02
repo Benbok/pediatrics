@@ -30,19 +30,16 @@ export const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
     const [manualName, setManualName] = useState(value?.nameRu || '');
 
     const handleManualSave = () => {
-        if (manualCode.trim() && manualName.trim()) {
-            // Простая валидация формата МКБ кода
-            const icdPattern = /^[A-Z]\d{2}\.?\d{0,2}$/;
-            if (!icdPattern.test(manualCode.trim())) {
-                return;
-            }
-            onChange({
-                code: manualCode.trim().toUpperCase(),
-                nameRu: manualName.trim(),
-                diseaseId: undefined,
-            });
-            setManualMode(false);
-        }
+        if (!manualName.trim()) return;
+        const icdPattern = /^[A-Z]\d{2}\.?\d{0,2}$/;
+        const codeTrimmed = manualCode.trim();
+        if (codeTrimmed && !icdPattern.test(codeTrimmed)) return;
+        onChange({
+            code: codeTrimmed ? codeTrimmed.toUpperCase() : undefined,
+            nameRu: manualName.trim(),
+            diseaseId: undefined,
+        });
+        setManualMode(false);
     };
 
     const handleClear = () => {
@@ -61,42 +58,40 @@ export const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
                             {label}
                             {required && <span className="text-red-500 ml-1">*</span>}
                         </label>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        {onOpenIcdSearch && (
+                        <div className="flex gap-2">
+                            {onOpenIcdSearch && (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={onOpenIcdSearch}
+                                    leftIcon={<Search className="w-3 h-3" />}
+                                >
+                                    Из МКБ
+                                </Button>
+                            )}
+                            {onOpenDiseaseSearch && (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={onOpenDiseaseSearch}
+                                    leftIcon={<FileText className="w-3 h-3" />}
+                                >
+                                    Из базы
+                                </Button>
+                            )}
                             <Button
                                 type="button"
                                 variant="secondary"
-                                onClick={onOpenIcdSearch}
-                                leftIcon={<Search className="w-4 h-4" />}
-                                className="w-full"
+                                size="sm"
+                                onClick={() => setManualMode(true)}
+                                leftIcon={<Plus className="w-3 h-3" />}
                             >
-                                Выбрать из МКБ
+                                Вручную
                             </Button>
-                        )}
-                        {onOpenDiseaseSearch && (
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={onOpenDiseaseSearch}
-                                leftIcon={<FileText className="w-4 h-4" />}
-                                className="w-full"
-                            >
-                                Выбрать из базы знаний
-                            </Button>
-                        )}
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => setManualMode(true)}
-                            leftIcon={<Plus className="w-4 h-4" />}
-                            className="w-full"
-                        >
-                            Ввести вручную
-                        </Button>
+                        </div>
                     </div>
-                    
                     {error && (
                         <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
@@ -136,8 +131,8 @@ export const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <Input
-                            label="Код МКБ"
-                            placeholder="Например: J45.0"
+                            label="Код МКБ (необязательно)"
+                            placeholder="Например: J45.0 или оставьте пустым"
                             value={manualCode}
                             onChange={(e) => setManualCode(e.target.value.toUpperCase())}
                             error={!isCodeValid && manualCode.trim() ? 'Неверный формат кода МКБ (например: J45.0)' : undefined}
@@ -151,11 +146,14 @@ export const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
                         />
                     </div>
 
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Код МКБ можно не заполнять при ручном вводе.
+                    </p>
                     <div className="flex gap-2">
                         <Button
                             type="button"
                             onClick={handleManualSave}
-                            disabled={!manualCode.trim() || !manualName.trim() || !isCodeValid}
+                            disabled={!manualName.trim() || !isCodeValid}
                             size="sm"
                         >
                             Сохранить
@@ -191,10 +189,16 @@ export const DiagnosisSelector: React.FC<DiagnosisSelectorProps> = ({
                         <FileText className="w-4 h-4 text-primary-600 dark:text-primary-400" />
                     </div>
                     <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="primary" size="sm">
-                                {value.code}
-                            </Badge>
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            {value.code ? (
+                                <Badge variant="primary" size="sm">
+                                    {value.code}
+                                </Badge>
+                            ) : (
+                                <Badge variant="outline" size="sm">
+                                    Без кода МКБ
+                                </Badge>
+                            )}
                             {value.diseaseId && (
                                 <Badge variant="outline" size="sm">
                                     Из базы знаний
@@ -239,10 +243,12 @@ export const MultipleDiagnosisSelector: React.FC<MultipleDiagnosisSelectorProps>
     const [manualMode, setManualMode] = useState(false);
     const [manualCode, setManualCode] = useState('');
     const [manualName, setManualName] = useState('');
+    const icdPattern = /^[A-Z]\d{2}\.?\d{0,2}$/;
+    const isCodeValid = !manualCode.trim() || icdPattern.test(manualCode.trim().toUpperCase());
 
     const handleAdd = (diagnosis: DiagnosisEntry) => {
-        // Проверка на дубликаты по коду
-        if (values.some(d => d.code === diagnosis.code)) {
+        // Проверка на дубликаты по коду (только если код указан)
+        if (diagnosis.code && values.some(d => d.code === diagnosis.code)) {
             return;
         }
         onChange([...values, diagnosis]);
@@ -252,21 +258,19 @@ export const MultipleDiagnosisSelector: React.FC<MultipleDiagnosisSelectorProps>
     };
 
     const handleManualSave = () => {
-        if (manualCode.trim() && manualName.trim()) {
-            const icdPattern = /^[A-Z]\d{2}\.?\d{0,2}$/;
-            if (!icdPattern.test(manualCode.trim())) {
-                return;
-            }
-            handleAdd({
-                code: manualCode.trim().toUpperCase(),
-                nameRu: manualName.trim(),
-                diseaseId: undefined,
-            });
-        }
+        if (!manualName.trim()) return;
+        const icdPattern = /^[A-Z]\d{2}\.?\d{0,2}$/;
+        const codeTrimmed = manualCode.trim();
+        if (codeTrimmed && !icdPattern.test(codeTrimmed)) return;
+        handleAdd({
+            code: codeTrimmed ? codeTrimmed.toUpperCase() : undefined,
+            nameRu: manualName.trim(),
+            diseaseId: undefined,
+        });
     };
 
-    const handleRemove = (code: string) => {
-        onChange(values.filter(d => d.code !== code));
+    const handleRemove = (index: number) => {
+        onChange(values.filter((_, i) => i !== index));
     };
 
     return (
@@ -332,7 +336,7 @@ export const MultipleDiagnosisSelector: React.FC<MultipleDiagnosisSelectorProps>
                 {manualMode && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                         <Input
-                            placeholder="Код МКБ"
+                            placeholder="Код МКБ (необязательно)"
                             value={manualCode}
                             onChange={(e) => setManualCode(e.target.value.toUpperCase())}
                             size="sm"
@@ -348,7 +352,7 @@ export const MultipleDiagnosisSelector: React.FC<MultipleDiagnosisSelectorProps>
                             <Button
                                 type="button"
                                 onClick={handleManualSave}
-                                disabled={!manualCode.trim() || !manualName.trim()}
+                                disabled={!manualName.trim() || !isCodeValid}
                                 size="sm"
                             >
                                 Добавить
@@ -359,14 +363,20 @@ export const MultipleDiagnosisSelector: React.FC<MultipleDiagnosisSelectorProps>
 
                 {values.length > 0 && (
                     <div className="space-y-2">
-                        {values.map((diagnosis) => (
+                        {values.map((diagnosis, index) => (
                             <div
-                                key={diagnosis.code}
+                                key={diagnosis.code ?? `manual-${index}`}
                                 className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700"
                             >
-                                <Badge variant="primary" size="sm">
-                                    {diagnosis.code}
-                                </Badge>
+                                {diagnosis.code ? (
+                                    <Badge variant="primary" size="sm">
+                                        {diagnosis.code}
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="outline" size="sm">
+                                        Без кода
+                                    </Badge>
+                                )}
                                 <span className="flex-1 text-sm text-slate-900 dark:text-white">
                                     {diagnosis.nameRu}
                                 </span>
@@ -374,7 +384,7 @@ export const MultipleDiagnosisSelector: React.FC<MultipleDiagnosisSelectorProps>
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleRemove(diagnosis.code)}
+                                    onClick={() => handleRemove(index)}
                                     leftIcon={<X className="w-3 h-3" />}
                                 >
                                     Удалить

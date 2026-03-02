@@ -7,11 +7,14 @@ import {
     AllergyStatusDataSchema,
 } from './anamnesis025.validator';
 
-// Схема для объекта диагноза
+// Схема для объекта диагноза (код МКБ необязателен при ручном вводе)
 export const DiagnosisEntrySchema = z.object({
-    code: z.string()
-        .regex(/^[A-Z]\d{2}\.?\d{0,2}$/, 'Неверный формат кода МКБ (например: J45.0)')
-        .min(1, 'Код МКБ обязателен'),
+    code: z
+        .union([
+            z.string().regex(/^[A-Z]\d{2}\.?\d{0,2}$/, 'Неверный формат кода МКБ (например: J45.0)'),
+            z.literal(''),
+        ])
+        .optional(),
     nameRu: z.string().min(1, 'Название диагноза обязательно'),
     diseaseId: z.number().positive().optional(),
 });

@@ -173,7 +173,7 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                     {primaryDiagnosis && (
                         <div className="diagnosis primary">
                             <span className="diagnosis-label">Основной:</span>
-                            <span className="diagnosis-code">{primaryDiagnosis.code}</span>
+                            {primaryDiagnosis.code && <span className="diagnosis-code">{primaryDiagnosis.code}</span>}
                             <span className="diagnosis-name">{primaryDiagnosis.nameRu}</span>
                         </div>
                     )}
@@ -182,7 +182,7 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                             <span className="diagnosis-label">Осложнения:</span>
                             {complications.map((c, i) => (
                                 <div key={i} className="diagnosis">
-                                    <span className="diagnosis-code">{c.code}</span>
+                                    {c.code && <span className="diagnosis-code">{c.code}</span>}
                                     <span className="diagnosis-name">{c.nameRu}</span>
                                 </div>
                             ))}
@@ -193,7 +193,7 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                             <span className="diagnosis-label">Сопутствующие:</span>
                             {comorbidities.map((c, i) => (
                                 <div key={i} className="diagnosis">
-                                    <span className="diagnosis-code">{c.code}</span>
+                                    {c.code && <span className="diagnosis-code">{c.code}</span>}
                                     <span className="diagnosis-name">{c.nameRu}</span>
                                 </div>
                             ))}

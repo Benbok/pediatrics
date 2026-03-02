@@ -569,9 +569,11 @@ const setupDatabaseHandlers = async () => {
         canEdit
       });
 
-      // Инвалидируем кеш списка пациентов для обоих пользователей
+      // Инвалидируем кеш списка пациентов для обоих пользователей (оба ключа на случай если целевой пользователь — админ)
       CacheService.invalidate('children', `user_${currentUserId}_admin_false`);
+      CacheService.invalidate('children', `user_${currentUserId}_admin_true`);
       CacheService.invalidate('children', `user_${userId}_admin_false`);
+      CacheService.invalidate('children', `user_${userId}_admin_true`);
       if (Boolean(session.user.roles?.includes('admin'))) {
         CacheService.invalidate('children');
       }
@@ -610,9 +612,11 @@ const setupDatabaseHandlers = async () => {
 
       logAudit('PATIENT_UNSHARED', { childId, sharedWith: userId });
 
-      // Инвалидируем кеш списка пациентов
+      // Инвалидируем кеш списка пациентов (оба ключа на случай если целевой пользователь — админ)
       CacheService.invalidate('children', `user_${session.user.id}_admin_false`);
+      CacheService.invalidate('children', `user_${session.user.id}_admin_true`);
       CacheService.invalidate('children', `user_${userId}_admin_false`);
+      CacheService.invalidate('children', `user_${userId}_admin_true`);
       if (Boolean(session.user.roles?.includes('admin'))) {
         CacheService.invalidate('children');
       }

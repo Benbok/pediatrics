@@ -196,6 +196,7 @@ const setupDiseaseHandlers = () => {
         const session = getSession();
         const note = await DiseaseService.createNote(data, session.user.id);
         logAudit('DISEASE_NOTE_CREATED', { diseaseId: data.diseaseId, noteId: note.id });
+        CacheService.invalidate('diseases', `id_${data.diseaseId}`);
         return note;
     }));
 
@@ -203,13 +204,15 @@ const setupDiseaseHandlers = () => {
         const session = getSession();
         const note = await DiseaseService.updateNote(id, data, session.user.id);
         logAudit('DISEASE_NOTE_UPDATED', { noteId: id });
+        CacheService.invalidate('diseases', `id_${note.diseaseId}`);
         return note;
     }));
 
     ipcMain.handle('diseases:notes-delete', ensureAuthenticated(async (_, id) => {
         const session = getSession();
-        await DiseaseService.deleteNote(id, session.user.id);
+        const deleted = await DiseaseService.deleteNote(id, session.user.id);
         logAudit('DISEASE_NOTE_DELETED', { noteId: id });
+        CacheService.invalidate('diseases', `id_${deleted.diseaseId}`);
         return true;
     }));
 

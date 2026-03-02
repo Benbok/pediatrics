@@ -2252,7 +2252,9 @@ export const VisitFormPage: React.FC = () => {
                                     {/* Primary Diagnosis */}
                                     <div className="p-3 bg-primary-600 rounded-2xl text-white shadow-lg shadow-primary-500/30">
                                         <div className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-1">Основной</div>
-                                        <div className="text-xs font-black text-white/80">{primaryDiagnosis.code}</div>
+                                        {primaryDiagnosis.code && (
+                                            <div className="text-xs font-black text-white/80">{primaryDiagnosis.code}</div>
+                                        )}
                                         <div className="font-bold">{primaryDiagnosis.nameRu}</div>
                                         {primaryDiagnosis.diseaseId && (
                                             <div className="text-[10px] text-white/60 mt-1 italic">Из базы знаний</div>
@@ -2265,7 +2267,9 @@ export const VisitFormPage: React.FC = () => {
                                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Осложнения</div>
                                             {complications.map((c: any, i: number) => (
                                                 <div key={i} className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-900/40">
-                                                    <div className="text-[10px] font-black text-amber-600 dark:text-amber-400">{c.code}</div>
+                                                    {c.code && (
+                                                        <div className="text-[10px] font-black text-amber-600 dark:text-amber-400">{c.code}</div>
+                                                    )}
                                                     <div className="text-sm font-bold text-slate-800 dark:text-slate-200">{c.nameRu}</div>
                                                 </div>
                                             ))}
@@ -2278,7 +2282,9 @@ export const VisitFormPage: React.FC = () => {
                                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Сопутствующие</div>
                                             {comorbidities.map((c: any, i: number) => (
                                                 <div key={i} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
-                                                    <div className="text-[10px] font-black text-slate-500">{c.code}</div>
+                                                    {c.code && (
+                                                        <div className="text-[10px] font-black text-slate-500">{c.code}</div>
+                                                    )}
                                                     <div className="text-sm font-bold text-slate-700 dark:text-slate-300">{c.nameRu}</div>
                                                 </div>
                                             ))}

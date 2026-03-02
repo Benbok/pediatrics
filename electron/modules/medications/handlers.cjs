@@ -75,18 +75,10 @@ const setupMedicationHandlers = () => {
             
             const result = await MedicationService.upsert(data, userId, source);
             logAudit(data.id ? 'MEDICATION_UPDATED' : 'MEDICATION_CREATED', { name: result.nameRu });
-            
-            // Инвалидируем кеш препаратов
-            CacheService.invalidate('medications', 'all'); // Список всех препаратов
-            if (result.id) {
-                CacheService.invalidate('medications', `id_${result.id}`); // Конкретный препарат
-                // Инвалидируем все кеши по заболеваниям (так как препарат может быть связан с разными заболеваниями)
-                // Используем паттерн для инвалидации всех ключей, начинающихся с "disease_"
-                // К сожалению, CacheService не поддерживает паттерны, поэтому инвалидируем весь namespace
-                // Это безопасно, так как кеш по заболеваниям пересоздается при следующем запросе
-                CacheService.invalidate('medications'); // Инвалидируем весь namespace medications
-            }
-            
+
+            // Инвалидируем весь namespace medications (all, id_*, disease_*)
+            CacheService.invalidate('medications');
+
             return result;
         } catch (error) {
             if (error.name === 'ZodError') {
@@ -99,14 +91,10 @@ const setupMedicationHandlers = () => {
     ipcMain.handle('medications:delete', ensureAuthenticated(async (_, id) => {
         await MedicationService.delete(id);
         logAudit('MEDICATION_DELETED', { id });
-        
-        // Инвалидируем кеш препаратов
-        CacheService.invalidate('medications', 'all');
-        CacheService.invalidate('medications', `id_${id}`);
-        // Инвалидируем все кеши по заболеваниям (так как препарат мог быть связан с разными)
-        // Можно оптимизировать позже, сохраняя список связанных заболеваний
-        CacheService.invalidate('medications', `by_disease_${id}`);
-        
+
+        // Инвалидируем весь namespace (включая all, id_*, disease_*)
+        CacheService.invalidate('medications');
+
         return true;
     }));
 
