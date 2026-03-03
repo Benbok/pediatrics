@@ -1,6 +1,6 @@
 const { ipcMain } = require('electron');
 const { VisitService, getExpandedIcdCodes } = require('./service.cjs');
-const { ensureAuthenticated } = require('../../auth.cjs');
+const { ensureAuthenticated, getSession } = require('../../auth.cjs');
 const { logAudit, logger } = require('../../logger.cjs');
 const { CacheService } = require('../../services/cacheService.cjs');
 
@@ -113,6 +113,20 @@ const setupVisitHandlers = () => {
         const result = await VisitService.getAllDiagnosticTests();
         CacheService.set('visits', 'all_diagnostic_tests', result);
         return result;
+    }));
+
+    ipcMain.handle('visits:list-by-doctor-and-date', ensureAuthenticated(async (_, dateStr) => {
+        const session = getSession();
+        const doctorId = session?.user?.id;
+        if (!doctorId) throw new Error('Unauthorized');
+        const visits = await VisitService.listByDoctorAndDate(doctorId, dateStr);
+        return visits.map(v => ({
+            ...v,
+            visitDate: serializeDateOnly(v.visitDate),
+            nextVisitDate: serializeDateOnly(v.nextVisitDate),
+            createdAt: serializeDate(v.createdAt),
+            updatedAt: serializeDate(v.updatedAt)
+        }));
     }));
 };
 

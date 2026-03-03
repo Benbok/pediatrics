@@ -154,6 +154,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAllIcdCodes: (params) => ipcRenderer.invoke('icd-codes:get-all', params),
     getIcdCategories: () => ipcRenderer.invoke('icd-codes:get-categories'),
 
+    // DASHBOARD MODULE API
+    getDashboardSummary: (date) => ipcRenderer.invoke('dashboard:get-summary', date),
+
     // LOGGING API
     log: (level, message, metadata) => ipcRenderer.invoke('logger:log', level, message, metadata),
 

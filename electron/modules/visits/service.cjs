@@ -374,7 +374,7 @@ const VisitService = {
                 },
                 orderBy: { visitDate: 'desc' }
             });
-            
+
             return visits.map(v => this._parseVisitFields(v));
         } catch (error) {
             logger.error('[VisitService] Failed to list visits for child:', {
@@ -384,6 +384,31 @@ const VisitService = {
             });
             throw error;
         }
+    },
+
+    /**
+     * List visits by doctor and date (for dashboard / calendar)
+     * date: YYYY-MM-DD string
+     */
+    async listByDoctorAndDate(doctorId, dateStr) {
+        const dayStart = new Date(dateStr + 'T00:00:00.000');
+        const dayEnd = new Date(dateStr + 'T23:59:59.999');
+        const visits = await prisma.visit.findMany({
+            where: {
+                doctorId: Number(doctorId),
+                visitDate: { gte: dayStart, lte: dayEnd }
+            },
+            include: {
+                child: {
+                    select: { id: true, name: true, surname: true, birthDate: true }
+                }
+            },
+            orderBy: [{ visitDate: 'asc' }, { visitTime: 'asc' }]
+        });
+        return visits.map(v => ({
+            ...this._parseVisitFields(v),
+            child: v.child
+        }));
     },
 
     /**

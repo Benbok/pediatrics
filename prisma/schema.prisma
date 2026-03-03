@@ -35,6 +35,7 @@ model User {
   examTextTemplates     ExamTextTemplate[]
   diagnosticTemplates      DiagnosticTemplate[]
   recommendationTemplates  RecommendationTemplate[]
+  receptionDaySchedules ReceptionDaySchedule[]
 
   @@map("users")
 }
@@ -597,4 +598,21 @@ model RecommendationTemplate {
   @@unique([createdById, name])
   @@index([createdById])
   @@map("recommendation_templates")
+}
+
+// ============= RECEPTION SCHEDULE (Dashboard / Calendar) =============
+
+model ReceptionDaySchedule {
+  id                   Int    @id @default(autoincrement())
+  doctorId             Int    @map("doctor_id")
+  date                 String @map("date") // YYYY-MM-DD
+  startTime            String @map("start_time") // HH:mm, e.g. "08:00"
+  slotDurationMinutes  Int    @map("slot_duration_minutes")
+  endTime              String @map("end_time") // HH:mm, e.g. "16:00"
+
+  doctor User @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, date])
+  @@index([doctorId])
+  @@map("reception_day_schedules")
 }

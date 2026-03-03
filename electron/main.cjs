@@ -18,6 +18,7 @@ const { setupMedicationTemplateHandlers } = require('./modules/medication-templa
 const { setupDiagnosticTemplateHandlers } = require('./modules/diagnostic-templates/handlers.cjs');
 const { setupRecommendationTemplateHandlers } = require('./modules/recommendation-templates/handlers.cjs');
 const { setupExamTextTemplateHandlers } = require('./modules/exam-text-templates/handlers.cjs');
+const { setupDashboardHandlers } = require('./modules/dashboard/handlers.cjs');
 const { initializeDatabase } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const isDev = !app.isPackaged;
@@ -94,6 +95,7 @@ app.whenReady().then(async () => {
     setupDiagnosticTemplateHandlers();
     setupRecommendationTemplateHandlers();
     setupExamTextTemplateHandlers();
+    setupDashboardHandlers();
 
     // Cache Service handlers
     const { CacheService } = require('./services/cacheService.cjs');

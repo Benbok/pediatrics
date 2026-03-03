@@ -491,20 +491,20 @@ export interface Visit {
   childId: number;
   doctorId: number;
   visitDate: string;
-  
+
   // Тип приема и организационные данные
   visitType?: 'primary' | 'followup' | 'consultation' | 'emergency' | 'urgent' | null;
   visitPlace?: 'clinic' | 'home' | 'other' | null;
   visitTime?: string | null; // время приема (ЧЧ:ММ)
   ticketNumber?: string | null; // номер талона 025-1/у
   referringDoctorId?: number | null; // ID направившего врача (для консультации)
-  
+
   // Anthropometry
   currentWeight?: number | null; // в кг
   currentHeight?: number | null; // в см
   bmi?: number | null; // Body Mass Index
   bsa?: number | null; // Body Surface Area (м²)
-  
+
   // АНАМНЕЗ ЗАБОЛЕВАНИЯ (для всех типов приема)
   diseaseOnset?: string | null; // когда началось заболевание и первые симптомы
   diseaseCourse?: string | null; // течение болезни
@@ -516,7 +516,7 @@ export interface Visit {
   feedingData?: FeedingData | string | null;
   infectiousDiseasesData?: InfectiousDiseasesData | string | null;
   allergyStatusData?: AllergyStatusData | string | null;
-  
+
   // Показатели жизнедеятельности (Vital Signs)
   bloodPressureSystolic?: number | null; // систолическое АД (мм рт.ст.)
   bloodPressureDiastolic?: number | null; // диастолическое АД (мм рт.ст.)
@@ -525,7 +525,7 @@ export interface Visit {
   temperature?: number | null; // температура тела (°C)
   oxygenSaturation?: number | null; // сатурация кислорода (SpO2, %)
   consciousnessLevel?: string | null;
-  
+
   // Объективный осмотр по системам (структурированный JSON)
   generalCondition?: string | null;
   consciousness?: string | null;
@@ -537,12 +537,12 @@ export interface Visit {
   abdomen?: string | null;
   urogenital?: string | null;
   nervousSystem?: string | null;
-  
+
   // Input
   complaints: string;
   complaintsJson?: any | null;
   physicalExam?: string | null;
-  
+
   // Диагностика и лечение
   additionalExaminationPlan?: string | null;
   laboratoryTests?: string | any[] | null; // JSON массив или строка
@@ -551,7 +551,7 @@ export interface Visit {
   physiotherapy?: string | null;
   isFirstTimeDiagnosis?: boolean | null;
   isTrauma?: boolean | null;
-  
+
   // Диагнозы (структурированные с поддержкой ручного ввода и МКБ)
   primaryDiagnosis?: string | DiagnosisEntry | null; // JSON строка или объект
   complications?: string | DiagnosisEntry[] | null; // JSON массив
@@ -560,22 +560,22 @@ export interface Visit {
   primaryDiagnosisId?: number | null;
   complicationIds?: string | number[] | null;
   comorbidityIds?: string | number[] | null;
-  
+
   // Treatment
   prescriptions: any[];
   recommendations?: string | null;
-  
+
   // Исходы и маршрутизация
   outcome?: 'recovery' | 'improvement' | 'no_change' | 'worsening' | null;
   patientRoute?: 'ambulatory' | 'hospitalization' | 'consultation' | 'other' | null;
   hospitalizationIndication?: string | null;
   nextVisitDate?: string | null; // дата следующего приема (ГГГГ-ММ-ДД)
-  
+
   // Документооборот
   disabilityCertificate?: boolean | null;
   preferentialPrescription?: boolean | null;
   certificateIssued?: boolean | null;
-  
+
   status: 'draft' | 'completed';
   notes?: string | null;
   createdAt?: string;
@@ -739,12 +739,40 @@ export interface AuthSession {
   user: User | null;
 }
 
+// ============= DASHBOARD MODULE TYPES =============
+
+export interface DashboardVisitItem {
+  id: number;
+  childId: number;
+  visitDate: string;
+  visitTime: string | null;
+  visitType: string | null;
+  complaints: string | null;
+  primaryDiagnosis?: any | null;
+  child: {
+    id: number;
+    name: string;
+    surname: string;
+    birthDate: string;
+  } | null;
+}
+
+export interface DashboardSummary {
+  visitsToday: DashboardVisitItem[];
+  visitsTodayCount: number;
+  patientsTodayCount: number;
+  weeklyVisitsCount: number;
+}
+
 // ============= GLOBAL TYPES =============
 
 // Global window extension for Electron API
 declare global {
   interface Window {
     electronAPI: {
+      // DASHBOARD MODULE API
+      getDashboardSummary: (date?: string) => Promise<DashboardSummary>;
+
       // PATIENTS MODULE API
       getChildren: () => Promise<ChildProfile[]>;
       getChild: (id: number) => Promise<ChildProfile>;
