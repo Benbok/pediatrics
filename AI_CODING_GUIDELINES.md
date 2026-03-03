@@ -106,9 +106,30 @@ setFormData(data.diagnosticPlan); // ← Already array
 
 **RULE**: Parse JSON strings at the **DATA BOUNDARY** (where you read from DB), never in handlers or components!
 
----
+### Derived / filtered lists (no infinite update loops)
 
+**Проблема:** Если отфильтрованный список хранить в `useState` и обновлять в `useEffect` при изменении исходных данных или критериев фильтра, возможен бесконечный цикл обновлений (Maximum update depth exceeded). Причина: зависимости эффекта (например `items ?? []`) создают новую ссылку на каждый рендер → эффект срабатывает → setState → ре-рендер → снова новая ссылка → цикл.
+
+```typescript
+// ❌ NEVER: filtered list in state + useEffect that sets it
+const [items, setItems] = useState<Item[]>([]);
+const [filtered, setFiltered] = useState<Item[]>([]);
+const source = cachedItems ?? [];  // новая ссылка [] каждый рендер при null!
+useEffect(() => { setFiltered(applyFilter(source)); }, [source, searchTerm]); // → infinite loop
 ```
+
+```typescript
+// ✅ ALWAYS: derived/filtered list via useMemo (no setState, stable deps)
+const source = cachedItems ?? [];
+const filteredItems = useMemo(() => {
+  let result = source;
+  if (searchTerm.trim()) result = result.filter(...);
+  if (filterByX) result = result.filter(...);
+  return result;
+}, [source, searchTerm, filterByX]); // примитивы/стабильные ссылки — цикла нет
+```
+
+**RULE:** Любой список, который является **производным** от другого (фильтрация, поиск, сортировка) — считать через **useMemo** с явными зависимостями. Не хранить производный список в `useState` и не обновлять его в `useEffect` по изменению исходных данных.
 
 ---
 
@@ -231,6 +252,7 @@ ipcMain.handle('db:create-feature', ensureAuthenticated(async (_, data) => {
 5. **Missing Type Hints**: All functions must have types
 6. **Duplicated code** (>5 lines): Extract to util/service
 7. **Missing authentication**: All IPC handlers need `ensureAuthenticated`
+8. **Filtered/derived list in useState + useEffect**: Use `useMemo` for any list derived from props/state (search, filter, sort) to avoid "Maximum update depth exceeded".
 
 ---
 
@@ -256,6 +278,7 @@ When writing new code, ensure:
 - [ ] No magic numbers (use `constants.ts`)
 - [ ] Code in correct layer (Component/Service/IPC/DB)
 - [ ] Новые GET/mutation handlers с частыми чтениями — кеширование через CacheService (см. [README-cache-service.md](electron/services/README-cache-service.md))
+- [ ] Производные списки (поиск/фильтр) — через `useMemo`, не через `useState` + `useEffect`
 
 ---
 

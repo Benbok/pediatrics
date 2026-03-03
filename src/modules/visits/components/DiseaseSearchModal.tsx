@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { diseaseService } from '../../diseases/services/diseaseService';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useDataCache } from '../../../context/DataCacheContext';
 import { Disease } from '../../../types';
 import { Card } from '../../../components/ui/Card';
 import { Input } from '../../../components/ui/Input';
@@ -8,7 +8,8 @@ import { Badge } from '../../../components/ui/Badge';
 import { Search, X, Loader2, AlertCircle, FileText } from 'lucide-react';
 import { useDebounce } from '../../../hooks/useDebounce';
 import { DiagnosisEntry } from '../../../types';
-import { logger } from '../../../services/logger';
+
+const DISPLAY_LIMIT = 50;
 
 interface DiseaseSearchModalProps {
     isOpen: boolean;
@@ -21,28 +22,38 @@ export const DiseaseSearchModal: React.FC<DiseaseSearchModalProps> = ({
     onClose,
     onSelect,
 }) => {
-    const [diseases, setDiseases] = useState<Disease[]>([]);
+    const { diseases: cachedDiseases, loadDiseases, isLoadingDiseases } = useDataCache();
     const [searchQuery, setSearchQuery] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [displayCount, setDisplayCount] = useState(DISPLAY_LIMIT);
     const modalRef = useRef<HTMLDivElement>(null);
 
     const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-    useEffect(() => {
-        if (isOpen) {
-            loadDiseases();
-            setSearchQuery('');
-        }
-    }, [isOpen]);
+    const filteredDiseases = useMemo(() => {
+        const base = cachedDiseases ?? [];
+        if (!debouncedSearchQuery.trim()) return base;
+        const q = debouncedSearchQuery.toLowerCase();
+        return base.filter(d =>
+            d.nameRu.toLowerCase().includes(q) ||
+            d.icd10Code.toLowerCase().includes(q) ||
+            (Array.isArray(d.icd10Codes) && d.icd10Codes.some(c => c.toLowerCase().includes(q)))
+        );
+    }, [cachedDiseases, debouncedSearchQuery]);
 
     useEffect(() => {
-        if (isOpen && debouncedSearchQuery.trim()) {
-            performSearch();
-        } else if (isOpen && !debouncedSearchQuery.trim()) {
-            loadDiseases();
+        setDisplayCount(DISPLAY_LIMIT);
+    }, [filteredDiseases]);
+
+    useEffect(() => {
+        if (isOpen) {
+            setError(null);
+            if (cachedDiseases === null) {
+                loadDiseases().catch(() => setError('Не удалось загрузить заболевания'));
+            }
+            setSearchQuery('');
         }
-    }, [debouncedSearchQuery, isOpen]);
+    }, [isOpen, cachedDiseases, loadDiseases]);
 
     // Закрытие по клику вне модального окна
     useEffect(() => {
@@ -68,46 +79,6 @@ export const DiseaseSearchModal: React.FC<DiseaseSearchModalProps> = ({
             document.removeEventListener('keydown', handleEscape);
         };
     }, [isOpen, onClose]);
-
-    const loadDiseases = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const allDiseases = await diseaseService.getDiseases();
-            setDiseases(allDiseases);
-        } catch (err: any) {
-            setError('Не удалось загрузить заболевания');
-            logger.error('[DiseaseSearchModal] Failed to load diseases:', err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const performSearch = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            // Получаем все заболевания и фильтруем локально
-            const allDiseases = await diseaseService.getDiseases();
-            const query = debouncedSearchQuery.toLowerCase().trim();
-            
-            const filtered = allDiseases.filter(disease => {
-                const nameMatch = disease.nameRu.toLowerCase().includes(query);
-                const codeMatch = disease.icd10Code.toLowerCase().includes(query);
-                const additionalCodesMatch = Array.isArray(disease.icd10Codes) 
-                    ? disease.icd10Codes.some(code => code.toLowerCase().includes(query))
-                    : false;
-                return nameMatch || codeMatch || additionalCodesMatch;
-            });
-            
-            setDiseases(filtered);
-        } catch (err: any) {
-            setError('Ошибка при поиске заболеваний');
-            logger.error('[DiseaseSearchModal] Search failed:', err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const handleDiseaseSelect = (disease: Disease) => {
         onSelect({
@@ -174,27 +145,28 @@ export const DiseaseSearchModal: React.FC<DiseaseSearchModalProps> = ({
                         </div>
                     )}
 
-                    {isLoading && (
+                    {isLoadingDiseases && (
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
                         </div>
                     )}
 
-                    {!isLoading && (
+                    {!isLoadingDiseases && (
                         <>
                             <div className="flex items-center justify-between mb-4">
                                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                                    Найдено: <span className="font-semibold text-slate-700 dark:text-slate-300">{diseases.length}</span> заболеваний
+                                    Найдено: <span className="font-semibold text-slate-700 dark:text-slate-300">{filteredDiseases.length}</span> заболеваний
                                 </p>
                             </div>
 
-                            {diseases.length === 0 ? (
+                            {filteredDiseases.length === 0 ? (
                                 <div className="text-center py-12">
                                     <p className="text-slate-500 dark:text-slate-400">Заболевания не найдены</p>
                                 </div>
                             ) : (
+                                <>
                                 <div className="grid grid-cols-1 gap-4">
-                                    {diseases.map((disease) => (
+                                    {filteredDiseases.slice(0, displayCount).map((disease) => (
                                         <Card
                                             key={disease.id}
                                             hoverable
@@ -227,6 +199,18 @@ export const DiseaseSearchModal: React.FC<DiseaseSearchModalProps> = ({
                                         </Card>
                                     ))}
                                 </div>
+                                {filteredDiseases.length > displayCount && (
+                                    <div className="flex justify-center pt-4">
+                                        <Button
+                                            variant="secondary"
+                                            onClick={() => setDisplayCount(c => c + DISPLAY_LIMIT)}
+                                            className="rounded-xl"
+                                        >
+                                            Показать ещё {Math.min(DISPLAY_LIMIT, filteredDiseases.length - displayCount)}
+                                        </Button>
+                                    </div>
+                                )}
+                                </>
                             )}
                         </>
                     )}

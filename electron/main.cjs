@@ -13,7 +13,6 @@ const { setupMedicationHandlers } = require('./modules/medications/handlers.cjs'
 const { setupVisitHandlers } = require('./modules/visits/handlers.cjs');
 const { setupIcdCodeHandlers } = require('./modules/icd-codes/handlers.cjs');
 const { setupAllergyHandlers } = require('./modules/allergies/handlers.cjs');
-const { setupInformedConsentHandlers } = require('./modules/informed-consent/handlers.cjs');
 const { setupVisitTemplateHandlers } = require('./modules/visits/template-handlers.cjs');
 const { setupMedicationTemplateHandlers } = require('./modules/medication-templates/handlers.cjs');
 const { setupDiagnosticTemplateHandlers } = require('./modules/diagnostic-templates/handlers.cjs');
@@ -90,7 +89,6 @@ app.whenReady().then(async () => {
     setupVisitHandlers();
     setupIcdCodeHandlers();
     setupAllergyHandlers();
-    setupInformedConsentHandlers();
     setupVisitTemplateHandlers();
     setupMedicationTemplateHandlers();
     setupDiagnosticTemplateHandlers();

@@ -2,6 +2,7 @@ const { ipcMain } = require('electron');
 const { VisitService, getExpandedIcdCodes } = require('./service.cjs');
 const { ensureAuthenticated } = require('../../auth.cjs');
 const { logAudit, logger } = require('../../logger.cjs');
+const { CacheService } = require('../../services/cacheService.cjs');
 
 /**
  * Сериализация даты для передачи в frontend
@@ -107,7 +108,11 @@ const setupVisitHandlers = () => {
     }));
 
     ipcMain.handle('visits:get-all-diagnostic-tests', ensureAuthenticated(async () => {
-        return await VisitService.getAllDiagnosticTests();
+        const cached = CacheService.get('visits', 'all_diagnostic_tests');
+        if (cached) return cached;
+        const result = await VisitService.getAllDiagnosticTests();
+        CacheService.set('visits', 'all_diagnostic_tests', result);
+        return result;
     }));
 };
 

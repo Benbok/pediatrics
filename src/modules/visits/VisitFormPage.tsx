@@ -4,12 +4,11 @@ import { visitService } from './services/visitService';
 import { medicationService } from '../medications/services/medicationService';
 import { diseaseService } from '../diseases/services/diseaseService';
 import { patientService } from '../../services/patient.service';
-import { informedConsentService } from './services/informedConsentService';
 import { logger } from '../../services/logger';
 import { draftService } from '../../services/draftService';
 import { useTabs } from '../../context/TabsContext';
 import debounce from 'lodash/debounce';
-import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, InformedConsent, MedicationRecommendation, getFullName } from '../../types';
+import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, MedicationRecommendation, getFullName } from '../../types';
 import { MedicationBrowser } from './components/MedicationBrowser';
 import { VisitTypeSelector, VisitType } from './components/VisitTypeSelector';
 import { AnamnesisSection } from './components/AnamnesisSection';
@@ -20,7 +19,6 @@ import { DiagnosisSelector, MultipleDiagnosisSelector } from './components/Diagn
 import { IcdCodeSearchModal } from './components/IcdCodeSearchModal';
 import { DiseaseSearchModal } from './components/DiseaseSearchModal';
 import { DiseaseSidePanel } from './components/DiseaseSidePanel';
-import { InformedConsentForm } from './components/InformedConsentForm';
 import { VisitTemplateSelector } from './components/VisitTemplateSelector';
 import type { DoseCalculationResult } from '../../types/medication.types';
 import { MedicationDoseModal, DoseData } from './components/MedicationDoseModal';
@@ -153,10 +151,6 @@ export const VisitFormPage: React.FC = () => {
     // Sidepanel для просмотра заболевания
     const [selectedDiseaseForView, setSelectedDiseaseForView] = useState<Disease | null>(null);
     const [isDiseasePanelOpen, setIsDiseasePanelOpen] = useState(false);
-
-    // Информированное согласие
-    const [informedConsent, setInformedConsent] = useState<InformedConsent | null>(null);
-    const [showConsentForm, setShowConsentForm] = useState(false);
 
     // Восстановление черновика
     const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -419,16 +413,6 @@ export const VisitFormPage: React.FC = () => {
                     setCalculatedBSA(visitData.bsa || calculateBSA(visitData.currentWeight, visitData.currentHeight));
                 }
 
-                // Загружаем информированное согласие, если есть
-                if (visitData.informedConsentId) {
-                    try {
-                        const consent = await informedConsentService.getById(visitData.informedConsentId);
-                        setInformedConsent(consent);
-                    } catch (err) {
-                        logger.warn('[VisitFormPage] Failed to load informed consent:', err);
-                    }
-                }
-
             } else {
                 // Для нового приема определяем тип автоматически
                 const autoType = await determineVisitType();
@@ -600,19 +584,6 @@ export const VisitFormPage: React.FC = () => {
             setHasLocalChanges(false);
             logger.info('[VisitFormPage] Visit saved, draft cleared', { draftKey });
 
-            // Если статус completed и нужно согласие, показываем форму
-            if (status === 'completed' && !informedConsent) {
-                // Проверяем, требуется ли согласие
-                const needsConsent = await informedConsentService.needsNewConsent(
-                    Number(childId),
-                    'Медицинское вмешательство согласно протоколу приема'
-                );
-                if (needsConsent) {
-                    setShowConsentForm(true);
-                    return; // Не перенаправляем, показываем форму согласия
-                }
-            }
-
             setTimeout(() => handleBack(), 1500);
         } catch (err: any) {
             const errorMessage = err.message || 'Ошибка сохранения';
@@ -645,23 +616,6 @@ export const VisitFormPage: React.FC = () => {
             }
         } finally {
             setIsSaving(false);
-        }
-    };
-
-    const handleConsentSave = async (consentData: Partial<InformedConsent>) => {
-        try {
-            const savedConsent = await informedConsentService.upsert({
-                ...consentData,
-                visitId: formData.id || null,
-            });
-            setInformedConsent(savedConsent);
-            setFormData(prev => ({ ...prev, informedConsentId: savedConsent.id }));
-            setShowConsentForm(false);
-            setSuccess(true);
-            setTimeout(() => handleBack(), 1500);
-        } catch (err: any) {
-            setError(err.message || 'Ошибка сохранения согласия');
-            logger.error('[VisitFormPage] Consent save failed:', err);
         }
     };
 
@@ -2383,22 +2337,6 @@ export const VisitFormPage: React.FC = () => {
                     setSelectedDiseaseForView(null);
                 }}
             />
-
-            {/* Informed Consent Form Modal */}
-            {showConsentForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
-                    <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-                        <InformedConsentForm
-                            consent={informedConsent}
-                            childId={Number(childId)}
-                            visitId={formData.id || null}
-                            doctorId={currentUser?.id!}
-                            onSave={handleConsentSave}
-                            onCancel={() => setShowConsentForm(false)}
-                        />
-                    </div>
-                </div>
-            )}
 
             {/* Error Modal for Validation Errors */}
             <ErrorModal

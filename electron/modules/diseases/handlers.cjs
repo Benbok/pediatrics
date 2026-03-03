@@ -72,6 +72,7 @@ const setupDiseaseHandlers = () => {
 
             // Инвалидируем кеш заболеваний
             CacheService.invalidate('diseases', 'all'); // Список всех заболеваний
+            CacheService.invalidate('visits', 'all_diagnostic_tests');
             if (result.id) {
                 CacheService.invalidate('diseases', `id_${result.id}`); // Конкретное заболевание
             }
@@ -91,6 +92,7 @@ const setupDiseaseHandlers = () => {
 
         // Инвалидируем кеш заболеваний
         CacheService.invalidate('diseases', 'all');
+        CacheService.invalidate('visits', 'all_diagnostic_tests');
         CacheService.invalidate('diseases', `id_${id}`);
 
         return true;

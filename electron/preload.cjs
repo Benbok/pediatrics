@@ -109,15 +109,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getMedicationsByIcdCode: ({ icdCode, childId }) => ipcRenderer.invoke('visits:get-medications-by-icd-code', { icdCode, childId }),
     getExpandedIcdCodes: (icdCodes) => ipcRenderer.invoke('visits:get-expanded-icd-codes', { icdCodes }),
 
-    // INFORMED CONSENT MODULE API
-    getInformedConsent: (id) => ipcRenderer.invoke('informed-consent:get-by-id', id),
-    getInformedConsentByVisitId: (visitId) => ipcRenderer.invoke('informed-consent:get-by-visit-id', visitId),
-    getInformedConsentHistory: (childId) => ipcRenderer.invoke('informed-consent:get-history-for-child', childId),
-    upsertInformedConsent: (data) => ipcRenderer.invoke('informed-consent:upsert', data),
-    deleteInformedConsent: (id) => ipcRenderer.invoke('informed-consent:delete', id),
-    getInformedConsentTemplate: (interventionType) => ipcRenderer.invoke('informed-consent:get-template', interventionType),
-    needsNewInformedConsent: ({ childId, interventionDescription }) => ipcRenderer.invoke('informed-consent:needs-new-consent', { childId, interventionDescription }),
-
     // VISIT TEMPLATES MODULE API
     getVisitTemplate: (id) => ipcRenderer.invoke('visit-templates:get-by-id', id),
     getAllVisitTemplates: () => ipcRenderer.invoke('visit-templates:get-all'),

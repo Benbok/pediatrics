@@ -572,7 +572,6 @@ export interface Visit {
   nextVisitDate?: string | null; // дата следующего приема (ГГГГ-ММ-ДД)
   
   // Документооборот
-  informedConsentId?: number | null;
   disabilityCertificate?: boolean | null;
   preferentialPrescription?: boolean | null;
   certificateIssued?: boolean | null;
@@ -588,36 +587,6 @@ export interface DiagnosisSuggestion {
   confidence: number; // 0.0 - 1.0
   reasoning: string;
   matchedSymptoms: string[];
-}
-
-export interface InformedConsent {
-  id?: number;
-  visitId?: number | null;
-  childId: number;
-  doctorId: number;
-  consentDate: string;
-  
-  // Описание вмешательства
-  interventionDescription: string;
-  goals?: string | null;
-  alternatives?: string | null;
-  
-  // Информация о рисках
-  risks?: string | null;
-  seriousComplicationsFrequency?: string | null;
-  
-  // Статус согласия
-  status: 'given' | 'refused' | 'withdrawn';
-  patientSignature?: string | null;
-  doctorSignature?: string | null;
-  signatureDate?: string | null;
-  
-  // Для несовершеннолетних
-  parentName?: string | null;
-  parentRelation?: string | null;
-  
-  notes?: string | null;
-  createdAt?: string;
 }
 
 export interface MedicationTemplateItem {

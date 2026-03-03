@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { DiagnosticPlanItem, DiagnosticRecommendationWithCodes } from '../../../types';
 import { logger } from '../../../services/logger';
 import { Card } from '../../../components/ui/Card';
@@ -6,6 +6,8 @@ import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { Microscope, Search, X, Plus, Loader2, FlaskConical, FileBarChart, CheckCircle2, Trash2 } from 'lucide-react';
+
+const DISPLAY_LIMIT = 50;
 
 // Утилита для сравнения массивов строк
 const areArraysEqual = (a: string[], b: string[]): boolean => {
@@ -33,13 +35,13 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
     selectedTests = []
 }) => {
     const [diagnostics, setDiagnostics] = useState<DiagnosticRecommendationWithCodes[]>([]);
-    const [filteredDiagnostics, setFilteredDiagnostics] = useState<DiagnosticRecommendationWithCodes[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [filterByIcd10, setFilterByIcd10] = useState(false);
     const [expandedIcdCodes, setExpandedIcdCodes] = useState<string[]>([]);
     const [filterType, setFilterType] = useState<'all' | 'lab' | 'instrumental'>('all');
-    
+    const [displayCount, setDisplayCount] = useState(DISPLAY_LIMIT);
+
     // Refs для предотвращения лишних загрузок
     const dataLoadedRef = useRef(false);
     const prevIcdCodesRef = useRef<string[]>([]);
@@ -69,9 +71,39 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
         }
     }, [isOpen]);
 
+    const filteredDiagnostics = useMemo(() => {
+        let filtered = diagnostics;
+        if (filterType !== 'all') {
+            filtered = filtered.filter(d => d.item.type === filterType);
+        }
+        if (searchTerm.trim()) {
+            const term = searchTerm.toLowerCase();
+            filtered = filtered.filter(d =>
+                d.item.test.toLowerCase().includes(term) ||
+                d.sourceDiseaseName.toLowerCase().includes(term) ||
+                d.icd10Codes.some(code => code.toLowerCase().includes(term))
+            );
+        }
+        if (filterByIcd10 && expandedIcdCodes.length > 0) {
+            filtered = filtered.filter(d =>
+                d.icd10Codes.some(diagCode =>
+                    expandedIcdCodes.some(diseaseCode => {
+                        const normalizedDiag = diagCode.toUpperCase();
+                        const normalizedDisease = diseaseCode.toUpperCase();
+                        if (normalizedDiag === normalizedDisease) return true;
+                        if (normalizedDiag.startsWith(normalizedDisease + '.')) return true;
+                        if (normalizedDisease.startsWith(normalizedDiag + '.')) return true;
+                        return false;
+                    })
+                )
+            );
+        }
+        return filtered;
+    }, [diagnostics, searchTerm, filterByIcd10, expandedIcdCodes, filterType]);
+
     useEffect(() => {
-        filterDiagnostics();
-    }, [searchTerm, filterByIcd10, diagnostics, expandedIcdCodes, filterType]);
+        setDisplayCount(DISPLAY_LIMIT);
+    }, [filteredDiagnostics]);
 
     const loadDiagnostics = async () => {
         setIsLoading(true);
@@ -101,45 +133,6 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
             logger.error('[DiagnosticBrowser] Failed to expand ICD codes', { error });
             setExpandedIcdCodes(currentIcd10Codes);
         }
-    };
-
-    const filterDiagnostics = () => {
-        let filtered = diagnostics;
-
-        // Фильтр по типу
-        if (filterType !== 'all') {
-            filtered = filtered.filter(d => d.item.type === filterType);
-        }
-
-        // Фильтр по поисковому запросу
-        if (searchTerm.trim()) {
-            const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(d =>
-                d.item.test.toLowerCase().includes(term) ||
-                d.sourceDiseaseName.toLowerCase().includes(term) ||
-                d.icd10Codes.some(code => code.toLowerCase().includes(term))
-            );
-        }
-
-        // Фильтр по ICD-10 кодам
-        if (filterByIcd10 && expandedIcdCodes.length > 0) {
-            filtered = filtered.filter(d =>
-                d.icd10Codes.some(diagCode => 
-                    expandedIcdCodes.some(diseaseCode => {
-                        const normalizedDiag = diagCode.toUpperCase();
-                        const normalizedDisease = diseaseCode.toUpperCase();
-                        
-                        if (normalizedDiag === normalizedDisease) return true;
-                        if (normalizedDiag.startsWith(normalizedDisease + '.')) return true;
-                        if (normalizedDisease.startsWith(normalizedDiag + '.')) return true;
-                        
-                        return false;
-                    })
-                )
-            );
-        }
-
-        setFilteredDiagnostics(filtered);
     };
 
     const isTestSelected = (test: DiagnosticPlanItem): boolean => {
@@ -251,8 +244,9 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
                             <p>Исследования не найдены</p>
                         </div>
                     ) : (
+                        <>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {filteredDiagnostics.map((diag, idx) => {
+                            {filteredDiagnostics.slice(0, displayCount).map((diag, idx) => {
                                 const isSelected = isTestSelected(diag.item);
                                 const isLab = diag.item.type === 'lab';
                                 
@@ -373,6 +367,18 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
                                 );
                             })}
                         </div>
+                        {filteredDiagnostics.length > displayCount && (
+                            <div className="flex justify-center pt-4">
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => setDisplayCount(c => c + DISPLAY_LIMIT)}
+                                    className="rounded-xl"
+                                >
+                                    Показать ещё {Math.min(DISPLAY_LIMIT, filteredDiagnostics.length - displayCount)}
+                                </Button>
+                            </div>
+                        )}
+                        </>
                     )}
                 </div>
 

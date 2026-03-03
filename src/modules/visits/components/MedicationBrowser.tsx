@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Medication } from '../../../types';
-import { medicationService } from '../../medications/services/medicationService';
+import { useDataCache } from '../../../context/DataCacheContext';
 import { logger } from '../../../services/logger';
 import { Card } from '../../../components/ui/Card';
 import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { Pill, Search, X, Plus, Loader2 } from 'lucide-react';
+
+const DISPLAY_LIMIT = 50;
 
 interface MedicationBrowserProps {
     isOpen: boolean;
@@ -21,35 +23,30 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
     onSelect,
     currentIcd10Codes = []
 }) => {
-    const [medications, setMedications] = useState<Medication[]>([]);
-    const [filteredMedications, setFilteredMedications] = useState<Medication[]>([]);
+    const { medications: cachedMedications, loadMedications, isLoadingMedications } = useDataCache();
     const [searchTerm, setSearchTerm] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
     const [filterByIcd10, setFilterByIcd10] = useState(false);
     const [expandedIcdCodes, setExpandedIcdCodes] = useState<string[]>([]);
+    const [displayCount, setDisplayCount] = useState(DISPLAY_LIMIT);
 
+    // Загрузка данных только при открытии модалки
+    useEffect(() => {
+        if (!isOpen) return;
+        if (cachedMedications === null) {
+            loadMedications();
+        }
+        loadExpandedIcdCodes();
+        // Сбрасываем поиск при открытии
+        setSearchTerm('');
+        setDisplayCount(DISPLAY_LIMIT);
+    }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // При смене ICD-кодов (диагноза) перезагружаем расширенный список
     useEffect(() => {
         if (isOpen) {
-            loadMedications();
             loadExpandedIcdCodes();
         }
-    }, [isOpen, currentIcd10Codes]);
-
-    useEffect(() => {
-        filterMedications();
-    }, [searchTerm, filterByIcd10, medications, expandedIcdCodes]);
-
-    const loadMedications = async () => {
-        setIsLoading(true);
-        try {
-            const data = await medicationService.getMedications();
-            setMedications(data);
-        } catch (error) {
-            logger.error('[MedicationBrowser] Failed to load medications', { error });
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    }, [currentIcd10Codes]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadExpandedIcdCodes = async () => {
         if (currentIcd10Codes.length === 0) {
@@ -57,23 +54,22 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
             return;
         }
         try {
-            // Получаем расширенный список кодов (все коды из заболеваний, содержащих выбранные диагнозы)
             const expanded = await window.electronAPI.getExpandedIcdCodes(currentIcd10Codes);
             setExpandedIcdCodes(expanded);
-            logger.info('[MedicationBrowser] Expanded ICD codes', { 
-                original: currentIcd10Codes, 
-                expanded 
+            logger.info('[MedicationBrowser] Expanded ICD codes', {
+                original: currentIcd10Codes,
+                expanded
             });
         } catch (error) {
             logger.error('[MedicationBrowser] Failed to expand ICD codes', { error });
-            setExpandedIcdCodes(currentIcd10Codes); // Fallback to original codes
+            setExpandedIcdCodes(currentIcd10Codes);
         }
     };
 
-    const filterMedications = () => {
-        let filtered = medications;
+    // Фильтрация через useMemo — нет лишних re-renders и setState в useEffect
+    const filteredMedications = useMemo(() => {
+        let filtered = cachedMedications ?? [];
 
-        // Фильтр по поисковому запросу
         if (searchTerm.trim()) {
             const term = searchTerm.toLowerCase();
             filtered = filtered.filter(med =>
@@ -83,31 +79,28 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
             );
         }
 
-        // Фильтр по ICD-10 кодам (используем расширенные коды из заболеваний)
-        // expandedIcdCodes содержит ВСЕ коды из заболеваний базы знаний,
-        // которые содержат выбранные диагнозы
         if (filterByIcd10 && expandedIcdCodes.length > 0) {
             filtered = filtered.filter(med =>
-                med.icd10Codes.some(medCode => 
+                med.icd10Codes.some(medCode =>
                     expandedIcdCodes.some(diseaseCode => {
                         const normalizedMed = medCode.toUpperCase();
                         const normalizedDisease = diseaseCode.toUpperCase();
-                        
-                        // Точное совпадение
                         if (normalizedMed === normalizedDisease) return true;
-                        
-                        // Частичное совпадение в обе стороны
                         if (normalizedMed.startsWith(normalizedDisease + '.')) return true;
                         if (normalizedDisease.startsWith(normalizedMed + '.')) return true;
-                        
                         return false;
                     })
                 )
             );
         }
 
-        setFilteredMedications(filtered);
-    };
+        return filtered;
+    }, [cachedMedications, searchTerm, filterByIcd10, expandedIcdCodes]);
+
+    // Сброс пагинации при смене результатов фильтрации
+    useEffect(() => {
+        setDisplayCount(DISPLAY_LIMIT);
+    }, [filteredMedications]);
 
     if (!isOpen) return null;
 
@@ -154,7 +147,7 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
 
                 {/* Medications List */}
                 <div className="flex-1 overflow-y-auto p-6">
-                    {isLoading ? (
+                    {isLoadingMedications ? (
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
                         </div>
@@ -164,8 +157,9 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
                             <p>Препараты не найдены</p>
                         </div>
                     ) : (
+                        <>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {filteredMedications.map((med) => (
+                            {filteredMedications.slice(0, displayCount).map((med) => (
                                 <Card
                                     key={med.id}
                                     className="p-4 rounded-2xl border-slate-100 dark:border-slate-800 hover:border-primary-300 transition-all cursor-pointer group"
@@ -206,13 +200,25 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
                                 </Card>
                             ))}
                         </div>
+                        {filteredMedications.length > displayCount && (
+                            <div className="flex justify-center pt-4">
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => setDisplayCount(c => c + DISPLAY_LIMIT)}
+                                    className="rounded-xl"
+                                >
+                                    Показать ещё {Math.min(DISPLAY_LIMIT, filteredMedications.length - displayCount)}
+                                </Button>
+                            </div>
+                        )}
+                        </>
                     )}
                 </div>
 
                 {/* Footer */}
                 <div className="p-6 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
                     <div className="text-sm text-slate-500">
-                        Найдено: <strong>{filteredMedications.length}</strong> из {medications.length}
+                        Найдено: <strong>{filteredMedications.length}</strong> из {cachedMedications?.length ?? 0}
                     </div>
                     <Button variant="primary" onClick={onClose} className="rounded-xl">
                         Закрыть

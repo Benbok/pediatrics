@@ -190,7 +190,6 @@ export const VisitSchema = z.object({
         .optional(),
     
     // Документооборот
-    informedConsentId: z.number().positive().nullable().optional(),
     disabilityCertificate: z.boolean().nullable().optional(),
     preferentialPrescription: z.boolean().nullable().optional(),
     certificateIssued: z.boolean().nullable().optional(),

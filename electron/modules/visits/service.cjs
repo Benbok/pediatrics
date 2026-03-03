@@ -308,7 +308,6 @@ const VisitSchema = z.object({
     nextVisitDate: z.string().optional().nullable(),
     
     // Документооборот
-    informedConsentId: z.number().positive().optional().nullable(),
     disabilityCertificate: z.boolean().optional().nullable(),
     preferentialPrescription: z.boolean().optional().nullable(),
     certificateIssued: z.boolean().optional().nullable(),
@@ -371,13 +370,6 @@ const VisitService = {
                     primaryDisease: true,
                     doctor: {
                         select: { lastName: true, firstName: true, middleName: true }
-                    },
-                    informedConsent: {
-                        select: {
-                            id: true,
-                            status: true,
-                            consentDate: true
-                        }
                     }
                 },
                 orderBy: { visitDate: 'desc' }
@@ -403,8 +395,7 @@ const VisitService = {
             include: {
                 child: true,
                 primaryDisease: true,
-                doctor: true,
-                informedConsent: true
+                doctor: true
             }
         });
         

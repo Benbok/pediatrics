@@ -40,6 +40,30 @@ export const MedicationsModule: React.FC = () => {
 
     const getFormTypeLabel = (type: string) => formTypeLabelMap[type] || type;
 
+    const formTypeAliasesMap: Record<string, string[]> = {
+        tablet: ['таблет'],
+        solution: ['раствор'],
+        syrup: ['сироп'],
+        suspension: ['суспенз'],
+        injection: ['инъек', 'укол', 'ампул'],
+        capsule: ['капсул'],
+        suppository: ['свеч', 'суппозит', 'суппозитор'],
+        powder: ['порош'],
+        drops: ['капли', 'кап'],
+        ointment: ['маз'],
+        gel: ['гель'],
+        cream: ['крем'],
+        spray: ['спрей', 'аэрозол'],
+        patch: ['пластыр']
+    };
+
+    const getFormTypeMatchTerms = (selectedType: string): string[] => {
+        const normalizedType = selectedType.toLowerCase();
+        const normalizedLabel = getFormTypeLabel(selectedType).toLowerCase();
+        const aliases = formTypeAliasesMap[normalizedType] ?? [];
+        return Array.from(new Set([normalizedType, normalizedLabel, ...aliases].filter(Boolean)));
+    };
+
     useEffect(() => {
         // Загружаем данные из кеша или делаем запрос
         const initializeData = async () => {
@@ -108,19 +132,18 @@ export const MedicationsModule: React.FC = () => {
         
         const matchesFormType = !selectedFormType || (() => {
             if (!selectedFormType) return true;
-            const normalizedType = selectedFormType.toLowerCase();
-            const normalizedLabel = getFormTypeLabel(selectedFormType).toLowerCase();
+            const matchTerms = getFormTypeMatchTerms(selectedFormType);
 
             if (Array.isArray(m.forms) && m.forms.length > 0) {
                 const hasStructuredMatch = m.forms.some(form => {
                     if (!form) return false;
                     if (typeof form === 'string') {
                         const text = form.toLowerCase();
-                        return text.includes(normalizedType) || text.includes(normalizedLabel);
+                        return matchTerms.some((t) => text.includes(t));
                     }
                     if (typeof form.type === 'string') {
                         const text = form.type.toLowerCase();
-                        return text.includes(normalizedType) || text.includes(normalizedLabel);
+                        return matchTerms.some((t) => text.includes(t));
                     }
                     return false;
                 });
@@ -128,7 +151,7 @@ export const MedicationsModule: React.FC = () => {
             }
 
             const descriptionText = (m.packageDescription || '').toLowerCase();
-            return descriptionText.includes(normalizedType) || descriptionText.includes(normalizedLabel);
+            return matchTerms.some((t) => descriptionText.includes(t));
         })();
         
         return matchesSearch && matchesFavorite && matchesGroup && matchesFormType;
