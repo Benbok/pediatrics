@@ -748,6 +748,7 @@ export interface DashboardVisitItem {
   visitTime: string | null;
   visitType: string | null;
   complaints: string | null;
+  notes: string | null;
   primaryDiagnosis?: any | null;
   child: {
     id: number;
@@ -772,7 +773,7 @@ declare global {
     electronAPI: {
       // DASHBOARD MODULE API
       getDashboardSummary: (date?: string) => Promise<DashboardSummary>;
-
+      updateVisitNotes: (visitId: number, notes: string) => Promise<boolean>;
       // PATIENTS MODULE API
       getChildren: () => Promise<ChildProfile[]>;
       getChild: (id: number) => Promise<ChildProfile>;

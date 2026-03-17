@@ -16,7 +16,11 @@ export const dashboardService = {
      * @param date - ISO date string YYYY-MM-DD (defaults to today on the backend)
      */
     async getSummary(date?: string): Promise<DashboardSummary> {
-        const validated = DateSchema.parse(date);
-        return window.electronAPI.getDashboardSummary(validated);
+        const validatedDate = date ? DateSchema.parse(date) : undefined;
+        return window.electronAPI.getDashboardSummary(validatedDate);
     },
+
+    async updateNotes(visitId: number, notes: string): Promise<boolean> {
+        return window.electronAPI.updateVisitNotes(visitId, notes);
+    }
 };

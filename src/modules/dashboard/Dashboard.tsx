@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Calendar, TrendingUp, AlertCircle, ChevronRight, RefreshCw } from 'lucide-react';
+import { Users, Calendar, TrendingUp, AlertCircle, ChevronRight, RefreshCw, StickyNote, Check, Loader2 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -70,6 +70,10 @@ const VISIT_TYPE_LABELS: Record<string, string> = {
 
 const VisitRow: React.FC<{ visit: DashboardVisitItem; index: number }> = ({ visit, index }) => {
     const child = visit.child;
+    const [isNotesOpen, setIsNotesOpen] = useState(false);
+    const [notes, setNotes] = useState(visit.notes || '');
+    const [isSaving, setIsSaving] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
     // Decryption safety: if name/surname still look encrypted (contain :), show "Пациент"
     const isNameEncrypted = (child?.name || '').includes(':') || (child?.surname || '').includes(':');
@@ -91,54 +95,116 @@ const VisitRow: React.FC<{ visit: DashboardVisitItem; index: number }> = ({ visi
     const color = child ? avatarColor(child.id) : AVATAR_COLORS[0];
     const visitTypeLabel = visit.visitType ? VISIT_TYPE_LABELS[visit.visitType] || visit.visitType : null;
 
+    const handleSaveNotes = async () => {
+        if (!hasUnsavedChanges) return;
+        setIsSaving(true);
+        try {
+            await dashboardService.updateNotes(visit.id, notes);
+            setHasUnsavedChanges(false);
+        } catch (err) {
+            console.error('Failed to save notes:', err);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
-        <Link
-            to={`/patients/${visit.childId}/visits/${visit.id}`}
-            className="flex items-center gap-4 p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group border border-transparent hover:border-slate-100 dark:hover:border-slate-700"
-            aria-label={`Перейти к приёму: ${fullName}`}
-        >
-            {/* Avatar */}
-            <div
-                className={`w-11 h-11 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-base shadow-sm group-hover:scale-105 transition-transform ${color}`}
-                aria-hidden="true"
-            >
-                {initials}
-            </div>
+        <div className="border-b last:border-0 dark:border-slate-800">
+            <div className="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                <Link
+                    to={`/patients/${visit.childId}/visits/${visit.id}`}
+                    className="flex items-center gap-4 flex-1 min-w-0"
+                    aria-label={`Перейти к приёму: ${fullName}`}
+                >
+                    {/* Avatar */}
+                    <div
+                        className={`w-11 h-11 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-base shadow-sm group-hover:scale-105 transition-transform ${color}`}
+                        aria-hidden="true"
+                    >
+                        {initials}
+                    </div>
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                    <p className="font-semibold text-slate-900 dark:text-white truncate">
-                        {fullName}
-                    </p>
-                    {age && (
-                        <span className="text-slate-400 dark:text-slate-500 font-normal text-sm lowercase">
-                            ({age})
-                        </span>
-                    )}
-                    {visitTypeLabel && (
-                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 font-normal bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
-                            {visitTypeLabel}
-                        </Badge>
-                    )}
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                            <p className="font-semibold text-slate-900 dark:text-white truncate">
+                                {fullName}
+                            </p>
+                            {age && (
+                                <span className="text-slate-400 dark:text-slate-500 font-normal text-sm lowercase">
+                                    ({age})
+                                </span>
+                            )}
+                            {visitTypeLabel && (
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 font-normal bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
+                                    {visitTypeLabel}
+                                </Badge>
+                            )}
+                        </div>
+                        {visit.primaryDiagnosis?.nameRu && (
+                            <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                {visit.primaryDiagnosis.nameRu}
+                            </p>
+                        )}
+                    </div>
+                </Link>
+
+                {/* Actions */}
+                <div className="flex items-center gap-3 flex-shrink-0">
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            setIsNotesOpen(!isNotesOpen);
+                        }}
+                        className={`p-2 rounded-lg transition-colors ${isNotesOpen || notes
+                            ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/20'
+                            : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                        title="Заметки"
+                    >
+                        <StickyNote size={18} />
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                        {visit.visitTime && (
+                            <Badge variant="default" className="font-mono text-xs tabular-nums">
+                                {visit.visitTime}
+                            </Badge>
+                        )}
+                        <Link to={`/patients/${visit.childId}/visits/${visit.id}`}>
+                            <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-primary-500 transition-colors" />
+                        </Link>
+                    </div>
                 </div>
-                {visit.primaryDiagnosis?.nameRu && (
-                    <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                        {visit.primaryDiagnosis.nameRu}
-                    </p>
-                )}
             </div>
 
-            {/* Time + chevron */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-                {visit.visitTime && (
-                    <Badge variant="default" className="font-mono text-xs tabular-nums">
-                        {visit.visitTime}
-                    </Badge>
-                )}
-                <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-primary-500 transition-colors" />
-            </div>
-        </Link>
+            {/* Notes Section */}
+            {isNotesOpen && (
+                <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+                    <div className="relative">
+                        <textarea
+                            value={notes}
+                            onChange={(e) => {
+                                setNotes(e.target.value);
+                                setHasUnsavedChanges(true);
+                            }}
+                            onBlur={handleSaveNotes}
+                            placeholder="Введите заметку к приёму..."
+                            className="w-full min-h-[80px] p-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all resize-none dark:text-slate-200"
+                        />
+                        <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                            {isSaving ? (
+                                <Loader2 size={14} className="animate-spin text-primary-500" />
+                            ) : hasUnsavedChanges ? (
+                                <span className="text-[10px] text-slate-400">Не сохранено</span>
+                            ) : notes ? (
+                                <Check size={14} className="text-green-500" />
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };
 

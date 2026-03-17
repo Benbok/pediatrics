@@ -120,6 +120,7 @@ const setupDashboardHandlers = () => {
                 visitTime: v.visitTime ?? null,
                 visitType: v.visitType ?? null,
                 complaints: v.complaints ?? null,
+                notes: v.notes ?? null,
                 primaryDiagnosis: v.primaryDiagnosis ? (typeof v.primaryDiagnosis === 'string' ? JSON.parse(v.primaryDiagnosis) : v.primaryDiagnosis) : null,
                 child: v.child
                     ? {
@@ -139,6 +140,28 @@ const setupDashboardHandlers = () => {
             };
         } catch (error) {
             logger.error('[DashboardHandler] get-summary failed:', error);
+            throw error;
+        }
+    }));
+
+    /**
+     * dashboard:update-visit-notes
+     * Updates notes for a specific visit.
+     */
+    ipcMain.handle('dashboard:update-visit-notes', ensureAuthenticated(async (_, visitId, notes) => {
+        try {
+            const session = getSession();
+            const doctorId = session?.user?.id;
+            if (!doctorId) throw new Error('Unauthorized');
+
+            await prisma.visit.update({
+                where: { id: Number(visitId), doctorId },
+                data: { notes }
+            });
+
+            return true;
+        } catch (error) {
+            logger.error(`[DashboardHandler] update-visit-notes failed for visit ${visitId}:`, error);
             throw error;
         }
     }));
