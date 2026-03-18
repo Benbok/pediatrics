@@ -177,6 +177,114 @@ app.whenReady().then(async () => {
         app.quit();
     });
 
+    // Direct document print: renders HTML in hidden window → native OS print dialog (no popup)
+    ipcMain.handle('print-document', ensureAuthenticated(async (event, payload) => {
+        logger.info('[Main] Received print-document request', { templateId: payload?.templateId });
+        logAudit('PRINT_DOCUMENT_ATTEMPT');
+
+        try {
+            const options = payload?.options || {};
+            const pageSize = options.pageSize || 'A4';
+            const orientation = options.orientation || 'portrait';
+            const marginsMm = options.margins || { top: 20, right: 15, bottom: 20, left: 15 };
+
+            const title = payload?.metadata?.title || 'Document';
+            const styles = payload?.styles || '';
+            const pageCss = `
+                @page {
+                    size: ${pageSize} ${orientation};
+                    margin: ${marginsMm.top}mm ${marginsMm.right}mm ${marginsMm.bottom}mm ${marginsMm.left}mm;
+                }
+                body { margin: 0; padding: 0; }
+            `;
+
+            const htmlDoc = `<!doctype html>
+<html><head><meta charset="utf-8"><title>${String(title).replace(/</g, '&lt;')}</title>
+<style>${pageCss}\n${styles}</style>
+</head><body>${payload.html}</body></html>`;
+
+            const printWin = new BrowserWindow({
+                width: 1200,
+                height: 900,
+                show: false,
+                webPreferences: {
+                    preload: path.join(__dirname, 'preload.cjs'),
+                    nodeIntegration: false,
+                    contextIsolation: true,
+                }
+            });
+
+            await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlDoc)}`);
+            // Wait for fonts/layout to settle
+            await new Promise(resolve => setTimeout(resolve, 400));
+
+            logger.info('[Main] Opening OS print dialog for hidden window', { pageSize, orientation });
+
+            const mmToIn = (mm) => mm / 25.4;
+            const marginsIn = {
+                top: mmToIn(marginsMm.top),
+                bottom: mmToIn(marginsMm.bottom),
+                left: mmToIn(marginsMm.left),
+                right: mmToIn(marginsMm.right),
+            };
+
+            const fallbackToPDF = async () => {
+                logger.info('[Main] Falling back to PDF viewer (no printer available)', { pageSize, orientation });
+                try {
+                    const pdfBuffer = await printWin.webContents.printToPDF({
+                        printBackground: true,
+                        landscape: orientation === 'landscape',
+                        pageSize,
+                        preferCSSPageSize: true,
+                        margins: marginsIn,
+                    });
+                    printWin.destroy();
+                    const safeTemplate = payload?.templateId
+                        ? String(payload.templateId).replace(/[^a-z0-9_-]+/gi, '-')
+                        : 'document';
+                    const tempPath = path.join(os.tmpdir(), `${safeTemplate}-${Date.now()}.pdf`);
+                    await fs.promises.writeFile(tempPath, pdfBuffer);
+                    logger.info('[Main] PDF fallback saved to:', tempPath);
+                    await shell.openPath(tempPath);
+                    logAudit('PRINT_DOCUMENT_PDF_FALLBACK', { templateId: payload?.templateId, path: tempPath });
+                    return { success: true, fallback: 'pdf', path: tempPath };
+                } catch (pdfErr) {
+                    if (!printWin.isDestroyed()) printWin.destroy();
+                    logger.error('[Main] PDF fallback also failed:', pdfErr);
+                    return { success: false, error: pdfErr.message };
+                }
+            };
+
+            return new Promise((resolve) => {
+                printWin.webContents.print(
+                    { silent: false, printBackground: true },
+                    async (success, failureReason) => {
+                        if (success) {
+                            if (!printWin.isDestroyed()) printWin.destroy();
+                            logAudit('PRINT_DOCUMENT_SUCCESS', { templateId: payload?.templateId });
+                            logger.info('[Main] Document printed successfully', { templateId: payload?.templateId });
+                            resolve({ success: true });
+                        } else {
+                            logger.warn('[Main] Print callback failed', { failureReason });
+                            // If no printer is configured → automatically open as PDF in system viewer
+                            const noPrinterError = /no printer|not available|network/i.test(failureReason || '');
+                            if (noPrinterError) {
+                                resolve(await fallbackToPDF());
+                            } else {
+                                // User cancelled the dialog or other non-recoverable reason
+                                if (!printWin.isDestroyed()) printWin.destroy();
+                                resolve({ success: false, error: failureReason || 'Print cancelled' });
+                            }
+                        }
+                    }
+                );
+            });
+        } catch (error) {
+            logger.error('[Main] Failed to print document:', error);
+            return { success: false, error: error.message };
+        }
+    }));
+
     // PDF export (supports both legacy and new contract)
     ipcMain.handle('export-pdf', ensureAuthenticated(async (event, payload) => {
         logger.info('[Main] Received export-pdf request', { hasHtml: !!payload?.html, templateId: payload?.templateId });

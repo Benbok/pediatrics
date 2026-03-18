@@ -129,19 +129,31 @@ export const BirthSection: React.FC<BirthSectionProps> = ({ data, onChange }) =>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-                <Input
-                    label="Течение беременности"
-                    value={birthData.pregnancyCourse || ''}
-                    onChange={(e) => handleChange('pregnancyCourse', e.target.value)}
-                    placeholder="Опишите течение беременности..."
-                />
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Течение беременности
+                    </label>
+                    <textarea
+                        value={birthData.pregnancyCourse || ''}
+                        onChange={(e) => handleChange('pregnancyCourse', e.target.value)}
+                        placeholder="Опишите течение беременности..."
+                        rows={3}
+                        className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-sm text-slate-800 dark:text-white"
+                    />
+                </div>
 
-                <Input
-                    label="Акушерский анамнез"
-                    value={birthData.obstetricalHistory || ''}
-                    onChange={(e) => handleChange('obstetricalHistory', e.target.value)}
-                    placeholder="Акушерский анамнез..."
-                />
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Акушерский анамнез
+                    </label>
+                    <textarea
+                        value={birthData.obstetricalHistory || ''}
+                        onChange={(e) => handleChange('obstetricalHistory', e.target.value)}
+                        placeholder="Акушерский анамнез..."
+                        rows={3}
+                        className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-sm text-slate-800 dark:text-white"
+                    />
+                </div>
 
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -215,13 +227,11 @@ export const BirthSection: React.FC<BirthSectionProps> = ({ data, onChange }) =>
                     />
 
                     <Input
-                        label="Оценка по шкале Апгар (баллов)"
-                        type="number"
-                        value={birthData.apgarScore?.toString() || ''}
-                        onChange={(e) => handleChange('apgarScore', e.target.value ? parseInt(e.target.value) : null)}
-                        placeholder="8"
-                        min={0}
-                        max={10}
+                        label="Оценка по шкале Апгар"
+                        type="text"
+                        value={birthData.apgarScore || ''}
+                        onChange={(e) => handleChange('apgarScore', e.target.value || null)}
+                        placeholder="8/8 или 8/8/8"
                     />
                 </div>
 

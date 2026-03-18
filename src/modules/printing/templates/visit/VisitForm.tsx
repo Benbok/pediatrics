@@ -9,6 +9,29 @@ import {
 } from './types';
 import { formatDate, formatFullName, calculateAge } from '../../utils/formatters';
 import { getRouteLabel } from '../../../../utils/routeOfAdmin';
+import {
+    AllergyStatusData,
+    BirthData,
+    FeedingData,
+    HeredityData,
+    InfectiousDiseasesData,
+} from '../../../../types';
+
+function parseJsonField<T>(value: T | string | null | undefined): T | null {
+    if (!value) return null;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value) as T;
+        } catch {
+            return null;
+        }
+    }
+    return value as T;
+}
+
+function hasText(value?: string | null): boolean {
+    return Boolean(value && value.trim());
+}
 
 /**
  * Компонент печатной формы приема (025/у-04)
@@ -26,6 +49,12 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
     const prescriptions = parsePrescriptions(visit.prescriptions);
     const laboratoryTests = parseDiagnosticTests(visit.laboratoryTests ?? null);
     const instrumentalTests = parseDiagnosticTests(visit.instrumentalTests ?? null);
+
+    const heredityData = parseJsonField<HeredityData>(visit.heredityData);
+    const birthData = parseJsonField<BirthData>(visit.birthData);
+    const feedingData = parseJsonField<FeedingData>(visit.feedingData);
+    const infectiousDiseasesData = parseJsonField<InfectiousDiseasesData>(visit.infectiousDiseasesData);
+    const allergyStatusData = parseJsonField<AllergyStatusData>(visit.allergyStatusData);
 
     // Форматируем дату приема
     const visitDateFormatted = visit.visitDate 
@@ -49,6 +78,123 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
         urgent: 'Неотложный',
     };
     const visitTypeLabel = visitTypeLabels[visit.visitType || ''] || visit.visitType || '—';
+
+    const heredityItems = [
+        heredityData?.tuberculosis
+            ? `Туберкулез${hasText(heredityData.tuberculosisDetails) ? `: ${heredityData.tuberculosisDetails}` : ''}`
+            : null,
+        heredityData?.diabetes
+            ? `Диабет${hasText(heredityData.diabetesDetails) ? `: ${heredityData.diabetesDetails}` : ''}`
+            : null,
+        heredityData?.hypertension
+            ? `Гипертоническая болезнь${hasText(heredityData.hypertensionDetails) ? `: ${heredityData.hypertensionDetails}` : ''}`
+            : null,
+        heredityData?.oncology
+            ? `Онкологические заболевания${hasText(heredityData.oncologyDetails) ? `: ${heredityData.oncologyDetails}` : ''}`
+            : null,
+        heredityData?.allergies
+            ? `Аллергические заболевания${hasText(heredityData.allergiesDetails) ? `: ${heredityData.allergiesDetails}` : ''}`
+            : null,
+        hasText(heredityData?.other) ? `Прочие: ${heredityData?.other}` : null,
+    ].filter(Boolean) as string[];
+
+    const birthItems = [
+        hasText(birthData?.pregnancyCourse) ? `Течение беременности: ${birthData?.pregnancyCourse}` : null,
+        hasText(birthData?.obstetricalHistory) ? `Акушерский анамнез: ${birthData?.obstetricalHistory}` : null,
+        birthData?.deliveryMethod === 'natural'
+            ? 'Способ родоразрешения: Естественные роды'
+            : birthData?.deliveryMethod === 'cesarean'
+                ? 'Способ родоразрешения: Кесарево сечение'
+                : null,
+        birthData?.gestationalAge !== undefined && birthData?.gestationalAge !== null
+            ? `Длительность беременности: ${birthData.gestationalAge} недель`
+            : null,
+        birthData?.birthWeight !== undefined && birthData?.birthWeight !== null
+            ? `Масса при рождении: ${birthData.birthWeight} г`
+            : null,
+        birthData?.birthHeight !== undefined && birthData?.birthHeight !== null
+            ? `Рост при рождении: ${birthData.birthHeight} см`
+            : null,
+        birthData?.apgarScore !== undefined && birthData?.apgarScore !== null
+            ? `Оценка по шкале Апгар: ${birthData.apgarScore}`
+            : null,
+        birthData?.neonatalComplications === true
+            ? `Период новорожденности: были осложнения${hasText(birthData.neonatalComplicationsDetails) ? ` (${birthData.neonatalComplicationsDetails})` : ''}`
+            : birthData?.neonatalComplications === false
+                ? 'Период новорожденности: осложнений не было'
+                : null,
+    ].filter(Boolean) as string[];
+
+    const breastfeedingLabel = feedingData?.breastfeeding === 'yes'
+        ? 'Да'
+        : feedingData?.breastfeeding === 'no'
+            ? 'Нет'
+            : feedingData?.breastfeeding === 'mixed'
+                ? 'Смешанное'
+                : null;
+
+    const feedingItems = [
+        breastfeedingLabel ? `Грудное вскармливание: ${breastfeedingLabel}` : null,
+        hasText(feedingData?.breastfeedingFrom) ? `Грудное вскармливание с: ${feedingData?.breastfeedingFrom}` : null,
+        hasText(feedingData?.breastfeedingTo) ? `Грудное вскармливание по: ${feedingData?.breastfeedingTo}` : null,
+        hasText(feedingData?.formulaName) ? `Молочная смесь: ${feedingData?.formulaName}` : null,
+        feedingData?.complementaryFoodAge !== undefined && feedingData?.complementaryFoodAge !== null
+            ? `Прикорм введен в возрасте: ${feedingData.complementaryFoodAge} мес`
+            : null,
+        hasText(feedingData?.nutritionFeatures) ? `Особенности питания: ${feedingData?.nutritionFeatures}` : null,
+    ].filter(Boolean) as string[];
+
+    const infectiousDiseaseMap: Array<{ key: keyof InfectiousDiseasesData; label: string }> = [
+        { key: 'measles', label: 'Корь' },
+        { key: 'chickenpox', label: 'Ветряная оспа' },
+        { key: 'rubella', label: 'Краснуха' },
+        { key: 'pertussis', label: 'Коклюш' },
+        { key: 'scarletFever', label: 'Скарлатина' },
+    ];
+
+    const infectiousItems: string[] = [];
+    for (const disease of infectiousDiseaseMap) {
+        const entry = infectiousDiseasesData?.[disease.key];
+        if (entry && typeof entry === 'object' && 'had' in entry && entry.had) {
+            const age = typeof entry.ageYears === 'number' ? ` (в ${entry.ageYears} лет)` : '';
+            infectiousItems.push(`${disease.label}${age}`);
+        }
+    }
+    if (infectiousDiseasesData?.tonsillitis?.had) {
+        const perYear = typeof infectiousDiseasesData.tonsillitis.perYear === 'number'
+            ? ` (${infectiousDiseasesData.tonsillitis.perYear} раз/год)`
+            : '';
+        infectiousItems.push(`Ангина${perYear}`);
+    }
+    if (hasText(infectiousDiseasesData?.other)) {
+        infectiousItems.push(`Прочие: ${infectiousDiseasesData?.other}`);
+    }
+
+    const allergyItems = [
+        hasText(allergyStatusData?.food) ? `Пищевая аллергия: ${allergyStatusData?.food}` : null,
+        hasText(allergyStatusData?.medication) ? `Лекарственная аллергия: ${allergyStatusData?.medication}` : null,
+        hasText(allergyStatusData?.materials) ? `Аллергия на материалы: ${allergyStatusData?.materials}` : null,
+        hasText(allergyStatusData?.insectBites) ? `Реакции на укусы насекомых: ${allergyStatusData?.insectBites}` : null,
+        hasText(allergyStatusData?.seasonal) ? `Сезонные аллергии: ${allergyStatusData?.seasonal}` : null,
+    ].filter(Boolean) as string[];
+
+    const hasLifeAnamnesis =
+        heredityItems.length > 0 ||
+        birthItems.length > 0 ||
+        feedingItems.length > 0 ||
+        infectiousItems.length > 0 ||
+        allergyItems.length > 0;
+
+    const doctorDisplayName = (doctorName ?? '').trim() || '—';
+
+    const formatDiagnosesSentence = (items: Array<{ nameRu?: string | null }>): string => {
+        const normalized = items
+            .map((item) => (item.nameRu ?? '').trim())
+            .filter(Boolean)
+            .map((item) => item.replace(/[.;:,\s]+$/g, ''));
+
+        return normalized.length > 0 ? `${normalized.join('. ')}.` : '';
+    };
 
     return (
         <div className="visit-form-print">
@@ -106,6 +252,69 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Анамнез жизни */}
+            {hasLifeAnamnesis && (
+                <div className="section">
+                    <div className="section-title">Анамнез жизни</div>
+                    <div className="section-content">
+                        {heredityItems.length > 0 && (
+                            <>
+                                <p><strong>Наследственность:</strong></p>
+                                <ul>
+                                    {heredityItems.map((item, index) => (
+                                        <li key={`heredity-${index}`}>{item}</li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+
+                        {birthItems.length > 0 && (
+                            <>
+                                <p><strong>Сведения о беременности и родах:</strong></p>
+                                <ul>
+                                    {birthItems.map((item, index) => (
+                                        <li key={`birth-${index}`}>{item}</li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+
+                        {feedingItems.length > 0 && (
+                            <>
+                                <p><strong>Вскармливание:</strong></p>
+                                <ul>
+                                    {feedingItems.map((item, index) => (
+                                        <li key={`feeding-${index}`}>{item}</li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+
+                        {infectiousItems.length > 0 && (
+                            <>
+                                <p><strong>Перенесенные инфекционные заболевания:</strong></p>
+                                <ul>
+                                    {infectiousItems.map((item, index) => (
+                                        <li key={`infectious-${index}`}>{item}</li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+
+                        {allergyItems.length > 0 && (
+                            <>
+                                <p><strong>Аллергический статус:</strong></p>
+                                <ul>
+                                    {allergyItems.map((item, index) => (
+                                        <li key={`allergy-${index}`}>{item}</li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Антропометрия */}
             {(visit.currentWeight || visit.currentHeight) && (
@@ -178,24 +387,18 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                     )}
                     {complications.length > 0 && (
                         <div className="diagnosis-group">
-                            <span className="diagnosis-label">Осложнения:</span>
-                            {complications.map((c, i) => (
-                                <div key={i} className="diagnosis">
-                                    {c.code && <span className="diagnosis-code">{c.code}</span>}
-                                    <span className="diagnosis-name">{c.nameRu}</span>
-                                </div>
-                            ))}
+                            <div className="diagnosis">
+                                <span className="diagnosis-label">Осложнение:</span>
+                                <span className="diagnosis-name">{formatDiagnosesSentence(complications)}</span>
+                            </div>
                         </div>
                     )}
                     {comorbidities.length > 0 && (
                         <div className="diagnosis-group">
-                            <span className="diagnosis-label">Сопутствующие:</span>
-                            {comorbidities.map((c, i) => (
-                                <div key={i} className="diagnosis">
-                                    {c.code && <span className="diagnosis-code">{c.code}</span>}
-                                    <span className="diagnosis-name">{c.nameRu}</span>
-                                </div>
-                            ))}
+                            <div className="diagnosis">
+                                <span className="diagnosis-label">Сопутствующий:</span>
+                                <span className="diagnosis-name">{formatDiagnosesSentence(comorbidities)}</span>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -290,13 +493,13 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
 
             {/* Подпись врача */}
             <div className="footer">
-                <div className="signature-block">
-                    <div className="signature-line"></div>
-                    <div className="signature-label">Подпись врача</div>
+                <div className="info-row">
+                    <span className="label">Врач:</span>
+                    <span className="value">{doctorDisplayName}</span>
                 </div>
-                <div className="doctor-name">{doctorName}</div>
-                <div className="print-date">
-                    Дата печати: {data.printDate ?? formatDate(new Date(), 'short')}
+                <div className="info-row">
+                    <span className="label">Подпись:</span>
+                    <span className="signature-line" aria-hidden="true"></span>
                 </div>
             </div>
         </div>

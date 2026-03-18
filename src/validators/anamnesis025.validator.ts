@@ -2,10 +2,15 @@ import { z } from 'zod';
 
 export const HeredityDataSchema = z.object({
   tuberculosis: z.boolean().default(false),
+  tuberculosisDetails: z.string().optional().nullable(),
   diabetes: z.boolean().default(false),
+  diabetesDetails: z.string().optional().nullable(),
   hypertension: z.boolean().default(false),
+  hypertensionDetails: z.string().optional().nullable(),
   oncology: z.boolean().default(false),
+  oncologyDetails: z.string().optional().nullable(),
   allergies: z.boolean().default(false),
+  allergiesDetails: z.string().optional().nullable(),
   other: z.string().optional().nullable(),
 });
 
@@ -30,7 +35,10 @@ export const BirthDataSchema = z.object({
     .nullable(),
   birthWeight: z.number().min(500).max(7000).optional().nullable(),
   birthHeight: z.number().min(20).max(70).optional().nullable(),
-  apgarScore: z.number().min(0).max(10).optional().nullable(),
+  apgarScore: z.string()
+    .regex(/^\d{1,2}\/\d{1,2}(\/\d{1,2})?$/, 'Формат Апгар: 8/8 или 8/8/8')
+    .optional()
+    .nullable(),
   neonatalComplications: z.boolean().optional().nullable(),
   neonatalComplicationsDetails: z.string().optional().nullable(),
 });

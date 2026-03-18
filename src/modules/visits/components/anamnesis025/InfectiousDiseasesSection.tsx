@@ -97,7 +97,7 @@ export const InfectiousDiseasesSection: React.FC<InfectiousDiseasesSectionProps>
                                 <span className="text-sm text-slate-700 dark:text-slate-300">{disease.label}</span>
                             </label>
                             {had && (
-                                <div className="w-24">
+                                <div className="w-44">
                                     <Input
                                         type="number"
                                         value={diseaseData?.ageYears?.toString() || ''}
@@ -139,12 +139,15 @@ export const InfectiousDiseasesSection: React.FC<InfectiousDiseasesSectionProps>
                 </div>
 
                 <div className="mt-3">
-                    <Input
-                        label="Прочие"
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Прочие
+                    </label>
+                    <textarea
                         value={infectiousData.other || ''}
                         onChange={(e) => handleOtherChange(e.target.value)}
                         placeholder="Другие перенесенные инфекционные заболевания..."
-                        className="w-full"
+                        rows={3}
+                        className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-sm text-slate-800 dark:text-white"
                     />
                 </div>
             </div>

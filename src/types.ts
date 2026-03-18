@@ -478,10 +478,15 @@ export interface DiagnosisEntry {
 
 export interface HeredityData {
   tuberculosis: boolean;
+  tuberculosisDetails?: string | null;
   diabetes: boolean;
+  diabetesDetails?: string | null;
   hypertension: boolean;
+  hypertensionDetails?: string | null;
   oncology: boolean;
+  oncologyDetails?: string | null;
   allergies: boolean;
+  allergiesDetails?: string | null;
   other?: string | null;
 }
 
@@ -492,7 +497,7 @@ export interface BirthData {
   gestationalAge?: number | null; // недель
   birthWeight?: number | null; // граммы
   birthHeight?: number | null; // см
-  apgarScore?: number | null;
+  apgarScore?: string | null; // формат: 8/8 или 8/8/8
   neonatalComplications?: boolean | null;
   neonatalComplicationsDetails?: string | null;
 }
@@ -847,6 +852,14 @@ declare global {
       upsertVaccinePlan: (plan: VaccinePlanTemplate) => Promise<VaccinePlanTemplate>;
       setVaccinePlanDeleted: (planId: string, isDeleted: boolean) => Promise<VaccinePlanTemplate>;
       print: () => void;
+      /** Renders HTML in a hidden Electron window and shows the native OS print dialog */
+      printDocument: (payload: {
+        templateId?: string;
+        html: string;
+        styles?: string;
+        metadata?: { title?: string; [key: string]: unknown };
+        options?: { pageSize?: string; orientation?: string; margins?: { top: number; right: number; bottom: number; left: number } };
+      }) => Promise<{ success: boolean; error?: string; fallback?: 'pdf'; path?: string }>;
       exportPDF: (payload: {
         templateId: string;
         data: any;

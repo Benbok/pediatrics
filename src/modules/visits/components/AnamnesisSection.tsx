@@ -136,7 +136,7 @@ export const AnamnesisSection: React.FC<AnamnesisSectionProps> = ({
                     <FileText className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                 </div>
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white text-left flex-1">
-                    Анамнез жизни (форма 025/у)
+                    Анамнез жизни
                 </h3>
                 {isExpanded ? (
                     <ChevronDown className="w-5 h-5 text-slate-500 dark:text-slate-400" />

@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     upsertVaccinePlan: (plan) => ipcRenderer.invoke('db:upsert-vaccine-plan', plan),
     setVaccinePlanDeleted: (planId, isDeleted) => ipcRenderer.invoke('db:set-vaccine-plan-deleted', planId, isDeleted),
     print: () => ipcRenderer.send('print-window'),
+    // payload: { templateId, html, styles, metadata, options }
+    // Renders HTML in a hidden window → native OS print dialog (no popup window)
+    printDocument: (payload) => ipcRenderer.invoke('print-document', payload),
     // payload: { templateId, data, metadata, options, html?, styles? }
     exportPDF: (payload) => ipcRenderer.invoke('export-pdf', payload),
     closeApp: () => ipcRenderer.send('app-close'),

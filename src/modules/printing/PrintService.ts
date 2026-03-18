@@ -71,9 +71,34 @@ class PrintService {
             const validated = this.getValidatedTemplateAndOptions(templateId, data, options);
             if (validated.success === false) return { success: false, error: validated.error };
 
-            // Вызываем браузерную печать
-            await this.invokeBrowserPrint(validated.template, data, metadata, validated.finalOptions);
+            const { template, finalOptions } = validated;
 
+            // Render template to static HTML and send to hidden Electron window for printing
+            if (window.electronAPI?.printDocument) {
+                const templateCss = Array.isArray(template.styles)
+                    ? template.styles.filter(Boolean).join('\n')
+                    : (template.styles ?? '');
+
+                const html = renderToStaticMarkup(
+                    React.createElement(template.component, { data, metadata, options: finalOptions })
+                );
+
+                const result = await window.electronAPI.printDocument({
+                    templateId,
+                    html,
+                    styles: templateCss,
+                    metadata,
+                    options: finalOptions,
+                });
+
+                if (!result.success) {
+                    return { success: false, error: result.error || 'Print cancelled' };
+                }
+                return { success: true };
+            }
+
+            // Fallback: legacy browser-popup print (non-Electron)
+            await this.invokeBrowserPrint(template, data, metadata, finalOptions);
             return { success: true };
         } catch (error) {
             logger.error('[PrintService] Print error', { error, templateId, metadata });

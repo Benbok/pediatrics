@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { templateRegistry } from '../registry';
 import { DocumentMetadata, PrintOptions } from '../types';
 import { applyPrintStyles, removePrintStyles } from '../utils/printStyles';
@@ -48,28 +49,48 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
         };
     }, [isOpen, options]);
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
+        if (!template) return;
         setIsPrinting(true);
         onPrint();
 
-        // Небольшая задержка перед вызовом печати
-        setTimeout(() => {
-            logger.info('[PrintPreview] Calling electronAPI.print()', { templateId });
-            if (window.electronAPI?.print) {
-                try {
-                    window.electronAPI.print();
-                    logger.info('[PrintPreview] electronAPI.print() dispatched', { templateId });
-                } catch (err) {
-                    logger.warn('[PrintPreview] IPC Print failed, falling back to window.print()', { error: err, templateId });
-                    window.print();
+        try {
+            // Render the template to static HTML
+            const templateCss = Array.isArray(template.styles)
+                ? template.styles.filter(Boolean).join('\n')
+                : (template.styles ?? '');
+
+            const html = renderToStaticMarkup(
+                React.createElement(template.component, { data, metadata, options })
+            );
+
+            logger.info('[PrintPreview] Sending document to hidden-window print', { templateId });
+
+            if (window.electronAPI?.printDocument) {
+                const result = await window.electronAPI.printDocument({
+                    templateId,
+                    html,
+                    styles: templateCss,
+                    metadata,
+                    options,
+                });
+                if (!result.success) {
+                    logger.warn('[PrintPreview] Print cancelled or failed', { error: result.error, templateId });
+                } else if (result.fallback === 'pdf') {
+                    logger.info('[PrintPreview] No printer found — document opened as PDF in system viewer', { templateId, path: result.path });
+                } else {
+                    logger.info('[PrintPreview] Document printed successfully', { templateId });
                 }
             } else {
-                logger.warn('[PrintPreview] electronAPI.print not found, using window.print()', { templateId });
+                // Fallback for non-Electron environments
+                logger.warn('[PrintPreview] electronAPI.printDocument not available, using window.print()', { templateId });
                 window.print();
             }
-            setIsPrinting(false);
-            // onClose(); // Опционально: закрывать после печати
-        }, 800);
+        } catch (err) {
+            logger.error('[PrintPreview] Print failed', { error: err, templateId });
+        }
+
+        setIsPrinting(false);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
