@@ -74,6 +74,56 @@ const UserVaccineRecordSchema = z.object({
   ignoreValidation: z.boolean().optional(),
 });
 
+const VaccineBrandSchema = z.object({
+  name: z.string().min(1).max(100),
+  country: z.string().min(1).max(100),
+  description: z.string().max(300).optional(),
+});
+
+const VaccineCatalogEntrySchema = z.object({
+  id: z.number().optional(),
+  vaccineId: z.string().min(2).max(100),
+  name: z.string().min(2).max(200),
+  disease: z.string().min(2).max(200),
+  ageMonthStart: z.number().min(0).max(240),
+  description: z.string().max(500).optional().nullable(),
+  requiredRiskFactor: z.string().max(100).optional().nullable(),
+  excludedRiskFactor: z.string().max(100).optional().nullable(),
+  isLive: z.boolean().optional(),
+  isRecommended: z.boolean().optional(),
+  lectureId: z.string().max(100).optional().nullable(),
+  availableBrands: z.array(VaccineBrandSchema).optional(),
+  isDeleted: z.boolean().optional(),
+});
+
+const VaccinePlanDoseSchema = z.object({
+  ageMonthStart: z.number().min(0).max(240),
+  minIntervalDays: z.number().int().min(0).max(3650).optional().nullable(),
+});
+
+const VaccinePlanTemplateSchema = z.object({
+  id: z.number().optional(),
+  planId: z.string().min(2).max(100),
+  vaccineBaseId: z.string().min(2).max(100),
+  name: z.string().min(2).max(200),
+  disease: z.string().min(2).max(200),
+  description: z.string().max(500).optional().nullable(),
+  isLive: z.boolean().optional(),
+  isRecommended: z.boolean().optional(),
+  availableBrands: z.array(VaccineBrandSchema).optional(),
+  lectureId: z.string().max(100).optional().nullable(),
+  doses: z.array(VaccinePlanDoseSchema).min(1),
+  isDeleted: z.boolean().optional(),
+});
+
+const getZodErrorMessage = (error) => {
+  const issues = error?.issues || error?.errors || [];
+  if (Array.isArray(issues) && issues.length > 0) {
+    return issues.map((item) => item?.message).filter(Boolean).join(', ');
+  }
+  return error?.message || 'Ошибка валидации данных';
+};
+
 // Import shared Prisma client
 const { prisma, dbPath, isDev } = require('./prisma-client.cjs');
 
@@ -280,6 +330,45 @@ async function initDatabase() {
       }
     }
 
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS vaccine_catalog_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vaccine_id TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        disease TEXT NOT NULL,
+        age_month_start REAL NOT NULL,
+        description TEXT,
+        required_risk_factor TEXT,
+        excluded_risk_factor TEXT,
+        is_live INTEGER NOT NULL DEFAULT 0,
+        is_recommended INTEGER NOT NULL DEFAULT 0,
+        available_brands TEXT,
+        lecture_id TEXT,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS vaccine_plan_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id TEXT NOT NULL UNIQUE,
+        vaccine_base_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        disease TEXT NOT NULL,
+        description TEXT,
+        is_live INTEGER NOT NULL DEFAULT 0,
+        is_recommended INTEGER NOT NULL DEFAULT 0,
+        available_brands TEXT,
+        lecture_id TEXT,
+        doses TEXT NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     logger.info('[Database] ========== INIT COMPLETE ==========');
   } catch (error) {
     logger.error('[Database] ========== INIT FAILED ==========');
@@ -453,7 +542,7 @@ const setupDatabaseHandlers = async () => {
     } catch (error) {
       logger.error('[Database] Failed to create child:', error);
       if (error instanceof z.ZodError) {
-        throw new Error(error.errors.map(e => e.message).join(', '));
+        throw new Error(getZodErrorMessage(error));
       }
       throw error;
     }
@@ -490,7 +579,7 @@ const setupDatabaseHandlers = async () => {
     } catch (error) {
       logger.error('[Database] Failed to update child:', error);
       if (error instanceof z.ZodError) {
-        throw new Error(error.errors.map(e => e.message).join(', '));
+        throw new Error(getZodErrorMessage(error));
       }
       throw error;
     }
@@ -763,7 +852,7 @@ const setupDatabaseHandlers = async () => {
     } catch (error) {
       logger.error('[Database] Failed to update vaccination profile:', error);
       if (error instanceof z.ZodError) {
-        throw new Error(error.errors.map(e => e.message).join(', '));
+        throw new Error(getZodErrorMessage(error));
       }
       throw error;
     }
@@ -834,8 +923,10 @@ const setupDatabaseHandlers = async () => {
           throw new Error('Ребенок не найден');
         }
 
+        const childBirthDate = decrypt(child.birthDate);
+
         // Вычисляем возраст на момент прививки БЦЖ
-        const ageAtVaccination = calculateAgeInMonths(child.birthDate, completedDate);
+        const ageAtVaccination = calculateAgeInMonths(childBirthDate, completedDate);
 
         // Если ребенку >= 2 месяцев на момент прививки, требуется Манту
         if (ageAtVaccination >= 2) {
@@ -906,7 +997,7 @@ const setupDatabaseHandlers = async () => {
     } catch (error) {
       logger.error('[Database] Failed to save vaccination record:', error);
       if (error instanceof z.ZodError) {
-        throw new Error(error.errors.map(e => e.message).join(', '));
+        throw new Error(getZodErrorMessage(error));
       }
       throw error;
     }
@@ -937,6 +1028,237 @@ const setupDatabaseHandlers = async () => {
       return true;
     } catch (error) {
       logger.error('[Database] Failed to delete vaccination record:', error);
+      throw error;
+    }
+  }));
+
+  ipcMain.handle('db:get-vaccine-catalog', ensureAuthenticated(async () => {
+    const cacheKey = 'global';
+    const cached = CacheService.get('vaccineCatalog', cacheKey);
+    if (cached) {
+      logger.debug('[DB] Cache hit for vaccine catalog');
+      return cached;
+    }
+
+    const entries = await prisma.vaccineCatalogEntry.findMany({
+      orderBy: [
+        { isDeleted: 'asc' },
+        { ageMonthStart: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+
+    const plans = await prisma.vaccinePlanTemplate.findMany({
+      where: { isDeleted: false },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const parsedEntries = entries.map((entry) => ({
+      ...entry,
+      availableBrands: JSON.parse(entry.availableBrands || '[]'),
+    }));
+
+    const expandedPlanEntries = plans.flatMap((plan) => {
+      const doses = JSON.parse(plan.doses || '[]');
+      const availableBrands = JSON.parse(plan.availableBrands || '[]');
+
+      return doses
+        .map((dose, index) => ({
+          vaccineId: `${plan.vaccineBaseId}-${index + 1}`,
+          name: `${plan.name} (доза ${index + 1})`,
+          disease: plan.disease,
+          ageMonthStart: Number(dose.ageMonthStart ?? 0),
+          minIntervalDays: dose.minIntervalDays ?? null,
+          description: plan.description,
+          isLive: plan.isLive,
+          isRecommended: plan.isRecommended,
+          lectureId: plan.lectureId,
+          availableBrands,
+          isDeleted: false,
+          planId: plan.planId,
+          doseNumber: index + 1,
+          createdAt: plan.createdAt,
+          updatedAt: plan.updatedAt,
+        }))
+        .filter((item) => Number.isFinite(item.ageMonthStart) && item.ageMonthStart >= 0);
+    });
+
+    const dedupedMap = new Map();
+    [...parsedEntries, ...expandedPlanEntries].forEach((entry) => {
+      if (!entry?.vaccineId) return;
+      dedupedMap.set(entry.vaccineId, entry);
+    });
+
+    const merged = Array.from(dedupedMap.values()).sort((a, b) => {
+      if ((a.ageMonthStart || 0) !== (b.ageMonthStart || 0)) {
+        return (a.ageMonthStart || 0) - (b.ageMonthStart || 0);
+      }
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+    });
+
+    CacheService.set('vaccineCatalog', cacheKey, merged);
+    return merged;
+  }));
+
+  ipcMain.handle('db:upsert-vaccine-catalog-entry', ensureAuthenticated(async (_, payload) => {
+    try {
+      const validated = VaccineCatalogEntrySchema.parse(payload);
+
+      const saved = await prisma.vaccineCatalogEntry.upsert({
+        where: { vaccineId: validated.vaccineId },
+        update: {
+          name: validated.name,
+          disease: validated.disease,
+          ageMonthStart: validated.ageMonthStart,
+          description: validated.description || null,
+          requiredRiskFactor: validated.requiredRiskFactor || null,
+          excludedRiskFactor: validated.excludedRiskFactor || null,
+          isLive: Boolean(validated.isLive),
+          isRecommended: Boolean(validated.isRecommended),
+          lectureId: validated.lectureId || null,
+          availableBrands: JSON.stringify(validated.availableBrands || []),
+          isDeleted: Boolean(validated.isDeleted),
+        },
+        create: {
+          vaccineId: validated.vaccineId,
+          name: validated.name,
+          disease: validated.disease,
+          ageMonthStart: validated.ageMonthStart,
+          description: validated.description || null,
+          requiredRiskFactor: validated.requiredRiskFactor || null,
+          excludedRiskFactor: validated.excludedRiskFactor || null,
+          isLive: Boolean(validated.isLive),
+          isRecommended: Boolean(validated.isRecommended),
+          lectureId: validated.lectureId || null,
+          availableBrands: JSON.stringify(validated.availableBrands || []),
+          isDeleted: Boolean(validated.isDeleted),
+        },
+      });
+
+      CacheService.invalidate('vaccineCatalog', 'global');
+      logAudit('VACCINE_CATALOG_UPSERT', { vaccineId: validated.vaccineId });
+
+      return {
+        ...saved,
+        availableBrands: JSON.parse(saved.availableBrands || '[]'),
+      };
+    } catch (error) {
+      logger.error('[Database] Failed to upsert vaccine catalog entry:', error);
+      if (error instanceof z.ZodError) {
+        throw new Error(getZodErrorMessage(error));
+      }
+      throw error;
+    }
+  }));
+
+  ipcMain.handle('db:set-vaccine-catalog-entry-deleted', ensureAuthenticated(async (_, vaccineId, isDeleted) => {
+    try {
+      const updated = await prisma.vaccineCatalogEntry.upsert({
+        where: { vaccineId: String(vaccineId) },
+        update: {
+          isDeleted: Boolean(isDeleted),
+        },
+        create: {
+          vaccineId: String(vaccineId),
+          name: String(vaccineId),
+          disease: 'Не указано',
+          ageMonthStart: 0,
+          isDeleted: Boolean(isDeleted),
+        },
+      });
+
+      CacheService.invalidate('vaccineCatalog', 'global');
+      logAudit('VACCINE_CATALOG_SET_DELETED', { vaccineId, isDeleted: Boolean(isDeleted) });
+
+      return {
+        ...updated,
+        availableBrands: JSON.parse(updated.availableBrands || '[]'),
+      };
+    } catch (error) {
+      logger.error('[Database] Failed to mark vaccine catalog entry deleted:', error);
+      throw error;
+    }
+  }));
+
+  ipcMain.handle('db:get-vaccine-plans', ensureAuthenticated(async () => {
+    const plans = await prisma.vaccinePlanTemplate.findMany({
+      orderBy: [{ isDeleted: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return plans.map((plan) => ({
+      ...plan,
+      doses: JSON.parse(plan.doses || '[]'),
+      availableBrands: JSON.parse(plan.availableBrands || '[]'),
+    }));
+  }));
+
+  ipcMain.handle('db:upsert-vaccine-plan', ensureAuthenticated(async (_, payload) => {
+    try {
+      const validated = VaccinePlanTemplateSchema.parse(payload);
+
+      const saved = await prisma.vaccinePlanTemplate.upsert({
+        where: { planId: validated.planId },
+        update: {
+          vaccineBaseId: validated.vaccineBaseId,
+          name: validated.name,
+          disease: validated.disease,
+          description: validated.description || null,
+          isLive: Boolean(validated.isLive),
+          isRecommended: Boolean(validated.isRecommended),
+          availableBrands: JSON.stringify(validated.availableBrands || []),
+          lectureId: validated.lectureId || null,
+          doses: JSON.stringify(validated.doses || []),
+          isDeleted: Boolean(validated.isDeleted),
+        },
+        create: {
+          planId: validated.planId,
+          vaccineBaseId: validated.vaccineBaseId,
+          name: validated.name,
+          disease: validated.disease,
+          description: validated.description || null,
+          isLive: Boolean(validated.isLive),
+          isRecommended: Boolean(validated.isRecommended),
+          availableBrands: JSON.stringify(validated.availableBrands || []),
+          lectureId: validated.lectureId || null,
+          doses: JSON.stringify(validated.doses || []),
+          isDeleted: Boolean(validated.isDeleted),
+        },
+      });
+
+      CacheService.invalidate('vaccineCatalog', 'global');
+      logAudit('VACCINE_PLAN_UPSERT', { planId: validated.planId, vaccineBaseId: validated.vaccineBaseId });
+
+      return {
+        ...saved,
+        doses: JSON.parse(saved.doses || '[]'),
+        availableBrands: JSON.parse(saved.availableBrands || '[]'),
+      };
+    } catch (error) {
+      logger.error('[Database] Failed to upsert vaccine plan:', error);
+      if (error instanceof z.ZodError) {
+        throw new Error(getZodErrorMessage(error));
+      }
+      throw error;
+    }
+  }));
+
+  ipcMain.handle('db:set-vaccine-plan-deleted', ensureAuthenticated(async (_, planId, isDeleted) => {
+    try {
+      const updated = await prisma.vaccinePlanTemplate.update({
+        where: { planId: String(planId) },
+        data: { isDeleted: Boolean(isDeleted) },
+      });
+
+      CacheService.invalidate('vaccineCatalog', 'global');
+      logAudit('VACCINE_PLAN_SET_DELETED', { planId, isDeleted: Boolean(isDeleted) });
+
+      return {
+        ...updated,
+        doses: JSON.parse(updated.doses || '[]'),
+        availableBrands: JSON.parse(updated.availableBrands || '[]'),
+      };
+    } catch (error) {
+      logger.error('[Database] Failed to set vaccine plan deleted:', error);
       throw error;
     }
   }));

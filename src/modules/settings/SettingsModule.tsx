@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2 } from 'lucide-react';
 import { getCurrentApiKey, setApiKey, validateApiKey } from '../../services/geminiService';
 import { apiKeyService, PoolStatus } from '../../services/apiKeyService';
+import { vaccinationService } from '../../services/vaccination.service';
+import { VaccineCatalogEntry } from '../../types';
 
 export const SettingsModule: React.FC = () => {
     const [apiKey, setLocalApiKey] = useState('');
@@ -26,6 +28,30 @@ export const SettingsModule: React.FC = () => {
     const [isLoadingCache, setIsLoadingCache] = useState(false);
     const [isClearingCache, setIsClearingCache] = useState(false);
 
+    // Global Vaccine Catalog State
+    const [vaccineCatalog, setVaccineCatalog] = useState<VaccineCatalogEntry[]>([]);
+    const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+    const [isSavingCatalog, setIsSavingCatalog] = useState(false);
+    const [catalogError, setCatalogError] = useState('');
+    const [catalogInfo, setCatalogInfo] = useState('');
+    const [catalogSearch, setCatalogSearch] = useState('');
+    const [isSyncingBaseline, setIsSyncingBaseline] = useState(false);
+    const [planMonths, setPlanMonths] = useState('');
+    const [planIntervals, setPlanIntervals] = useState('');
+    const [singleDoseMonth, setSingleDoseMonth] = useState('');
+    const [catalogForm, setCatalogForm] = useState<VaccineCatalogEntry>({
+        vaccineId: '',
+        name: '',
+        disease: '',
+        ageMonthStart: 0,
+        description: '',
+        isLive: false,
+        isRecommended: false,
+        availableBrands: []
+    });
+    const [brandDraft, setBrandDraft] = useState({ name: '', country: '', description: '' });
+    const [activeTab, setActiveTab] = useState<'api' | 'catalog' | 'cache' | 'security'>('api');
+
     useEffect(() => {
         // Load current API key and base URL on mount
         const currentKey = getCurrentApiKey();
@@ -44,7 +70,229 @@ export const SettingsModule: React.FC = () => {
         
         // Load cache stats
         loadCacheStats();
+
+        // Load vaccine catalog
+        loadVaccineCatalog();
     }, []);
+
+    const loadVaccineCatalog = async () => {
+        setIsLoadingCatalog(true);
+        try {
+            const seedResult = await vaccinationService.ensureBaselineCatalogSeeded(false);
+            const data = await vaccinationService.getVaccineCatalog();
+            setVaccineCatalog(data);
+            setCatalogError('');
+            if (seedResult.inserted > 0) {
+                setCatalogInfo(`Каталог дополнен базовым календарём: добавлено ${seedResult.inserted} записей.`);
+            }
+        } catch (error: any) {
+            setCatalogError(error.message || 'Не удалось загрузить каталог вакцин');
+        } finally {
+            setIsLoadingCatalog(false);
+        }
+    };
+
+    const handleSyncBaselineCatalog = async () => {
+        setIsSyncingBaseline(true);
+        setCatalogError('');
+        setCatalogInfo('');
+        try {
+            const result = await vaccinationService.ensureBaselineCatalogSeeded(true);
+            const refreshed = await vaccinationService.getVaccineCatalog();
+            setVaccineCatalog(refreshed);
+            setCatalogInfo(`Синхронизация завершена: добавлено ${result.inserted}, обновлено ${result.updated}.`);
+        } catch (error: any) {
+            setCatalogError(error.message || 'Не удалось синхронизировать базовый календарь');
+        } finally {
+            setIsSyncingBaseline(false);
+        }
+    };
+
+    const resetCatalogForm = () => {
+        setCatalogForm({
+            vaccineId: '',
+            name: '',
+            disease: '',
+            ageMonthStart: 0,
+            description: '',
+            isLive: false,
+            isRecommended: false,
+            availableBrands: []
+        });
+        setBrandDraft({ name: '', country: '', description: '' });
+        setPlanMonths('');
+        setPlanIntervals('');
+        setSingleDoseMonth('');
+        setCatalogError('');
+        setCatalogInfo('Поля формы очищены.');
+    };
+
+    const generateVaccineId = (name: string) => {
+        const slug = name
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+        const base = slug || 'vaccine';
+        const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        return `${base}-${suffix}`;
+    };
+
+    const handleCatalogSave = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!catalogForm.name.trim() || !catalogForm.disease.trim()) {
+            setCatalogError('Заполните название и заболевание');
+            return;
+        }
+
+        const parsedMonths = planMonths
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean)
+            .map((value) => Number(value));
+
+        const parsedIntervals = planIntervals
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean)
+            .map((value) => Number(value));
+
+        const parsedSingleDoseMonth = Number(singleDoseMonth);
+        const monthsToSave = parsedMonths.length
+            ? parsedMonths
+            : (singleDoseMonth.trim() ? [parsedSingleDoseMonth] : []);
+
+        if (!monthsToSave.length) {
+            setCatalogError('Укажите план доз или возраст первой дозы');
+            return;
+        }
+
+        if (monthsToSave.some((value) => Number.isNaN(value) || value < 0 || value > 240)) {
+            setCatalogError('План доз должен содержать месяцы от 0 до 240, через запятую (дробные разрешены)');
+            return;
+        }
+
+        if (parsedIntervals.some((value) => Number.isNaN(value) || !Number.isInteger(value) || value < 0 || value > 3650)) {
+            setCatalogError('Интервалы доз должны быть целыми днями от 0 до 3650, через запятую');
+            return;
+        }
+
+        if (parsedIntervals.length > 0 && parsedIntervals.length !== monthsToSave.length) {
+            setCatalogError('Количество интервалов должно совпадать с количеством доз');
+            return;
+        }
+
+        setIsSavingCatalog(true);
+        try {
+            const vaccineId = catalogForm.vaccineId?.trim() || generateVaccineId(catalogForm.name);
+            const baseEntry: VaccineCatalogEntry = {
+                ...catalogForm,
+                vaccineId,
+                name: catalogForm.name.trim(),
+                disease: catalogForm.disease.trim(),
+                ageMonthStart: monthsToSave[0],
+                description: catalogForm.description?.trim() || null,
+                isDeleted: false,
+            };
+
+            const refreshedCatalog = await vaccinationService.upsertVaccinePlan(baseEntry, monthsToSave, parsedIntervals);
+            setVaccineCatalog(refreshedCatalog);
+
+            resetCatalogForm();
+            setCatalogError('');
+            setCatalogInfo('Запись плана сохранена.');
+        } catch (error: any) {
+            setCatalogError(error.message || 'Не удалось сохранить запись каталога');
+        } finally {
+            setIsSavingCatalog(false);
+        }
+    };
+
+    const handleCatalogEdit = (entry: VaccineCatalogEntry) => {
+        setCatalogForm({
+            ...entry,
+            description: entry.description || '',
+            availableBrands: entry.availableBrands || []
+        });
+        setBrandDraft({ name: '', country: '', description: '' });
+        setPlanMonths(String(entry.ageMonthStart ?? 0));
+        setPlanIntervals(entry.minIntervalDays != null ? String(entry.minIntervalDays) : '');
+        setSingleDoseMonth(String(entry.ageMonthStart ?? ''));
+    };
+
+    const handleCatalogToggleDeleted = async (entry: VaccineCatalogEntry) => {
+        try {
+            const updated = await vaccinationService.setVaccineCatalogEntryDeleted(entry.vaccineId, !entry.isDeleted);
+            setVaccineCatalog(prev => prev.map(item => item.vaccineId === updated.vaccineId ? updated : item));
+        } catch (error: any) {
+            setCatalogError(error.message || 'Не удалось изменить статус записи');
+        }
+    };
+
+    const handleAddBrand = () => {
+        const name = brandDraft.name.trim();
+        const country = brandDraft.country.trim();
+        const description = brandDraft.description.trim();
+
+        if (!name || !country) {
+            setCatalogError('Для препарата заполните название и страну');
+            return;
+        }
+
+        setCatalogForm(prev => ({
+            ...prev,
+            availableBrands: [
+                ...(prev.availableBrands || []),
+                {
+                    name,
+                    country,
+                    description: description || undefined,
+                },
+            ],
+        }));
+
+        setBrandDraft({ name: '', country: '', description: '' });
+        setCatalogError('');
+    };
+
+    const handleBrandChange = (index: number, field: 'name' | 'country' | 'description', value: string) => {
+        setCatalogForm(prev => {
+            const brands = [...(prev.availableBrands || [])];
+            const current = brands[index] || { name: '', country: '', description: '' };
+            brands[index] = {
+                ...current,
+                [field]: value,
+            };
+            return {
+                ...prev,
+                availableBrands: brands,
+            };
+        });
+    };
+
+    const handleRemoveBrand = (index: number) => {
+        setCatalogForm(prev => ({
+            ...prev,
+            availableBrands: (prev.availableBrands || []).filter((_, idx) => idx !== index),
+        }));
+    };
+
+    const normalizedCatalogSearch = catalogSearch.trim().toLowerCase();
+    const filteredVaccineCatalog = vaccineCatalog.filter((entry) => {
+        if (!normalizedCatalogSearch) return true;
+
+        const haystack = [
+            entry.vaccineId,
+            entry.name,
+            entry.disease,
+            ...(entry.availableBrands || []).flatMap((brand) => [brand.name, brand.country, brand.description || ''])
+        ]
+            .join(' ')
+            .toLowerCase();
+
+        return haystack.includes(normalizedCatalogSearch);
+    });
 
     const loadPoolStatus = async () => {
         setIsLoadingPool(true);
@@ -215,6 +463,53 @@ export const SettingsModule: React.FC = () => {
                 </p>
             </div>
 
+            <div className="mb-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    <button
+                        onClick={() => setActiveTab('api')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === 'api'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        }`}
+                    >
+                        Gemini API и пул ключей
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('catalog')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === 'catalog'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        }`}
+                    >
+                        Каталог вакцин
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('cache')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === 'cache'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        }`}
+                    >
+                        Производительность кеша
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('security')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === 'security'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        }`}
+                    >
+                        Безопасность и Данные
+                    </button>
+                </div>
+            </div>
+
+            {activeTab === 'api' && (
+            <>
             {/* API Settings Section */}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                 <div className="flex items-center gap-3 mb-4">
@@ -498,8 +793,252 @@ export const SettingsModule: React.FC = () => {
                     </div>
                 )}
             </div>
+            </>
+            )}
 
-            {/* Cache Performance Section */}
+            {activeTab === 'catalog' && (
+            <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Каталог вакцин</h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Глобальный справочник для всей базы: добавление, редактирование и деактивация
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={resetCatalogForm}
+                            disabled={isLoadingCatalog}
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm disabled:opacity-50"
+                        >
+                            <RefreshCw size={16} />
+                            Очистить
+                        </button>
+                        <button
+                            onClick={handleSyncBaselineCatalog}
+                            disabled={isSyncingBaseline}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-sm disabled:opacity-50"
+                        >
+                            {isSyncingBaseline ? <Loader size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+                            Синхр. базовый календарь
+                        </button>
+                    </div>
+                </div>
+
+                <form onSubmit={handleCatalogSave} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                    <input
+                        value={catalogForm.name}
+                        onChange={(e) => setCatalogForm(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Название вакцины"
+                        className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                    />
+                    <input
+                        value={catalogForm.disease}
+                        onChange={(e) => setCatalogForm(prev => ({ ...prev, disease: e.target.value }))}
+                        placeholder="Заболевание"
+                        className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                    />
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            Возраст первой дозы (мес.)
+                        </label>
+                        <input
+                            type="number"
+                            min={0}
+                            max={240}
+                            step="0.1"
+                            value={singleDoseMonth}
+                            onChange={(e) => setSingleDoseMonth(e.target.value)}
+                            placeholder="Например: 0, 2, 4.5"
+                            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                        />
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Используется только если поле «План доз» не заполнено.
+                        </p>
+                    </div>
+                    <textarea
+                        value={catalogForm.description || ''}
+                        onChange={(e) => setCatalogForm(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Описание (опционально)"
+                        rows={3}
+                        className="md:col-span-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                    />
+
+                    <input
+                        value={planMonths}
+                        onChange={(e) => setPlanMonths(e.target.value)}
+                        placeholder="План доз (месяцы через запятую, напр. 0,2,6)"
+                        className="md:col-span-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                    />
+
+                    <input
+                        value={planIntervals}
+                        onChange={(e) => setPlanIntervals(e.target.value)}
+                        placeholder="Интервалы доз (дни через запятую, напр. 0,60,120)"
+                        className="md:col-span-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                    />
+
+                    <div className="md:col-span-2 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Препараты вакцин</p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                            <input
+                                value={brandDraft.name}
+                                onChange={(e) => setBrandDraft(prev => ({ ...prev, name: e.target.value }))}
+                                placeholder="Название препарата"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={brandDraft.country}
+                                onChange={(e) => setBrandDraft(prev => ({ ...prev, country: e.target.value }))}
+                                placeholder="Страна"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={brandDraft.description}
+                                onChange={(e) => setBrandDraft(prev => ({ ...prev, description: e.target.value }))}
+                                placeholder="Описание (опционально)"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={handleAddBrand}
+                            className="mb-3 px-3 py-2 text-sm rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600"
+                        >
+                            Добавить препарат
+                        </button>
+
+                        <div className="space-y-2">
+                            {(catalogForm.availableBrands || []).map((brand, index) => (
+                                <div key={`${brand.name}-${index}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+                                    <input
+                                        value={brand.name || ''}
+                                        onChange={(e) => handleBrandChange(index, 'name', e.target.value)}
+                                        placeholder="Название"
+                                        className="md:col-span-4 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                    />
+                                    <input
+                                        value={brand.country || ''}
+                                        onChange={(e) => handleBrandChange(index, 'country', e.target.value)}
+                                        placeholder="Страна"
+                                        className="md:col-span-3 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                    />
+                                    <input
+                                        value={brand.description || ''}
+                                        onChange={(e) => handleBrandChange(index, 'description', e.target.value)}
+                                        placeholder="Описание"
+                                        className="md:col-span-4 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveBrand(index)}
+                                        className="md:col-span-1 px-2 py-2 text-xs rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50"
+                                        title="Удалить препарат"
+                                    >
+                                        Удалить
+                                    </button>
+                                </div>
+                            ))}
+                            {!catalogForm.availableBrands?.length && (
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Пока нет добавленных препаратов для этой вакцины.</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <input
+                            type="checkbox"
+                            checked={Boolean(catalogForm.isLive)}
+                            onChange={(e) => setCatalogForm(prev => ({ ...prev, isLive: e.target.checked }))}
+                        />
+                        Живая вакцина
+                    </label>
+
+                    <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <input
+                            type="checkbox"
+                            checked={Boolean(catalogForm.isRecommended)}
+                            onChange={(e) => setCatalogForm(prev => ({ ...prev, isRecommended: e.target.checked }))}
+                        />
+                        Рекомендованная
+                    </label>
+
+                    <button
+                        type="submit"
+                        disabled={isSavingCatalog}
+                        className="md:col-span-2 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                        {isSavingCatalog ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
+                        Сохранить в каталог
+                    </button>
+                </form>
+
+                {catalogError && (
+                    <div className="mb-3 text-sm text-red-600 dark:text-red-400">{catalogError}</div>
+                )}
+                {catalogInfo && (
+                    <div className="mb-3 text-sm text-green-600 dark:text-green-400">{catalogInfo}</div>
+                )}
+
+                <input
+                    value={catalogSearch}
+                    onChange={(e) => setCatalogSearch(e.target.value)}
+                    placeholder="Поиск по названию, ID, заболеванию или препарату"
+                    className="mb-3 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                />
+
+                {isLoadingCatalog ? (
+                    <div className="py-4 text-slate-500 dark:text-slate-400 text-sm">Загрузка каталога...</div>
+                ) : (
+                    <div className="space-y-2 max-h-72 overflow-auto pr-1">
+                        {filteredVaccineCatalog.map((entry) => (
+                            <div key={entry.vaccineId} className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                            {entry.name} <span className="text-slate-500">({entry.vaccineId})</span>
+                                        </p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400">
+                                            {entry.disease} • с {entry.ageMonthStart} мес. {entry.isDeleted ? '• деактивирована' : ''}
+                                        </p>
+                                        {!!entry.availableBrands?.length && (
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                Препараты: {entry.availableBrands.map((brand) => brand.name).join(', ')}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => handleCatalogEdit(entry)}
+                                            className="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                                        >
+                                            Редактировать
+                                        </button>
+                                        <button
+                                            onClick={() => handleCatalogToggleDeleted(entry)}
+                                            className="text-xs px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                                        >
+                                            {entry.isDeleted ? 'Восстановить' : 'Деактивировать'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {!filteredVaccineCatalog.length && (
+                            <div className="text-sm text-slate-500 dark:text-slate-400">
+                                {vaccineCatalog.length
+                                    ? 'Ничего не найдено по вашему запросу.'
+                                    : 'Пока нет пользовательских записей каталога.'}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+            )}
+
+            {activeTab === 'cache' && (
             <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -615,8 +1154,9 @@ export const SettingsModule: React.FC = () => {
                     </div>
                 )}
             </div>
+            )}
 
-            {/* Database & Security Section */}
+            {activeTab === 'security' && (
             <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                 <div className="flex items-center gap-3 mb-4">
                     <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
@@ -679,6 +1219,7 @@ export const SettingsModule: React.FC = () => {
                     </div>
                 </div>
             </div>
+            )}
         </div>
     );
 };

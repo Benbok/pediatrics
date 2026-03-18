@@ -161,6 +161,49 @@ export interface VaccineDefinition {
   availableBrands?: VaccineBrand[];
 }
 
+export interface VaccineCatalogEntry {
+  id?: number;
+  vaccineId: string;
+  name: string;
+  disease: string;
+  ageMonthStart: number;
+  planId?: string;
+  doseNumber?: number;
+  minIntervalDays?: number | null;
+  description?: string | null;
+  requiredRiskFactor?: string | null;
+  excludedRiskFactor?: string | null;
+  isLive?: boolean;
+  isRecommended?: boolean;
+  lectureId?: string | null;
+  availableBrands?: VaccineBrand[];
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface VaccinePlanDose {
+  ageMonthStart: number;
+  minIntervalDays?: number | null;
+}
+
+export interface VaccinePlanTemplate {
+  id?: number;
+  planId: string;
+  vaccineBaseId: string;
+  name: string;
+  disease: string;
+  description?: string | null;
+  isLive?: boolean;
+  isRecommended?: boolean;
+  availableBrands?: VaccineBrand[];
+  lectureId?: string | null;
+  doses: VaccinePlanDose[];
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface UserVaccineRecord {
   id?: number;
   childId?: number;
@@ -797,6 +840,12 @@ declare global {
       getRecords: (childId: number) => Promise<UserVaccineRecord[]>;
       saveRecord: (record: UserVaccineRecord) => Promise<boolean>;
       deleteRecord: (childId: number, vaccineId: string) => Promise<boolean>;
+      getVaccineCatalog: () => Promise<VaccineCatalogEntry[]>;
+      upsertVaccineCatalogEntry: (entry: VaccineCatalogEntry) => Promise<VaccineCatalogEntry>;
+      setVaccineCatalogEntryDeleted: (vaccineId: string, isDeleted: boolean) => Promise<VaccineCatalogEntry>;
+      getVaccinePlans: () => Promise<VaccinePlanTemplate[]>;
+      upsertVaccinePlan: (plan: VaccinePlanTemplate) => Promise<VaccinePlanTemplate>;
+      setVaccinePlanDeleted: (planId: string, isDeleted: boolean) => Promise<VaccinePlanTemplate>;
       print: () => void;
       exportPDF: (payload: {
         templateId: string;

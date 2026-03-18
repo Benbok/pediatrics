@@ -14,6 +14,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getRecords: (childId) => ipcRenderer.invoke('db:get-records', childId),
     saveRecord: (record) => ipcRenderer.invoke('db:save-record', record),
     deleteRecord: (childId, vaccineId) => ipcRenderer.invoke('db:delete-record', childId, vaccineId),
+    getVaccineCatalog: () => ipcRenderer.invoke('db:get-vaccine-catalog'),
+    upsertVaccineCatalogEntry: (entry) => ipcRenderer.invoke('db:upsert-vaccine-catalog-entry', entry),
+    setVaccineCatalogEntryDeleted: (vaccineId, isDeleted) => ipcRenderer.invoke('db:set-vaccine-catalog-entry-deleted', vaccineId, isDeleted),
+    getVaccinePlans: () => ipcRenderer.invoke('db:get-vaccine-plans'),
+    upsertVaccinePlan: (plan) => ipcRenderer.invoke('db:upsert-vaccine-plan', plan),
+    setVaccinePlanDeleted: (planId, isDeleted) => ipcRenderer.invoke('db:set-vaccine-plan-deleted', planId, isDeleted),
     print: () => ipcRenderer.send('print-window'),
     // payload: { templateId, data, metadata, options, html?, styles? }
     exportPDF: (payload) => ipcRenderer.invoke('export-pdf', payload),

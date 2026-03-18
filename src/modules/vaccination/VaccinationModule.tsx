@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { VACCINE_SCHEDULE } from '../../constants';
-import { ChildProfile, VaccinationProfile, UserVaccineRecord, AugmentedVaccine, VaccineStatus, VaccineDefinition, HepBRiskFactor } from '../../types';
+import { ChildProfile, VaccinationProfile, UserVaccineRecord, AugmentedVaccine, VaccineStatus, VaccineDefinition, HepBRiskFactor, VaccineCatalogEntry } from '../../types';
 import { VaccineCard } from '../../components/VaccineCard';
 import { VisualStats } from '../../components/VisualStats';
 import { LECTURES } from '../../lectures';
@@ -17,7 +16,6 @@ import { getFluRiskFactorLabel } from '../../utils/fluLogic';
 import { getHpvRiskFactorLabel } from '../../utils/hpvLogic';
 import { getTbeRiskFactorLabel } from '../../utils/tbeLogic';
 import { getRotavirusRiskFactorLabel } from '../../utils/rotaLogic';
-import { calculateVaccineSchedule } from '../../logic/vax';
 import { PneumoRiskFactor, PertussisContraindication, PolioRiskFactor, MMRContraindication, MeningoRiskFactor, VaricellaRiskFactor, HepARiskFactor, FluRiskFactor, HpvRiskFactor, TbeRiskFactor, RotavirusRiskFactor } from '../../types';
 import { printService } from '../printing';
 import { createVaccinationCertificateData } from './adapters/printingAdapter';
@@ -46,6 +44,7 @@ export const VaccinationModule: React.FC = () => {
     const [vaccinationProfile, setVaccinationProfile] = useState<VaccinationProfile | null>(null);
     const [records, setRecords] = useState<UserVaccineRecord[]>([]);
     const [customVaccines, setCustomVaccines] = useState<VaccineDefinition[]>([]);
+    const [vaccineCatalog, setVaccineCatalog] = useState<VaccineCatalogEntry[]>([]);
 
     // UI state
     const [activeTab, setActiveTab] = useState<'all' | 'due' | 'completed'>('all');
@@ -75,15 +74,17 @@ export const VaccinationModule: React.FC = () => {
         setIsLoading(true);
         try {
             // Load data via services
-            const [childData, profileData, recordsData] = await Promise.all([
+            const [childData, profileData, recordsData, catalogData] = await Promise.all([
                 patientService.getChildById(id),
                 vaccinationService.getProfile(id),
-                vaccinationService.getRecords(id)
+                vaccinationService.getRecords(id),
+                vaccinationService.getVaccineCatalog(),
             ]);
 
             if (childData) setChild(childData);
             setVaccinationProfile(profileData);
             setRecords(recordsData);
+            setVaccineCatalog(catalogData || []);
         } catch (error) {
             console.error('Failed to load vaccination data:', error);
         } finally {
@@ -246,8 +247,8 @@ export const VaccinationModule: React.FC = () => {
 
     const augmentedSchedule = useMemo(() => {
         if (!child || !vaccinationProfile) return [];
-        return vaccinationService.calculateSchedule(child, vaccinationProfile, records, customVaccines);
-    }, [child, vaccinationProfile, records, customVaccines]);
+        return vaccinationService.calculateSchedule(child, vaccinationProfile, records, customVaccines, vaccineCatalog);
+    }, [child, vaccinationProfile, records, customVaccines, vaccineCatalog]);
 
     const stats = useMemo(() => {
         const total = augmentedSchedule.length;
@@ -793,7 +794,7 @@ export const VaccinationModule: React.FC = () => {
                             <div className="sticky top-0 z-20 bg-slate-100/90 dark:bg-slate-900/90 backdrop-blur-md py-1 px-3 rounded-lg font-bold text-xs uppercase text-slate-500 border dark:border-slate-800">{getAgeLabel(age)}</div>
                             <div className="space-y-3">
                                 {groupedVaccines[age].map(vaccine => (
-                                    <VaccineCard key={vaccine.id} data={vaccine} child={child} vaccinationProfile={vaccinationProfile || undefined} onToggleComplete={handleToggleComplete} onDeleteCustom={handleDeleteCustomVaccine} onEditCustom={(id) => { const v = customVaccines.find(cv => cv.id === id); if (v) setEditingVaccine(v); }} onOpenLecture={(lectureId) => setViewingLecture(lectureId)} />
+                                    <VaccineCard key={vaccine.id} data={vaccine} child={child} onToggleComplete={handleToggleComplete} onDeleteCustom={handleDeleteCustomVaccine} onEditCustom={(id) => { const v = customVaccines.find(cv => cv.id === id); if (v) setEditingVaccine(v); }} onOpenLecture={(lectureId) => setViewingLecture(lectureId)} />
                                 ))}
                             </div>
                         </div>

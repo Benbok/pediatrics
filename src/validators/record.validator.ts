@@ -1,14 +1,9 @@
 import { z } from 'zod';
-import { VACCINE_SCHEDULE } from '../constants';
-
-const validVaccineIds = VACCINE_SCHEDULE.map(v => v.id);
 
 export const UserVaccineRecordSchema = z.object({
     id: z.number().optional(),
     childId: z.number().optional(),
-    vaccineId: z.string().refine(id => validVaccineIds.includes(id) || id.startsWith('custom-'), {
-        message: 'Неверный ID вакцины',
-    }),
+    vaccineId: z.string().min(2, 'Неверный ID вакцины').max(100, 'Неверный ID вакцины'),
     isCompleted: z.boolean(),
     completedDate: z.string()
         .nullable()

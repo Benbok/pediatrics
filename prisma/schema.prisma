@@ -162,6 +162,45 @@ model VaccinationRecord {
   @@map("vaccination_records")
 }
 
+model VaccineCatalogEntry {
+  id              Int      @id @default(autoincrement())
+  vaccineId       String   @unique @map("vaccine_id")
+  name            String
+  disease         String
+  ageMonthStart   Float    @map("age_month_start")
+  description     String?
+  requiredRiskFactor String? @map("required_risk_factor")
+  excludedRiskFactor String? @map("excluded_risk_factor")
+  isLive          Boolean  @default(false) @map("is_live")
+  isRecommended   Boolean  @default(false) @map("is_recommended")
+  availableBrands String?  @map("available_brands") // JSON string
+  lectureId       String?  @map("lecture_id")
+  isDeleted       Boolean  @default(false) @map("is_deleted")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("vaccine_catalog_entries")
+}
+
+model VaccinePlanTemplate {
+  id              Int      @id @default(autoincrement())
+  planId          String   @unique @map("plan_id")
+  vaccineBaseId   String   @map("vaccine_base_id")
+  name            String
+  disease         String
+  description     String?
+  isLive          Boolean  @default(false) @map("is_live")
+  isRecommended   Boolean  @default(false) @map("is_recommended")
+  availableBrands String?  @map("available_brands") // JSON string
+  lectureId       String?  @map("lecture_id")
+  doses           String   // JSON string: [{ ageMonthStart, minIntervalDays }]
+  isDeleted       Boolean  @default(false) @map("is_deleted")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("vaccine_plan_templates")
+}
+
 // ============= CDSS MODULE (Diseases, Medications, Visits) =============
 
 model Disease {

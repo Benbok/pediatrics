@@ -12,6 +12,7 @@ const NAMESPACE_CONFIG = {
     medications: { ttl: 300000 },  // 5 минут - редко меняются
     profiles: { ttl: 60000 },      // 1 минута - могут часто обновляться
     records: { ttl: 30000 },       // 30 секунд - часто меняются
+    vaccineCatalog: { ttl: 300000 }, // 5 минут - глобальный каталог вакцин
     visits: { ttl: 300000 },       // 5 минут - агрегаты (diagnostic tests)
 };
 

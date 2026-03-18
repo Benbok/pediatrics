@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { AugmentedVaccine, VaccineStatus, ChildProfile, VaccinationProfile } from '../types';
-import { getVaccineAdvice } from '../services/geminiService';
+import { AugmentedVaccine, VaccineStatus, ChildProfile } from '../types';
 import { DatePicker } from './DatePicker';
 import { UserVaccineRecordSchema } from '../validators/record.validator';
 
 interface Props {
   data: AugmentedVaccine;
   child: ChildProfile;
-  vaccinationProfile?: VaccinationProfile;
   onToggleComplete: (
     id: string,
     date: string | null,
@@ -37,10 +35,8 @@ const formatAge = (totalMonths: number) => {
   return months > 0 ? `${years} ${yearStr} ${months} мес` : `${years} ${yearStr}`;
 };
 
-export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, onToggleComplete, onDeleteCustom, onEditCustom, onOpenLecture }) => {
+export const VaccineCard: React.FC<Props> = ({ data, child, onToggleComplete, onDeleteCustom, onEditCustom, onOpenLecture }) => {
   const [showInfo, setShowInfo] = useState(false);
-  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
-  const [loadingAi, setLoadingAi] = useState(false);
   const [dose, setDose] = useState<string>(data.userRecord?.dose || '');
   const [series, setSeries] = useState<string>(data.userRecord?.series || '');
   const [manufacturer, setManufacturer] = useState<string>(data.userRecord?.manufacturer || '');
@@ -108,14 +104,6 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
       case VaccineStatus.SKIPPED: return 'Не требуется';
       case VaccineStatus.PLANNED: return 'В плане';
     }
-  };
-
-  const handleAskAI = async () => {
-    if (aiAdvice) return;
-    setLoadingAi(true);
-    const advice = await getVaccineAdvice(data, child, vaccinationProfile);
-    setAiAdvice(advice);
-    setLoadingAi(false);
   };
 
   const toggleDetails = () => {
@@ -439,40 +427,6 @@ export const VaccineCard: React.FC<Props> = ({ data, child, vaccinationProfile, 
               </button>
             )}
 
-            <div className="bg-white/60 p-3 rounded-lg border border-black/5 dark:bg-black/20 dark:border-white/5">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
-                    <path fillRule="evenodd" d="M9 4.5a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.383l3.035 3.035c.42.42.42 1.102 0 1.522l-4.5 4.5a1.875 1.875 0 01-2.652 0l-4.5-4.5a1.875 1.875 0 010-2.652L9 8.883V4.5zM13.5 18a.75.75 0 010-1.5V16.5h-3v-1.5a.75.75 0 010-1.5h3v-1.5h-3a.75.75 0 010-1.5h3V9h-3V7.5h3A.75.75 0 0113.5 9v9z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <span className="font-semibold text-indigo-900 dark:text-indigo-300">AI Справка (Gemini)</span>
-              </div>
-
-              {loadingAi ? (
-                <div className="animate-pulse space-y-2">
-                  <div className="h-2 bg-indigo-200 rounded w-3/4 dark:bg-indigo-900"></div>
-                  <div className="h-2 bg-indigo-200 rounded w-full dark:bg-indigo-900"></div>
-                  <div className="h-2 bg-indigo-200 rounded w-5/6 dark:bg-indigo-900"></div>
-                </div>
-              ) : aiAdvice ? (
-                <div className="prose prose-sm prose-indigo max-w-none dark:prose-invert">
-                  <div dangerouslySetInnerHTML={{
-                    __html: aiAdvice.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br/>') || ''
-                  }} />
-                </div>
-              ) : (
-                <button
-                  onClick={handleAskAI}
-                  className="w-full text-left text-xs p-2 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300 dark:hover:bg-indigo-900/40 transition-colors flex items-center gap-2 group"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 group-hover:scale-110 transition-transform">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                  </svg>
-                  <span>Нажмите, чтобы загрузить краткую справку</span>
-                </button>
-              )}
-            </div>
           </div>
         </div>
       )}
