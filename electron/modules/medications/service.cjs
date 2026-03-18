@@ -1,7 +1,6 @@
 const { prisma } = require('../../prisma-client.cjs');
 const { logger } = require('../../logger.cjs');
 const { z } = require('zod');
-const { CacheService } = require('../../services/cacheService.cjs');
 const { normalizeContraindicationsText } = require('../../utils/cdssVocabulary.cjs');
 const { normalizeMedicationRoutes } = require('../../utils/routeOfAdmin.cjs');
 
@@ -717,8 +716,6 @@ const MedicationService = {
                 lastUsedAt: new Date()
             }
         });
-        CacheService.invalidate('medications', 'all');
-        CacheService.invalidate('medications', `id_${medicationId}`);
         return true;
     },
 

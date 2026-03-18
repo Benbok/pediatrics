@@ -287,6 +287,10 @@ Doctor нажимает "SELECT" для "Пневмонии"
 | `CDSSService` | `electron/services/cdssService.cjs` | Gemini API вызовы (parseComplaints, rankDiagnoses) |
 | `AnamnesisFormatter` | `electron/modules/visits/anamnesis-formatter.cjs` | Форматирование анамнеза 025/у |
 
+**Принцип кэширования по слоям:**
+- `CacheService` используется в IPC handlers (read-through / invalidate)
+- service-layer (`electron/modules/*/service.cjs`) не должен напрямую вызывать `CacheService`
+
 ---
 
 ## 🔍 Процесс анализа жалоб
@@ -1142,7 +1146,7 @@ try {
 } catch (err) {
   if (err.message.includes('AI')) {
     // Используется fallback - простой текстовый поиск
-    console.log('AI недоступен, использован fallback поиск');
+    logger.warn('AI недоступен, использован fallback поиск');
   }
 }
 
@@ -1154,10 +1158,21 @@ const doseValidation = visitService.validatePatientForDosing(
 );
 
 if (!doseValidation.isValid) {
-  console.error('Ошибки валидации:', doseValidation.errors);
+  logger.error('Ошибки валидации дозирования', { errors: doseValidation.errors });
   // ["Укажите вес пациента в разделе 'Антропометрия'..."]
 }
 ```
+
+### Пример 5: Интеграционные тесты пайплайна
+
+```bash
+npx vitest run tests/cdss.test.ts tests/cdss-pipeline.integration.test.ts
+```
+
+Покрытые сценарии в `cdss-pipeline.integration.test.ts`:
+- No-AI fallback (ограничение количества и confidence)
+- AI success (ранжирование через mocked `rankDiagnoses`)
+- AI error → fallback (graceful degradation)
 
 ---
 
@@ -1189,8 +1204,9 @@ if (!doseValidation.isValid) {
 - **Аудит**: Все действия врача логируются (какие диагнозы выбраны, препараты назначены)
 - **Offline mode**: Если Gemini недоступен - работает fallback с безопасными ограничениями (confidence ≤ 40%, min 2 совпадения)
 - **Rate limiting**: Анализ ограничен до 1 параллельного запроса с cooldown 2 секунды (`useVisitAnalysis`)
+- **Тестирование пайплайна**: Добавлены интеграционные сценарии No-AI, AI-success и AI-error fallback
 
 ---
 
 **Документация CDSS System актуальна на**: March 18, 2026
-**Последнее обновление**: Версия 2.1 (Safety fixes + Two-phase ranking + Rate limiting)
+**Последнее обновление**: Версия 2.2 (Architecture hardening + Integration pipeline tests)

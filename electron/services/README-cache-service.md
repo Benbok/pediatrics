@@ -43,8 +43,9 @@
 | `medications` | 300 с | `electron/modules/medications/handlers.cjs` — список всех, по id, по diseaseId |
 | `profiles` | 60 с   | `database.cjs` — профиль вакцинации по childId |
 | `records`  | 30 с   | `database.cjs` — записи прививок по childId |
+| `visits`   | 300 с  | `electron/modules/visits/handlers.cjs` — кэш `all_diagnostic_tests` |
 
-Конфигурация TTL задаётся в `cacheService.cjs` в `NAMESPACE_CONFIG`. Максимальный размер кеша — 10 000 записей (суммарно); при переполнении удаляются самые старые 10% в текущем namespace. Namespace `users` и `visits` удалены из конфига (не использовались).
+Конфигурация TTL задаётся в `cacheService.cjs` в `NAMESPACE_CONFIG`. Максимальный размер кеша — 10 000 записей (суммарно); при переполнении удаляются самые старые 10% в текущем namespace. Namespace `users` удалён из конфига (не использовался).
 
 ## Паттерны работы с кешем
 
@@ -107,6 +108,7 @@ return result;
 | `medications` | `disease_${diseaseId}` | `disease_3` |
 | `profiles` | `child_${childId}` | `child_1` |
 | `records`  | `child_${childId}` | `child_1` |
+| `visits`   | `all_diagnostic_tests` | кэш справочника диагностических тестов |
 
 Важно: при инвалидации использовать тот же формат ключа, что и при `set`, иначе запись останется в кеше до истечения TTL.
 
@@ -126,7 +128,7 @@ return result;
 
 Следующие пункты ранее относились к техдолгу и исправлены:
 
-1. **Неиспользуемые namespace** — из `NAMESPACE_CONFIG` удалены `users` и `visits`.
+1. **Неиспользуемые namespace** — из `NAMESPACE_CONFIG` удалён `users`.
 2. **medications:delete** — вместо неверного ключа `by_disease_${id}` выполняется полная инвалидация namespace `medications`.
 3. **medications:upsert** — оставлен один вызов `CacheService.invalidate('medications')`.
 4. **share/unshare пациента** — в `db:share-patient` и `db:unshare-patient` инвалидируются оба ключа (`user_*_admin_false` и `user_*_admin_true`) для текущего и целевого пользователя.

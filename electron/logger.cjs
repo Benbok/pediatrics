@@ -9,7 +9,10 @@ const { app } = require('electron');
  * Logs are stored in the user data directory.
  */
 
-const logDir = path.join(app.getPath('userData'), 'logs');
+const userDataPath = app && typeof app.getPath === 'function'
+    ? app.getPath('userData')
+    : process.cwd();
+const logDir = path.join(userDataPath, 'logs');
 
 // Custom format for readable logs
 const customFormat = winston.format.printf(({ level, message, timestamp, ...metadata }) => {
