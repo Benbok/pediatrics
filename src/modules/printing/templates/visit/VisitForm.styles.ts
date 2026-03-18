@@ -1,3 +1,4 @@
+export const visitFormStyles = `
 /* Стили для печатной формы приема 025/у-04 */
 
 .visit-form-print {
@@ -281,3 +282,5 @@
         page-break-inside: avoid;
     }
 }
+`;
+

@@ -49,16 +49,20 @@ export const VisitTicket025_1: React.FC<VisitTicket025_1Props> = ({
         } else {
             // Fallback: используем window.electronAPI.exportPDF если доступен
             try {
-                await window.electronAPI.exportPDF({
-                    type: 'visit-ticket-025-1',
-                    data: {
-                        visit,
-                        child,
-                        doctorName,
-                    },
+                await window.electronAPI?.exportPDF?.({
+                    templateId: 'visit-ticket-025-1',
+                    data: { visit, child, doctorName },
                     metadata: {
                         title: 'Талон пациента 025-1/у',
-                        subtitle: `№ ${visit.ticketNumber || visit.id}`,
+                        createdAt: new Date(),
+                        custom: {
+                            subtitle: `№ ${visit.ticketNumber || visit.id}`,
+                        }
+                    },
+                    options: {
+                        pageSize: 'A4',
+                        orientation: 'portrait',
+                        margins: { top: 20, right: 15, bottom: 20, left: 15 },
                     }
                 });
             } catch (err: any) {

@@ -15,7 +15,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveRecord: (record) => ipcRenderer.invoke('db:save-record', record),
     deleteRecord: (childId, vaccineId) => ipcRenderer.invoke('db:delete-record', childId, vaccineId),
     print: () => ipcRenderer.send('print-window'),
-    exportPDF: (certificateData) => ipcRenderer.invoke('export-pdf', certificateData),
+    // payload: { templateId, data, metadata, options, html?, styles? }
+    exportPDF: (payload) => ipcRenderer.invoke('export-pdf', payload),
     closeApp: () => ipcRenderer.send('app-close'),
     openFile: (options) => ipcRenderer.invoke('dialog:open-file', options),
     readTextFile: (filePath) => ipcRenderer.invoke('file:read-text', filePath),

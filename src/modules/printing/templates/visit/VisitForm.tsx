@@ -9,7 +9,6 @@ import {
 } from './types';
 import { formatDate, formatFullName, calculateAge } from '../../utils/formatters';
 import { getRouteLabel } from '../../../../utils/routeOfAdmin';
-import './VisitForm.css';
 
 /**
  * Компонент печатной формы приема (025/у-04)
@@ -25,8 +24,8 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
     const complications = parseDiagnosesArray(visit.complications);
     const comorbidities = parseDiagnosesArray(visit.comorbidities);
     const prescriptions = parsePrescriptions(visit.prescriptions);
-    const laboratoryTests = parseDiagnosticTests((visit as any).laboratoryTests);
-    const instrumentalTests = parseDiagnosticTests((visit as any).instrumentalTests);
+    const laboratoryTests = parseDiagnosticTests(visit.laboratoryTests ?? null);
+    const instrumentalTests = parseDiagnosticTests(visit.instrumentalTests ?? null);
 
     // Форматируем дату приема
     const visitDateFormatted = visit.visitDate 
@@ -141,18 +140,18 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
             )}
 
             {/* Анамнез заболевания */}
-            {((visit as any).diseaseOnset || (visit as any).diseaseCourse || (visit as any).treatmentBeforeVisit) && (
+            {(visit.diseaseOnset || visit.diseaseCourse || visit.treatmentBeforeVisit) && (
                 <div className="section">
                     <div className="section-title">Анамнез заболевания</div>
                     <div className="section-content">
-                        {(visit as any).diseaseOnset && (
-                            <p><strong>Начало заболевания:</strong> {(visit as any).diseaseOnset}</p>
+                        {visit.diseaseOnset && (
+                            <p><strong>Начало заболевания:</strong> {visit.diseaseOnset}</p>
                         )}
-                        {(visit as any).diseaseCourse && (
-                            <p><strong>Течение:</strong> {(visit as any).diseaseCourse}</p>
+                        {visit.diseaseCourse && (
+                            <p><strong>Течение:</strong> {visit.diseaseCourse}</p>
                         )}
-                        {(visit as any).treatmentBeforeVisit && (
-                            <p><strong>Лечение до обращения:</strong> {(visit as any).treatmentBeforeVisit}</p>
+                        {visit.treatmentBeforeVisit && (
+                            <p><strong>Лечение до обращения:</strong> {visit.treatmentBeforeVisit}</p>
                         )}
                     </div>
                 </div>
@@ -278,12 +277,12 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
             )}
 
             {/* Дата следующего визита */}
-            {(visit as any).nextVisitDate && (
+            {visit.nextVisitDate && (
                 <div className="section">
                     <div className="info-row">
                         <span className="label">Дата следующего визита:</span>
                         <span className="value">
-                            {formatDate(new Date((visit as any).nextVisitDate), 'short')}
+                            {formatDate(new Date(visit.nextVisitDate), 'short')}
                         </span>
                     </div>
                 </div>
@@ -297,7 +296,7 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                 </div>
                 <div className="doctor-name">{doctorName}</div>
                 <div className="print-date">
-                    Дата печати: {formatDate(new Date(), 'short')}
+                    Дата печати: {data.printDate ?? formatDate(new Date(), 'short')}
                 </div>
             </div>
         </div>

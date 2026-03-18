@@ -770,7 +770,7 @@ export interface DashboardSummary {
 // Global window extension for Electron API
 declare global {
   interface Window {
-    electronAPI: {
+    electronAPI?: {
       // DASHBOARD MODULE API
       getDashboardSummary: (date?: string) => Promise<DashboardSummary>;
       updateVisitNotes: (visitId: number, notes: string) => Promise<boolean>;
@@ -788,7 +788,17 @@ declare global {
       saveRecord: (record: UserVaccineRecord) => Promise<boolean>;
       deleteRecord: (childId: number, vaccineId: string) => Promise<boolean>;
       print: () => void;
-      exportPDF: (certificateData: any) => Promise<string>;
+      exportPDF: (payload: {
+        templateId: string;
+        data: any;
+        metadata: { title: string; createdAt?: any; author?: string; organization?: string; custom?: Record<string, unknown> };
+        options?: { pageSize?: string; orientation?: string; margins?: { top: number; right: number; bottom: number; left: number } };
+        html?: string;
+        styles?: string;
+      }) => Promise<
+        | string
+        | { success: boolean; path?: string; error?: string }
+      >;
       closeApp: () => void;
       openFile: (options?: any) => Promise<{ canceled: boolean; filePaths: string[] }>;
       readTextFile: (filePath: string) => Promise<string>;
@@ -812,7 +822,7 @@ declare global {
 
       // SYSTEM API
       openExternalPath: (path: string) => Promise<string>;
-      openPdfAtPage: (path: string, page: number) => Promise<string>;
+      openPdfAtPage: (path: string, page: number) => Promise<{ success: boolean }>;
 
       // AUTH API
       login: (credentials: { username: string; password: string }) => Promise<{ success: boolean; user?: User; error?: string }>;

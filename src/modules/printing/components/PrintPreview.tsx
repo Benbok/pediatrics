@@ -4,6 +4,7 @@ import { templateRegistry } from '../registry';
 import { DocumentMetadata, PrintOptions } from '../types';
 import { applyPrintStyles, removePrintStyles } from '../utils/printStyles';
 import { logger } from '../../../services/logger';
+import { printService } from '../PrintService';
 import './PrintPreview.css';
 
 interface PrintPreviewProps {
@@ -54,9 +55,9 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
         // Небольшая задержка перед вызовом печати
         setTimeout(() => {
             logger.info('[PrintPreview] Calling electronAPI.print()', { templateId });
-            if ((window as any).electronAPI?.print) {
+            if (window.electronAPI?.print) {
                 try {
-                    (window as any).electronAPI.print();
+                    window.electronAPI.print();
                     logger.info('[PrintPreview] electronAPI.print() dispatched', { templateId });
                 } catch (err) {
                     logger.warn('[PrintPreview] IPC Print failed, falling back to window.print()', { error: err, templateId });
@@ -87,24 +88,21 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({
         setIsPrinting(true);
         onPrint();
 
-        if ((window as any).electronAPI?.exportPDF) {
-            try {
-                logger.info('[PrintPreview] Calling exportPDF', { templateId });
-                // Pass the certificate data to the main process
-                await (window as any).electronAPI.exportPDF(data);
-                logger.info('[PrintPreview] PDF exported and opened', { templateId });
-            } catch (err) {
-                logger.error('[PrintPreview] PDF Export failed', { error: err, templateId });
-                alert('Не удалось создать PDF');
+        try {
+            logger.info('[PrintPreview] Exporting PDF via PrintService', { templateId });
+            const result = await printService.exportToPDF(templateId, data, metadata, options);
+            if (!result.success) {
+                logger.error('[PrintPreview] PDF Export failed', { error: result.error, templateId });
+                alert(result.error || 'Не удалось создать PDF');
+            } else {
+                logger.info('[PrintPreview] PDF exported and opened', { templateId, path: result.path });
             }
-        } else {
-            logger.warn('[PrintPreview] PDF экспорт недоступен в этом окружении', { templateId });
-            alert('PDF экспорт недоступен в этом окружении');
+        } catch (err) {
+            logger.error('[PrintPreview] PDF Export failed', { error: err, templateId });
+            alert('Не удалось создать PDF');
         }
         setIsPrinting(false);
     };
-
-    if (!isOpen) return null;
 
     return ReactDOM.createPortal(
         <div id="printOverlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">

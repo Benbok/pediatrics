@@ -177,65 +177,89 @@ app.whenReady().then(async () => {
         app.quit();
     });
 
-    // New clean PDF export using dedicated print window
-    ipcMain.handle('export-pdf', ensureAuthenticated(async (event, certificateData) => {
-        logger.info('[Main] Received export-pdf request with data');
+    // PDF export (supports both legacy and new contract)
+    ipcMain.handle('export-pdf', ensureAuthenticated(async (event, payload) => {
+        logger.info('[Main] Received export-pdf request', { hasHtml: !!payload?.html, templateId: payload?.templateId });
         logAudit('EXPORT_PDF_ATTEMPT');
 
         try {
-            // Create a hidden window for clean PDF rendering
-            const printWin = new BrowserWindow({
-                width: 1123, // A4 landscape width at 96 DPI
-                height: 794, // A4 landscape height at 96 DPI
-                show: false, // Hidden window
-                webPreferences: {
-                    preload: path.join(__dirname, 'preload.cjs'),
-                    nodeIntegration: false,
-                    contextIsolation: true,
-                }
-            });
+            const options = payload?.options || {};
+            const pageSize = options.pageSize || 'A4';
+            const orientation = options.orientation || 'portrait';
+            const marginsMm = options.margins || { top: 20, right: 15, bottom: 20, left: 15 };
+            const mmToIn = (mm) => mm / 25.4;
+            const marginsIn = {
+                top: mmToIn(marginsMm.top),
+                bottom: mmToIn(marginsMm.bottom),
+                left: mmToIn(marginsMm.left),
+                right: mmToIn(marginsMm.right),
+            };
 
-            // Load the standalone print page
-            const printPagePath = isDev
-                ? path.join(__dirname, '../public/print-certificate.html')
-                : path.join(__dirname, '../dist/print-certificate.html');
+            let pdfBuffer;
 
-            logger.info('[Main] Loading print page', { printPagePath });
-            await printWin.loadFile(printPagePath);
+            if (payload?.html) {
+                // Clean export: render provided HTML in hidden window
+                const printWin = new BrowserWindow({
+                    width: 1200,
+                    height: 900,
+                    show: false,
+                    webPreferences: {
+                        preload: path.join(__dirname, 'preload.cjs'),
+                        nodeIntegration: false,
+                        contextIsolation: true,
+                    }
+                });
 
-            // Inject the certificate data and render
-            await printWin.webContents.executeJavaScript(`
-                window.__PRINT_DATA__ = ${JSON.stringify(certificateData)};
-                if (typeof renderCertificate === 'function') {
-                    renderCertificate(window.__PRINT_DATA__);
-                }
-            `);
+                const title = payload?.metadata?.title || 'Document';
+                const styles = payload?.styles || '';
+                const pageCss = `
+                    @page {
+                        size: ${pageSize} ${orientation};
+                        margin: ${marginsMm.top}mm ${marginsMm.right}mm ${marginsMm.bottom}mm ${marginsMm.left}mm;
+                    }
+                    body { margin: 0; padding: 0; }
+                `;
 
-            // Wait for content to render
-            await new Promise(resolve => setTimeout(resolve, 1000));
+                const htmlDoc = `<!doctype html>
+<html><head><meta charset="utf-8"><title>${String(title).replace(/</g, '&lt;')}</title>
+<style>${pageCss}\n${styles}</style>
+</head><body>${payload.html}</body></html>`;
 
-            // Generate PDF from the clean window
-            logger.info('[Main] Generating PDF');
-            const data = await printWin.webContents.printToPDF({
-                printBackground: true,
-                landscape: true,
-                pageSize: 'A4',
-                preferCSSPageSize: true, // CRITICAL: Respect CSS @page and break-inside rules
-                margins: {
-                    top: 0.4,
-                    bottom: 0.4,
-                    left: 0.4,
-                    right: 0.4
-                }
-            });
+                await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlDoc)}`);
+
+                // Wait for layout/fonts
+                await new Promise(resolve => setTimeout(resolve, 300));
+
+                logger.info('[Main] Generating PDF (clean window)', { pageSize, orientation, marginsIn });
+                pdfBuffer = await printWin.webContents.printToPDF({
+                    printBackground: true,
+                    landscape: orientation === 'landscape',
+                    pageSize,
+                    preferCSSPageSize: true,
+                    margins: marginsIn,
+                });
+
+                printWin.close();
+            } else {
+                // Legacy export: print current renderer window to PDF
+                const win = BrowserWindow.fromWebContents(event.sender);
+                if (!win) throw new Error('No sender window for PDF export');
+
+                logger.info('[Main] Generating PDF (sender window)', { pageSize, orientation, marginsIn });
+                pdfBuffer = await win.webContents.printToPDF({
+                    printBackground: true,
+                    landscape: orientation === 'landscape',
+                    pageSize,
+                    preferCSSPageSize: true,
+                    margins: marginsIn,
+                });
+            }
 
             // Save to temp file
-            const tempPath = path.join(os.tmpdir(), `vaccination-certificate-${Date.now()}.pdf`);
-            await fs.promises.writeFile(tempPath, data);
+            const safeTemplate = payload?.templateId ? String(payload.templateId).replace(/[^a-z0-9_-]+/gi, '-') : 'document';
+            const tempPath = path.join(os.tmpdir(), `${safeTemplate}-${Date.now()}.pdf`);
+            await fs.promises.writeFile(tempPath, pdfBuffer);
             logger.info('[Main] PDF saved to:', tempPath);
-
-            // Close the print window
-            printWin.close();
 
             // Open PDF in default viewer
             await shell.openPath(tempPath);

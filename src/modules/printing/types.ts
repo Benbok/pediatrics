@@ -97,6 +97,14 @@ export interface PrintTemplate<TData = unknown> {
     description: string;
     /** React компонент для рендеринга */
     component: React.ComponentType<PrintTemplateProps<TData>>;
+    /**
+     * CSS-стили для печати/предпросмотра, которые можно инлайнить в окно печати.
+     *
+     * Важно: при `renderToStaticMarkup` импортированные CSS файлы внутри компонента
+     * не попадут в новое окно. Для режима прямой печати через `invokeBrowserPrint`
+     * используйте это поле, чтобы передать критичные стили строкой.
+     */
+    styles?: string | string[];
     /** Настройки печати по умолчанию */
     defaultOptions: PrintOptions;
     /** Функция валидации данных */
@@ -139,4 +147,13 @@ export interface PDFExportOptions extends PrintOptions {
     quality?: number;
     /** Сжатие */
     compress?: boolean;
+}
+
+/**
+ * Результат экспорта в PDF (Electron-side generation + сохранение/открытие).
+ */
+export interface PDFExportResult {
+    success: boolean;
+    path?: string;
+    error?: string;
 }

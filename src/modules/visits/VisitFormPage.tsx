@@ -36,6 +36,7 @@ import { RecommendationTemplateSelector } from './components/RecommendationTempl
 import { CreateRecommendationTemplateModal } from './components/CreateRecommendationTemplateModal';
 import { printService } from '../printing';
 import { VisitFormPrintData } from '../printing/templates/visit/types';
+import { formatDate } from '../printing/utils/formatters';
 import { buildVisitPayload } from './utils/buildVisitPayload';
 import { VisitFormNavigation, NavigationSection } from './components/VisitFormNavigation';
 import { useActiveSection } from './hooks/useActiveSection';
@@ -526,6 +527,7 @@ export const VisitFormPage: React.FC = () => {
                 child: child,
                 doctorName: getFullName(currentUser) || 'Врач',
                 recommendations: recommendations,
+                printDate: formatDate(new Date(), 'short'),
             };
 
             await printService.preview('visit-form', printData, {

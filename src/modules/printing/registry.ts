@@ -18,7 +18,7 @@ class PrintTemplateRegistry {
      */
     register<TData>(template: PrintTemplate<TData>): void {
         if (this.templates.has(template.id)) {
-            throw new Error(`Template with id "${template.id}" is already registered`);
+            logger.warn('[PrintRegistry] Overwriting template (duplicate id)', { templateId: template.id });
         }
 
         this.templates.set(template.id, template as PrintTemplate);

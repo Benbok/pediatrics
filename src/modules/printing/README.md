@@ -225,7 +225,7 @@ interface PrintTemplate<TData> {
 ```typescript
 printService.print(templateId, data, metadata, options)    // Печать документа
 printService.preview(templateId, data, metadata, options) // Предпросмотр
-printService.exportToPDF(templateId, data, metadata, options) // Экспорт в PDF
+printService.exportToPDF(templateId, data, metadata, options) // Экспорт в PDF (Electron)
 printService.closePrintWindow()                          // Закрыть окно печати
 printService.getAvailableTemplates()                    // Получить все шаблоны
 printService.isTemplateAvailable(templateId)            // Проверить доступность
@@ -326,7 +326,10 @@ const result = await printService.print(
 await printService.preview(templateId, data, metadata, options);
 
 // Экспорт в PDF
-const pdfBlob = await printService.exportToPDF(templateId, data, metadata, options);
+const result = await printService.exportToPDF(templateId, data, metadata, options);
+if (!result.success) {
+  // handle error
+}
 ```
 
 **Особенности сервиса**:
@@ -508,7 +511,21 @@ import './modules/printing/templates/my-template/register';
 
 ## ⚠️ Известные ограничения
 
-1. **PDF экспорт**: Функция `exportToPDF` пока не реализована (TODO)
+1. **PDF экспорт**: Реализован только в Electron (через `window.electronAPI.exportPDF` / IPC в main process)
 2. **Браузерная печать**: Зависит от возможностей браузера/Electron
 3. **Стили печати**: Некоторые браузеры могут игнорировать некоторые CSS свойства
 4. **Размеры страниц**: Размеры рассчитываются для 96 DPI, могут отличаться на других принтерах
+
+## 🎨 Важно про CSS при прямой печати (`invokeBrowserPrint`)
+
+`invokeBrowserPrint` рендерит шаблон **статически** в HTML строку (через `renderToStaticMarkup`) и открывает новое окно печати.
+
+Это означает, что CSS, подключённый через `import './x.css'` внутри React-компонента шаблона, **не попадает** в новое окно автоматически.
+
+Чтобы стили применялись в прямой печати, используйте механизм инлайна:
+- добавьте в шаблон поле `styles?: string | string[]` (CSS строкой), и сервис вставит его в `<style>` окна печати.
+
+## ✅ Проверка невалидных данных
+
+Во всех методах `print()` / `preview()` / `exportToPDF()` сервис сначала валидирует данные через `template.validateData`.
+При невалидных данных метод должен вернуть `{ success: false, error: '...' }` (без проброса необработанного исключения наверх).

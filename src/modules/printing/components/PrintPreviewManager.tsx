@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PrintPreview } from './PrintPreview';
 import { DocumentMetadata, PrintOptions } from '../types';
-import { logger } from '../../../services/logger';
-
-interface PrintPreviewEvent {
-    templateId: string;
-    data: unknown;
-    metadata: DocumentMetadata;
-    options: PrintOptions;
-}
+import { printEventBus, PrintPreviewEventPayload } from '../printEventBus';
 
 /**
  * Менеджер предпросмотра печати
@@ -26,32 +19,14 @@ export const PrintPreviewManager: React.FC = () => {
     } | null>(null);
 
     useEffect(() => {
-        const handleOpenPreview = (event: Event) => {
-            const customEvent = event as CustomEvent<PrintPreviewEvent>;
-            const { templateId, data, metadata, options } = customEvent.detail;
-
-            setPreviewState({
-                isOpen: true,
-                templateId,
-                data,
-                metadata,
-                options,
-            });
-        };
-
-        window.addEventListener('openPrintPreview', handleOpenPreview);
-
-        return () => {
-            window.removeEventListener('openPrintPreview', handleOpenPreview);
-        };
+        return printEventBus.on((payload: PrintPreviewEventPayload) => {
+            const { templateId, data, metadata, options } = payload;
+            setPreviewState({ isOpen: true, templateId, data, metadata, options });
+        });
     }, []);
 
     const handleClose = () => {
         setPreviewState(null);
-    };
-
-    const handlePrint = () => {
-        logger.info('[PrintPreviewManager] Initiating print', { templateId: previewState?.templateId });
     };
 
     if (!previewState) {
@@ -66,7 +41,7 @@ export const PrintPreviewManager: React.FC = () => {
             metadata={previewState.metadata}
             options={previewState.options}
             onClose={handleClose}
-            onPrint={handlePrint}
+            onPrint={() => {}}
         />
     );
 };

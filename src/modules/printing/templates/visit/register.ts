@@ -1,6 +1,7 @@
 import { templateRegistry } from '../../registry';
 import { VisitForm } from './VisitForm';
 import { VisitFormPrintData, isVisitFormPrintData } from './types';
+import { visitFormStyles } from './VisitForm.styles';
 import { PrintTemplate } from '../../types';
 import { logger } from '../../../../services/logger';
 
@@ -13,6 +14,7 @@ const visitFormTemplate: PrintTemplate<VisitFormPrintData> = {
     description: 'Полная форма медицинского приёма с диагнозами, назначениями и рекомендациями',
     category: 'medical',
     component: VisitForm,
+    styles: visitFormStyles,
     defaultOptions: {
         orientation: 'portrait',
         pageSize: 'A4',

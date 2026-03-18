@@ -3,10 +3,14 @@ import {
     DocumentMetadata,
     PrintOptions,
     PrintResult,
-    PrintMode,
     PDFExportOptions,
+    PDFExportResult,
 } from './types';
 import { logger } from '../../services/logger';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import type { PrintTemplate } from './types';
+import { printEventBus } from './printEventBus';
 
 /**
  * Основной сервис управления печатью документов
@@ -16,6 +20,37 @@ import { logger } from '../../services/logger';
  */
 class PrintService {
     private currentPrintWindow: Window | null = null;
+
+    private getValidatedTemplateAndOptions<TData>(
+        templateId: string,
+        data: TData,
+        options?: Partial<PrintOptions>
+    ):
+        | { success: true; template: PrintTemplate<TData>; finalOptions: PrintOptions }
+        | { success: false; error: string } {
+        const template = templateRegistry.get<TData>(templateId);
+
+        if (!template) {
+            return {
+                success: false,
+                error: `Template "${templateId}" not found in registry`,
+            };
+        }
+
+        if (!template.validateData(data)) {
+            return {
+                success: false,
+                error: 'Data validation failed for the template',
+            };
+        }
+
+        const finalOptions: PrintOptions = {
+            ...template.defaultOptions,
+            ...options,
+        };
+
+        return { success: true, template, finalOptions };
+    }
 
     /**
      * Печатает документ
@@ -33,31 +68,11 @@ class PrintService {
         options?: Partial<PrintOptions>
     ): Promise<PrintResult> {
         try {
-            const template = templateRegistry.get<TData>(templateId);
-
-            if (!template) {
-                return {
-                    success: false,
-                    error: `Template "${templateId}" not found in registry`,
-                };
-            }
-
-            // Валидация данных
-            if (!template.validateData(data)) {
-                return {
-                    success: false,
-                    error: 'Data validation failed for the template',
-                };
-            }
-
-            // Объединяем настройки
-            const finalOptions: PrintOptions = {
-                ...template.defaultOptions,
-                ...options,
-            };
+            const validated = this.getValidatedTemplateAndOptions(templateId, data, options);
+            if (validated.success === false) return { success: false, error: validated.error };
 
             // Вызываем браузерную печать
-            await this.invokeBrowserPrint(template, data, metadata, finalOptions);
+            await this.invokeBrowserPrint(validated.template, data, metadata, validated.finalOptions);
 
             return { success: true };
         } catch (error) {
@@ -85,29 +100,11 @@ class PrintService {
         options?: Partial<PrintOptions>
     ): Promise<PrintResult> {
         try {
-            const template = templateRegistry.get<TData>(templateId);
-
-            if (!template) {
-                return {
-                    success: false,
-                    error: `Template "${templateId}" not found in registry`,
-                };
-            }
-
-            if (!template.validateData(data)) {
-                return {
-                    success: false,
-                    error: 'Data validation failed for the template',
-                };
-            }
-
-            const finalOptions: PrintOptions = {
-                ...template.defaultOptions,
-                ...options,
-            };
+            const validated = this.getValidatedTemplateAndOptions(templateId, data, options);
+            if (validated.success === false) return { success: false, error: validated.error };
 
             // Вызываем событие для открытия модального окна предпросмотра
-            this.openPreviewModal(templateId, data, metadata, finalOptions);
+            this.openPreviewModal(templateId, data, metadata, validated.finalOptions);
 
             return { success: true };
         } catch (error) {
@@ -133,20 +130,56 @@ class PrintService {
         data: TData,
         metadata: DocumentMetadata,
         options?: Partial<PDFExportOptions>
-    ): Promise<Blob> {
-        const template = templateRegistry.get<TData>(templateId);
+    ): Promise<PDFExportResult> {
+        try {
+            const validated = this.getValidatedTemplateAndOptions(templateId, data, options);
+            if (validated.success === false) return { success: false, error: validated.error };
+            const finalOptions = { ...validated.finalOptions, ...options } as PDFExportOptions;
 
-        if (!template) {
-            throw new Error(`Template "${templateId}" not found in registry`);
+            // Electron PDF export (main process handles rendering + printToPDF)
+            if (window.electronAPI?.exportPDF) {
+                const templateCss = Array.isArray(validated.template.styles)
+                    ? validated.template.styles.filter(Boolean).join('\n')
+                    : (validated.template.styles ?? '');
+
+                const html = renderToStaticMarkup(
+                    React.createElement(validated.template.component, {
+                        data,
+                        metadata,
+                        options: finalOptions,
+                    })
+                );
+
+                const result = await window.electronAPI.exportPDF({
+                    templateId,
+                    data,
+                    metadata,
+                    options: finalOptions,
+                    html,
+                    styles: templateCss,
+                });
+                // normalize potential older return types
+                if (typeof result === 'string') {
+                    return { success: true, path: result };
+                }
+                if (result && typeof result === 'object') {
+                    return result as PDFExportResult;
+                }
+                return { success: false, error: 'Unexpected exportPDF result' };
+            }
+
+            logger.warn('[PrintService] PDF export requested outside Electron', { templateId, metadata, options: finalOptions });
+            return {
+                success: false,
+                error: 'PDF export is only available in Electron environment',
+            };
+        } catch (error) {
+            logger.error('[PrintService] exportToPDF error', { error, templateId, metadata });
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            };
         }
-
-        if (!template.validateData(data)) {
-            throw new Error('Data validation failed for the template');
-        }
-
-        // TODO: Реализовать экспорт в PDF через html2pdf или jspdf
-        // Пока заглушка
-        throw new Error('PDF export is not implemented yet');
     }
 
     /**
@@ -155,13 +188,23 @@ class PrintService {
      * @private
      */
     private async invokeBrowserPrint<TData>(
-        template: any,
+        template: PrintTemplate<TData>,
         data: TData,
         metadata: DocumentMetadata,
         options: PrintOptions
     ): Promise<void> {
+        const TemplateComponent = template.component;
+
+        const templateCss = Array.isArray(template.styles)
+            ? template.styles.filter(Boolean).join('\n')
+            : (template.styles ?? '');
+
+        const html = renderToStaticMarkup(
+            React.createElement(TemplateComponent, { data, metadata, options })
+        );
+
         // Создаем временное окно с контентом для печати
-        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
 
         if (!printWindow) {
             throw new Error('Failed to open print window. Please allow popups.');
@@ -169,8 +212,6 @@ class PrintService {
 
         this.currentPrintWindow = printWindow;
 
-        // Рендерим содержимое (это упрощенная версия, в реальности нужно использовать ReactDOM)
-        // В продакшене это должно быть реализовано через отдельный компонент
         printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -187,10 +228,12 @@ class PrintService {
               body { margin: 0; padding: 0; }
               .no-print { display: none !important; }
             }
+            /* Template styles (inlined) */
+            ${templateCss}
           </style>
         </head>
         <body>
-          <div id="print-root"></div>
+          <div id="print-root">${html}</div>
           <script>
             window.onload = () => {
               setTimeout(() => {
@@ -217,17 +260,7 @@ class PrintService {
         metadata: DocumentMetadata,
         options: PrintOptions
     ): void {
-        // Создаем событие для React компонента
-        const event = new CustomEvent('openPrintPreview', {
-            detail: {
-                templateId,
-                data,
-                metadata,
-                options,
-            },
-        });
-
-        window.dispatchEvent(event);
+        printEventBus.emit({ templateId, data, metadata, options });
     }
 
     /**
