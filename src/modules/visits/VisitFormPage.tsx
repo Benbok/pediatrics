@@ -7,6 +7,7 @@ import { patientService } from '../../services/patient.service';
 import { logger } from '../../services/logger';
 import { draftService } from '../../services/draftService';
 import { useTabs } from '../../context/TabsContext';
+import { useVisitAnalysis } from '../../hooks/useVisitAnalysis';
 import debounce from 'lodash/debounce';
 import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, MedicationRecommendation, getFullName } from '../../types';
 import { MedicationBrowser } from './components/MedicationBrowser';
@@ -104,7 +105,7 @@ export const VisitFormPage: React.FC = () => {
     });
 
     const [suggestions, setSuggestions] = useState<DiagnosisSuggestion[]>([]);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const visitAnalysis = useVisitAnalysis({ maxConcurrentAnalyses: 1, cooldownMs: 2000 });
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -637,42 +638,46 @@ export const VisitFormPage: React.FC = () => {
             return;
         }
 
-        setIsAnalyzing(true);
         setError(null);
-        const startTime = Date.now();
 
         try {
-            // Сначала сохраняем визит как черновик (если еще не сохранен)
-            let visitId = formData.id;
-            if (!visitId) {
-                const savedVisit = await visitService.upsertVisit({
-                    ...formData,
-                    status: 'draft'
-                } as Visit);
-                visitId = savedVisit.id!;
-                setFormData(prev => ({ ...prev, id: visitId }));
-            } else {
-                // Обновляем данные перед анализом
-                await visitService.upsertVisit({
-                    ...formData,
-                } as Visit);
-            }
+            const results = await visitAnalysis.runAnalysis(async () => {
+                const startTime = Date.now();
 
-            // Выполняем AI-анализ (использует расширенные поля из service)
-            const results = await visitService.analyzeVisit(visitId!);
+                // Сначала сохраняем визит как черновик (если еще не сохранен)
+                let visitId = formData.id;
+                if (!visitId) {
+                    const savedVisit = await visitService.upsertVisit({
+                        ...formData,
+                        status: 'draft'
+                    } as Visit);
+                    visitId = savedVisit.id!;
+                    setFormData(prev => ({ ...prev, id: visitId }));
+                } else {
+                    // Обновляем данные перед анализом
+                    await visitService.upsertVisit({
+                        ...formData,
+                    } as Visit);
+                }
+
+                // Выполняем AI-анализ (использует расширенные поля из service)
+                const results = await visitService.analyzeVisit(visitId!);
+                setSuggestions(results);
+
+                const duration = Date.now() - startTime;
+                logger.info(`[VisitFormPage] Analysis completed in ${duration}ms`, { visitId, duration });
+
+                if (duration > 5000) {
+                    logger.warn(`[VisitFormPage] Analysis took longer than expected: ${duration}ms`, { duration });
+                }
+
+                return results;
+            });
+
             setSuggestions(results);
-
-            const duration = Date.now() - startTime;
-            logger.info(`[VisitFormPage] Analysis completed in ${duration}ms`, { visitId, duration });
-
-            if (duration > 5000) {
-                logger.warn(`[VisitFormPage] Analysis took longer than expected: ${duration}ms`, { duration });
-            }
         } catch (err: any) {
             logger.error('[VisitFormPage] Analysis failed', { error: err, visitId: formData.id });
             setError(err.message || 'Ошибка анализа. Попробуйте еще раз.');
-        } finally {
-            setIsAnalyzing(false);
         }
     };
 
@@ -695,15 +700,8 @@ export const VisitFormPage: React.FC = () => {
             setIsLoadingMedications(true);
             try {
                 const recommendations = await visitService.getMedicationsForDiagnosis(disease.id, Number(childId));
-                // Фильтруем препараты с учетом аллергоанамнеза
-                const filtered = recommendations.filter(rec => {
-                    // Если есть предупреждения об аллергии, исключаем препарат
-                    const hasAllergyWarning = rec.warnings?.some(w =>
-                        w.toLowerCase().includes('аллергия') ||
-                        w.toLowerCase().includes('непереносимость')
-                    );
-                    return !hasAllergyWarning && rec.canUse;
-                });
+                // Фильтруем препараты строго по canUse (источник истины — backend)
+                const filtered = recommendations.filter(rec => rec.canUse);
                 setMedicationRecommendations(filtered);
             } catch (err: any) {
                 logger.error('[VisitFormPage] Failed to load medications', { error: err, diseaseId: disease.id, childId });
@@ -783,13 +781,7 @@ export const VisitFormPage: React.FC = () => {
             // Преобразуем в массив и фильтруем с учетом аллергий
             const uniqueRecommendations = Array.from(medicationMap.values());
             
-            const filtered = uniqueRecommendations.filter(rec => {
-                const hasAllergyWarning = rec.warnings?.some(w =>
-                    w.toLowerCase().includes('аллергия') ||
-                    w.toLowerCase().includes('непереносимость')
-                );
-                return !hasAllergyWarning && rec.canUse;
-            });
+            const filtered = uniqueRecommendations.filter(rec => rec.canUse);
 
             // Сортируем по приоритету
             filtered.sort((a, b) => (a.priority || 999) - (b.priority || 999));
@@ -1769,7 +1761,8 @@ export const VisitFormPage: React.FC = () => {
                             formData={formData}
                             onChange={handleFieldChange}
                             onAnalyze={() => runAnalysis()}
-                            isAnalyzing={isAnalyzing}
+                            isAnalyzing={visitAnalysis.isAnalyzing}
+                            canAnalyze={visitAnalysis.canAnalyze}
                         />
                     </div>
 
@@ -2115,8 +2108,13 @@ export const VisitFormPage: React.FC = () => {
                             <h2 className="text-sm font-black text-primary-700 dark:text-primary-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                 <Sparkles className="w-4 h-4" />
                                 AI рекомендации диагнозов
-                                {isAnalyzing && (
+                                {visitAnalysis.isAnalyzing && (
                                     <span className="ml-2 text-xs text-slate-500">Анализ...</span>
+                                )}
+                                {suggestions.some(s => s.isUsingFallback) && (
+                                    <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-semibold">
+                                        ⚠️ Упрощённый анализ
+                                    </span>
                                 )}
                             </h2>
 
@@ -2130,8 +2128,17 @@ export const VisitFormPage: React.FC = () => {
                                         return (
                                             <div
                                                 key={idx}
-                                                className="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm group"
+                                                className={`p-3 bg-white dark:bg-slate-800 rounded-2xl border shadow-sm group ${
+                                                    s.isUsingFallback 
+                                                        ? 'border-yellow-300 bg-yellow-50/50 dark:bg-yellow-950/10' 
+                                                        : 'border-slate-100 dark:border-slate-700'
+                                                }`}
                                             >
+                                                {s.isUsingFallback && (
+                                                    <div className="mb-2 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded-lg font-semibold border border-yellow-200 dark:border-yellow-800">
+                                                        ⚠️ Упрощённый анализ (AI недоступен)
+                                                    </div>
+                                                )}
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <Badge variant="primary" size="sm" className="font-mono text-[10px]">
                                                         {s.disease.icd10Code}
@@ -2189,7 +2196,7 @@ export const VisitFormPage: React.FC = () => {
                                 <div className="text-center py-6">
                                     <Stethoscope className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                                     <p className="text-xs text-slate-400 font-medium italic">
-                                        {isAnalyzing
+                                        {visitAnalysis.isAnalyzing
                                             ? 'AI анализирует данные...'
                                             : 'Заполните анамнез и клинический осмотр для получения рекомендаций'}
                                     </p>

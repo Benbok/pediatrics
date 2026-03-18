@@ -587,6 +587,16 @@ export interface DiagnosisSuggestion {
   confidence: number; // 0.0 - 1.0
   reasoning: string;
   matchedSymptoms: string[];
+  isUsingFallback?: boolean; // true if AI unavailable, fallback analysis used
+  phase1Score?: number; // Score from Phase 1 (BM25/semantic search)
+  rankingFactors?: {
+    phase1NormalizedScore: number;
+    phase1SymptomScore: number;
+    phase1ChunkScore: number;
+    aiConfidence: number;
+    aiContribution?: number;
+    error?: string;
+  };
 }
 
 export interface MedicationTemplateItem {

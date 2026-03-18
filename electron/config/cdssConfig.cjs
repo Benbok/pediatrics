@@ -18,4 +18,9 @@ module.exports = {
         temperatureC: 37.5,
         oxygenSaturation: 95,
     },
+
+    // Fallback analysis constants (Task 2)
+    MAX_FALLBACK_CONFIDENCE: 0.4,        // Maximum confidence for fallback analysis (40%)
+    MIN_FALLBACK_MATCHES: 2,             // Minimum symptom matches required
+    MAX_FALLBACK_SUGGESTIONS: 3,         // Maximum suggestions in fallback mode
 };

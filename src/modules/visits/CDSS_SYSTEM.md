@@ -32,7 +32,7 @@
 │ 📊 Семантический поиск (embeddings + BM25)            │
 │ 🎯 Контекстное ранжирование диагнозов                 │
 │ 🔗 Интеграция с базой знаний (Disease database)       │
-│ 💾 Кэширование и дедупликация результатов             │
+│ 🔁 Rate limiting анализа (1 запрос + cooldown)        │
 │ 📱 Расчет дозировок по весу/возрасту пациента         │
 │ ⚠️  Учет аллергий и противопоказаний                   │
 └─────────────────────────────────────────────────────────┘
@@ -48,6 +48,7 @@
 ┌──────────────────────────────────────────────────────────────────┐
 │  Component Layer (React Hooks + State Management)                 │
 │  VisitFormPage.tsx                                                 │
+│  ├─ useVisitAnalysis()         ←─ Rate limiting анализа          │
 │  ├─ runAnalysis()              ←─ Инициирует анализ              │
 │  ├─ loadMedicationsForAllDiagnoses()  ←─ Загружает препараты    │
 │  └─ loadDiagnosticsForAllDiagnoses()  ←─ Загружает исследования │
@@ -381,20 +382,24 @@ const candidates = [...prefiltered, ...ftsResults, ...semanticResults]
 ```javascript
 // electron/config/cdssConfig.cjs
 PREFILTER_TOKEN_MIN_LEN: 3,
-PREFILTER_SCORE_THRESHOLD: 0.3,
+PREFILTER_SCORE_THRESHOLD: 0.1,
 MERGE_SYMPTOM_WEIGHT: 0.4,
-MERGE_CHUNK_WEIGHT: 0.35,
-MERGE_FTS_WEIGHT: 0.25,
-MAX_CANDIDATES_BEFORE_RANK: 20,
+MERGE_CHUNK_WEIGHT: 0.6,
+MAX_CANDIDATES_BEFORE_RANK: 15,
 MAX_CANDIDATES_FOR_AI_RANK: 8,
+MAX_FALLBACK_CONFIDENCE: 0.4,
+MIN_FALLBACK_MATCHES: 2,
+MAX_FALLBACK_SUGGESTIONS: 3,
 ```
 
 ### Этап 4: AI Ranking (Gemini)
 
 ```javascript
-// Top-8 кандидатов отправляем на Gemini для умного ранжирования
+// Двухфазный ранкинг:
+// Фаза 1 (CDSSSearchService): BM25 + embeddings → top-15 кандидатов
+// Фаза 2 (CDSSRankingService): Gemini ранжирует только top-8
 
-const ranked = await rankDiagnoses(
+const ranked = await rankDiagnosesWithContext(
   symptoms: ["кашель", "лихорадка", "хрипы"],
   candidates: [
     { disease: { id: 123, nameRu: "Пневмония", ... }, score: 0.85 },
@@ -410,6 +415,10 @@ const ranked = await rankDiagnoses(
     clinicalQuery: "..."
   }
 );
+
+// Каждый результат также содержит:
+// phase1Score и rankingFactors
+// (phase1NormalizedScore, phase1SymptomScore, phase1ChunkScore, aiConfidence)
 
 // Gemini Prompt (иммитация):
 /*
@@ -463,16 +472,26 @@ async _fallbackAnalysis(complaints) {
       const matches = symptoms.filter(s => 
         complaintsLower.includes(s.toLowerCase())
       );
+
+      // Минимум 2 совпадения для безопасности
+      if (matches.length < MIN_FALLBACK_MATCHES) {
+        return null;
+      }
+
       return {
         disease: d,
-        confidence: matches.length / Math.max(symptoms.length, 1),
-        reasoning: `Совпало ${matches.length} симптомов`,
-        matchedSymptoms: matches
+        confidence: Math.min(
+          MAX_FALLBACK_CONFIDENCE,
+          matches.length / (Math.max(symptoms.length, 1) * 2)
+        ),
+        reasoning: `[⚠️ УПРОЩЁННЫЙ АНАЛИЗ] Совпало ${matches.length} симптомов`,
+        matchedSymptoms: matches,
+        isUsingFallback: true
       };
     })
-    .filter(s => s.confidence > 0)
+    .filter(s => s !== null && s.confidence > 0)
     .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, 5);  // Top 5
+    .slice(0, MAX_FALLBACK_SUGGESTIONS);  // Max 3
 
   return suggestions;
 }
@@ -554,15 +573,9 @@ const loadMedicationsForAllDiagnoses = async (
     }
   });
 
-  // 4. Фильтруем по аллергиям
+  // 4. Фильтруем только по canUse (источник истины — backend)
   const filtered = Array.from(medicationMap.values())
-    .filter(rec => {
-      const hasAllergyWarning = rec.warnings?.some(w =>
-        w.toLowerCase().includes('аллергия') ||
-        w.toLowerCase().includes('непереносимость')
-      );
-      return !hasAllergyWarning && rec.canUse;
-    });
+    .filter(rec => rec.canUse);
 
   // 5. Сортируем по приоритету
   filtered.sort((a, b) => (a.priority || 999) - (b.priority || 999));
@@ -926,6 +939,16 @@ interface DiagnosisSuggestion {
   confidence: number;            // Вероятность 0.0-1.0
   reasoning: string;             // Обоснование (почему этот диагноз?)
   matchedSymptoms: string[];     // Найденные симптомы в жалобах
+  isUsingFallback?: boolean;     // true, если использован fallback
+  phase1Score?: number;          // Score из фазы 1 (поиск)
+  rankingFactors?: {
+    phase1NormalizedScore: number;
+    phase1SymptomScore: number;
+    phase1ChunkScore: number;
+    aiConfidence: number;
+    aiContribution?: number;
+    error?: string;
+  };
 }
 ```
 
@@ -1162,12 +1185,12 @@ if (!doseValidation.isValid) {
 
 ## 📝 Notes
 
-- **Все анализы кэшируются** на 24 часа (чтобы не перезапускать AI)
 - **Логирование**: Все операции логируются в `electron/logs/`
 - **Аудит**: Все действия врача логируются (какие диагнозы выбраны, препараты назначены)
-- **Offline mode**: Если Gemini недоступен - работает fallback (медленнее, менее точно)
+- **Offline mode**: Если Gemini недоступен - работает fallback с безопасными ограничениями (confidence ≤ 40%, min 2 совпадения)
+- **Rate limiting**: Анализ ограничен до 1 параллельного запроса с cooldown 2 секунды (`useVisitAnalysis`)
 
 ---
 
 **Документация CDSS System актуальна на**: March 18, 2026
-**Последнее обновление**: Версия 2.0 (AI Ranking, Semantic Search)
+**Последнее обновление**: Версия 2.1 (Safety fixes + Two-phase ranking + Rate limiting)

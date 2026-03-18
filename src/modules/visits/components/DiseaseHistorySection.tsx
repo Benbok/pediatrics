@@ -9,6 +9,7 @@ interface DiseaseHistorySectionProps {
     onChange: (field: keyof Visit, value: any) => void;
     onAnalyze?: () => void;
     isAnalyzing?: boolean;
+    canAnalyze?: boolean;
     errors?: Record<string, string>;
 }
 
@@ -17,6 +18,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
     onChange,
     onAnalyze,
     isAnalyzing = false,
+    canAnalyze = true,
     errors = {},
 }) => {
     return (
@@ -35,7 +37,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                         variant="secondary"
                         size="sm"
                         onClick={onAnalyze}
-                        disabled={isAnalyzing || !formData.complaints?.trim()}
+                        disabled={isAnalyzing || !canAnalyze || !formData.complaints?.trim()}
                         className="flex items-center gap-2"
                     >
                         {isAnalyzing ? (

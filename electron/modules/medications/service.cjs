@@ -120,17 +120,53 @@ const MedicationService = {
      * Get medications that match any of the provided ICD-10 codes
      * Поддерживает частичное совпадение: если препарат имеет код J10, 
      * он подходит для диагноза J10.8
+     * 
+     * Оптимизированная версия: использует SQL WHERE вместо загрузки всех записей
      */
     async getByIcd10Codes(icd10Codes) {
         logger.info(`[MedicationService] Searching medications for ICD codes:`, icd10Codes);
         
-        const medications = await prisma.medication.findMany();
-        logger.info(`[MedicationService] Total medications in DB: ${medications.length}`);
+        if (!icd10Codes || icd10Codes.length === 0) {
+            return [];
+        }
 
-        const matched = medications.filter(med => {
-            const medCodes = safeJsonParse(med.icd10Codes, []);
+        // Строим WHERE условия для каждого ICD кода
+        const whereConditions = icd10Codes.map(code => {
+            // Ищем точное совпадение в JSON массиве
+            const exactMatch = `"${code}"`;
+            // Ищем частичное совпадение (префикс)
+            const prefixMatch = `"${code}."`;
             
-            const hasMatch = medCodes.some(medCode => {
+            return {
+                OR: [
+                    { icd10Codes: { contains: exactMatch } },
+                    { icd10Codes: { contains: prefixMatch } }
+                ]
+            };
+        });
+
+        // Выполняем один запрос с OR условиями
+        const medications = await prisma.medication.findMany({
+            where: {
+                OR: whereConditions
+            }
+        });
+
+        logger.info(`[MedicationService] Found ${medications.length} matching medications via SQL query`);
+
+        // Парсим JSON поля
+        const matched = medications.map(med => ({
+            ...med,
+            icd10Codes: safeJsonParse(med.icd10Codes, []),
+            userTags: safeJsonParse(med.userTags, [])
+        }));
+
+        // Дополнительная фильтрация для сложных случаев частичного совпадения
+        // (например, когда код препарата является префиксом, но с точкой)
+        const finalMatched = matched.filter(med => {
+            const medCodes = med.icd10Codes;
+            
+            return medCodes.some(medCode => {
                 return icd10Codes.some(diagnosisCode => {
                     // Точное совпадение
                     if (medCode === diagnosisCode) return true;
@@ -142,20 +178,10 @@ const MedicationService = {
                     return false;
                 });
             });
-            
-            if (hasMatch) {
-                logger.info(`[MedicationService] Match found: ${med.nameRu}, codes:`, medCodes);
-            }
-            
-            return hasMatch;
-        }).map(med => ({
-            ...med,
-            icd10Codes: safeJsonParse(med.icd10Codes, []),
-            userTags: safeJsonParse(med.userTags, [])
-        }));
-        
-        logger.info(`[MedicationService] Found ${matched.length} matching medications`);
-        return matched;
+        });
+
+        logger.info(`[MedicationService] After additional filtering: ${finalMatched.length} medications`);
+        return finalMatched;
     },
 
     /**

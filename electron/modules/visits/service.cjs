@@ -6,6 +6,7 @@ const { normalizeText, normalizeContraindicationsText } = require('../../utils/c
 const { parseComplaints, rankDiagnoses } = require('../../services/cdssService.cjs');
 const { DiseaseService } = require('../diseases/service.cjs');
 const { decrypt } = require('../../crypto.cjs');
+const { MAX_FALLBACK_CONFIDENCE, MIN_FALLBACK_MATCHES, MAX_FALLBACK_SUGGESTIONS } = require('../../config/cdssConfig.cjs');
 
 /**
  * Безопасный парсинг JSON полей
@@ -671,7 +672,9 @@ const VisitService = {
                     },
                     confidence: ranking.confidence,
                     reasoning: ranking.reasoning,
-                    matchedSymptoms: ranking.matchedSymptoms
+                    matchedSymptoms: ranking.matchedSymptoms,
+                    phase1Score: ranking.phase1Score,
+                    rankingFactors: ranking.rankingFactors
                 };
             }).filter(s => s !== null);
 
@@ -687,6 +690,7 @@ const VisitService = {
 
     /**
      * Fallback метод для анализа (если AI недоступен)
+     * Ограничен по confidence для безопасности пациентов
      * @private
      */
     async _fallbackAnalysis(complaints) {
@@ -697,20 +701,36 @@ const VisitService = {
             .map(d => {
                 const symptoms = JSON.parse(d.symptoms || '[]');
                 const matches = symptoms.filter(s => complaintsLower.includes(s.toLowerCase()));
+
+                // Фильтр: минимум 2 совпадения симптомов
+                if (matches.length < MIN_FALLBACK_MATCHES) {
+                    return null;
+                }
+
                 return {
                     disease: {
                         ...d,
                         symptoms,
                         icd10Codes: JSON.parse(d.icd10Codes || '[]')
                     },
-                    confidence: matches.length / Math.max(symptoms.length, 1),
-                    reasoning: `Совпало ${matches.length} симптомов`,
-                    matchedSymptoms: matches
+                    confidence: Math.min(
+                        MAX_FALLBACK_CONFIDENCE,
+                        matches.length / (symptoms.length * 2)  // Более консервативный расчет
+                    ),
+                    reasoning: `[⚠️ УПРОЩЁННЫЙ АНАЛИЗ] Совпало ${matches.length} симптомов`,
+                    matchedSymptoms: matches,
+                    isUsingFallback: true  // Флаг для UI
                 };
             })
-            .filter(s => s.confidence > 0)
+            .filter(s => s !== null && s.confidence > 0)
             .sort((a, b) => b.confidence - a.confidence)
-            .slice(0, 5);
+            .slice(0, MAX_FALLBACK_SUGGESTIONS);  // Максимум 3 рекомендации
+
+        logger.warn('[VisitService] Using fallback analysis (AI unavailable)', {
+            totalDiseases: diseases.length,
+            suggestionsCount: suggestions.length,
+            maxConfidence: suggestions.length > 0 ? Math.max(...suggestions.map(s => s.confidence)) : 0
+        });
 
         return suggestions;
     },
