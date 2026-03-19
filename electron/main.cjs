@@ -19,7 +19,8 @@ const { setupDiagnosticTemplateHandlers } = require('./modules/diagnostic-templa
 const { setupRecommendationTemplateHandlers } = require('./modules/recommendation-templates/handlers.cjs');
 const { setupExamTextTemplateHandlers } = require('./modules/exam-text-templates/handlers.cjs');
 const { setupDashboardHandlers } = require('./modules/dashboard/handlers.cjs');
-const { initializeDatabase } = require('./init-db.cjs');
+const { setupNutritionHandlers } = require('./modules/nutrition/handlers.cjs');
+const { initializeDatabase, seedNutritionData } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const isDev = !app.isPackaged;
 
@@ -65,6 +66,7 @@ app.whenReady().then(async () => {
     // Initialize database (create first admin if needed)
     logger.info('[Main] Initializing database...');
     await initializeDatabase();
+    await seedNutritionData();
     logger.info('[Main] Database initialization completed');
 
     // Initialize CDSS indexes (FTS rebuild + in-memory embeddings)
@@ -96,6 +98,7 @@ app.whenReady().then(async () => {
     setupRecommendationTemplateHandlers();
     setupExamTextTemplateHandlers();
     setupDashboardHandlers();
+    setupNutritionHandlers();
 
     // Cache Service handlers
     const { CacheService } = require('./services/cacheService.cjs');

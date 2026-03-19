@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "purpose": "Template payloads for adding products in Nutrition -> Products section",
+  "notes": [
+    "Use objects from feedingTypeTemplates.BF/MF/FF as payload for nutrition:upsert-product",
+    "Keep minAgeDays <= maxAgeDays",
+    "At least one of energyKcalPer100ml or energyKcalPer100g must be set",
+    "formulaType can be: standard, hydrolysate, amino-acid, soy, AR, LF, premature"
+  ],
+  "categoryMapFromCurrentDB": {
+    "BREAST_MILK": 1,
+    "INFANT_FORMULA": 2,
+    "VEG_PUREE": 3,
+    "CEREAL": 4,
+    "FRUIT_PUREE": 5,
+    "MEAT": 6,
+    "FISH": 7,
+    "EGG_YOLK": 8,
+    "JUICE": 9,
+    "DAIRY_1_3Y": 10,
+    "BREAD_PASTA": 11
+  },
+  "productPayloadSchema": {
+    "id": null,
+    "categoryId": 2,
+    "brand": "Brand name or null",
+    "name": "Product name",
+    "energyKcalPer100ml": 67,
+    "energyKcalPer100g": null,
+    "proteinGPer100g": null,
+    "fatGPer100g": null,
+    "carbsGPer100g": null,
+    "minAgeDays": 0,
+    "maxAgeDays": 180,
+    "formulaType": "standard",
+    "isArchived": false,
+    "compositionJson": "{\"optional\":\"json-string\"}"
+  },
+  "feedingTypeTemplates": {
+    "BF": [
+      {
+        "id": null,
+        "categoryId": 1,
+        "brand": "Human milk bank",
+        "name": "Donor breast milk, pasteurized",
+        "energyKcalPer100ml": 67,
+        "energyKcalPer100g": null,
+        "proteinGPer100g": 1.1,
+        "fatGPer100g": 4.2,
+        "carbsGPer100g": 7.0,
+        "minAgeDays": 0,
+        "maxAgeDays": 365,
+        "formulaType": "standard",
+        "isArchived": false,
+        "compositionJson": "{\"source\":\"template\",\"note\":\"replace with your local values\"}"
+      }
+    ],
+    "MF": [
+      {
+        "id": null,
+        "categoryId": 2,
+        "brand": "Template brand",
+        "name": "Stage 1 infant formula (0-6 months)",
+        "energyKcalPer100ml": 67,
+        "energyKcalPer100g": 500,
+        "proteinGPer100g": 10.5,
+        "fatGPer100g": 26,
+        "carbsGPer100g": 58,
+        "minAgeDays": 0,
+        "maxAgeDays": 180,
+        "formulaType": "standard",
+        "isArchived": false,
+        "compositionJson": "{\"stage\":1,\"forFeedingType\":\"MF\"}"
+      },
+      {
+        "id": null,
+        "categoryId": 2,
+        "brand": "Template brand",
+        "name": "Hydrolyzed formula",
+        "energyKcalPer100ml": 66,
+        "energyKcalPer100g": null,
+        "proteinGPer100g": null,
+        "fatGPer100g": null,
+        "carbsGPer100g": null,
+        "minAgeDays": 0,
+        "maxAgeDays": 365,
+        "formulaType": "hydrolysate",
+        "isArchived": false,
+        "compositionJson": "{\"forFeedingType\":\"MF\",\"clinicalTag\":\"allergy-risk\"}"
+      }
+    ],
+    "FF": [
+      {
+        "id": null,
+        "categoryId": 2,
+        "brand": "Template brand",
+        "name": "Stage 1 infant formula (0-6 months)",
+        "energyKcalPer100ml": 67,
+        "energyKcalPer100g": 505,
+        "proteinGPer100g": 10.8,
+        "fatGPer100g": 27,
+        "carbsGPer100g": 57,
+        "minAgeDays": 0,
+        "maxAgeDays": 180,
+        "formulaType": "standard",
+        "isArchived": false,
+        "compositionJson": "{\"stage\":1,\"forFeedingType\":\"FF\"}"
+      },
+      {
+        "id": null,
+        "categoryId": 2,
+        "brand": "Template brand",
+        "name": "Stage 2 infant formula (6-12 months)",
+        "energyKcalPer100ml": 68,
+        "energyKcalPer100g": 510,
+        "proteinGPer100g": 12.0,
+        "fatGPer100g": 25,
+        "carbsGPer100g": 59,
+        "minAgeDays": 181,
+        "maxAgeDays": 365,
+        "formulaType": "standard",
+        "isArchived": false,
+        "compositionJson": "{\"stage\":2,\"forFeedingType\":\"FF\"}"
+      },
+      {
+        "id": null,
+        "categoryId": 2,
+        "brand": "Template brand",
+        "name": "Amino-acid formula",
+        "energyKcalPer100ml": 67,
+        "energyKcalPer100g": null,
+        "proteinGPer100g": null,
+        "fatGPer100g": null,
+        "carbsGPer100g": null,
+        "minAgeDays": 0,
+        "maxAgeDays": 365,
+        "formulaType": "amino-acid",
+        "isArchived": false,
+        "compositionJson": "{\"forFeedingType\":\"FF\",\"clinicalTag\":\"severe-allergy\"}"
+      },
+      {
+        "id": null,
+        "categoryId": 2,
+        "brand": "Template brand",
+        "name": "Lactose-free formula",
+        "energyKcalPer100ml": 67,
+        "energyKcalPer100g": null,
+        "proteinGPer100g": null,
+        "fatGPer100g": null,
+        "carbsGPer100g": null,
+        "minAgeDays": 0,
+        "maxAgeDays": 365,
+        "formulaType": "LF",
+        "isArchived": false,
+        "compositionJson": "{\"forFeedingType\":\"FF\",\"clinicalTag\":\"lactose-intolerance\"}"
+      }
+    ]
+  }
+}

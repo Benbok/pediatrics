@@ -36,6 +36,7 @@ model User {
   diagnosticTemplates      DiagnosticTemplate[]
   recommendationTemplates  RecommendationTemplate[]
   receptionDaySchedules ReceptionDaySchedule[]
+  feedingPlans          ChildFeedingPlan[]    @relation("UserFeedingPlans")
 
   @@map("users")
 }
@@ -96,6 +97,7 @@ model Child {
   visits             Visit[]
   allergies          PatientAllergy[]
   informedConsents   InformedConsent[]
+  feedingPlans       ChildFeedingPlan[]
 
   @@map("children")
 }
@@ -654,4 +656,118 @@ model ReceptionDaySchedule {
   @@unique([doctorId, date])
   @@index([doctorId])
   @@map("reception_day_schedules")
+}
+
+// ============= NUTRITION MODULE =============
+// Source: Национальная программа оптимизации питания детей 2019,
+//         MP 2.3.1.0253-21 from 2021
+
+model NutritionAgeNorm {
+  id               Int      @id @default(autoincrement())
+  feedingStage     String   @map("feeding_stage")        // '0-10d' | '10d-2m' | '2-4m' | '4-6m' | '6-12m' | '12-36m'
+  ageMinDays       Int      @map("age_min_days")
+  ageMaxDays       Int      @map("age_max_days")
+  energyKcalPerKg  Float?   @map("energy_kcal_per_kg")  // NULL for 12-36m (uses fixedEnergyKcal)
+  fixedEnergyKcal  Float?   @map("fixed_energy_kcal")   // for 12-36m range
+  volumeFactorMin  Float?   @map("volume_factor_min")   // fraction of body weight, e.g. 0.111 = 1/9
+  volumeFactorMax  Float?   @map("volume_factor_max")   // e.g. 0.2 = 1/5
+  totalFoodMinG    Float?   @map("total_food_min_g")    // daily food mass min for 12-36m (g)
+  totalFoodMaxG    Float?   @map("total_food_max_g")    // daily food mass max for 12-36m (g)
+  mealsPerDay      Int      @map("meals_per_day")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("nutrition_age_norms")
+}
+
+model NutritionProductCategory {
+  id         Int      @id @default(autoincrement())
+  code       String   @unique // BREAST_MILK | INFANT_FORMULA | CEREAL | VEG_PUREE | MEAT | FRUIT_PUREE | DAIRY_1_3Y | FISH | EGG_YOLK | JUICE
+  name       String
+  minAgeDays Int      @map("min_age_days")
+  maxAgeDays Int      @map("max_age_days")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  products      NutritionProduct[]
+  templateItems NutritionFeedingTemplateItem[]
+
+  @@map("nutrition_product_categories")
+}
+
+model NutritionProduct {
+  id                  Int      @id @default(autoincrement())
+  categoryId          Int      @map("category_id")
+  brand               String?
+  name                String
+  energyKcalPer100ml  Float?   @map("energy_kcal_per_100ml") // for liquid (ready formula)
+  energyKcalPer100g   Float?   @map("energy_kcal_per_100g")  // for dry/purée products
+  proteinGPer100g     Float?   @map("protein_g_per_100g")
+  fatGPer100g         Float?   @map("fat_g_per_100g")
+  carbsGPer100g       Float?   @map("carbs_g_per_100g")
+  minAgeDays          Int      @map("min_age_days")
+  maxAgeDays          Int      @map("max_age_days")
+  formulaType         String?  @map("formula_type") // standard | hydrolysate | amino-acid | soy | AR | LF | premature
+  isArchived          Boolean  @default(false) @map("is_archived")
+  compositionJson     String?  @map("composition_json") // JSON: extra nutrients (Fe, Ca, vitamins, osmolarity, special flags)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  category     NutritionProductCategory @relation(fields: [categoryId], references: [id])
+  feedingPlans ChildFeedingPlan[]
+
+  @@map("nutrition_products")
+}
+
+model NutritionFeedingTemplate {
+  id         Int      @id @default(autoincrement())
+  ageMinDays Int      @map("age_min_days")
+  ageMaxDays Int      @map("age_max_days")
+  title      String
+  description String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  items NutritionFeedingTemplateItem[]
+
+  @@map("nutrition_feeding_templates")
+}
+
+model NutritionFeedingTemplateItem {
+  id                Int      @id @default(autoincrement())
+  templateId        Int      @map("template_id")
+  mealOrder         Int      @map("meal_order")    // 1..5 — meal sequence in day
+  productCategoryId Int      @map("product_category_id")
+  portionSizeG      Float    @map("portion_size_g") // grams or ml
+  isExample         Boolean  @default(true) @map("is_example")
+  note              String?
+
+  template        NutritionFeedingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  productCategory NutritionProductCategory @relation(fields: [productCategoryId], references: [id])
+
+  @@map("nutrition_feeding_template_items")
+}
+
+model ChildFeedingPlan {
+  id                    Int      @id @default(autoincrement())
+  childId               Int      @map("child_id")
+  createdByUserId       Int      @map("created_by_user_id")
+  date                  String   // ISO YYYY-MM-DD
+  ageDays               Int      @map("age_days")
+  weightKg              Float    @map("weight_kg")
+  birthWeightG          Int?     @map("birth_weight_g")       // needed for Tur formula (0-10d)
+  feedingType           String   @map("feeding_type")          // BF | MF | FF
+  dailyEnergyNeedKcal   Float    @map("daily_energy_need_kcal")
+  dailyVolumeNeedMl     Float?   @map("daily_volume_need_ml")  // NULL for 12-36m
+  mealsPerDay           Int      @map("meals_per_day")
+  estimatedBreastMilkMl Float?   @map("estimated_breast_milk_ml") // entered by doctor (MF only)
+  formulaVolumeMl       Float?   @map("formula_volume_ml")    // calculated formula deficit
+  formulaId             Int?     @map("formula_id")            // FK to NutritionProduct
+  comments              String?
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  child     Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
+  createdBy User              @relation("UserFeedingPlans", fields: [createdByUserId], references: [id])
+  formula   NutritionProduct? @relation(fields: [formulaId], references: [id])
+
+  @@index([childId])
+  @@map("child_feeding_plans")
 }

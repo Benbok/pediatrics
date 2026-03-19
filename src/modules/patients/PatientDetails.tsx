@@ -227,15 +227,25 @@ export const PatientDetails: React.FC = () => {
                         </p>
                     </div>
 
-                    {/* Placeholder for future modules */}
-                    <div className="bg-slate-50 dark:bg-slate-800/20 p-6 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800/50 flex flex-col items-center justify-center text-center opacity-75">
-                        <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-2xl flex items-center justify-center mb-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    {/* Nutrition Card */}
+                    <div
+                        onClick={() => navigate(`/patients/${child.id}/nutrition`)}
+                        className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 cursor-pointer group hover:shadow-xl hover:border-emerald-500 transition-all relative overflow-hidden"
+                    >
+                        <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-emerald-500">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                             </svg>
                         </div>
-                        <h3 className="text-lg font-bold text-slate-400 mb-1">Новый модуль</h3>
-                        <p className="text-slate-400 text-xs">Скоро здесь появятся другие разделы</p>
+                        <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75c-2.071 0-3.75 1.343-3.75 3s1.679 3 3.75 3 3.75 1.343 3.75 3-1.679 3-3.75 3m0-12c1.655 0 3-1.007 3-2.25S13.655 2.25 12 2.25 9 3.257 9 4.5s1.345 2.25 3 2.25zm0 12c-1.655 0-3 1.007-3 2.25s1.345 2.25 3 2.25 3-1.007 3-2.25-1.345-2.25-3-2.25z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Питание</h3>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+                            Расчёт суточной потребности, прикорм 4-12 мес., рацион 1-3 года и история назначений.
+                        </p>
                     </div>
                 </div>
             </div>

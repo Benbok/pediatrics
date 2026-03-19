@@ -194,4 +194,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openExternalPath: (path) => ipcRenderer.invoke('app:open-path', path),
     openPdfAtPage: (path, page) => ipcRenderer.invoke('app:open-pdf-at-page', path, page),
     readPdfFile: (path) => ipcRenderer.invoke('app:read-pdf-file', path),
+
+    // NUTRITION MODULE API
+    getNutritionAgeNorms: () => ipcRenderer.invoke('nutrition:get-age-norms'),
+    getNutritionProductCategories: () => ipcRenderer.invoke('nutrition:get-product-categories'),
+    getNutritionProducts: (categoryId) => ipcRenderer.invoke('nutrition:get-products', categoryId),
+    upsertNutritionProduct: (data) => ipcRenderer.invoke('nutrition:upsert-product', data),
+    deleteNutritionProduct: (id) => ipcRenderer.invoke('nutrition:delete-product', id),
+    bulkUpsertNutritionProducts: (products) => ipcRenderer.invoke('nutrition:bulk-upsert-products', products),
+    getNutritionTemplates: (ageDays) => ipcRenderer.invoke('nutrition:get-templates', ageDays),
+    getNutritionTemplateItems: (templateId) => ipcRenderer.invoke('nutrition:get-template-items', templateId),
+    upsertNutritionTemplate: (data) => ipcRenderer.invoke('nutrition:upsert-template', data),
+    deleteNutritionTemplate: (id) => ipcRenderer.invoke('nutrition:delete-template', id),
+    getChildFeedingPlans: (childId) => ipcRenderer.invoke('nutrition:get-child-feeding-plans', childId),
+    saveChildFeedingPlan: (data) => ipcRenderer.invoke('nutrition:save-child-feeding-plan', data),
+    deleteChildFeedingPlan: (id) => ipcRenderer.invoke('nutrition:delete-child-feeding-plan', id),
 });

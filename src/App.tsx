@@ -17,6 +17,7 @@ import { MedicationFormPage } from './modules/medications/MedicationFormPage';
 import { VisitsModule } from './modules/visits/VisitsModule';
 import { VisitFormPage } from './modules/visits/VisitFormPage';
 import { PrintPreviewManager } from './modules/printing/components/PrintPreviewManager';
+import { NutritionModule } from './modules/nutrition/NutritionModule';
 // Register print templates
 import './modules/printing/templates/vaccination/register';
 import './modules/printing/templates/visit/register';
@@ -101,6 +102,10 @@ const router = createHashRouter([
             {
                 path: 'patients/:childId/visits/:id',
                 element: <VisitFormPage />,
+            },
+            {
+                path: 'patients/:childId/nutrition',
+                element: <NutritionModule />,
             },
             {
                 path: 'settings',

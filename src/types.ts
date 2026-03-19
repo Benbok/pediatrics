@@ -1075,6 +1075,140 @@ declare global {
       resetAllApiKeys: () => Promise<boolean>;
       reloadApiKeysFromEnv: () => Promise<{ success: boolean; keysCount: number }>;
       onApiKeysLowWarning: (callback: (event: any, data: { remaining: number; total: number }) => void) => void;
+
+      // NUTRITION MODULE API
+      getNutritionAgeNorms: () => Promise<NutritionAgeNorm[]>;
+      getNutritionProductCategories: () => Promise<NutritionProductCategory[]>;
+      getNutritionProducts: (categoryId?: number | null) => Promise<NutritionProduct[]>;
+      upsertNutritionProduct: (data: Partial<NutritionProduct>) => Promise<NutritionProduct>;
+      deleteNutritionProduct: (id: number) => Promise<boolean>;
+      bulkUpsertNutritionProducts: (products: unknown[]) => Promise<Array<{ index: number; status: 'success' | 'error'; id?: number; name: string; errors?: string[] }>>;
+      getNutritionTemplates: (ageDays?: number | null) => Promise<NutritionFeedingTemplate[]>;
+      getNutritionTemplateItems: (templateId: number) => Promise<NutritionFeedingTemplateItem[]>;
+      upsertNutritionTemplate: (data: NutritionTemplateUpsertInput) => Promise<NutritionFeedingTemplate>;
+      deleteNutritionTemplate: (id: number) => Promise<boolean>;
+      getChildFeedingPlans: (childId: number) => Promise<ChildFeedingPlan[]>;
+      saveChildFeedingPlan: (data: Partial<ChildFeedingPlan>) => Promise<ChildFeedingPlan>;
+      deleteChildFeedingPlan: (id: number) => Promise<boolean>;
     }
   }
+}
+
+// ============= NUTRITION MODULE TYPES =============
+
+export type FeedingType = 'BF' | 'MF' | 'FF';
+
+export type FormulaType =
+  | 'standard'
+  | 'hydrolysate'
+  | 'amino-acid'
+  | 'soy'
+  | 'AR'     // anti-reflux
+  | 'LF'     // lactose-free
+  | 'premature'
+  | string;
+
+export interface NutritionAgeNorm {
+  id: number;
+  feedingStage: string;
+  ageMinDays: number;
+  ageMaxDays: number;
+  energyKcalPerKg: number | null;
+  fixedEnergyKcal: number | null;
+  volumeFactorMin: number | null;
+  volumeFactorMax: number | null;
+  totalFoodMinG: number | null;
+  totalFoodMaxG: number | null;
+  mealsPerDay: number;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface NutritionProductCategory {
+  id: number;
+  code: string;
+  name: string;
+  minAgeDays: number;
+  maxAgeDays: number;
+  createdAt: string;
+}
+
+export interface NutritionProduct {
+  id: number;
+  categoryId: number;
+  brand: string | null;
+  name: string;
+  energyKcalPer100ml: number | null;
+  energyKcalPer100g: number | null;
+  proteinGPer100g: number | null;
+  fatGPer100g: number | null;
+  carbsGPer100g: number | null;
+  minAgeDays: number;
+  maxAgeDays: number;
+  formulaType: FormulaType | null;
+  isArchived: boolean;
+  compositionJson: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Joined from category
+  category?: { code: string; name: string };
+}
+
+export interface NutritionFeedingTemplate {
+  id: number;
+  ageMinDays: number;
+  ageMaxDays: number;
+  title: string;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface NutritionFeedingTemplateItem {
+  id: number;
+  templateId: number;
+  mealOrder: number;
+  productCategoryId: number;
+  portionSizeG: number;
+  isExample: boolean;
+  note: string | null;
+  // Joined from category
+  productCategory?: { code: string; name: string };
+}
+
+export interface NutritionTemplateItemInput {
+  mealOrder: number;
+  productCategoryId: number;
+  portionSizeG: number;
+  isExample?: boolean;
+  note?: string | null;
+}
+
+export interface NutritionTemplateUpsertInput {
+  id?: number;
+  ageMinDays: number;
+  ageMaxDays: number;
+  title: string;
+  description?: string | null;
+  items: NutritionTemplateItemInput[];
+}
+
+export interface ChildFeedingPlan {
+  id: number;
+  childId: number;
+  createdByUserId: number;
+  date: string;
+  ageDays: number;
+  weightKg: number;
+  birthWeightG: number | null;
+  feedingType: FeedingType;
+  dailyEnergyNeedKcal: number;
+  dailyVolumeNeedMl: number | null;
+  mealsPerDay: number;
+  estimatedBreastMilkMl: number | null;
+  formulaVolumeMl: number | null;
+  formulaId: number | null;
+  comments: string | null;
+  createdAt: string;
+  // Joined
+  formula?: { id: number; name: string; brand: string | null; energyKcalPer100ml: number | null } | null;
 }
