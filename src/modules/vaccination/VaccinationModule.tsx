@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ShieldCheck, Printer, Download, Upload, Settings2 } from 'lucide-react';
 import { ChildProfile, VaccinationProfile, UserVaccineRecord, AugmentedVaccine, VaccineStatus, VaccineDefinition, HepBRiskFactor, VaccineCatalogEntry } from '../../types';
+import { PatientModuleHeader } from '../../components/PatientModuleHeader';
+import { Badge } from '../../components/ui/Badge';
 import { VaccineCard } from '../../components/VaccineCard';
 import { VisualStats } from '../../components/VisualStats';
 import { LECTURES } from '../../lectures';
@@ -592,10 +595,6 @@ export const VaccinationModule: React.FC = () => {
         return m > 0 ? `${years} ${yearStr} ${m} мес` : `${years} ${yearStr}`;
     };
 
-    const getFullName = (child: ChildProfile) => {
-        return [child.surname, child.name, child.patronymic].filter(Boolean).join(' ');
-    };
-
     if (isLoading) {
         return (
             <div className="flex items-center justify-center p-12">
@@ -622,37 +621,56 @@ export const VaccinationModule: React.FC = () => {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                    <div className="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0">{child.surname.charAt(0)}</div>
-                    <div>
-                        <h1 className="font-bold text-slate-900 dark:text-white leading-tight">{getFullName(child)}</h1>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span>{new Date(child.birthDate).toLocaleDateString('ru-RU')}</span>
-                            <span>•</span>
-                            <span>{stats.done}/{stats.total} готово</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                    <button onClick={() => setIsRiskFactorsModalOpen(true)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Группы риска">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    </button>
-                    <button onClick={handlePrintCertificate} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Печать сертификата">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" /></svg>
-                    </button>
-                    <button onClick={handleExportCSV} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-blue-600" title="Экспорт CSV">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-                    </button>
-                    <button onClick={handleImportCSV} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-400 hover:text-emerald-600" title="Импорт CSV">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                        </svg>
-                    </button>
-                    <button onClick={() => navigate(`/patients/${child.id}`)} className="text-xs text-slate-500 hover:text-red-500 p-2 font-medium transition-colors">Закрыть</button>
-                </div>
-            </div>
+        <div className="space-y-4">
+            {/* Premium Header */}
+            <PatientModuleHeader
+                child={child}
+                title="Вакцинация"
+                icon={<ShieldCheck className="w-6 h-6 !text-white" strokeWidth={2.5} />}
+                iconBgClass="bg-blue-600"
+                iconShadowClass="shadow-blue-500/25"
+                onBack={() => navigate(`/patients/${child.id}`)}
+                badge={
+                    <Badge
+                        variant="primary"
+                        className="px-3 py-1 text-xs font-bold"
+                    >
+                        {stats.done}/{stats.total} выполнено
+                    </Badge>
+                }
+                actions={
+                    <>
+                        <button
+                            onClick={() => setIsRiskFactorsModalOpen(true)}
+                            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-500 hover:text-blue-600"
+                            title="Группы риска"
+                        >
+                            <Settings2 className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={handlePrintCertificate}
+                            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-500 hover:text-blue-600"
+                            title="Печать сертификата"
+                        >
+                            <Printer className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={handleExportCSV}
+                            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-500 hover:text-blue-600"
+                            title="Экспорт CSV"
+                        >
+                            <Download className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={handleImportCSV}
+                            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-500 hover:text-emerald-600"
+                            title="Импорт CSV"
+                        >
+                            <Upload className="w-5 h-5" />
+                        </button>
+                    </>
+                }
+            />
 
             <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl overflow-hidden p-2 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
                 <div className="flex-1 sm:max-w-xs relative group">

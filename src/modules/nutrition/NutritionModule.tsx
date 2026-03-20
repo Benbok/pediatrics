@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Utensils } from 'lucide-react';
 import { patientService } from '../../services/patient.service';
 import type { ChildProfile } from '../../types';
+import { PatientModuleHeader } from '../../components/PatientModuleHeader';
 import { QuickCalculatorPanel } from './components/QuickCalculatorPanel';
 import { ComplementaryFeedingPanel } from './components/ComplementaryFeedingPanel';
 import { DietPlan1to3Panel } from './components/DietPlan1to3Panel';
@@ -99,36 +101,19 @@ export const NutritionModule: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Top nav bar */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center gap-4">
-        <button
-          onClick={() => navigate(`/patients/${childId}`)}
-          className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors text-sm flex items-center gap-1"
-        >
-          ← Назад к пациенту
-        </button>
-        <span className="text-slate-300 dark:text-slate-700">|</span>
-        <div>
-          <h1 className="font-semibold text-slate-800 dark:text-white text-sm">
-            Питание —{' '}
-            {child.surname} {child.name} {child.patronymic ?? ''}
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            {child.birthDate} · {ageDays} дн.
-            <span className="ml-2 text-emerald-600 dark:text-emerald-400">
-              {ageDays < 30
-                ? 'Новорождённый'
-                : ageDays < 365
-                ? `${Math.floor(ageDays / 30)} мес.`
-                : `${Math.floor(ageDays / 365)} г. ${Math.floor((ageDays % 365) / 30)} мес.`}
-            </span>
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4">
+      {/* Premium Header */}
+      <PatientModuleHeader
+        child={child}
+        title="Питание"
+        icon={<Utensils className="w-6 h-6 !text-white" strokeWidth={2.5} />}
+        iconBgClass="bg-emerald-600"
+        iconShadowClass="shadow-emerald-500/25"
+        onBack={() => navigate(`/patients/${childId}`)}
+      />
 
       {/* Tab strip */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6">
+      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm px-2">
         <div className="flex gap-1 overflow-x-auto">
           {visibleTabs.map((tab) => (
             <button
@@ -147,7 +132,7 @@ export const NutritionModule: React.FC = () => {
       </div>
 
       {/* Panel content */}
-      <div className="max-w-5xl mx-auto px-6 py-6">
+      <div className="max-w-5xl mx-auto">
         {safeTab === 'calculator' && (
           <QuickCalculatorPanel
             childId={childNumericId}
