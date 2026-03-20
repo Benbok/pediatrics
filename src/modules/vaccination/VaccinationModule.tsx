@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShieldCheck, Printer, Download, Upload, Settings2 } from 'lucide-react';
+import { Syringe, Printer, Download, Upload, Settings2 } from 'lucide-react';
 import { ChildProfile, VaccinationProfile, UserVaccineRecord, AugmentedVaccine, VaccineStatus, VaccineDefinition, HepBRiskFactor, VaccineCatalogEntry } from '../../types';
 import { PatientModuleHeader } from '../../components/PatientModuleHeader';
 import { Badge } from '../../components/ui/Badge';
@@ -626,7 +626,7 @@ export const VaccinationModule: React.FC = () => {
             <PatientModuleHeader
                 child={child}
                 title="Вакцинация"
-                icon={<ShieldCheck className="w-6 h-6 !text-white" strokeWidth={2.5} />}
+                icon={<Syringe className="w-6 h-6 !text-white" strokeWidth={2.5} />}
                 iconBgClass="bg-blue-600"
                 iconShadowClass="shadow-blue-500/25"
                 onBack={() => navigate(`/patients/${child.id}`)}

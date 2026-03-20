@@ -3,50 +3,40 @@
 //   1=BREAST_MILK  2=INFANT_FORMULA  3=VEG_PUREE  4=CEREAL  5=FRUIT_PUREE
 //   6=MEAT  7=FISH  8=EGG_YOLK  9=JUICE  10=DAIRY_1_3Y  11=BREAD_PASTA
 
+// One minimal example template per category (used as a fill-in guide for bulk import)
 export const FORMULA_IMPORT_TEMPLATES: Record<string, object[]> = {
-  'Смеси 1 ступень (0–6 мес)': [
+  'Грудное молоко': [
+    { categoryId: 1, name: 'Грудное молоко', energyKcalPer100ml: 70, proteinGPer100g: 1.1, fatGPer100g: 4.5, carbsGPer100g: 7.0, minAgeDays: 0, maxAgeDays: 365 },
+  ],
+  'Молочная смесь': [
     { categoryId: 2, brand: 'Nestlé', name: 'NAN Optipro 1', energyKcalPer100ml: 67, energyKcalPer100g: 510, proteinGPer100g: 12.0, fatGPer100g: 27.3, carbsGPer100g: 55.7, minAgeDays: 0, maxAgeDays: 180, formulaType: 'standard' },
-    { categoryId: 2, brand: 'Abbott', name: 'Similac Classic 1', energyKcalPer100ml: 67, energyKcalPer100g: 504, proteinGPer100g: 10.8, fatGPer100g: 27.2, carbsGPer100g: 56.7, minAgeDays: 0, maxAgeDays: 180, formulaType: 'standard' },
-    { categoryId: 2, brand: 'Danone', name: 'Nutrilon Premium 1', energyKcalPer100ml: 67, energyKcalPer100g: 505, proteinGPer100g: 10.5, fatGPer100g: 27.6, carbsGPer100g: 55.8, minAgeDays: 0, maxAgeDays: 180, formulaType: 'standard' },
-    { categoryId: 2, brand: 'Нутритек', name: 'Нутрилак Премиум 1', energyKcalPer100ml: 67, energyKcalPer100g: 510, proteinGPer100g: 11.5, fatGPer100g: 27.0, carbsGPer100g: 56.0, minAgeDays: 0, maxAgeDays: 180, formulaType: 'standard' },
-    { categoryId: 2, brand: 'Heinz', name: 'Heinz 1', energyKcalPer100ml: 67, energyKcalPer100g: 510, proteinGPer100g: 11.0, fatGPer100g: 27.5, carbsGPer100g: 56.0, minAgeDays: 0, maxAgeDays: 180, formulaType: 'standard' },
   ],
-  'Смеси 2 ступень (6–12 мес)': [
-    { categoryId: 2, brand: 'Nestlé', name: 'NAN Optipro 2', energyKcalPer100ml: 68, energyKcalPer100g: 510, proteinGPer100g: 13.5, fatGPer100g: 26.5, carbsGPer100g: 56.0, minAgeDays: 181, maxAgeDays: 365, formulaType: 'standard' },
-    { categoryId: 2, brand: 'Abbott', name: 'Similac Classic 2', energyKcalPer100ml: 68, energyKcalPer100g: 510, proteinGPer100g: 13.0, fatGPer100g: 26.8, carbsGPer100g: 56.0, minAgeDays: 181, maxAgeDays: 365, formulaType: 'standard' },
-    { categoryId: 2, brand: 'Danone', name: 'Nutrilon Premium 2', energyKcalPer100ml: 68, energyKcalPer100g: 510, proteinGPer100g: 13.5, fatGPer100g: 26.2, carbsGPer100g: 56.5, minAgeDays: 181, maxAgeDays: 365, formulaType: 'standard' },
-    { categoryId: 2, brand: 'Нутритек', name: 'Нутрилак Премиум 2', energyKcalPer100ml: 68, energyKcalPer100g: 512, proteinGPer100g: 13.0, fatGPer100g: 27.0, carbsGPer100g: 56.5, minAgeDays: 181, maxAgeDays: 365, formulaType: 'standard' },
+  'Овощное пюре': [
+    { categoryId: 3, name: 'Кабачок', energyKcalPer100g: 27, proteinGPer100g: 0.6, fatGPer100g: 0.3, carbsGPer100g: 5.7, minAgeDays: 150, maxAgeDays: 1095 },
   ],
-  'Смеси 3 ступень (12–36 мес)': [
-    { categoryId: 2, brand: 'Nestlé', name: 'NAN Optipro 3', energyKcalPer100ml: 70, energyKcalPer100g: 530, proteinGPer100g: 15.0, fatGPer100g: 26.0, carbsGPer100g: 55.5, minAgeDays: 366, maxAgeDays: 1095, formulaType: 'standard' },
-    { categoryId: 2, brand: 'Danone', name: 'Nutrilon Premium 3', energyKcalPer100ml: 71, energyKcalPer100g: 535, proteinGPer100g: 15.0, fatGPer100g: 26.5, carbsGPer100g: 54.5, minAgeDays: 366, maxAgeDays: 1095, formulaType: 'standard' },
-    { categoryId: 2, brand: 'Abbott', name: 'Similac Classic 3', energyKcalPer100ml: 69, energyKcalPer100g: 525, proteinGPer100g: 14.0, fatGPer100g: 26.0, carbsGPer100g: 56.0, minAgeDays: 366, maxAgeDays: 1095, formulaType: 'standard' },
+  'Каша': [
+    { categoryId: 4, brand: 'Heinz', name: 'Гречневая каша безмолочная', energyKcalPer100g: 356, proteinGPer100g: 10.5, fatGPer100g: 2.4, carbsGPer100g: 73.0, minAgeDays: 150, maxAgeDays: 1095 },
   ],
-  'Гипоаллергенные смеси (гидролизат)': [
-    { categoryId: 2, brand: 'Nestlé', name: 'NAN ГА 1', energyKcalPer100ml: 67, energyKcalPer100g: 505, proteinGPer100g: 11.0, fatGPer100g: 27.0, carbsGPer100g: 56.3, minAgeDays: 0, maxAgeDays: 180, formulaType: 'hydrolysate' },
-    { categoryId: 2, brand: 'Danone', name: 'Nutrilon ГА 1', energyKcalPer100ml: 67, energyKcalPer100g: 505, proteinGPer100g: 11.5, fatGPer100g: 26.8, carbsGPer100g: 55.9, minAgeDays: 0, maxAgeDays: 180, formulaType: 'hydrolysate' },
-    { categoryId: 2, brand: 'Hipp', name: 'Hipp HA Combiotic 1', energyKcalPer100ml: 66, energyKcalPer100g: 500, proteinGPer100g: 10.5, fatGPer100g: 27.5, carbsGPer100g: 56.0, minAgeDays: 0, maxAgeDays: 180, formulaType: 'hydrolysate' },
-    { categoryId: 2, brand: 'Nestlé', name: 'Alfare', energyKcalPer100ml: 68, energyKcalPer100g: 508, proteinGPer100g: 18.0, fatGPer100g: 28.0, carbsGPer100g: 48.6, minAgeDays: 0, maxAgeDays: 365, formulaType: 'hydrolysate' },
+  'Фруктовое пюре': [
+    { categoryId: 5, name: 'Яблоко', energyKcalPer100g: 46, proteinGPer100g: 0.4, fatGPer100g: 0.4, carbsGPer100g: 9.8, minAgeDays: 120, maxAgeDays: 1095 },
   ],
-  'Аминокислотные смеси': [
-    { categoryId: 2, brand: 'Nestlé', name: 'Alfamino', energyKcalPer100ml: 68, energyKcalPer100g: 510, proteinGPer100g: 16.9, fatGPer100g: 28.6, carbsGPer100g: 49.4, minAgeDays: 0, maxAgeDays: 365, formulaType: 'amino-acid' },
-    { categoryId: 2, brand: 'Danone', name: 'Neocate LCP', energyKcalPer100ml: 68, energyKcalPer100g: 510, proteinGPer100g: 14.5, fatGPer100g: 29.5, carbsGPer100g: 51.0, minAgeDays: 0, maxAgeDays: 365, formulaType: 'amino-acid' },
+  'Мясное пюре': [
+    { categoryId: 6, name: 'Индейка', energyKcalPer100g: 101, proteinGPer100g: 15.0, fatGPer100g: 4.5, carbsGPer100g: 0.0, minAgeDays: 180, maxAgeDays: 1095 },
   ],
-  'Соевые смеси': [
-    { categoryId: 2, brand: 'Nestlé', name: 'NAN Соя', energyKcalPer100ml: 67, energyKcalPer100g: 505, proteinGPer100g: 13.2, fatGPer100g: 27.0, carbsGPer100g: 54.5, minAgeDays: 180, maxAgeDays: 1095, formulaType: 'soy' },
-    { categoryId: 2, brand: 'Danone', name: 'Nutrilon Соя', energyKcalPer100ml: 67, energyKcalPer100g: 505, proteinGPer100g: 13.5, fatGPer100g: 27.5, carbsGPer100g: 53.8, minAgeDays: 180, maxAgeDays: 1095, formulaType: 'soy' },
+  'Рыба': [
+    { categoryId: 7, name: 'Минтай', energyKcalPer100g: 72, proteinGPer100g: 15.9, fatGPer100g: 0.7, carbsGPer100g: 0.0, minAgeDays: 270, maxAgeDays: 1095 },
   ],
-  'Антирефлюксные смеси (AR)': [
-    { categoryId: 2, brand: 'Nestlé', name: 'NAN AR', energyKcalPer100ml: 67, energyKcalPer100g: 505, proteinGPer100g: 12.3, fatGPer100g: 27.0, carbsGPer100g: 55.7, minAgeDays: 0, maxAgeDays: 365, formulaType: 'AR' },
-    { categoryId: 2, brand: 'Danone', name: 'Nutrilon AR', energyKcalPer100ml: 67, energyKcalPer100g: 505, proteinGPer100g: 12.5, fatGPer100g: 27.2, carbsGPer100g: 55.0, minAgeDays: 0, maxAgeDays: 365, formulaType: 'AR' },
+  'Желток': [
+    { categoryId: 8, name: 'Желток куриного яйца', energyKcalPer100g: 322, proteinGPer100g: 16.2, fatGPer100g: 26.6, carbsGPer100g: 3.6, minAgeDays: 210, maxAgeDays: 1095 },
   ],
-  'Низколактозные смеси (LF)': [
-    { categoryId: 2, brand: 'Nestlé', name: 'NAN безлактозный', energyKcalPer100ml: 68, energyKcalPer100g: 510, proteinGPer100g: 13.0, fatGPer100g: 27.0, carbsGPer100g: 55.5, minAgeDays: 0, maxAgeDays: 365, formulaType: 'LF' },
-    { categoryId: 2, brand: 'Abbott', name: 'Similac безлактозный', energyKcalPer100ml: 67, energyKcalPer100g: 505, proteinGPer100g: 12.8, fatGPer100g: 27.3, carbsGPer100g: 55.5, minAgeDays: 0, maxAgeDays: 365, formulaType: 'LF' },
+  'Сок': [
+    { categoryId: 9, name: 'Яблочный сок осветлённый', energyKcalPer100ml: 40, proteinGPer100g: 0.2, fatGPer100g: 0.1, carbsGPer100g: 9.5, minAgeDays: 270, maxAgeDays: 1095 },
   ],
-  'Смеси для недоношенных': [
-    { categoryId: 2, brand: 'Nestlé', name: 'Pre NAN', energyKcalPer100ml: 80, energyKcalPer100g: 600, proteinGPer100g: 19.0, fatGPer100g: 34.0, carbsGPer100g: 43.0, minAgeDays: 0, maxAgeDays: 90, formulaType: 'premature' },
-    { categoryId: 2, brand: 'Abbott', name: 'Similac Neo Sure', energyKcalPer100ml: 73, energyKcalPer100g: 545, proteinGPer100g: 16.3, fatGPer100g: 27.5, carbsGPer100g: 51.5, minAgeDays: 0, maxAgeDays: 120, formulaType: 'premature' },
+  'Молочные продукты': [
+    { categoryId: 10, brand: 'Агуша', name: 'Творог детский 4.5%', energyKcalPer100g: 95, proteinGPer100g: 7.0, fatGPer100g: 4.5, carbsGPer100g: 5.5, minAgeDays: 270, maxAgeDays: 1095 },
+  ],
+  'Хлеб и крупы': [
+    { categoryId: 11, name: 'Пшеничные сухарики', energyKcalPer100g: 330, proteinGPer100g: 8.0, fatGPer100g: 1.0, carbsGPer100g: 72.0, minAgeDays: 210, maxAgeDays: 1095 },
   ],
 };
 

@@ -6,6 +6,7 @@ import type {
   NutritionTemplateItemInput,
 } from '../../../types';
 import { nutritionService } from '../services/nutritionService';
+import { PrettySelect, type SelectOption } from './PrettySelect';
 
 const DEFAULT_ITEM: NutritionTemplateItemInput = {
   mealOrder: 1,
@@ -150,6 +151,11 @@ export const TemplateManager: React.FC<Props> = ({ onChanged }) => {
     }
   };
 
+  const categoryOptions: Array<SelectOption<number>> = categories.map((category) => ({
+    value: category.id,
+    label: category.name,
+  }));
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 space-y-3">
@@ -264,15 +270,15 @@ export const TemplateManager: React.FC<Props> = ({ onChanged }) => {
                   title="Порядок приема пищи"
                 />
 
-                <select
+                <PrettySelect
                   value={it.productCategoryId}
-                  onChange={(e) => setItem(idx, { productCategoryId: Number(e.target.value) })}
-                  className="px-2 py-1.5 rounded border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-sm"
-                >
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                  onChange={(value) => setItem(idx, { productCategoryId: Number(value) })}
+                  options={categoryOptions}
+                  searchable
+                  searchPlaceholder="Поиск..."
+                  buttonClassName="px-2 py-1.5"
+                  useFixedPanel
+                />
 
                 <input
                   type="number"

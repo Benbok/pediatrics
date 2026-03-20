@@ -31,22 +31,99 @@ export interface BasicNeedsResult {
   totalFoodMaxG: number | null;     // for 12-36m
   perMealVolumeMl: number | null;
   feedingStage: string;
-  method: 'tur_zaytseva' | 'volumetric' | 'fixed_energy';
+  method: 'zaytseva' | 'volumetric' | 'fixed_energy';
 }
 
 /**
  * Maximum recommended daily volume for children under 1 year (ml).
  * Clinical guidelines limit intake to prevent overfeeding.
  */
-const MAX_DAILY_VOLUME_ML = 1000;
+const MAX_DAILY_VOLUME_ML = 1100;
+
+type LectureInfantProfile = {
+  energyKcalPerKg: number;
+  volumeFactorMin: number;
+  volumeFactorMax: number;
+  feedingStage: string;
+  mealsPerDay: number;
+};
+
+function getLectureInfantProfile(ageDays: number): LectureInfantProfile | null {
+  if (ageDays <= 10 || ageDays > 365) return null;
+
+  if (ageDays <= 60) {
+    return {
+      energyKcalPerKg: 120,
+      volumeFactorMin: 0.2,
+      volumeFactorMax: 0.2,
+      feedingStage: '10d-2m',
+      mealsPerDay: 7,
+    };
+  }
+
+  if (ageDays <= 120) {
+    return {
+      energyKcalPerKg: ageDays <= 90 ? 120 : 115,
+      volumeFactorMin: 1 / 6,
+      volumeFactorMax: 1 / 6,
+      feedingStage: '2-4m',
+      mealsPerDay: 6,
+    };
+  }
+
+  if (ageDays <= 180) {
+    return {
+      energyKcalPerKg: 115,
+      volumeFactorMin: 1 / 7,
+      volumeFactorMax: 1 / 7,
+      feedingStage: '4-6m',
+      mealsPerDay: 6,
+    };
+  }
+
+  return {
+    energyKcalPerKg: ageDays <= 270 ? 110 : 105,
+    volumeFactorMin: 1 / 9,
+    volumeFactorMax: 1 / 8,
+    feedingStage: '6-12m',
+    mealsPerDay: 5,
+  };
+}
+
+function getLectureToddlerRange(ageDays: number): {
+  totalFoodMinG: number;
+  totalFoodMaxG: number;
+  mealsPerDay: number;
+  fixedEnergyKcal: number;
+} | null {
+  if (ageDays < 366 || ageDays > 1095) return null;
+
+  if (ageDays <= 548) {
+    return {
+      totalFoodMinG: 1000,
+      totalFoodMaxG: 1200,
+      mealsPerDay: 5,
+      fixedEnergyKcal: 1100,
+    };
+  }
+
+  return {
+    totalFoodMinG: 1200,
+    totalFoodMaxG: 1500,
+    mealsPerDay: 5,
+    fixedEnergyKcal: 1200,
+  };
+}
+
+function calcZaytsevaDailyVolume(dayOfLife: number, birthWeightG: number): number {
+  return 0.02 * birthWeightG * dayOfLife;
+}
 
 /**
- * Calculate daily volume for the first 10 days of life using
- * Tur formula and Zaytseva formula, returning the maximum of both.
+ * Legacy helper kept for compatibility with earlier tests and docs.
  *
- * Tur formula:
- *   If birthWeight >= 3200g: volume = 80 × dayOfLife
- *   If birthWeight < 3200g:  volume = 70 × dayOfLife
+ * For lecture-aligned neonatal calculations, the module now uses the
+ * Zaytseva formula directly inside calcBasicNeeds().
  *
  * Zaytseva formula:
  *   volume = 0.02 × birthWeightG × dayOfLife
@@ -55,10 +132,7 @@ const MAX_DAILY_VOLUME_ML = 1000;
  * @param birthWeightG   Birth weight in grams
  */
 export function calcTurZaytsevaDailyVolume(dayOfLife: number, birthWeightG: number): number {
-  const turCoefficient = birthWeightG >= 3200 ? 80 : 70;
-  const turVolume = turCoefficient * dayOfLife;
-  const zaytseva = 0.02 * birthWeightG * dayOfLife;
-  return Math.max(turVolume, zaytseva);
+  return calcZaytsevaDailyVolume(dayOfLife, birthWeightG);
 }
 
 /**
@@ -80,42 +154,50 @@ export function calcBasicNeeds(
   let dailyVolumeNeedMl: number | null = null;
   let dailyEnergyNeedKcal: number;
   let method: BasicNeedsResult['method'];
+  let feedingStage = norm.feedingStage;
+  let totalFoodMinG = norm.totalFoodMinG;
+  let totalFoodMaxG = norm.totalFoodMaxG;
 
   if (ageDays <= 10) {
-    // ——— Stage 0-10 days: Tur / Zaytseva formulas ———
-    method = 'tur_zaytseva';
+    // ——— Stage 0-10 days: lecture uses Zaytseva formula ———
+    method = 'zaytseva';
     const dayOfLife = ageDays + 1; // day 1 = born today
     const bwG = birthWeightG ?? 3200; // reasonable fallback if not provided
     dailyVolumeNeedMl = Math.min(
-      calcTurZaytsevaDailyVolume(dayOfLife, bwG),
+      calcZaytsevaDailyVolume(dayOfLife, bwG),
       MAX_DAILY_VOLUME_ML,
     );
-    // Caloric method for 0-10d: use medium factor 100 kcal/kg as transitional estimate
-    dailyEnergyNeedKcal = weightKg * 100;
+    dailyEnergyNeedKcal = weightKg * 120;
+    feedingStage = '0-10d';
   } else if (ageDays < 366) {
-    // ——— Stage 10d–12m: volumetric method ———
+    // ——— Stage 10d–12m: lecture-based volumetric and caloric tables ———
     method = 'volumetric';
-    // Use the midpoint factor of the range for display; actual range shown separately
-    const factorMid = norm.volumeFactorMin !== null && norm.volumeFactorMax !== null
-      ? (norm.volumeFactorMin + norm.volumeFactorMax) / 2
-      : norm.volumeFactorMax ?? norm.volumeFactorMin ?? 0.167;
+    const lectureProfile = getLectureInfantProfile(ageDays);
+    const factorMin = lectureProfile?.volumeFactorMin ?? norm.volumeFactorMin ?? 1 / 6;
+    const factorMax = lectureProfile?.volumeFactorMax ?? norm.volumeFactorMax ?? factorMin;
+    const factorMid = (factorMin + factorMax) / 2;
 
     dailyVolumeNeedMl = Math.min(weightKg * factorMid * 1000, MAX_DAILY_VOLUME_ML);
-
-    // Caloric method runs in parallel; doctors may use either
-    dailyEnergyNeedKcal = norm.energyKcalPerKg !== null
-      ? weightKg * norm.energyKcalPerKg
-      : weightKg * 110;
+    dailyEnergyNeedKcal = weightKg * (lectureProfile?.energyKcalPerKg ?? norm.energyKcalPerKg ?? 110);
+    feedingStage = lectureProfile?.feedingStage ?? norm.feedingStage;
   } else {
-    // ——— Stage 12-36m: fixed energy by age ———
+    // ——— Stage 12-36m: lecture-based daily food range and 5 meals ———
     method = 'fixed_energy';
-    dailyEnergyNeedKcal = norm.fixedEnergyKcal ?? 1200;
+    const toddlerRange = getLectureToddlerRange(ageDays);
+    dailyEnergyNeedKcal = toddlerRange?.fixedEnergyKcal ?? norm.fixedEnergyKcal ?? 1200;
     dailyVolumeNeedMl = null; // replaced by totalFoodG range
+    totalFoodMinG = toddlerRange?.totalFoodMinG ?? norm.totalFoodMinG;
+    totalFoodMaxG = toddlerRange?.totalFoodMaxG ?? norm.totalFoodMaxG;
+    feedingStage = ageDays <= 548 ? '12-18m' : '18-36m';
   }
+
+  const defaultMealsPerDay = ageDays < 366
+    ? getLectureInfantProfile(ageDays)?.mealsPerDay ?? norm.mealsPerDay
+    : getLectureToddlerRange(ageDays)?.mealsPerDay ?? norm.mealsPerDay;
 
   const mealsPerDay = mealsPerDayOverride && mealsPerDayOverride > 0
     ? Math.round(mealsPerDayOverride)
-    : norm.mealsPerDay;
+    : defaultMealsPerDay;
 
   const perMealVolumeMl = dailyVolumeNeedMl !== null && mealsPerDay > 0
     ? Math.round(dailyVolumeNeedMl / mealsPerDay)
@@ -125,10 +207,10 @@ export function calcBasicNeeds(
     dailyVolumeNeedMl: dailyVolumeNeedMl !== null ? Math.round(dailyVolumeNeedMl) : null,
     dailyEnergyNeedKcal: Math.round(dailyEnergyNeedKcal),
     mealsPerDay,
-    totalFoodMinG: norm.totalFoodMinG,
-    totalFoodMaxG: norm.totalFoodMaxG,
+    totalFoodMinG,
+    totalFoodMaxG,
     perMealVolumeMl,
-    feedingStage: norm.feedingStage,
+    feedingStage,
     method,
   };
 }
@@ -139,10 +221,14 @@ export function calcBasicNeeds(
  */
 export function calcVolumetricRange(
   weightKg: number,
+  ageDays: number,
   norm: AgeNorm,
 ): [number, number] | null {
-  if (norm.volumeFactorMin === null || norm.volumeFactorMax === null) return null;
-  const minMl = Math.min(Math.round(weightKg * norm.volumeFactorMin * 1000), MAX_DAILY_VOLUME_ML);
-  const maxMl = Math.min(Math.round(weightKg * norm.volumeFactorMax * 1000), MAX_DAILY_VOLUME_ML);
+  const lectureProfile = getLectureInfantProfile(ageDays);
+  const factorMin = lectureProfile?.volumeFactorMin ?? norm.volumeFactorMin;
+  const factorMax = lectureProfile?.volumeFactorMax ?? norm.volumeFactorMax;
+  if (factorMin === null || factorMax === null || factorMin === undefined || factorMax === undefined) return null;
+  const minMl = Math.min(Math.round(weightKg * factorMin * 1000), MAX_DAILY_VOLUME_ML);
+  const maxMl = Math.min(Math.round(weightKg * factorMax * 1000), MAX_DAILY_VOLUME_ML);
   return [minMl, maxMl];
 }

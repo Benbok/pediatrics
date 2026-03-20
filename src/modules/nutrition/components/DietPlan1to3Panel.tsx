@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { NutritionAgeNorm, NutritionFeedingTemplate, NutritionFeedingTemplateItem } from '../../../types';
 import { calcBasicNeeds } from '../../../logic/nutrition/calculateNeeds';
 import { nutritionService } from '../services/nutritionService';
+import { PrettySelect, type SelectOption } from './PrettySelect';
 
 interface Props {
   ageDays: number;
@@ -37,6 +38,11 @@ export const DietPlan1to3Panel: React.FC<Props> = ({ ageDays }) => {
     if (!norm || isNaN(wt) || wt <= 0) return null;
     return calcBasicNeeds(ageDays, wt, norm);
   }, [weightKg, norm, ageDays]);
+
+  const templateOptions = useMemo<Array<SelectOption<number>>>(
+    () => templates.map((template) => ({ value: template.id, label: template.title })),
+    [templates],
+  );
 
   const ageYears = Math.floor(ageDays / 365);
   const ageMonths = Math.floor((ageDays % 365) / 30);
@@ -89,33 +95,42 @@ export const DietPlan1to3Panel: React.FC<Props> = ({ ageDays }) => {
           <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm border border-slate-200 dark:border-slate-700">
             <div className="text-slate-500 text-xs mb-1">Объём пищи</div>
             <div className="font-bold text-slate-800 dark:text-white">
-              {norm?.totalFoodMinG ? `${norm.totalFoodMinG}–${norm.totalFoodMaxG} г/сут` : `${needs.dailyVolumeNeedMl ?? '—'} мл/сут`}
+              {needs.totalFoodMinG ? `${needs.totalFoodMinG}–${needs.totalFoodMaxG} г/сут` : `${needs.dailyVolumeNeedMl ?? '—'} мл/сут`}
             </div>
           </div>
           <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm border border-slate-200 dark:border-slate-700">
-            <div className="text-slate-500 text-xs mb-1">Кормлений/сут</div>
-            <div className="font-bold text-slate-800 dark:text-white">{needs.mealsPerDay}</div>
+            <div className="text-slate-500 text-xs mb-1">Режим</div>
+            <div className="font-bold text-slate-800 dark:text-white">{needs.mealsPerDay} приёмов</div>
           </div>
           <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm border border-slate-200 dark:border-slate-700">
-            <div className="text-slate-500 text-xs mb-1">Ккал/кг/сут</div>
-            <div className="font-bold text-slate-800 dark:text-white">{norm?.energyKcalPerKg ?? '—'}</div>
+            <div className="text-slate-500 text-xs mb-1">Разовая порция</div>
+            <div className="font-bold text-slate-800 dark:text-white">до 300–350 мл</div>
           </div>
         </div>
       )}
 
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 p-4">
+        <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">
+          Принципы рациона 1–3 лет
+        </div>
+        <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+          <li>Режим: 3 основных приёма пищи + 2 перекуса.</li>
+          <li>1–1.5 года: 1000–1200 г/сут; 1.5–3 года: 1200–1500 г/сут.</li>
+          <li>Обед должен быть самым калорийным приёмом пищи.</li>
+          <li>Ежедневно: не менее 3 порций молочных продуктов и 5 порций овощей/фруктов суммарно.</li>
+          <li>Рыба и яйца: 2–3 раза в неделю.</li>
+        </ul>
+      </div>
+
       {/* Template */}
-      {templates.length > 1 && (
+      {templates.length > 1 && selectedTemplateId != null && (
         <div className="space-y-1 max-w-sm">
           <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Возрастная схема питания</label>
-          <select
-            value={selectedTemplateId ?? ''}
-            onChange={(e) => setSelectedTemplateId(Number(e.target.value))}
-            className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm"
-          >
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>{t.title}</option>
-            ))}
-          </select>
+          <PrettySelect
+            value={selectedTemplateId}
+            onChange={(value) => setSelectedTemplateId(Number(value))}
+            options={templateOptions}
+          />
         </div>
       )}
 

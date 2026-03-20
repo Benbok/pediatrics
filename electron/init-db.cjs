@@ -127,27 +127,27 @@ async function seedNutritionData() {
                 feedingStage: '0-10d',
                 ageMinDays: 0,
                 ageMaxDays: 10,
-                energyKcalPerKg: null,
+                energyKcalPerKg: 120,
                 fixedEnergyKcal: null,
                 volumeFactorMin: null,
                 volumeFactorMax: null,
                 totalFoodMinG: null,
                 totalFoodMaxG: null,
                 mealsPerDay: 7,
-                notes: 'Формулы Тура (70/80×n) и Зайцевой (2%×масса×n), n — день жизни',
+                notes: 'Формула Зайцевой: 2% от массы при рождении × день жизни; ориентировочно 10 × n мл на кормление',
             },
             {
                 feedingStage: '10d-2m',
                 ageMinDays: 11,
                 ageMaxDays: 60,
-                energyKcalPerKg: 115,
+                energyKcalPerKg: 120,
                 fixedEnergyKcal: null,
-                volumeFactorMin: 0.167, // 1/6
+                volumeFactorMin: 0.2,   // 1/5
                 volumeFactorMax: 0.2,   // 1/5
                 totalFoodMinG: null,
                 totalFoodMaxG: null,
                 mealsPerDay: 7,
-                notes: 'I полугодие: 115 ккал/кг; объёмный метод 1/5–1/6 массы',
+                notes: '10 дней – 2 месяца: 120 ккал/кг/сут; объёмный метод 1/5 массы',
             },
             {
                 feedingStage: '2-4m',
@@ -155,12 +155,12 @@ async function seedNutritionData() {
                 ageMaxDays: 120,
                 energyKcalPerKg: 115,
                 fixedEnergyKcal: null,
-                volumeFactorMin: 0.143, // 1/7
+                volumeFactorMin: 0.167, // 1/6
                 volumeFactorMax: 0.167, // 1/6
                 totalFoodMinG: null,
                 totalFoodMaxG: null,
                 mealsPerDay: 6,
-                notes: 'I полугодие: 115 ккал/кг; объёмный метод 1/6–1/7 массы',
+                notes: '2–4 месяца: объёмный метод 1/6 массы; энергетически 120 ккал/кг до 3 мес и 115 ккал/кг после 3 мес',
             },
             {
                 feedingStage: '4-6m',
@@ -168,12 +168,12 @@ async function seedNutritionData() {
                 ageMaxDays: 180,
                 energyKcalPerKg: 115,
                 fixedEnergyKcal: null,
-                volumeFactorMin: 0.125, // 1/8
+                volumeFactorMin: 0.143, // 1/7
                 volumeFactorMax: 0.143, // 1/7
                 totalFoodMinG: null,
                 totalFoodMaxG: null,
                 mealsPerDay: 6,
-                notes: 'I полугодие: 115 ккал/кг; объёмный метод 1/7–1/8 массы; начало прикорма',
+                notes: '4–6 месяцев: 115 ккал/кг/сут; объёмный метод 1/7 массы; окно введения прикорма',
             },
             {
                 feedingStage: '6-12m',
@@ -186,7 +186,7 @@ async function seedNutritionData() {
                 totalFoodMinG: null,
                 totalFoodMaxG: null,
                 mealsPerDay: 5,
-                notes: 'II полугодие: 110 ккал/кг; объёмный метод 1/8–1/9 массы; активный прикорм',
+                notes: '6–12 месяцев: объёмный метод 1/8–1/9 массы, обычно не более 1000–1100 мл/сут; 110 ккал/кг в III квартале и 105 ккал/кг в IV квартале',
             },
             {
                 feedingStage: '12-36m',
@@ -198,40 +198,23 @@ async function seedNutritionData() {
                 volumeFactorMax: null,
                 totalFoodMinG: 1000,
                 totalFoodMaxG: 1500,
-                mealsPerDay: 4,
-                notes: '1–3 года: ~1000–1400 ккал/сут; суточный объём пищи 1000–1500 г; 4–5 приёмов',
+                mealsPerDay: 5,
+                notes: '1–3 года: суточный объём пищи 1000–1500 г; режим 3 основных приёма пищи + 2 перекуса',
             },
         ];
 
         for (const norm of ageNorms) {
-            await prisma.nutritionAgeNorm.upsert({
-                where: {
-                    // Upsert by stage name (unique enough for reference data)
-                    // We use findFirst + update/create pattern since there's no unique index
-                    // Instead we'll check and skip below
-                    id: -1, // forces "not found" path every time — handled via create logic
-                },
-                update: norm,
-                create: norm,
-            }).catch(async () => {
-                // If upsert fails (no matching id=-1), do create-if-not-exists
-                const existing = await prisma.nutritionAgeNorm.findFirst({
-                    where: { feedingStage: norm.feedingStage },
-                });
-                if (!existing) {
-                    await prisma.nutritionAgeNorm.create({ data: norm });
-                }
+            const existing = await prisma.nutritionAgeNorm.findFirst({
+                where: { feedingStage: norm.feedingStage },
+                select: { id: true },
             });
-        }
 
-        // Simpler idempotent seeding pattern — just skip if feedingStage already exists
-        const existingStages = await prisma.nutritionAgeNorm.findMany({
-            select: { feedingStage: true },
-        });
-        const existingStageCodes = new Set(existingStages.map(s => s.feedingStage));
-
-        for (const norm of ageNorms) {
-            if (!existingStageCodes.has(norm.feedingStage)) {
+            if (existing) {
+                await prisma.nutritionAgeNorm.update({
+                    where: { id: existing.id },
+                    data: norm,
+                });
+            } else {
                 await prisma.nutritionAgeNorm.create({ data: norm });
                 logger.info(`[DB Init] Created nutrition age norm: ${norm.feedingStage}`);
             }
@@ -247,7 +230,8 @@ async function seedNutritionData() {
             { code: 'MEAT',            name: 'Мясное пюре',         minAgeDays: 180, maxAgeDays: 1095 },
             { code: 'FISH',            name: 'Рыба',                minAgeDays: 240, maxAgeDays: 1095 },
             { code: 'EGG_YOLK',        name: 'Желток',              minAgeDays: 240, maxAgeDays: 1095 },
-            { code: 'JUICE',           name: 'Сок',                 minAgeDays: 180, maxAgeDays: 1095 },
+            { code: 'CURD',            name: 'Творог',              minAgeDays: 240, maxAgeDays: 1095 },
+            { code: 'JUICE',           name: 'Сок',                 minAgeDays: 240, maxAgeDays: 1095 },
             { code: 'DAIRY_1_3Y',      name: 'Молочные продукты',   minAgeDays: 365, maxAgeDays: 1095 },
             { code: 'BREAD_PASTA',     name: 'Хлеб / крупы',        minAgeDays: 365, maxAgeDays: 1095 },
         ];
@@ -270,10 +254,11 @@ async function seedNutritionData() {
                 ageMinDays: 121,
                 ageMaxDays: 180,
                 title: 'Прикорм 4–6 мес',
-                description: 'Введение первого прикорма: овощное пюре или безмолочная каша. Начинать с 5–10 г, за 2 нед довести до 150 г.',
+                description: 'Введение первого прикорма в окно 4–6 мес: овощное пюре или безмолочная каша. Начинать с 5–10 г утром и доводить до 150 г за 7–10 дней.',
                 items: [
                     { mealOrder: 1, code: 'BREAST_MILK',    portionSizeG: 180, note: 'ГМ / смесь' },
-                    { mealOrder: 2, code: 'VEG_PUREE',      portionSizeG: 100, note: 'Первый прикорм, постепенно до 150 г' },
+                    { mealOrder: 2, code: 'VEG_PUREE',      portionSizeG: 150, note: 'Первый выбор при запорах/избытке веса; старт с 5–10 г' },
+                    { mealOrder: 2, code: 'CEREAL',         portionSizeG: 150, note: 'Альтернатива первому прикорму при дефиците массы/частом стуле' },
                     { mealOrder: 3, code: 'BREAST_MILK',    portionSizeG: 180, note: 'ГМ / смесь' },
                     { mealOrder: 4, code: 'BREAST_MILK',    portionSizeG: 180, note: 'ГМ / смесь' },
                     { mealOrder: 5, code: 'BREAST_MILK',    portionSizeG: 180, note: 'ГМ / смесь' },
@@ -283,11 +268,12 @@ async function seedNutritionData() {
                 ageMinDays: 181,
                 ageMaxDays: 212,
                 title: 'Рацион 6 мес',
-                description: 'Расширение прикорма: добавляется каша. Мясо — с 6 мес при ИВ, с 7–8 при ГВ.',
+                description: 'Расширение прикорма: второй продукт через 2–3 недели. С 6 месяцев вводится мясное пюре как источник железа и цинка.',
                 items: [
                     { mealOrder: 1, code: 'BREAST_MILK',    portionSizeG: 200, note: 'ГМ / смесь' },
-                    { mealOrder: 2, code: 'CEREAL',          portionSizeG: 150, note: 'Безмолочная каша + фруктовое пюре 30 г' },
-                    { mealOrder: 3, code: 'VEG_PUREE',       portionSizeG: 150, note: 'Овощи + растительное масло 3 мл' },
+                    { mealOrder: 2, code: 'CEREAL',          portionSizeG: 150, note: 'Второй продукт прикорма, если первым были овощи' },
+                    { mealOrder: 3, code: 'VEG_PUREE',       portionSizeG: 150, note: 'Если первым вводилась каша' },
+                    { mealOrder: 3, code: 'MEAT',            portionSizeG: 30,  note: 'Старт мясного пюре с 6 месяцев' },
                     { mealOrder: 4, code: 'BREAST_MILK',    portionSizeG: 150, note: 'ГМ / смесь' },
                     { mealOrder: 5, code: 'BREAST_MILK',    portionSizeG: 200, note: 'ГМ / смесь' },
                 ],
@@ -296,13 +282,15 @@ async function seedNutritionData() {
                 ageMinDays: 213,
                 ageMaxDays: 273,
                 title: 'Рацион 7–9 мес',
-                description: 'Добавляются мясное пюре (50–60 г), желток, детское печенье. Вводится третий прикорм вместо одного кормления грудью/смесью.',
+                description: 'Продолжение прикорма: мясное пюре 50–60 г, желток, постепенное расширение ассортимента. С 8 месяцев можно вводить творог до 50 г и сок до 100 мл.',
                 items: [
                     { mealOrder: 1, code: 'BREAST_MILK',    portionSizeG: 200, note: 'ГМ / смесь' },
                     { mealOrder: 2, code: 'CEREAL',          portionSizeG: 180, note: 'Каша молочная + фрукт 30 г' },
                     { mealOrder: 3, code: 'VEG_PUREE',       portionSizeG: 150, note: 'Овощи' },
                     { mealOrder: 3, code: 'MEAT',            portionSizeG: 50,  note: 'Мясное пюре' },
                     { mealOrder: 4, code: 'FRUIT_PUREE',     portionSizeG: 60,  note: 'Фруктовое пюре' },
+                    { mealOrder: 4, code: 'CURD',            portionSizeG: 50,  note: 'С 8 месяцев, не более 50 г' },
+                    { mealOrder: 4, code: 'JUICE',           portionSizeG: 100, note: 'С 8 месяцев, не более 100 мл' },
                     { mealOrder: 5, code: 'BREAST_MILK',    portionSizeG: 200, note: 'ГМ / смесь / кефир' },
                 ],
             },
@@ -310,13 +298,15 @@ async function seedNutritionData() {
                 ageMinDays: 274,
                 ageMaxDays: 365,
                 title: 'Рацион 9–12 мес',
-                description: 'Вводится рыба (2 раза/нед вместо мяса). Кефир или детский йогурт до 200 мл. Хлеб, печенье.',
+                description: 'К 9–12 месяцам рацион расширяется: рыба 2–3 раза в неделю вместо мяса, кисломолочные продукты, хлеб и печенье в возрастных порциях.',
                 items: [
                     { mealOrder: 1, code: 'BREAST_MILK',    portionSizeG: 200, note: 'ГМ / смесь' },
                     { mealOrder: 2, code: 'CEREAL',          portionSizeG: 200, note: 'Каша + фрукт 40 г' },
                     { mealOrder: 3, code: 'VEG_PUREE',       portionSizeG: 150, note: 'Овощи' },
-                    { mealOrder: 3, code: 'MEAT',            portionSizeG: 60,  note: 'Мясо / рыба 2×нед' },
-                    { mealOrder: 4, code: 'FRUIT_PUREE',     portionSizeG: 80,  note: 'Фрукт / детский йогурт 100 г' },
+                    { mealOrder: 3, code: 'MEAT',            portionSizeG: 60,  note: 'Мясо / рыба 2–3 раза в неделю' },
+                    { mealOrder: 4, code: 'FRUIT_PUREE',     portionSizeG: 80,  note: 'Фрукт / фруктовое пюре' },
+                    { mealOrder: 4, code: 'CURD',            portionSizeG: 50,  note: 'Творог до 50 г' },
+                    { mealOrder: 4, code: 'JUICE',           portionSizeG: 100, note: 'Сок до 100 мл' },
                     { mealOrder: 5, code: 'DAIRY_1_3Y',      portionSizeG: 200, note: 'Кефир / смесь' },
                 ],
             },
@@ -324,46 +314,51 @@ async function seedNutritionData() {
                 ageMinDays: 366,
                 ageMaxDays: 548,
                 title: 'Рацион 1–1,5 года',
-                description: 'По программе оптимизации питания 1–3 лет. Суточный объём ~1100–1200 г, ~1000–1100 ккал.',
+                description: 'Режим 3 основных приёма пищи и 2 перекуса. Суточный объём 1000–1200 г, разовая порция не более 300–350 мл.',
                 items: [
                     { mealOrder: 1, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Каша на молоке / кефир + фрукт 50 г' },
+                    { mealOrder: 2, code: 'FRUIT_PUREE',    portionSizeG: 100, note: 'Перекус: фрукт / фруктовое пюре' },
                     { mealOrder: 2, code: 'MEAT',            portionSizeG: 80,  note: 'Суп 150 мл + мясо/рыба' },
                     { mealOrder: 2, code: 'VEG_PUREE',       portionSizeG: 150, note: 'Овощной гарнир' },
                     { mealOrder: 3, code: 'DAIRY_1_3Y',     portionSizeG: 180, note: 'Кефир / творог 50 г' },
-                    { mealOrder: 3, code: 'FRUIT_PUREE',    portionSizeG: 100, note: 'Фрукты' },
-                    { mealOrder: 4, code: 'CEREAL',          portionSizeG: 150, note: 'Каша / тушёные овощи' },
-                    { mealOrder: 4, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Молоко / кефир' },
+                    { mealOrder: 4, code: 'CEREAL',          portionSizeG: 150, note: 'Ужин: каша / тушёные овощи' },
+                    { mealOrder: 4, code: 'DAIRY_1_3Y',     portionSizeG: 180, note: 'Молочный продукт' },
+                    { mealOrder: 5, code: 'DAIRY_1_3Y',     portionSizeG: 180, note: 'Перекус: кефир / йогурт' },
                 ],
             },
             {
                 ageMinDays: 549,
                 ageMaxDays: 730,
                 title: 'Рацион 1,5–2 года',
-                description: 'Суточный объём ~1200–1300 г, ~1100–1200 ккал. Увеличивается доля мяса, рыбы и злаков.',
+                description: 'Суточный объём 1200–1500 г. Сохраняется 5-разовый режим, расширяется ассортимент продуктов и увеличивается доля плотных блюд.',
                 items: [
                     { mealOrder: 1, code: 'CEREAL',          portionSizeG: 200, note: 'Каша / яйцо' },
                     { mealOrder: 1, code: 'DAIRY_1_3Y',     portionSizeG: 150, note: 'Молоко / кефир' },
+                    { mealOrder: 2, code: 'FRUIT_PUREE',    portionSizeG: 120, note: 'Перекус: фрукты' },
                     { mealOrder: 2, code: 'MEAT',            portionSizeG: 100, note: 'Мясное блюдо / рыба 2×нед' },
                     { mealOrder: 2, code: 'VEG_PUREE',       portionSizeG: 200, note: 'Суп 200 мл + овощной гарнир' },
-                    { mealOrder: 3, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Кефир / йогурт + фрукт' },
-                    { mealOrder: 4, code: 'BREAD_PASTA',    portionSizeG: 100, note: 'Хлеб / творог / яйцо' },
-                    { mealOrder: 4, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Молоко / кефир' },
+                    { mealOrder: 3, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Перекус: кефир / йогурт' },
+                    { mealOrder: 4, code: 'BREAD_PASTA',    portionSizeG: 100, note: 'Ужин: крупяное или творожное блюдо' },
+                    { mealOrder: 4, code: 'DAIRY_1_3Y',     portionSizeG: 180, note: 'Молочный продукт' },
+                    { mealOrder: 5, code: 'FRUIT_PUREE',    portionSizeG: 100, note: 'Поздний перекус: фрукт / кисломолочный напиток' },
                 ],
             },
             {
                 ageMinDays: 731,
                 ageMaxDays: 1095,
                 title: 'Рацион 2–3 года',
-                description: 'Суточный объём ~1300–1500 г, ~1200–1400 ккал. Приближается к взрослому рациону, 4 приёма пищи.',
+                description: 'Суточный объём 1200–1500 г. Рацион приближается к общему столу, но сохраняется 5-разовый режим с контролем порций и разнообразия.',
                 items: [
                     { mealOrder: 1, code: 'CEREAL',          portionSizeG: 200, note: 'Каша / яичное блюдо' },
                     { mealOrder: 1, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Молоко' },
+                    { mealOrder: 2, code: 'FRUIT_PUREE',    portionSizeG: 120, note: 'Перекус: фрукт / овощной перекус' },
                     { mealOrder: 2, code: 'MEAT',            portionSizeG: 120, note: 'Мясное / рыбное блюдо' },
                     { mealOrder: 2, code: 'VEG_PUREE',       portionSizeG: 250, note: 'Суп 200 мл + гарнир' },
                     { mealOrder: 2, code: 'BREAD_PASTA',    portionSizeG: 20,  note: 'Хлеб' },
-                    { mealOrder: 3, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Кефир / молоко + фрукт' },
-                    { mealOrder: 4, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Кефир / ряженка' },
-                    { mealOrder: 4, code: 'BREAD_PASTA',    portionSizeG: 50,  note: 'Хлеб / печенье' },
+                    { mealOrder: 3, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Перекус: кефир / молоко + фрукт' },
+                    { mealOrder: 4, code: 'DAIRY_1_3Y',     portionSizeG: 200, note: 'Ужин: молочный продукт' },
+                    { mealOrder: 4, code: 'BREAD_PASTA',    portionSizeG: 120, note: 'Гарнир / крупяное блюдо' },
+                    { mealOrder: 5, code: 'DAIRY_1_3Y',     portionSizeG: 180, note: 'Поздний перекус: кисломолочный напиток' },
                 ],
             },
         ];
@@ -371,9 +366,19 @@ async function seedNutritionData() {
         for (const tmpl of templates) {
             const existing = await prisma.nutritionFeedingTemplate.findFirst({
                 where: { title: tmpl.title },
+                select: { id: true },
             });
-            if (!existing) {
-                const created = await prisma.nutritionFeedingTemplate.create({
+
+            const templateRecord = existing
+                ? await prisma.nutritionFeedingTemplate.update({
+                    where: { id: existing.id },
+                    data: {
+                        ageMinDays: tmpl.ageMinDays,
+                        ageMaxDays: tmpl.ageMaxDays,
+                        description: tmpl.description,
+                    },
+                })
+                : await prisma.nutritionFeedingTemplate.create({
                     data: {
                         ageMinDays: tmpl.ageMinDays,
                         ageMaxDays: tmpl.ageMaxDays,
@@ -381,21 +386,28 @@ async function seedNutritionData() {
                         description: tmpl.description,
                     },
                 });
-                for (const item of tmpl.items) {
-                    const catId = categoryMap[item.code];
-                    if (catId) {
-                        await prisma.nutritionFeedingTemplateItem.create({
-                            data: {
-                                templateId: created.id,
-                                mealOrder: item.mealOrder,
-                                productCategoryId: catId,
-                                portionSizeG: item.portionSizeG,
-                                isExample: true,
-                                note: item.note || null,
-                            },
-                        });
-                    }
+
+            await prisma.nutritionFeedingTemplateItem.deleteMany({
+                where: { templateId: templateRecord.id },
+            });
+
+            for (const item of tmpl.items) {
+                const catId = categoryMap[item.code];
+                if (catId) {
+                    await prisma.nutritionFeedingTemplateItem.create({
+                        data: {
+                            templateId: templateRecord.id,
+                            mealOrder: item.mealOrder,
+                            productCategoryId: catId,
+                            portionSizeG: item.portionSizeG,
+                            isExample: true,
+                            note: item.note || null,
+                        },
+                    });
                 }
+            }
+
+            if (!existing) {
                 logger.info(`[DB Init] Created nutrition feeding template: ${tmpl.title}`);
             }
         }

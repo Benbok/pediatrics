@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { NutritionFeedingTemplate, NutritionFeedingTemplateItem } from '../../../types';
 import { getComplementaryFeedingStatus } from '../../../logic/nutrition/calculateFeeding';
 import { nutritionService } from '../services/nutritionService';
+import { PrettySelect, type SelectOption } from './PrettySelect';
 
 interface Props {
   ageDays: number;
@@ -79,6 +80,11 @@ export const ComplementaryFeedingPanel: React.FC<Props> = ({ ageDays, isBF = tru
     return grouped;
   }, [items]);
 
+  const templateOptions = useMemo<Array<SelectOption<number>>>(
+    () => templates.map((template) => ({ value: template.id, label: template.title })),
+    [templates],
+  );
+
   return (
     <div className="space-y-5">
       {/* Status badge */}
@@ -92,10 +98,24 @@ export const ComplementaryFeedingPanel: React.FC<Props> = ({ ageDays, isBF = tru
           {ageDays > 180 && ageDays < 365 ? '(> 6 мес.)' : ''}
         </p>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
-          По Нацпрограмме 2019: оптимальный срок введения прикорма — 5–6 мес. (не ранее 4 мес.).
-          При ГВ — не позднее 6 мес.
+          По Нацпрограмме РФ: окно введения прикорма 4–6 мес., оптимально около 5 мес.
+          По ВОЗ при исключительно ГВ ориентир — 6 мес.
         </p>
       </div>
+
+      {status !== 'too_early' && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-2">
+            Правила введения прикорма
+          </div>
+          <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-300">
+            <li>Начало с 5–10 г утром, один новый монокомпонентный продукт за раз.</li>
+            <li>Первый выбор: овощное пюре или безмолочная каша по клинической ситуации.</li>
+            <li>Второй продукт вводится через 2–3 недели.</li>
+            <li>Мясное пюре — с 6 месяцев, творог и соки — с 8 месяцев.</li>
+          </ul>
+        </div>
+      )}
 
       {status === 'too_early' && (
         <div className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
@@ -106,20 +126,16 @@ export const ComplementaryFeedingPanel: React.FC<Props> = ({ ageDays, isBF = tru
       {status !== 'too_early' && (
         <>
           {/* Template selector */}
-          {templates.length > 1 && (
+          {templates.length > 1 && selectedTemplateId != null && (
             <div className="space-y-1 max-w-sm">
               <label className="text-sm font-medium text-slate-600 dark:text-slate-400">
                 Схема прикорма для возраста
               </label>
-              <select
-                value={selectedTemplateId ?? ''}
-                onChange={(e) => setSelectedTemplateId(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm"
-              >
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.title}</option>
-                ))}
-              </select>
+              <PrettySelect
+                value={selectedTemplateId}
+                onChange={(value) => setSelectedTemplateId(Number(value))}
+                options={templateOptions}
+              />
             </div>
           )}
 
@@ -175,7 +191,7 @@ export const ComplementaryFeedingPanel: React.FC<Props> = ({ ageDays, isBF = tru
 
               <p className="text-xs text-slate-400 mt-2">
                 * Порции — ориентировочные. Введение каждого продукта — индивидуально,
-                начиная с 1/4 чайной ложки.
+                начиная с 5–10 г с постепенным доведением до полной порции за 7–10 дней.
               </p>
             </div>
           )}

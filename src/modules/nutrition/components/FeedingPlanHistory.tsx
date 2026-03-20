@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { ChildFeedingPlan, FeedingType } from '../../../types';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { nutritionService } from '../services/nutritionService';
 
 interface Props {
@@ -25,10 +26,25 @@ function formatAgeDays(ageDays: number): string {
   return `${Math.floor(ageDays / 365)} л. ${Math.floor((ageDays % 365) / 30)} мес.`;
 }
 
+function formatPlanDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
 export const FeedingPlanHistory: React.FC<Props> = ({ childId, refreshKey }) => {
   const [plans, setPlans] = useState<ChildFeedingPlan[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [planToDelete, setPlanToDelete] = useState<ChildFeedingPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -46,12 +62,14 @@ export const FeedingPlanHistory: React.FC<Props> = ({ childId, refreshKey }) => 
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Удалить этот расчёт питания?')) return;
-    setDeletingId(id);
+  const handleDelete = async () => {
+    if (!planToDelete) return;
+
+    setDeletingId(planToDelete.id);
     try {
-      await nutritionService.deleteFeedingPlan(id);
-      setPlans((prev) => prev.filter((p) => p.id !== id));
+      await nutritionService.deleteFeedingPlan(planToDelete.id);
+      setPlans((prev) => prev.filter((p) => p.id !== planToDelete.id));
+      setPlanToDelete(null);
     } catch (e: any) {
       setError(e.message || 'Ошибка удаления');
     } finally {
@@ -95,7 +113,7 @@ export const FeedingPlanHistory: React.FC<Props> = ({ childId, refreshKey }) => 
           {plans.map((plan) => (
             <tr key={plan.id} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
               <td className="px-3 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                {plan.date}
+                {formatPlanDate(plan.date)}
               </td>
               <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                 {formatAgeDays(plan.ageDays)}
@@ -122,7 +140,7 @@ export const FeedingPlanHistory: React.FC<Props> = ({ childId, refreshKey }) => 
               </td>
               <td className="px-3 py-2 text-right">
                 <button
-                  onClick={() => handleDelete(plan.id)}
+                  onClick={() => setPlanToDelete(plan)}
                   disabled={deletingId === plan.id}
                   className="text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors p-1 rounded"
                   title="Удалить"
@@ -134,6 +152,23 @@ export const FeedingPlanHistory: React.FC<Props> = ({ childId, refreshKey }) => 
           ))}
         </tbody>
       </table>
+
+      <ConfirmDialog
+        isOpen={planToDelete !== null}
+        title="Удаление расчёта"
+        message="Вы уверены, что хотите удалить этот сохранённый расчёт питания?
+
+Это действие нельзя отменить."
+        confirmText="Удалить"
+        cancelText="Отмена"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => {
+          if (deletingId === null) {
+            setPlanToDelete(null);
+          }
+        }}
+      />
     </div>
   );
 };

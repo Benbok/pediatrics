@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { NutritionAgeNorm, NutritionProduct, ChildFeedingPlan, FeedingType } from '../../../types';
 import { calcBasicNeeds, calcVolumetricRange } from '../../../logic/nutrition/calculateNeeds';
 import {
@@ -9,6 +8,7 @@ import {
   type FeedingCalcResult,
 } from '../../../logic/nutrition/calculateFeeding';
 import { nutritionService } from '../services/nutritionService';
+import { PrettySelect, type SelectOption } from './PrettySelect';
 
 interface Props {
   childId: number;
@@ -24,11 +24,6 @@ const FEEDING_TYPE_LABELS: Record<FeedingType, string> = {
 };
 
 type FormulaCalcMethod = 'auto' | 'caloric' | 'volumetric';
-
-type SelectOption<T extends string> = {
-  value: T;
-  label: string;
-};
 
 const FEEDING_TYPE_OPTIONS: Array<SelectOption<FeedingType>> = [
   { value: 'BF', label: FEEDING_TYPE_LABELS.BF },
@@ -133,8 +128,8 @@ export const QuickCalculatorPanel: React.FC<Props> = ({
   const volumeRange = useMemo(() => {
     const wt = parseFloat(weightKg);
     if (!norm || isNaN(wt) || !norm.volumeFactorMin) return null;
-    return calcVolumetricRange(wt, norm);
-  }, [weightKg, norm]);
+    return calcVolumetricRange(wt, ageDays, norm);
+  }, [weightKg, norm, ageDays]);
 
   const handleSave = async () => {
     if (!result) return;
@@ -241,7 +236,7 @@ export const QuickCalculatorPanel: React.FC<Props> = ({
             <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Тип вскармливания</label>
             <PrettySelect
               value={feedingType}
-              onChange={setFeedingType}
+              onChange={(value) => setFeedingType(value as FeedingType)}
               options={FEEDING_TYPE_OPTIONS}
             />
           </div>
@@ -272,7 +267,7 @@ export const QuickCalculatorPanel: React.FC<Props> = ({
               </label>
               <PrettySelect
                 value={formulaCalcMethod}
-                onChange={setFormulaCalcMethod}
+                onChange={(value) => setFormulaCalcMethod(value as FormulaCalcMethod)}
                 options={FORMULA_METHOD_OPTIONS}
               />
             </div>
@@ -352,111 +347,6 @@ interface FeedingResultCardProps {
   saveSuccess: boolean;
   saveError: string | null;
 }
-
-interface PrettySelectProps<T extends string> {
-  value: T;
-  onChange: (value: T) => void;
-  options: Array<SelectOption<T>>;
-  searchable?: boolean;
-  searchPlaceholder?: string;
-}
-
-const PrettySelect = <T extends string,>({
-  value,
-  onChange,
-  options,
-  searchable = false,
-  searchPlaceholder = 'Поиск...',
-}: PrettySelectProps<T>) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const rootRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const onClickOutside = (event: MouseEvent) => {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setSearchQuery('');
-    }
-  }, [isOpen]);
-
-  const selected = options.find((opt) => opt.value === value) ?? options[0];
-
-  const filteredOptions = useMemo(() => {
-    if (!searchable) return options;
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((opt) => opt.label.toLowerCase().includes(q));
-  }, [options, searchable, searchQuery]);
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen((v) => !v)}
-        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 flex items-center justify-between transition-colors hover:border-emerald-400"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-      >
-        <span className="truncate text-left">{selected?.label}</span>
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden">
-          {searchable && (
-            <div className="p-2 border-b border-slate-200 dark:border-slate-700">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="w-full px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                autoFocus
-              />
-            </div>
-          )}
-          <ul role="listbox" className="max-h-64 overflow-auto py-1">
-            {filteredOptions.map((opt) => (
-              <li key={opt.value}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange(opt.value);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full px-3 py-2 text-left text-sm transition-colors ${
-                    opt.value === value
-                      ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                      : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-                  }`}
-                  role="option"
-                  aria-selected={opt.value === value}
-                >
-                  {opt.label}
-                </button>
-              </li>
-            ))}
-            {filteredOptions.length === 0 && (
-              <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
-                Ничего не найдено
-              </li>
-            )}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-};
 
 const FeedingResultCard: React.FC<FeedingResultCardProps> = ({
   result, volumeRange, comments, onCommentsChange, onSave, isSaving, saveSuccess, saveError,
@@ -562,6 +452,25 @@ const FeedingResultCard: React.FC<FeedingResultCardProps> = ({
           {' '}={' '}
           <span className="font-semibold">{result.formulaPerMealMl} мл</span>
         </p>
+      </div>
+    )}
+
+    {(result.type === 'MF' || result.type === 'FF') && (
+      <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50/70 dark:bg-amber-900/10 p-3 text-sm text-slate-700 dark:text-slate-300 space-y-2">
+        <p className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300 font-semibold">
+          Показания и тактика докорма
+        </p>
+        <ul className="space-y-1">
+          <li>Показания: прибавка массы ≤ 400 г за первый месяц, признаки дегидратации, патологическая убыль массы.</li>
+          <li>Стартовая тактика: начинать с 10 мл смеси после каждого прикладывания к груди с последующей оценкой динамики массы и клинического статуса.</li>
+          <li>Приоритет: сохранение лактации. Докорм рассматривается как мера восполнения дефицита, а не замена грудного вскармливания без показаний.</li>
+          {result.type === 'MF' && (
+            <li>
+              Смешанное вскармливание сохраняется при объёме грудного молока не менее 150–200 мл/сут.
+              При меньшем объёме ребёнок клинически ближе к искусственному вскармливанию.
+            </li>
+          )}
+        </ul>
       </div>
     )}
 

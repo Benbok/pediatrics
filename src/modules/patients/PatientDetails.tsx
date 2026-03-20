@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
+import { Syringe } from 'lucide-react';
 import { ChildProfile } from '../../types';
 import { patientService } from '../../services/patient.service';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
@@ -196,9 +197,7 @@ export const PatientDetails: React.FC = () => {
                             </svg>
                         </div>
                         <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5h3m-6.75 2.25h10.5a2.25 2.25 0 002.25-2.25v-15a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 4.5v15a2.25 2.25 0 002.25 2.25z" />
-                            </svg>
+                            <Syringe className="w-6 h-6" strokeWidth={1.8} />
                         </div>
                         <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Вакцинация</h3>
                         <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">

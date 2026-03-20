@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { NutritionProduct, NutritionProductCategory } from '../../../types';
 import { nutritionService } from '../services/nutritionService';
 import { JsonImportPanel } from './JsonImportPanel';
+import { PrettySelect, type SelectOption } from './PrettySelect';
 
 type ViewMode = 'list' | 'import';
 
@@ -15,6 +16,9 @@ export const ProductsManager: React.FC = () => {
   const [editProduct, setEditProduct] = useState<Partial<NutritionProduct> | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const PAGE_SIZE = 15;
 
   const loadProducts = async (catId?: number | null) => {
     setIsLoading(true);
@@ -33,6 +37,7 @@ export const ProductsManager: React.FC = () => {
 
   const handleFilterChange = (catId: number | null) => {
     setFilterCatId(catId);
+    setPage(1);
     loadProducts(catId);
   };
 
@@ -76,6 +81,48 @@ export const ProductsManager: React.FC = () => {
 
   const upd = <K extends keyof NutritionProduct>(k: K, v: NutritionProduct[K]) =>
     setEditProduct((prev) => ({ ...prev, [k]: v }));
+
+  const categoryOptions: Array<SelectOption<number | ''>> = [
+    { value: '', label: '— выбрать —' },
+    ...categories.map((category) => ({ value: category.id, label: category.name })),
+  ];
+
+  const formulaTypeOptions: Array<SelectOption<string>> = [
+    { value: '', label: 'стандартная' },
+    { value: 'hydrolysate', label: 'гидролизат' },
+    { value: 'amino-acid', label: 'аминокислотная' },
+    { value: 'soy', label: 'соевая' },
+    { value: 'AR', label: 'антирефлюксная (AR)' },
+    { value: 'LF', label: 'низколактозная (LF)' },
+    { value: 'premature', label: 'для недоношенных' },
+  ];
+
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name])),
+    [categories],
+  );
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const filteredProducts = useMemo(() => {
+    if (!normalizedSearch) return products;
+    return products.filter((product) => {
+      const categoryName = categoryNameById.get(product.categoryId) ?? '';
+      const haystack = [
+        product.name,
+        product.brand ?? '',
+        categoryName,
+        product.formulaType ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+  }, [products, categoryNameById, normalizedSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedProducts = filteredProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <div className="space-y-4">
@@ -137,12 +184,29 @@ export const ProductsManager: React.FC = () => {
         </button>
       </div>
 
+      <div className="max-w-md">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setPage(1);
+          }}
+          placeholder="Поиск по названию, бренду, категории..."
+          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm"
+        />
+      </div>
+
       {/* Table */}
       {isLoading ? (
         <p className="text-sm text-slate-500">Загрузка...</p>
       ) : products.length === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Нет продуктов в справочнике. Добавьте адаптированные смеси, чтобы использовать калорийный метод расчёта.
+        </p>
+      ) : filteredProducts.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          По запросу ничего не найдено.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
@@ -159,13 +223,13 @@ export const ProductsManager: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {products.map((p) => {
-                const cat = categories.find((c) => c.id === p.categoryId);
+              {paginatedProducts.map((p) => {
+                const catName = categoryNameById.get(p.categoryId);
                 return (
                   <tr key={p.id} className={`bg-white dark:bg-slate-900 ${p.isArchived ? 'opacity-50' : ''}`}>
                     <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-medium">{p.name}</td>
                     <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{p.brand ?? '—'}</td>
-                    <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{cat?.name ?? '—'}</td>
+                    <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{catName ?? '—'}</td>
                     <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-300">
                       {p.energyKcalPer100ml ?? '—'}
                     </td>
@@ -193,6 +257,40 @@ export const ProductsManager: React.FC = () => {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {filteredProducts.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Показано {Math.min((currentPage - 1) * PAGE_SIZE + 1, filteredProducts.length)}–{Math.min(currentPage * PAGE_SIZE, filteredProducts.length)} из {filteredProducts.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1 rounded-lg text-sm border border-slate-300 dark:border-slate-600 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              ←
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={`px-2.5 py-1 rounded-lg text-sm border transition-colors ${currentPage === p ? 'bg-emerald-600 text-white border-emerald-600' : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-2.5 py-1 rounded-lg text-sm border border-slate-300 dark:border-slate-600 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              →
+            </button>
+          </div>
         </div>
       )}
 
@@ -235,16 +333,14 @@ export const ProductsManager: React.FC = () => {
 
               <label className="space-y-1">
                 <span className="text-sm text-slate-600 dark:text-slate-400">Категория</span>
-                <select
+                <PrettySelect
                   value={editProduct.categoryId ?? ''}
-                  onChange={(e) => upd('categoryId', Number(e.target.value) as any)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm"
-                >
-                  <option value="">— выбрать —</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                  onChange={(value) => upd('categoryId', (value === '' ? null : value) as any)}
+                  options={categoryOptions}
+                  searchable
+                  searchPlaceholder="Поиск категории..."
+                  useFixedPanel
+                />
               </label>
 
               <label className="space-y-1">
@@ -260,19 +356,12 @@ export const ProductsManager: React.FC = () => {
 
               <label className="space-y-1">
                 <span className="text-sm text-slate-600 dark:text-slate-400">Тип смеси</span>
-                <select
+                <PrettySelect
                   value={editProduct.formulaType ?? ''}
-                  onChange={(e) => upd('formulaType', e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm"
-                >
-                  <option value="">стандартная</option>
-                  <option value="hydrolysate">гидролизат</option>
-                  <option value="amino-acid">аминокислотная</option>
-                  <option value="soy">соевая</option>
-                  <option value="AR">антирефлюксная (AR)</option>
-                  <option value="LF">низколактозная (LF)</option>
-                  <option value="premature">для недоношенных</option>
-                </select>
+                  onChange={(value) => upd('formulaType', value as any)}
+                  options={formulaTypeOptions}
+                  useFixedPanel
+                />
               </label>
 
               <label className="space-y-1">
