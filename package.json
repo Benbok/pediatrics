@@ -39,7 +39,12 @@
       },
       "node_modules/better-sqlite3/**/*"
     ],
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/.prisma/**/*",
+      "node_modules/@prisma/client/**/*"
+    ],
     "win": {
       "target": "nsis",
       "icon": "build/icon.png"

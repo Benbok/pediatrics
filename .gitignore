@@ -13,6 +13,11 @@ dist-ssr
 dist_electron
 *.local
 
+# License keys — NEVER commit private key to git!
+keys/private.pem
+keys/*.pem
+license.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

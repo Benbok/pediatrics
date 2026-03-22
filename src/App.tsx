@@ -23,6 +23,7 @@ import './modules/printing/templates/vaccination/register';
 import './modules/printing/templates/visit/register';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './modules/auth/LoginPage';
+import { ActivationPage } from './modules/license/ActivationPage';
 import { ChildProvider } from './context/ChildContext';
 import { DataCacheProvider } from './context/DataCacheContext';
 import { PdfViewerPage } from './pages/PdfViewerPage';
@@ -121,8 +122,17 @@ const router = createHashRouter([
 
 const AppContent: React.FC = () => {
     const { isAuthenticated, isLoading } = useAuth();
+    const [licenseValid, setLicenseValid] = React.useState<boolean | null>(null);
 
-    if (isLoading) {
+    React.useEffect(() => {
+        window.electronAPI.checkLicense().then((result) => {
+            setLicenseValid(result.valid);
+        }).catch(() => {
+            setLicenseValid(false);
+        });
+    }, []);
+
+    if (licenseValid === null || isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
                 <div className="flex flex-col items-center gap-4">
@@ -131,6 +141,10 @@ const AppContent: React.FC = () => {
                 </div>
             </div>
         );
+    }
+
+    if (!licenseValid) {
+        return <ActivationPage onActivated={() => setLicenseValid(true)} />;
     }
 
     if (!isAuthenticated) {

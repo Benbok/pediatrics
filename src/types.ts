@@ -829,6 +829,11 @@ export interface DashboardSummary {
 declare global {
   interface Window {
     electronAPI?: {
+      // LICENSE ACTIVATION API (no auth required)
+      getLicenseFingerprint: () => Promise<{ fingerprint: string | null; display: string; error?: string }>;
+      checkLicense: () => Promise<{ valid: boolean; reason?: string; devMode?: boolean; data?: { userName: string; expiresAt: string | null } }>;
+      importLicense: () => Promise<{ success: boolean; reason?: string; data?: { userName: string; expiresAt: string | null } }>;
+
       // DASHBOARD MODULE API
       getDashboardSummary: (date?: string) => Promise<DashboardSummary>;
       updateVisitNotes: (visitId: number, notes: string) => Promise<boolean>;

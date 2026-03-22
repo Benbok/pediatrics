@@ -1,6 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+    // LICENSE ACTIVATION API (no auth required — called before login)
+    getLicenseFingerprint: () => ipcRenderer.invoke('license:get-fingerprint'),
+    checkLicense: () => ipcRenderer.invoke('license:check'),
+    importLicense: () => ipcRenderer.invoke('license:import'),
+
     // PATIENTS MODULE API
     getChildren: () => ipcRenderer.invoke('db:get-children'),
     getChild: (id) => ipcRenderer.invoke('db:get-child', id),

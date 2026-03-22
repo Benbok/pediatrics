@@ -22,6 +22,7 @@ const { setupDashboardHandlers } = require('./modules/dashboard/handlers.cjs');
 const { setupNutritionHandlers } = require('./modules/nutrition/handlers.cjs');
 const { initializeDatabase, seedNutritionData } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
+const { setupLicenseHandlers } = require('./license/handlers.cjs');
 const isDev = !app.isPackaged;
 
 function createWindow() {
@@ -62,6 +63,10 @@ function createWindow() {
 
 app.whenReady().then(async () => {
     logger.info('[Main] ========== APP READY ==========');
+
+    // Register license handlers FIRST (before window creation, no auth required)
+    setupLicenseHandlers();
+    logger.info('[Main] License handlers registered');
 
     // Initialize database (create first admin if needed)
     logger.info('[Main] Initializing database...');
