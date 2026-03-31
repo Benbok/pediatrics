@@ -282,6 +282,21 @@ export interface CategorizedSymptom {
   category: SymptomCategory;
 }
 
+export type DiseaseRecommendationCategory = 'regimen' | 'nutrition' | 'followup' | 'activity' | 'education' | 'other';
+
+export interface DiseaseRecommendationItem {
+  category: DiseaseRecommendationCategory;
+  text: string;
+  priority?: 'low' | 'medium' | 'high';
+}
+
+export interface DiseaseRecommendationSuggestion {
+  item: DiseaseRecommendationItem;
+  sourceDiseaseName: string;
+  sourceDiseaseId?: number;
+  icd10Codes?: string[]; // МКБ коды источника для фильтрации
+}
+
 export interface Disease {
   id: number;
   icd10Code: string; // Primary code
@@ -292,6 +307,7 @@ export interface Disease {
   symptoms: CategorizedSymptom[];
   diagnosticPlan?: DiagnosticPlanItem[];
   treatmentPlan?: TreatmentPlanItem[];
+  clinicalRecommendations?: DiseaseRecommendationItem[];
   differentialDiagnosis?: string[];
   redFlags?: string[];
   createdAt: Date;
@@ -1046,6 +1062,8 @@ declare global {
       deleteDiagnosticTemplate: (id: number, userId: number) => Promise<boolean>;
       getDiagnosticsByIcdCode: (icdCode: string) => Promise<DiagnosticRecommendation[]>;
       getAllDiagnosticTests: () => Promise<DiagnosticRecommendationWithCodes[]>;
+      getAllDiseaseRecommendations: () => Promise<DiseaseRecommendationSuggestion[]>;
+      getDiseaseRecommendationsByIcdCode: (icdCode: string) => Promise<DiseaseRecommendationSuggestion[]>;
 
       // RECOMMENDATION TEMPLATES API
       getRecommendationTemplates: (userId: number) => Promise<RecommendationTemplate[]>;

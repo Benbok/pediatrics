@@ -6,6 +6,7 @@ import {
     FileSignature,
     Save,
     FileText,
+    BookOpen,
     Plus,
     Pencil,
     Trash2,
@@ -18,6 +19,7 @@ interface RecommendationsSectionProps {
     onChange: (items: string[]) => void;
     onOpenTemplateSelector: () => void;
     onOpenSaveTemplate: () => void;
+    onOpenBrowser?: () => void;
     disabled?: boolean;
 }
 
@@ -26,6 +28,7 @@ export const RecommendationsSection: React.FC<RecommendationsSectionProps> = ({
     onChange,
     onOpenTemplateSelector,
     onOpenSaveTemplate,
+    onOpenBrowser,
     disabled = false,
 }) => {
     const [newItemText, setNewItemText] = useState('');
@@ -93,6 +96,19 @@ export const RecommendationsSection: React.FC<RecommendationsSectionProps> = ({
                     Рекомендации
                 </h2>
                 <div className="flex gap-2">
+                    {onOpenBrowser && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={onOpenBrowser}
+                            className="text-xs"
+                            title="Открыть справочник рекомендаций"
+                            disabled={disabled}
+                        >
+                            <BookOpen className="w-3 h-3 mr-1" />
+                            Справочник
+                        </Button>
+                    )}
                     {items.length > 0 && (
                         <Button
                             variant="ghost"

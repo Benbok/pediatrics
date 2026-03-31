@@ -156,6 +156,47 @@ export const visitService = {
     },
 
     /**
+     * Get clinical recommendations from disease knowledge base by ICD code
+     */
+    async getDiseaseRecommendationsByIcdCode(icdCode: string): Promise<import('../../../types').DiseaseRecommendationSuggestion[]> {
+        if (!icdCode || icdCode.trim() === '') {
+            throw new Error('Код МКБ обязателен');
+        }
+
+        try {
+            return await window.electronAPI.getDiseaseRecommendationsByIcdCode(icdCode);
+        } catch (error: any) {
+            logger.error('[VisitService] Failed to get disease recommendations by ICD code', { error, icdCode });
+            throw new Error(error.message || 'Ошибка при получении рекомендаций по коду МКБ');
+        }
+    },
+
+    /**
+     * Get ALL clinical recommendations from all diseases (for browser)
+     */
+    async getAllDiseaseRecommendations(): Promise<import('../../../types').DiseaseRecommendationSuggestion[]> {
+        try {
+            return await window.electronAPI.getAllDiseaseRecommendations();
+        } catch (error: any) {
+            logger.error('[VisitService] Failed to get all disease recommendations', { error });
+            throw new Error(error.message || 'Ошибка при получении рекомендаций');
+        }
+    },
+
+    /**
+     * Expand ICD-10 codes to include all related codes from the knowledge base
+     */
+    async getExpandedIcdCodes(icdCodes: string[]): Promise<string[]> {
+        if (!icdCodes || icdCodes.length === 0) return [];
+        try {
+            return await window.electronAPI.getExpandedIcdCodes(icdCodes);
+        } catch (error: any) {
+            logger.error('[VisitService] Failed to expand ICD codes', { error, icdCodes });
+            return icdCodes;
+        }
+    },
+
+    /**
      * Check if medication is already in prescriptions list
      * Business logic helper - validates duplicate medications
      */

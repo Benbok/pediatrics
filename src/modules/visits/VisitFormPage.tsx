@@ -31,6 +31,7 @@ import { CreateDiagnosticTemplateModal } from './components/CreateDiagnosticTemp
 import { DiagnosticTemplateSelector } from './components/DiagnosticTemplateSelector';
 import { DiagnosticTemplateBatchEditor } from './components/DiagnosticTemplateBatchEditor';
 import { DiagnosticBrowser } from './components/DiagnosticBrowser';
+import { RecommendationsBrowser } from './components/RecommendationsBrowser';
 import { diagnosticTemplateService } from './services/diagnosticTemplateService';
 import { RecommendationsSection } from './components/RecommendationsSection';
 import { RecommendationTemplateSelector } from './components/RecommendationTemplateSelector';
@@ -72,7 +73,9 @@ import {
     X,
     Search,
     FileSignature,
-    Printer
+    Printer,
+    BookOpen,
+    Loader2
 } from 'lucide-react';
 import { calculateBMI, calculateBSA, getBMICategory, getBMICategoryLabel, formatBMI, formatBSA, validateAnthropometry } from '../../utils/anthropometry';
 import { calculateAgeInMonths, getFormattedAge } from '../../utils/ageUtils';
@@ -140,10 +143,15 @@ export const VisitFormPage: React.FC = () => {
     const [diagnosticTemplateToEdit, setDiagnosticTemplateToEdit] = useState<import('../../types').DiagnosticTemplate | null>(null);
     const [isDiagnosticBrowserOpen, setIsDiagnosticBrowserOpen] = useState(false);
 
+    // Рекомендации из базы знаний заболеваний
+    const [diseaseRecommendations, setDiseaseRecommendations] = useState<import('../../types').DiseaseRecommendationSuggestion[]>([]);
+    const [isLoadingDiseaseRecs, setIsLoadingDiseaseRecs] = useState(false);
+
     // Рекомендации
     const [recommendations, setRecommendations] = useState<string[]>([]);
     const [isRecommendationTemplateSelectorOpen, setIsRecommendationTemplateSelectorOpen] = useState(false);
     const [isCreateRecommendationTemplateOpen, setIsCreateRecommendationTemplateOpen] = useState(false);
+    const [isRecommendationBrowserOpen, setIsRecommendationBrowserOpen] = useState(false);
 
     // Модальные окна
     const [isIcdSearchOpen, setIsIcdSearchOpen] = useState(false);
@@ -854,9 +862,61 @@ export const VisitFormPage: React.FC = () => {
         }
     };
 
+    /**
+     * Загрузка клинических рекомендаций из базы знаний для всех выбранных диагнозов
+     */
+    const loadDiseaseRecommendationsForAllDiagnoses = async (
+        primary: DiagnosisEntry | null,
+        complicationsArr: DiagnosisEntry[],
+        comorbiditiesArr: DiagnosisEntry[]
+    ) => {
+        const allDiagnoses: DiagnosisEntry[] = [
+            ...(primary ? [primary] : []),
+            ...complicationsArr,
+            ...comorbiditiesArr
+        ];
+
+        const icdCodes = [...new Set(
+            allDiagnoses.map(d => d.code).filter(Boolean)
+        )] as string[];
+
+        if (icdCodes.length === 0) {
+            setDiseaseRecommendations([]);
+            return;
+        }
+
+        setIsLoadingDiseaseRecs(true);
+        try {
+            const allResults = await Promise.all(
+                icdCodes.map(code => visitService.getDiseaseRecommendationsByIcdCode(code))
+            );
+
+            // Дедупликация по тексту рекомендации
+            const recsMap = new Map<string, import('../../types').DiseaseRecommendationSuggestion>();
+            allResults.flat().forEach(rec => {
+                const key = rec.item.text.toLowerCase().trim();
+                if (!recsMap.has(key)) {
+                    recsMap.set(key, rec);
+                }
+            });
+
+            setDiseaseRecommendations(Array.from(recsMap.values()));
+            logger.info('[VisitFormPage] Loaded disease recommendations', {
+                icdCodes,
+                count: recsMap.size
+            });
+        } catch (err) {
+            logger.error('[VisitFormPage] Failed to load disease recommendations', { err });
+            setDiseaseRecommendations([]);
+        } finally {
+            setIsLoadingDiseaseRecs(false);
+        }
+    };
+
     // Загрузка препаратов и диагностики для существующего приема при открытии
     const medicationsLoadedForEdit = useRef(false);
     const diagnosticsLoadedForEdit = useRef(false);
+    const diseaseRecsLoadedForEdit = useRef(false);
     useEffect(() => {
         // Загружаем препараты и диагностику только один раз при редактировании существующего приема
         if (isEdit && initialLoadDone.current) {
@@ -886,6 +946,17 @@ export const VisitFormPage: React.FC = () => {
                         comorbiditiesCount: comorbiditiesArr.length
                     });
                 }
+
+                // Загружаем рекомендации из базы знаний
+                if (!diseaseRecsLoadedForEdit.current) {
+                    diseaseRecsLoadedForEdit.current = true;
+                    loadDiseaseRecommendationsForAllDiagnoses(primary, complicationsArr, comorbiditiesArr);
+                    logger.info('[VisitFormPage] Loading disease recommendations for existing visit', {
+                        hasPrimary: !!primary,
+                        complicationsCount: complicationsArr.length,
+                        comorbiditiesCount: comorbiditiesArr.length
+                    });
+                }
             }
         }
     }, [isEdit, formData.primaryDiagnosis, formData.complications, formData.comorbidities]);
@@ -900,7 +971,8 @@ export const VisitFormPage: React.FC = () => {
         // Перезагружаем препараты и диагностику для всех диагнозов
         await Promise.all([
             loadMedicationsForAllDiagnoses(diagnosis, complications, comorbidities),
-            loadDiagnosticsForAllDiagnoses(diagnosis, complications, comorbidities)
+            loadDiagnosticsForAllDiagnoses(diagnosis, complications, comorbidities),
+            loadDiseaseRecommendationsForAllDiagnoses(diagnosis, complications, comorbidities)
         ]);
     };
 
@@ -913,7 +985,8 @@ export const VisitFormPage: React.FC = () => {
         // Перезагружаем препараты и диагностику для всех диагнозов
         await Promise.all([
             loadMedicationsForAllDiagnoses(primaryDiagnosis, newComplications, comorbidities),
-            loadDiagnosticsForAllDiagnoses(primaryDiagnosis, newComplications, comorbidities)
+            loadDiagnosticsForAllDiagnoses(primaryDiagnosis, newComplications, comorbidities),
+            loadDiseaseRecommendationsForAllDiagnoses(primaryDiagnosis, newComplications, comorbidities)
         ]);
     };
 
@@ -926,7 +999,8 @@ export const VisitFormPage: React.FC = () => {
         // Перезагружаем препараты и диагностику для всех диагнозов
         await Promise.all([
             loadMedicationsForAllDiagnoses(primaryDiagnosis, complications, newComorbidities),
-            loadDiagnosticsForAllDiagnoses(primaryDiagnosis, complications, newComorbidities)
+            loadDiagnosticsForAllDiagnoses(primaryDiagnosis, complications, newComorbidities),
+            loadDiseaseRecommendationsForAllDiagnoses(primaryDiagnosis, complications, newComorbidities)
         ]);
     };
 
@@ -1841,12 +1915,13 @@ export const VisitFormPage: React.FC = () => {
                             </h2>
                             <div className="flex items-center gap-2">
                                 <Button
-                                    variant="secondary"
+                                    variant="ghost"
                                     size="sm"
                                     onClick={() => setIsMedicationBrowserOpen(true)}
-                                    className="rounded-xl"
+                                    className="text-xs"
+                                    title="Открыть справочник препаратов"
                                 >
-                                    <Search className="w-4 h-4 mr-1" />
+                                    <BookOpen className="w-3 h-3 mr-1" />
                                     Справочник
                                 </Button>
                             {currentUser?.id && (
@@ -1985,12 +2060,13 @@ export const VisitFormPage: React.FC = () => {
                             </h2>
                             <div className="flex items-center gap-2">
                                 <Button
-                                    variant="secondary"
+                                    variant="ghost"
                                     size="sm"
                                     onClick={() => setIsDiagnosticBrowserOpen(true)}
-                                    className="rounded-xl"
+                                    className="text-xs"
+                                    title="Открыть справочник исследований"
                                 >
-                                    <Search className="w-4 h-4 mr-1" />
+                                    <BookOpen className="w-3 h-3 mr-1" />
                                     Справочник
                                 </Button>
                             {currentUser?.id && (
@@ -2098,6 +2174,7 @@ export const VisitFormPage: React.FC = () => {
                             onChange={setRecommendations}
                             onOpenTemplateSelector={() => setIsRecommendationTemplateSelectorOpen(true)}
                             onOpenSaveTemplate={() => setIsCreateRecommendationTemplateOpen(true)}
+                            onOpenBrowser={() => setIsRecommendationBrowserOpen(true)}
                         />
                     </div>
                 </div>
@@ -2253,6 +2330,53 @@ export const VisitFormPage: React.FC = () => {
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            </Card>
+                        )}
+
+                        {/* Disease Knowledge Recommendations Card */}
+                        {diseaseRecommendations.length > 0 && (
+                            <Card className="p-5 rounded-[32px] border-teal-100 dark:border-teal-900/30 shadow-sm animate-in zoom-in-95 duration-200 bg-gradient-to-br from-teal-50/50 to-white dark:from-teal-950/10 dark:to-slate-900">
+                                <h2 className="text-sm font-black text-teal-700 dark:text-teal-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <BookOpen className="w-4 h-4" />
+                                    Рекомендации из базы знаний
+                                    {isLoadingDiseaseRecs && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
+                                </h2>
+                                <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
+                                    {diseaseRecommendations.map((rec, idx) => {
+                                        const categoryLabels: Record<string, string> = {
+                                            regimen: 'Режим',
+                                            nutrition: 'Питание',
+                                            followup: 'Наблюдение',
+                                            activity: 'Активность',
+                                            education: 'Родителям',
+                                            other: 'Прочее',
+                                        };
+                                        const alreadyAdded = recommendations.includes(rec.item.text);
+                                        return (
+                                            <div key={idx} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-teal-100 dark:border-teal-900/30 flex items-start gap-3">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-snug">{rec.item.text}</p>
+                                                    <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-1 font-semibold uppercase tracking-wide">
+                                                        {categoryLabels[rec.item.category] || rec.item.category}
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        if (!alreadyAdded) {
+                                                            setRecommendations(prev => [...prev, rec.item.text]);
+                                                        }
+                                                    }}
+                                                    disabled={alreadyAdded}
+                                                    className={`flex-shrink-0 ${alreadyAdded ? 'text-green-500' : 'text-teal-600 hover:text-teal-700'}`}
+                                                >
+                                                    {alreadyAdded ? <CheckCircle2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                                </Button>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </Card>
                         )}
@@ -2582,6 +2706,23 @@ export const VisitFormPage: React.FC = () => {
                 onRemove={(item) => handleRemoveDiagnosticTestByName(item.test, item.type || 'lab')}
                 currentIcd10Codes={diagnosticBrowserIcdCodes}
                 selectedTests={currentDiagnosticItems}
+            />
+
+            {/* Recommendations Browser Modal */}
+            <RecommendationsBrowser
+                isOpen={isRecommendationBrowserOpen}
+                onClose={() => setIsRecommendationBrowserOpen(false)}
+                onSelect={(text) => {
+                    if (!recommendations.includes(text)) {
+                        setRecommendations(prev => [...prev, text]);
+                    }
+                }}
+                currentIcd10Codes={[
+                    ...(primaryDiagnosis?.code ? [primaryDiagnosis.code] : []),
+                    ...complications.map((c: any) => c.code).filter(Boolean),
+                    ...comorbidities.map((c: any) => c.code).filter(Boolean),
+                ]}
+                selectedTexts={recommendations}
             />
 
             {/* ==================== RECOMMENDATION TEMPLATE MODALS ==================== */}

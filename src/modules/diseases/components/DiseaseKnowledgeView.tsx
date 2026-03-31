@@ -94,6 +94,7 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
     }, [searchTerm, searchFileId, guidelines]);
 
     const hasRedFlags = disease.redFlags && disease.redFlags.length > 0;
+    const hasRecommendations = disease.clinicalRecommendations && disease.clinicalRecommendations.length > 0;
 
     const sections = [
         {
@@ -112,6 +113,7 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
             id: 'treatment', label: 'Лечение', icon: Pill, content: []
         },
         ...(hasRedFlags ? [{ id: 'red-flags', label: 'Красные флаги', icon: AlertTriangle }] : []),
+        ...(hasRecommendations ? [{ id: 'recommendations', label: 'Рекомендации', icon: BookOpen }] : []),
         {
             id: 'medications', label: 'Препараты', icon: Pill
         },
@@ -501,6 +503,48 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                                                 </div>
                                             </div>
                                         ))}
+                                    </div>
+                                </Card>
+                            </TabsContent>
+                        )}
+
+                        {/* Recommendations Tab */}
+                        {hasRecommendations && (
+                            <TabsContent value="recommendations" className="mt-0 focus-visible:outline-none">
+                                <Card className="p-8 rounded-3xl border-teal-200 dark:border-teal-900/50 bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/20 dark:to-emerald-950/20">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-12 h-12 bg-teal-100 dark:bg-teal-900/30 rounded-2xl flex items-center justify-center">
+                                            <BookOpen className="w-7 h-7 text-teal-600 dark:text-teal-400" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-teal-900 dark:text-teal-100">Рекомендации</h3>
+                                            <p className="text-sm text-teal-600 dark:text-teal-400">Клинические рекомендации для пациента и родителей</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {(disease.clinicalRecommendations || []).map((item: import('../../../types').DiseaseRecommendationItem, idx: number) => {
+                                            const categoryLabels: Record<string, string> = {
+                                                regimen: 'Режим',
+                                                nutrition: 'Питание',
+                                                followup: 'Наблюдение',
+                                                activity: 'Активность',
+                                                education: 'Родителям',
+                                                other: 'Прочее',
+                                            };
+                                            return (
+                                                <div key={idx} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-teal-200 dark:border-teal-900/50 shadow-sm hover:shadow-md transition-shadow">
+                                                    <div className="flex items-start gap-3">
+                                                        <BookOpen className="w-5 h-5 text-teal-600 dark:text-teal-400 mt-0.5 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <span className="text-slate-800 dark:text-slate-200 leading-relaxed block">{item.text}</span>
+                                                            <span className="text-xs font-semibold text-teal-600 dark:text-teal-400 mt-1 block uppercase tracking-wide">
+                                                                {categoryLabels[item.category] || item.category}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </Card>
                             </TabsContent>

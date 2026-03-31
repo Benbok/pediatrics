@@ -216,8 +216,9 @@ model Disease {
   symptomsEmbedding     String?  @map("symptoms_embedding") // JSON array of numbers (embedding vector)
   diagnosticPlan        String?  @map("diagnostic_plan") // JSON array
   treatmentPlan         String?  @map("treatment_plan") // JSON array
-  differentialDiagnosis String?  @map("differential_diagnosis") // JSON array
-  redFlags              String?  @map("red_flags") // JSON array
+  differentialDiagnosis    String?  @map("differential_diagnosis") // JSON array
+  redFlags                 String?  @map("red_flags") // JSON array
+  clinicalRecommendations  String?  @map("clinical_recommendations") // JSON array of DiseaseRecommendationItem
   createdAt             DateTime @default(now()) @map("created_at")
 
   // Relations

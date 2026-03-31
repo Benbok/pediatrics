@@ -107,11 +107,23 @@ const setupVisitHandlers = () => {
         return await VisitService.getDiagnosticsByIcdCode(icdCode);
     }));
 
+    ipcMain.handle('visits:get-disease-recommendations-by-icd-code', ensureAuthenticated(async (_, icdCode) => {
+        return await VisitService.getDiseaseRecommendationsByIcdCode(icdCode);
+    }));
+
     ipcMain.handle('visits:get-all-diagnostic-tests', ensureAuthenticated(async () => {
         const cached = CacheService.get('visits', 'all_diagnostic_tests');
         if (cached) return cached;
         const result = await VisitService.getAllDiagnosticTests();
         CacheService.set('visits', 'all_diagnostic_tests', result);
+        return result;
+    }));
+
+    ipcMain.handle('visits:get-all-disease-recommendations', ensureAuthenticated(async () => {
+        const cached = CacheService.get('visits', 'all_disease_recommendations');
+        if (cached) return cached;
+        const result = await VisitService.getAllDiseaseRecommendations();
+        CacheService.set('visits', 'all_disease_recommendations', result);
         return result;
     }));
 

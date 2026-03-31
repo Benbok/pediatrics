@@ -1136,6 +1136,66 @@ const VisitService = {
     },
 
     /**
+     * Получить клинические рекомендации по коду МКБ
+     * Ищет ВСЕ заболевания, у которых данный код присутствует в icd10Codes,
+     * и собирает их clinicalRecommendations.
+     * @param {string} icdCode - Код МКБ (например, J18)
+     * @returns {Promise<Array>} Массив рекомендаций с источником — { item, sourceDiseaseName, sourceDiseaseId }
+     */
+    async getDiseaseRecommendationsByIcdCode(icdCode) {
+        if (!icdCode) {
+            throw new Error('Код МКБ обязателен');
+        }
+
+        const normalizedCode = icdCode.toUpperCase().trim();
+        logger.info(`[VisitService] getDiseaseRecommendationsByIcdCode: searching for code ${normalizedCode}`);
+
+        const allDiseases = await prisma.disease.findMany();
+
+        const diseases = allDiseases.filter(disease => {
+            const additionalCodes = safeJsonParse(disease.icd10Codes, []);
+            const allDiseaseCodes = [disease.icd10Code, ...additionalCodes].filter(Boolean);
+
+            return allDiseaseCodes.some(diseaseCode => {
+                if (diseaseCode === normalizedCode) return true;
+                if (normalizedCode.startsWith(diseaseCode + '.')) return true;
+                if (diseaseCode.startsWith(normalizedCode + '.')) return true;
+                return false;
+            });
+        });
+
+        logger.info(`[VisitService] Found ${diseases.length} diseases matching ICD code ${normalizedCode} for recommendations`);
+
+        const recMap = new Map();
+
+        for (const disease of diseases) {
+            const clinicalRecs = safeJsonParse(disease.clinicalRecommendations, []);
+
+            for (const item of clinicalRecs) {
+                if (!item || !item.text) continue;
+
+                const key = item.text.toLowerCase().trim();
+                if (!recMap.has(key)) {
+                    recMap.set(key, {
+                        item: {
+                            category: item.category || 'other',
+                            text: item.text,
+                            priority: item.priority || 'medium',
+                        },
+                        sourceDiseaseName: disease.nameRu,
+                        sourceDiseaseId: disease.id,
+                    });
+                }
+            }
+        }
+
+        const result = Array.from(recMap.values());
+        logger.info(`[VisitService] Found ${result.length} unique recommendations for ICD code ${normalizedCode}`);
+
+        return result;
+    },
+
+    /**
      * Получить ВСЕ диагностические исследования из всех заболеваний базы знаний
      * Используется для справочника исследований
      * @returns {Promise<Array>} Массив всех диагностических исследований с источниками
@@ -1182,6 +1242,54 @@ const VisitService = {
         const result = Array.from(diagnosticsMap.values());
         logger.info(`[VisitService] Found ${result.length} total unique diagnostic tests`);
 
+        return result;
+    },
+
+    /**
+     * Получить ВСЕ клинические рекомендации из всех заболеваний базы знаний
+     * Используется для справочника рекомендаций
+     * @returns {Promise<Array>} Массив всех рекомендаций с источниками
+     */
+    async getAllDiseaseRecommendations() {
+        logger.info('[VisitService] Getting all disease recommendations from knowledge base');
+
+        const allDiseases = await prisma.disease.findMany();
+
+        // Map для дедупликации по тексту, но сохраняем все источники
+        const recsMap = new Map();
+
+        for (const disease of allDiseases) {
+            const clinicalRecs = safeJsonParse(disease.clinicalRecommendations, []);
+            const diseaseCodes = safeJsonParse(disease.icd10Codes, []);
+            const allCodes = [disease.icd10Code, ...diseaseCodes].filter(Boolean);
+
+            for (const item of clinicalRecs) {
+                if (!item || !item.text) continue;
+
+                const recKey = item.text.toLowerCase().trim();
+
+                if (!recsMap.has(recKey)) {
+                    recsMap.set(recKey, {
+                        item: {
+                            category: item.category || 'other',
+                            text: item.text,
+                            priority: item.priority || 'medium'
+                        },
+                        sourceDiseaseName: disease.nameRu,
+                        sourceDiseaseId: disease.id,
+                        icd10Codes: allCodes
+                    });
+                } else {
+                    // Добавляем коды к существующей рекомендации
+                    const existing = recsMap.get(recKey);
+                    const newCodes = allCodes.filter(c => !existing.icd10Codes.includes(c));
+                    existing.icd10Codes = [...existing.icd10Codes, ...newCodes];
+                }
+            }
+        }
+
+        const result = Array.from(recsMap.values());
+        logger.info(`[VisitService] Found ${result.length} total unique disease recommendations`);
         return result;
     }
 };

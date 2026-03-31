@@ -148,16 +148,21 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <Card className="w-full max-w-4xl max-h-[90vh] m-4 flex flex-col rounded-3xl">
+            <Card className="w-full max-w-4xl max-h-[90vh] m-4 flex flex-col rounded-3xl overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-xl">
                             <Microscope className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                         </div>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                            Справочник исследований
-                        </h2>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                                Справочник исследований
+                            </h2>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">
+                                Лабораторные и инструментальные исследования из базы знаний
+                            </p>
+                        </div>
                     </div>
                     <Button variant="ghost" size="sm" onClick={onClose} className="rounded-xl">
                         <X className="w-5 h-5" />
@@ -165,7 +170,7 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
                 </div>
 
                 {/* Search and Filters */}
-                <div className="p-6 border-b border-slate-200 dark:border-slate-800 space-y-4">
+                <div className="p-6 border-b border-slate-200 dark:border-slate-800 space-y-4 flex-shrink-0">
                     <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <Input
@@ -177,46 +182,42 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
                         />
                     </div>
                     
-                    <div className="flex flex-wrap items-center gap-4">
-                        {/* Type filter */}
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setFilterType('all')}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                                    filterType === 'all' 
-                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' 
-                                        : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-                                }`}
-                            >
-                                Все
-                            </button>
-                            <button
-                                onClick={() => setFilterType('lab')}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
-                                    filterType === 'lab' 
-                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' 
-                                        : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-                                }`}
-                            >
-                                <FlaskConical className="w-4 h-4" />
-                                Лабораторные
-                            </button>
-                            <button
-                                onClick={() => setFilterType('instrumental')}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
-                                    filterType === 'instrumental' 
-                                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' 
-                                        : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-                                }`}
-                            >
-                                <FileBarChart className="w-4 h-4" />
-                                Инструментальные
-                            </button>
-                        </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            onClick={() => setFilterType('all')}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                filterType === 'all' 
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 ring-1 ring-blue-400' 
+                                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                            }`}
+                        >
+                            Все
+                        </button>
+                        <button
+                            onClick={() => setFilterType('lab')}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                                filterType === 'lab' 
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 ring-1 ring-blue-400' 
+                                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                            }`}
+                        >
+                            <FlaskConical className="w-4 h-4" />
+                            Лабораторные
+                        </button>
+                        <button
+                            onClick={() => setFilterType('instrumental')}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                                filterType === 'instrumental' 
+                                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 ring-1 ring-purple-400' 
+                                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                            }`}
+                        >
+                            <FileBarChart className="w-4 h-4" />
+                            Инструментальные
+                        </button>
 
-                        {/* ICD filter */}
                         {currentIcd10Codes.length > 0 && (
-                            <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer ml-2">
                                 <input
                                     type="checkbox"
                                     id="filter-icd10-diag"
@@ -224,10 +225,8 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
                                     onChange={(e) => setFilterByIcd10(e.target.checked)}
                                     className="w-4 h-4 rounded border-slate-300 text-blue-600"
                                 />
-                                <label htmlFor="filter-icd10-diag" className="text-sm text-slate-600 dark:text-slate-400">
-                                    Показать только исследования для выбранного диагноза
-                                </label>
-                            </div>
+                                Показать только исследования для выбранного диагноза
+                            </label>
                         )}
                     </div>
                 </div>
@@ -255,12 +254,11 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
                                         key={`${diag.item.test}-${idx}`}
                                         className={`
                                             p-4 rounded-2xl cursor-pointer group relative overflow-hidden
-                                            transition-all duration-300 ease-out
-                                            transform hover:scale-[1.02] active:scale-[0.98]
+                                            transition-all duration-200
                                             border-2
                                             ${isSelected 
-                                                ? 'border-green-500 bg-green-50 dark:bg-green-950/30 shadow-lg shadow-green-500/20 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:shadow-red-500/20' 
-                                                : `border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-${isLab ? 'blue' : 'purple'}-400 hover:shadow-lg hover:shadow-${isLab ? 'blue' : 'purple'}-500/10`
+                                                ? 'border-green-500 bg-green-50 dark:bg-green-950/30 shadow-md shadow-green-500/20 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:shadow-red-500/20' 
+                                                : `border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-${isLab ? 'blue' : 'purple'}-400 hover:shadow-md hover:shadow-${isLab ? 'blue' : 'purple'}-500/10`
                                             }
                                         `}
                                         onClick={() => {
@@ -383,21 +381,22 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center flex-shrink-0">
                     <div className="text-sm text-slate-500 flex items-center gap-4">
                         <span>
-                            Найдено: <strong>{filteredDiagnostics.length}</strong> из {diagnostics.length}
+                            {filteredDiagnostics.length} исследований
+                            {selectedTests.length > 0 && ` · ${selectedTests.length} добавлено`}
                         </span>
-                        <span className="text-blue-600">
+                        <span className="text-blue-600 dark:text-blue-400">
                             <FlaskConical className="w-4 h-4 inline mr-1" />
                             {labCount} лаб.
                         </span>
-                        <span className="text-purple-600">
+                        <span className="text-purple-600 dark:text-purple-400">
                             <FileBarChart className="w-4 h-4 inline mr-1" />
                             {instrCount} инстр.
                         </span>
                     </div>
-                    <Button variant="primary" onClick={onClose} className="rounded-xl">
+                    <Button variant="secondary" onClick={onClose} className="rounded-xl">
                         Закрыть
                     </Button>
                 </div>

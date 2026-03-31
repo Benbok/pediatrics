@@ -83,6 +83,12 @@ const TreatmentPlanItemSchema = z.object({
     priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
 });
 
+const RecommendationItemSchema = z.object({
+    category: z.enum(['regimen', 'nutrition', 'followup', 'activity', 'education', 'other']).default('other'),
+    text: z.string().min(1),
+    priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+});
+
 function getGuidelineText(value) {
     if (!value || typeof value !== 'string') return null;
     const trimmed = value.trim();
@@ -195,6 +201,7 @@ const DiseaseSchema = z.object({
     symptoms: z.array(SymptomSchema).default([]),
     diagnosticPlan: z.array(DiagnosticPlanItemSchema).optional().default([]),
     treatmentPlan: z.array(TreatmentPlanItemSchema).optional().default([]),
+    clinicalRecommendations: z.array(RecommendationItemSchema).optional().default([]),
     differentialDiagnosis: z.array(z.string()).optional().default([]),
     redFlags: z.array(z.string()).optional().default([]),
 });
@@ -250,6 +257,7 @@ const DiseaseService = {
         const parsedTreatmentPlan = safeJsonParse(disease.treatmentPlan, []);
         const parsedDifferentialDiagnosis = safeJsonParse(disease.differentialDiagnosis, []);
         const parsedRedFlags = safeJsonParse(disease.redFlags, []);
+        const parsedClinicalRecommendations = safeJsonParse(disease.clinicalRecommendations, []);
 
         // DEBUG: Log parsed values
         logger.info(`[DiseaseService] Parsed values:`, {
@@ -276,6 +284,7 @@ const DiseaseService = {
             treatmentPlan: ___,
             differentialDiagnosis: ____,
             redFlags: _____,
+            clinicalRecommendations: ______cr,
             symptomsEmbedding: ______,
             symptoms: _____symptoms,
             ...diseaseWithoutJsonFields
@@ -289,6 +298,7 @@ const DiseaseService = {
             symptoms: parsedSymptoms,
             diagnosticPlan: parsedDiagnosticPlan,
             treatmentPlan: parsedTreatmentPlan,
+            clinicalRecommendations: parsedClinicalRecommendations,
             differentialDiagnosis: parsedDifferentialDiagnosis,
             redFlags: parsedRedFlags,
             relatedMedications
@@ -344,12 +354,14 @@ const DiseaseService = {
             treatmentPlan: JSON.stringify(rest.treatmentPlan || []),
             differentialDiagnosis: JSON.stringify(rest.differentialDiagnosis || []),
             redFlags: JSON.stringify(rest.redFlags || []),
+            clinicalRecommendations: JSON.stringify(rest.clinicalRecommendations || []),
             symptomsEmbedding: symptomsEmbedding ? (typeof symptomsEmbedding === 'string' ? symptomsEmbedding : JSON.stringify(symptomsEmbedding)) : null,
         };
 
         logger.debug(`[DiseaseService] Saving disease with plans:`, {
             diagnosticPlan: (rest.diagnosticPlan || []).length,
             treatmentPlan: (rest.treatmentPlan || []).length,
+            clinicalRecommendations: (rest.clinicalRecommendations || []).length,
             differentialDiagnosis: (rest.differentialDiagnosis || []).length,
             redFlags: (rest.redFlags || []).length
         });

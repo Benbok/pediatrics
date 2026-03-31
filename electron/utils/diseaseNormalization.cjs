@@ -138,11 +138,22 @@ function normalizeDiseaseData(diseaseData) {
         })
         : diseaseData.diagnosticPlan;
 
+    const normalizedClinicalRecommendations = Array.isArray(diseaseData.clinicalRecommendations)
+        ? diseaseData.clinicalRecommendations
+            .filter(item => item && typeof item === 'object' && typeof item.text === 'string' && item.text.trim())
+            .map(item => ({
+                category: ['regimen', 'nutrition', 'followup', 'activity', 'education', 'other'].includes(item.category) ? item.category : 'other',
+                text: item.text.trim(),
+                priority: ['low', 'medium', 'high'].includes(item.priority) ? item.priority : 'medium',
+            }))
+        : [];
+
     const normalized = {
         ...diseaseData,
         symptoms: normalizeSymptomsToCategorized(diseaseData.symptoms || []),
         diagnosticPlan: normalizedDiagnosticPlan,
         treatmentPlan: normalizedTreatmentPlan,
+        clinicalRecommendations: normalizedClinicalRecommendations,
         differentialDiagnosis: diseaseData.differentialDiagnosis || [],
         redFlags: diseaseData.redFlags || []
     };

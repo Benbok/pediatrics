@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { diseaseService, parseSymptoms } from './services/diseaseService';
 import { useToast } from '../../context/ToastContext';
 import { icdCodeService } from '../../services/icdCode.service';
-import { Disease, SymptomCategory, CategorizedSymptom } from '../../types';
+import { Disease, SymptomCategory, CategorizedSymptom, DiseaseRecommendationItem, DiseaseRecommendationCategory } from '../../types';
 import { logger } from '../../services/logger';
 import { Card } from '../../components/ui/Card';
 import { SymptomsList } from './components/SymptomsList';
@@ -27,7 +27,8 @@ import {
     Sparkles,
     Trash2,
     Copy,
-    Eye
+    Eye,
+    BookOpen
 } from 'lucide-react';
 import DISEASE_JSON_TEMPLATE from './templates/diseaseJsonTemplate.json';
 
@@ -45,6 +46,7 @@ export const DiseaseFormPage: React.FC = () => {
         symptoms: [],
         diagnosticPlan: [],
         treatmentPlan: [],
+        clinicalRecommendations: [],
         differentialDiagnosis: [],
         redFlags: [],
     });
@@ -92,6 +94,7 @@ export const DiseaseFormPage: React.FC = () => {
                 icd10Codes: Array.isArray(data.icd10Codes) ? data.icd10Codes : (typeof data.icd10Codes === 'string' ? JSON.parse(data.icd10Codes) : []),
                 diagnosticPlan: typeof data.diagnosticPlan === 'string' ? JSON.parse(data.diagnosticPlan) : (data.diagnosticPlan || []),
                 treatmentPlan: typeof data.treatmentPlan === 'string' ? JSON.parse(data.treatmentPlan) : (data.treatmentPlan || []),
+                clinicalRecommendations: typeof data.clinicalRecommendations === 'string' ? JSON.parse(data.clinicalRecommendations) : (data.clinicalRecommendations || []),
                 differentialDiagnosis: typeof data.differentialDiagnosis === 'string' ? JSON.parse(data.differentialDiagnosis) : (data.differentialDiagnosis || []),
                 redFlags: typeof data.redFlags === 'string' ? JSON.parse(data.redFlags) : (data.redFlags || []),
             };
@@ -242,6 +245,29 @@ export const DiseaseFormPage: React.FC = () => {
         setFormData({
             ...formData,
             treatmentPlan: (formData.treatmentPlan || []).filter((_, i) => i !== index)
+        });
+    };
+
+    const addRecommendationItem = () => {
+        setFormData({
+            ...formData,
+            clinicalRecommendations: [
+                ...(formData.clinicalRecommendations || []),
+                { category: 'other' as DiseaseRecommendationCategory, text: '', priority: 'medium' }
+            ]
+        });
+    };
+
+    const updateRecommendationItem = (index: number, updates: Partial<DiseaseRecommendationItem>) => {
+        const items = [...(formData.clinicalRecommendations || [])];
+        items[index] = { ...items[index], ...updates };
+        setFormData({ ...formData, clinicalRecommendations: items });
+    };
+
+    const removeRecommendationItem = (index: number) => {
+        setFormData({
+            ...formData,
+            clinicalRecommendations: (formData.clinicalRecommendations || []).filter((_, i) => i !== index)
         });
     };
 
@@ -538,6 +564,15 @@ export const DiseaseFormPage: React.FC = () => {
         { value: 'other', label: 'Другое' },
     ];
 
+    const recommendationCategoryOptions: Array<SelectOption<DiseaseRecommendationCategory>> = [
+        { value: 'regimen', label: 'Режим' },
+        { value: 'nutrition', label: 'Питание' },
+        { value: 'followup', label: 'Наблюдение' },
+        { value: 'activity', label: 'Активность' },
+        { value: 'education', label: 'Рекомендации родителям' },
+        { value: 'other', label: 'Другое' },
+    ];
+
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
@@ -813,6 +848,68 @@ export const DiseaseFormPage: React.FC = () => {
                         ))}
                         {(formData.treatmentPlan || []).length === 0 && (
                             <p className="text-sm text-slate-400 italic">План лечения не заполнен</p>
+                        )}
+                    </div>
+                </Card>
+
+                {/* Clinical Recommendations */}
+                <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <BookOpen className="w-6 h-6 text-teal-500" />
+                            Рекомендации
+                        </h2>
+                        <Button type="button" variant="secondary" onClick={addRecommendationItem} className="rounded-xl">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Добавить
+                        </Button>
+                    </div>
+                    <div className="space-y-4">
+                        {(formData.clinicalRecommendations || []).map((item: DiseaseRecommendationItem, idx: number) => (
+                            <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 relative">
+                                <button
+                                    type="button"
+                                    onClick={() => removeRecommendationItem(idx)}
+                                    className="absolute top-3 right-3 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pr-8">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Категория</label>
+                                        <PrettySelect
+                                            value={item.category || 'other'}
+                                            onChange={(value) => updateRecommendationItem(idx, { category: value as DiseaseRecommendationCategory })}
+                                            options={recommendationCategoryOptions}
+                                            buttonClassName="h-10 px-3 rounded-xl"
+                                            useFixedPanel
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2 md:col-span-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Текст рекомендации</label>
+                                        <textarea
+                                            value={item.text || ''}
+                                            onChange={e => updateRecommendationItem(idx, { text: e.target.value })}
+                                            placeholder="Например: Постельный режим 3-5 дней"
+                                            rows={2}
+                                            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Приоритет</label>
+                                        <PrettySelect
+                                            value={item.priority || 'medium'}
+                                            onChange={(value) => updateRecommendationItem(idx, { priority: value as 'low' | 'medium' | 'high' })}
+                                            options={priorityOptions}
+                                            buttonClassName="h-10 px-3 rounded-xl"
+                                            useFixedPanel
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {(formData.clinicalRecommendations || []).length === 0 && (
+                            <p className="text-sm text-slate-400 italic">Рекомендации не заполнены</p>
                         )}
                     </div>
                 </Card>
