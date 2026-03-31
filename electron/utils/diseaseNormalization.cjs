@@ -100,7 +100,7 @@ function normalizeSymptomsToCategorized(symptoms) {
                 const normalizedTexts = normalizeSymptomsWithPhrases([raw]);
                 return {
                     text: normalizedTexts[0] != null ? normalizedTexts[0] : raw,
-                    category: ['clinical', 'physical', 'other'].includes(s.category) ? s.category : 'other',
+                    category: ['clinical', 'physical', 'laboratory', 'other'].includes(s.category) ? s.category : 'other',
                 };
             })
             .filter(item => {

@@ -181,7 +181,7 @@ function buildGuidelinePlan(disease, guideline) {
 // Symptom schema: { text, category } with backward compatibility for string[]
 const SymptomSchema = z.object({
     text: z.string().min(1),
-    category: z.enum(['clinical', 'physical', 'other']).default('other'),
+    category: z.enum(['clinical', 'physical', 'laboratory', 'other']).default('other'),
 });
 
 // Disease Validation Schema
@@ -210,7 +210,7 @@ function _parseSymptoms(symptomsJson) {
     }
     return parsed.map(s => ({
         text: (s && s.text) ? String(s.text).trim() : '',
-        category: (s && s.category && ['clinical', 'physical', 'other'].includes(s.category)) ? s.category : 'other',
+        category: (s && s.category && ['clinical', 'physical', 'laboratory', 'other'].includes(s.category)) ? s.category : 'other',
     })).filter(s => s.text.length > 0);
 }
 

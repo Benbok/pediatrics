@@ -354,7 +354,7 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
                                     Симптомы и клинические признаки
                                 </h3>
-                                <SymptomsList symptoms={disease.symptoms || []} editable={false} />
+                                <SymptomsList symptoms={disease.symptoms || []} editable={false} showQuickFilters />
                             </div>
                         </TabsContent>
 

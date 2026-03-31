@@ -11,6 +11,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { PrettySelect, type SelectOption } from './components/PrettySelect';
 import {
     ChevronLeft,
     ChevronRight,
@@ -510,6 +511,33 @@ export const DiseaseFormPage: React.FC = () => {
         }
     };
 
+    // Опции для выпадающих списков
+    const symptomCategoryOptions: Array<SelectOption<SymptomCategory>> = [
+        { value: 'other', label: 'Другое' },
+        { value: 'clinical', label: 'Клинические' },
+        { value: 'physical', label: 'Физикальные' },
+        { value: 'laboratory', label: 'Лабораторные' },
+    ];
+
+    const diagnosticTypeOptions: Array<SelectOption<string>> = [
+        { value: 'lab', label: 'Лабораторное' },
+        { value: 'instrumental', label: 'Инструментальное' },
+    ];
+
+    const priorityOptions: Array<SelectOption<string>> = [
+        { value: 'low', label: 'Низкий' },
+        { value: 'medium', label: 'Средний' },
+        { value: 'high', label: 'Высокий' },
+    ];
+
+    const treatmentCategoryOptions: Array<SelectOption<string>> = [
+        { value: 'symptomatic', label: 'Симптоматическое' },
+        { value: 'etiologic', label: 'Этиотропное' },
+        { value: 'supportive', label: 'Поддерживающее' },
+        { value: 'respiratory', label: 'Респираторная поддержка' },
+        { value: 'other', label: 'Другое' },
+    ];
+
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
@@ -630,15 +658,15 @@ export const DiseaseFormPage: React.FC = () => {
                             placeholder="Введите симптом или несколько через запятую..."
                             className="h-12 rounded-xl flex-1 min-w-[200px]"
                         />
-                        <select
-                            value={newSymptomCategory}
-                            onChange={e => setNewSymptomCategory(e.target.value as SymptomCategory)}
-                            className="h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-bold text-slate-700 dark:text-slate-200"
-                        >
-                            <option value="other">Другое</option>
-                            <option value="clinical">Клинические</option>
-                            <option value="physical">Физикальные</option>
-                        </select>
+                        <div className="w-48">
+                            <PrettySelect
+                                value={newSymptomCategory}
+                                onChange={(value) => setNewSymptomCategory(value)}
+                                options={symptomCategoryOptions}
+                                buttonClassName="h-12 px-4 rounded-xl font-bold"
+                                useFixedPanel
+                            />
+                        </div>
                         <Button type="button" onClick={addSymptom} variant="secondary" className="h-12 w-12 rounded-xl p-0">
                             <Plus className="w-6 h-6" />
                         </Button>
@@ -680,14 +708,13 @@ export const DiseaseFormPage: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="flex flex-col gap-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Тип</label>
-                                        <select
+                                        <PrettySelect
                                             value={item.type || 'lab'}
-                                            onChange={e => updateDiagnosticPlanItem(idx, { type: e.target.value })}
-                                            className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-                                        >
-                                            <option value="lab">Лабораторное</option>
-                                            <option value="instrumental">Инструментальное</option>
-                                        </select>
+                                            onChange={(value) => updateDiagnosticPlanItem(idx, { type: value })}
+                                            options={diagnosticTypeOptions}
+                                            buttonClassName="h-10 px-3 rounded-xl"
+                                            useFixedPanel
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-2 md:col-span-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Исследование</label>
@@ -700,15 +727,13 @@ export const DiseaseFormPage: React.FC = () => {
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Приоритет</label>
-                                        <select
+                                        <PrettySelect
                                             value={item.priority || 'medium'}
-                                            onChange={e => updateDiagnosticPlanItem(idx, { priority: e.target.value })}
-                                            className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-                                        >
-                                            <option value="low">Низкий</option>
-                                            <option value="medium">Средний</option>
-                                            <option value="high">Высокий</option>
-                                        </select>
+                                            onChange={(value) => updateDiagnosticPlanItem(idx, { priority: value })}
+                                            options={priorityOptions}
+                                            buttonClassName="h-10 px-3 rounded-xl"
+                                            useFixedPanel
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-2 md:col-span-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Обоснование</label>
@@ -755,16 +780,13 @@ export const DiseaseFormPage: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="flex flex-col gap-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Категория</label>
-                                        <select
+                                        <PrettySelect
                                             value={item.category || 'symptomatic'}
-                                            onChange={e => updateTreatmentPlanItem(idx, { category: e.target.value })}
-                                            className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-                                        >
-                                            <option value="symptomatic">Симптоматическое</option>
-                                            <option value="etiologic">Этиотропное</option>
-                                            <option value="supportive">Поддерживающее</option>
-                                            <option value="other">Другое</option>
-                                        </select>
+                                            onChange={(value) => updateTreatmentPlanItem(idx, { category: value })}
+                                            options={treatmentCategoryOptions}
+                                            buttonClassName="h-10 px-3 rounded-xl"
+                                            useFixedPanel
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-2 md:col-span-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Описание</label>
@@ -778,15 +800,13 @@ export const DiseaseFormPage: React.FC = () => {
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Приоритет</label>
-                                        <select
+                                        <PrettySelect
                                             value={item.priority || 'medium'}
-                                            onChange={e => updateTreatmentPlanItem(idx, { priority: e.target.value })}
-                                            className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-                                        >
-                                            <option value="low">Низкий</option>
-                                            <option value="medium">Средний</option>
-                                            <option value="high">Высокий</option>
-                                        </select>
+                                            onChange={(value) => updateTreatmentPlanItem(idx, { priority: value })}
+                                            options={priorityOptions}
+                                            buttonClassName="h-10 px-3 rounded-xl"
+                                            useFixedPanel
+                                        />
                                     </div>
                                 </div>
                             </div>

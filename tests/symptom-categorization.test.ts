@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { parseSymptoms } from '../src/modules/diseases/services/diseaseService';
 
+const { normalizeSymptomsToCategorized } = require('../electron/utils/diseaseNormalization.cjs');
+
 describe('Symptom Categorization', () => {
     it('should parse old format (string[]) to new format', () => {
         const oldFormat = ['кашель', 'лихорадка'];
@@ -20,6 +22,25 @@ describe('Symptom Categorization', () => {
 
         const parsed = parseSymptoms(newFormat);
         expect(parsed).toEqual(newFormat);
+    });
+
+    it('should preserve laboratory category in frontend parsing', () => {
+        const newFormat = [
+            { text: 'СРБ > 30 мг/л', category: 'laboratory' },
+        ];
+
+        const parsed = parseSymptoms(newFormat);
+        expect(parsed).toEqual(newFormat);
+    });
+
+    it('should preserve laboratory category in backend normalization', () => {
+        const normalized = normalizeSymptomsToCategorized([
+            { text: 'Лейкоцитоз', category: 'laboratory' },
+        ]);
+
+        expect(normalized).toEqual([
+            { text: 'Лейкоцитоз', category: 'laboratory' },
+        ]);
     });
 
     it('should extract text for AI search', () => {

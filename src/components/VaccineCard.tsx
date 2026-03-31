@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { AugmentedVaccine, VaccineStatus, ChildProfile } from '../types';
 import { DatePicker } from './DatePicker';
 import { UserVaccineRecordSchema } from '../validators/record.validator';
+import { PrettySelect, type SelectOption } from '../modules/vaccination/components/PrettySelect';
 
 interface Props {
   data: AugmentedVaccine;
@@ -152,6 +153,18 @@ export const VaccineCard: React.FC<Props> = ({ data, child, onToggleComplete, on
     return data.availableBrands?.find(b => b.name === selectedBrandName);
   }, [data.availableBrands, selectedBrandName]);
 
+  const brandOptions = useMemo<Array<SelectOption<string>>>(() => {
+    const base: Array<SelectOption<string>> = [{ value: '', label: 'Выберите препарат...' }];
+    if (!data.availableBrands?.length) return base;
+    return [
+      ...base,
+      ...data.availableBrands.map((brand) => ({
+        value: brand.name,
+        label: `${brand.name} (${brand.country})`,
+      })),
+    ];
+  }, [data.availableBrands]);
+
   // If skipped or missed, allow forcing completion via a "Force" button hidden in details?
   // For now, allow regular completion but show visually distinct.
   // Disable actions for missed/skipped vaccines UNLESS it's an emergency (SOS) vaccine like ATS
@@ -246,16 +259,13 @@ export const VaccineCard: React.FC<Props> = ({ data, child, onToggleComplete, on
             <div className={`flex flex-col items-end gap-2 w-full ${isActionDisabled && !isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
               {data.availableBrands && data.availableBrands.length > 0 && (
                 <div className="w-full max-w-full sm:max-w-[14rem]">
-                  <select
+                  <PrettySelect
                     value={selectedBrandName}
-                    onChange={(e) => setSelectedBrandName(e.target.value)}
-                    className="text-xs p-2 w-full rounded border border-slate-300 bg-white/80 focus:ring-1 focus:ring-blue-400 outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200 mb-1"
-                  >
-                    <option value="">Выберите препарат...</option>
-                    {data.availableBrands.map(brand => (
-                      <option key={brand.name} value={brand.name}>{brand.name} ({brand.country})</option>
-                    ))}
-                  </select>
+                    onChange={(value) => setSelectedBrandName(value)}
+                    options={brandOptions}
+                    buttonClassName="text-xs p-2 mb-1"
+                    useFixedPanel
+                  />
                   {selectedBrandDetails && (
                     <div className="text-[10px] bg-white/50 dark:bg-black/20 p-1.5 rounded text-slate-600 dark:text-slate-400 leading-snug">
                       {selectedBrandDetails.description}

@@ -16,7 +16,7 @@ class MedicationValidator {
         this.warnings = [];
         this.errors = [];
 
-        this.validateDosing(medicationData.pediatricDosing || []);
+        this.validateDosing(medicationData.pediatricDosing || [], medicationData.forms || []);
         this.validateForms(medicationData);
         this.validateFormLinks(medicationData);
         this.validateNumericFields(medicationData);
@@ -32,12 +32,43 @@ class MedicationValidator {
     }
 
     /**
+     * Определяет, используются ли МЕ/IU (Международные Единицы) вместо мг.
+     * Проверяет rule.unit, unit связанной формы и unit внутри dosing.
+     */
+    isIUUnit(rule, forms = []) {
+        const isIUString = (str) => {
+            if (!str || typeof str !== 'string') return false;
+            const upper = str.toUpperCase().trim();
+            return upper === 'IU' || upper === 'ME' || upper === 'МЕ'
+                || upper.includes('МЕ') || upper.endsWith(' IU') || upper.endsWith(' ME');
+        };
+
+        // 1. Поле unit у самого правила дозирования
+        if (isIUString(rule.unit)) return true;
+
+        // 2. Если есть formId — unit связанной формы выпуска
+        if (rule.formId) {
+            const form = forms.find(f => f.id === rule.formId);
+            if (isIUString(form?.unit)) return true;
+        }
+
+        // 3. Unit внутри блока dosing (fixedDose / ageBasedDose)
+        if (isIUString(rule.dosing?.fixedDose?.unit)) return true;
+        if (isIUString(rule.dosing?.ageBasedDose?.unit)) return true;
+
+        return false;
+    }
+
+    /**
      * Проверка дозирования на опасные значения
      */
-    validateDosing(dosingRules) {
+    validateDosing(dosingRules, forms = []) {
         dosingRules.forEach((rule, idx) => {
-            // Проверка на слишком высокие дозы
-            if (rule.dosing?.mgPerKg > 100) {
+            const isIU = this.isIUUnit(rule, forms);
+            const unitLabel = isIU ? 'МЕ' : 'мг';
+
+            // Проверка на слишком высокие дозы мг/кг (не применимо для МЕ/IU)
+            if (!isIU && rule.dosing?.mgPerKg > 100) {
                 this.warnings.push({
                     field: `pediatricDosing[${idx}].dosing.mgPerKg`,
                     message: `Очень высокая доза: ${rule.dosing.mgPerKg} мг/кг (обычно не более 100 мг/кг)`,
@@ -87,24 +118,35 @@ class MedicationValidator {
                 });
             }
 
-            // Проверка согласованности: maxDailyDose должна быть >= maxSingleDose * timesPerDay
+            // Проверка согласованности maxDailyDose vs maxSingleDose × timesPerDay.
+            // Поддерживаются асимметричные схемы (разные дозы в разные приёмы),
+            // например: утром 1 000 000 МЕ + вечером 500 000 МЕ = 1 500 000 МЕ/сутки.
             if (rule.maxDailyDose && rule.maxSingleDose && rule.timesPerDay) {
                 const theoreticalMaxDaily = rule.maxSingleDose * rule.timesPerDay;
-                
-                if (rule.maxDailyDose < theoreticalMaxDaily * 0.9) {
+
+                if (rule.maxDailyDose < rule.maxSingleDose) {
+                    // Суточная доза меньше разовой — явная ошибка данных
                     this.errors.push({
                         field: `pediatricDosing[${idx}].maxDailyDose`,
-                        message: `Максимальная суточная доза (${rule.maxDailyDose} мг) меньше чем разовая × частоту (${theoreticalMaxDaily} мг). Проверьте данные!`,
+                        message: `Максимальная суточная доза (${rule.maxDailyDose} ${unitLabel}) меньше разовой (${rule.maxSingleDose} ${unitLabel}). Проверьте данные!`,
+                        severity: 'high'
+                    });
+                } else if (rule.maxDailyDose < theoreticalMaxDaily * 0.9) {
+                    // Суточная ≥ разовой, но < разовая × частота — вероятно асимметричная схема
+                    this.warnings.push({
+                        field: `pediatricDosing[${idx}].maxDailyDose`,
+                        message: `Суточная доза (${rule.maxDailyDose} ${unitLabel}) меньше расчётной разовая × частота (${theoreticalMaxDaily} ${unitLabel}). ` +
+                            `Если схема асимметричная (разные дозы в разные приёмы) — это норма. Иначе проверьте данные.`,
                         severity: 'high'
                     });
                 }
             }
 
-            // Проверка расчетной дозы vs максимальной (для weight_based)
-            if (rule.dosing?.mgPerKg && rule.maxSingleDose && rule.timesPerDay) {
+            // Проверка расчетной дозы vs максимальной (для weight_based, только мг)
+            if (!isIU && rule.dosing?.mgPerKg && rule.maxSingleDose) {
                 // Для среднего ребенка 20 кг
                 const calculatedDose = 20 * rule.dosing.mgPerKg;
-                
+
                 if (calculatedDose > rule.maxSingleDose) {
                     this.warnings.push({
                         field: `pediatricDosing[${idx}].dosing.mgPerKg`,
@@ -114,38 +156,40 @@ class MedicationValidator {
                 }
             }
 
-            // Проверка: максимальная разовая доза не должна быть аномально большой
-            if (rule.maxSingleDose && rule.maxSingleDose > 5000) {
-                this.warnings.push({
-                    field: `pediatricDosing[${idx}].maxSingleDose`,
-                    message: `Очень большая максимальная разовая доза: ${rule.maxSingleDose} мг. Возможно ошибка в единицах измерения?`,
-                    severity: 'high'
-                });
-            }
+            // Проверка аномально больших доз.
+            // Для МЕ/IU пороги мг неприменимы — пропускаем эти проверки.
+            if (!isIU) {
+                if (rule.maxSingleDose && rule.maxSingleDose > 5000) {
+                    this.warnings.push({
+                        field: `pediatricDosing[${idx}].maxSingleDose`,
+                        message: `Очень большая максимальная разовая доза: ${rule.maxSingleDose} мг. Возможно ошибка в единицах измерения?`,
+                        severity: 'high'
+                    });
+                }
 
-            if (rule.maxSingleDosePerKg && rule.maxSingleDosePerKg > 200) {
-                this.warnings.push({
-                    field: `pediatricDosing[${idx}].maxSingleDosePerKg`,
-                    message: `Очень большая максимальная разовая доза: ${rule.maxSingleDosePerKg} мг/кг. Возможно ошибка в единицах?`,
-                    severity: 'high'
-                });
-            }
+                if (rule.maxSingleDosePerKg && rule.maxSingleDosePerKg > 200) {
+                    this.warnings.push({
+                        field: `pediatricDosing[${idx}].maxSingleDosePerKg`,
+                        message: `Очень большая максимальная разовая доза: ${rule.maxSingleDosePerKg} мг/кг. Возможно ошибка в единицах?`,
+                        severity: 'high'
+                    });
+                }
 
-            // Проверка: максимальная суточная не должна быть аномально большой
-            if (rule.maxDailyDose && rule.maxDailyDose > 20000) {
-                this.warnings.push({
-                    field: `pediatricDosing[${idx}].maxDailyDose`,
-                    message: `Очень большая максимальная суточная доза: ${rule.maxDailyDose} мг. Возможно ошибка в единицах измерения?`,
-                    severity: 'high'
-                });
-            }
+                if (rule.maxDailyDose && rule.maxDailyDose > 20000) {
+                    this.warnings.push({
+                        field: `pediatricDosing[${idx}].maxDailyDose`,
+                        message: `Очень большая максимальная суточная доза: ${rule.maxDailyDose} мг. Возможно ошибка в единицах измерения?`,
+                        severity: 'high'
+                    });
+                }
 
-            if (rule.maxDailyDosePerKg && rule.maxDailyDosePerKg > 400) {
-                this.warnings.push({
-                    field: `pediatricDosing[${idx}].maxDailyDosePerKg`,
-                    message: `Очень большая максимальная суточная доза: ${rule.maxDailyDosePerKg} мг/кг. Возможно ошибка в единицах?`,
-                    severity: 'high'
-                });
+                if (rule.maxDailyDosePerKg && rule.maxDailyDosePerKg > 400) {
+                    this.warnings.push({
+                        field: `pediatricDosing[${idx}].maxDailyDosePerKg`,
+                        message: `Очень большая максимальная суточная доза: ${rule.maxDailyDosePerKg} мг/кг. Возможно ошибка в единицах?`,
+                        severity: 'high'
+                    });
+                }
             }
         });
     }

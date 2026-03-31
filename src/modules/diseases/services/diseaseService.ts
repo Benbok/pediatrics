@@ -28,7 +28,7 @@ export function parseSymptoms(symptoms: any): CategorizedSymptom[] {
     }
     return parsed.map((s: any) => ({
         text: (s && s.text) ? String(s.text).trim() : '',
-        category: (s && s.category && ['clinical', 'physical', 'other'].includes(s.category)) ? s.category as SymptomCategory : 'other' as SymptomCategory
+        category: (s && s.category && ['clinical', 'physical', 'laboratory', 'other'].includes(s.category)) ? s.category as SymptomCategory : 'other' as SymptomCategory
     })).filter((s: CategorizedSymptom) => s.text.length > 0);
 }
 

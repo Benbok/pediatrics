@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const SymptomCategoryEnum = z.enum(['clinical', 'physical', 'other']);
+export const SymptomCategoryEnum = z.enum(['clinical', 'physical', 'laboratory', 'other']);
 export type SymptomCategoryType = z.infer<typeof SymptomCategoryEnum>;
 
 export const SymptomSchema = z.object({

@@ -275,7 +275,7 @@ export interface TreatmentPlanItem {
   priority?: 'low' | 'medium' | 'high';
 }
 
-export type SymptomCategory = 'clinical' | 'physical' | 'other';
+export type SymptomCategory = 'clinical' | 'physical' | 'laboratory' | 'other';
 
 export interface CategorizedSymptom {
   text: string;

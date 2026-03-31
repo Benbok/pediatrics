@@ -24,6 +24,7 @@ import { printService } from '../printing';
 import { createVaccinationCertificateData } from './adapters/printingAdapter';
 import { patientService } from '../../services/patient.service';
 import { vaccinationService } from '../../services/vaccination.service';
+import { PrettySelect, type SelectOption } from './components/PrettySelect';
 
 /**
  * VACCINATION MODULE
@@ -58,6 +59,11 @@ export const VaccinationModule: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [tempMantouxDate, setTempMantouxDate] = useState('');
+    
+    // Custom vaccine form state
+    const [customVaccineName, setCustomVaccineName] = useState('');
+    const [customVaccineDisease, setCustomVaccineDisease] = useState('other');
+    const [customVaccineAge, setCustomVaccineAge] = useState('12');
 
     // Load all data when childId changes
     useEffect(() => {
@@ -330,18 +336,18 @@ export const VaccinationModule: React.FC = () => {
 
     const handleAddCustomVaccine = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const name = formData.get('name') as string;
-        const disease = formData.get('disease') as string;
-        const ageMonth = parseInt(formData.get('age') as string);
-        const description = formData.get('description') as string;
+        
+        if (!customVaccineName.trim()) {
+            alert('Введите название прививки');
+            return;
+        }
 
         const newVaccine: VaccineDefinition = {
             id: `custom-${Date.now()}`,
-            name,
-            disease,
-            ageMonthStart: ageMonth,
-            description: description || 'Пользовательская прививка',
+            name: customVaccineName,
+            disease: customVaccineDisease,
+            ageMonthStart: parseInt(customVaccineAge),
+            description: customVaccineName,
             isCustom: true
         };
 
@@ -358,6 +364,10 @@ export const VaccinationModule: React.FC = () => {
                 await vaccinationService.updateProfile(updatedProfile);
                 setVaccinationProfile(updatedProfile);
                 setIsAddModalOpen(false);
+                // Reset form
+                setCustomVaccineName('');
+                setCustomVaccineDisease('other');
+                setCustomVaccineAge('12');
             } catch (error: any) {
                 console.error('Failed to add custom vaccine:', error);
                 alert(error.message || 'Ошибка обновления профиля');
@@ -619,6 +629,49 @@ export const VaccinationModule: React.FC = () => {
             </div>
         );
     }
+
+    // Options for custom vaccine form
+    const diseaseOptions: Array<SelectOption<string>> = [
+        { value: 'other', label: 'Другое' },
+        { value: 'influenza', label: 'Грипп' },
+        { value: 'pneumonia', label: 'Пневмокок' },
+        { value: 'meningitis', label: 'Менингит' },
+        { value: 'measles', label: 'Корь' },
+        { value: 'mumps', label: 'Паротит' },
+        { value: 'rubella', label: 'Краснуха' },
+        { value: 'whooping', label: 'Коклюш' },
+        { value: 'tetanus', label: 'Столбняк' },
+        { value: 'diphtheria', label: 'Дифтерия' },
+        { value: 'polio', label: 'Полиомиелит' },
+        { value: 'typhoid', label: 'Брюшной тиф' },
+        { value: 'hepatitis_a', label: 'Гепатит А' },
+        { value: 'hepatitis_b', label: 'Гепатит В' },
+        { value: 'hpv', label: 'ВПЧ' },
+        { value: 'rotavirus', label: 'Ротавирус' },
+        { value: 'varicella', label: 'Ветрянка' },
+    ];
+
+    const ageOptions: Array<SelectOption<string>> = [
+        { value: '0', label: 'При рождении (0 мес)' },
+        { value: '1', label: '1 месяц' },
+        { value: '2', label: '2 месяца' },
+        { value: '3', label: '3 месяца' },
+        { value: '4', label: '4 месяца' },
+        { value: '5', label: '5 месяцев' },
+        { value: '6', label: '6 месяцев' },
+        { value: '12', label: '12 месяцев (1 год)' },
+        { value: '18', label: '18 месяцев' },
+        { value: '24', label: '24 месяца (2 года)' },
+        { value: '36', label: '36 месяцев (3 года)' },
+        { value: '48', label: '4 года' },
+        { value: '60', label: '5 лет' },
+        { value: '72', label: '6 лет' },
+        { value: '84', label: '7 лет' },
+        { value: '120', label: '10 лет' },
+        { value: '144', label: '12 лет' },
+        { value: '168', label: '14 лет' },
+        { value: '180', label: '15 лет' },
+    ];
 
     return (
         <div className="space-y-4">
@@ -1117,14 +1170,83 @@ export const VaccinationModule: React.FC = () => {
 
             {isAddModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full border dark:border-slate-800">
-                        <h3 className="text-lg font-bold mb-4">Своя прививка</h3>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full border dark:border-slate-800">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold">Добавить прививку</h3>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsAddModalOpen(false);
+                                    setCustomVaccineName('');
+                                    setCustomVaccineDisease('other');
+                                    setCustomVaccineAge('12');
+                                }}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                            >
+                                ✕
+                            </button>
+                        </div>
                         <form onSubmit={handleAddCustomVaccine} className="space-y-4">
-                            <input name="name" required className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-700" placeholder="Название" />
-                            <input name="disease" required className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-700" placeholder="Болезнь" />
-                            <input name="age" type="number" min="0" required className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-700" placeholder="Возраст (мес)" />
-                            <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded">Добавить</button>
-                            <button type="button" onClick={() => setIsAddModalOpen(false)} className="w-full text-slate-500 py-2">Отмена</button>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                    Название прививки
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={customVaccineName}
+                                    onChange={(e) => setCustomVaccineName(e.target.value)}
+                                    placeholder="Например: Дополнительная доза Полио"
+                                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                    Заболевание
+                                </label>
+                                <PrettySelect
+                                    value={customVaccineDisease}
+                                    onChange={(value) => setCustomVaccineDisease(value)}
+                                    options={diseaseOptions}
+                                    buttonClassName="h-10 px-3 rounded-lg"
+                                    useFixedPanel
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                    Рекомендуемый возраст
+                                </label>
+                                <PrettySelect
+                                    value={customVaccineAge}
+                                    onChange={(value) => setCustomVaccineAge(value)}
+                                    options={ageOptions}
+                                    buttonClassName="h-10 px-3 rounded-lg"
+                                    useFixedPanel
+                                />
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    type="submit"
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium transition-colors"
+                                >
+                                    Добавить
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsAddModalOpen(false);
+                                        setCustomVaccineName('');
+                                        setCustomVaccineDisease('other');
+                                        setCustomVaccineAge('12');
+                                    }}
+                                    className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-lg font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    Отмена
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>
