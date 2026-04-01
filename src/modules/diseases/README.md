@@ -6,6 +6,8 @@
 
 ## 🏗️ Архитектура
 
+> **Последняя версия:** добавлен `DiagnosticTestCatalog` — постоянный каталог названий диагностических тестов. Реализована трёхуровневая система дедупликации (запись → импорт → ввод). Подробнее см. раздел [Нормализация и дедупликация](#нормализация-и-дедупликация-диагностических-тестов).
+
 Модуль следует строгой многослойной архитектуре согласно `AI_CODING_GUIDELINES.md`:
 
 ```
@@ -71,7 +73,9 @@ src/modules/diseases/
 │   ├── DiseaseNoteCard.tsx           # Карточка заметки
 │   ├── DiseaseNoteEditor.tsx         # Редактор заметок
 │   ├── DiseaseNotesList.tsx          # Список заметок к заболеванию
-│   └── GuidelinesList.tsx            # Список клинических рекомендаций
+│   ├── GuidelinesList.tsx            # Список клинических рекомендаций
+│   ├── SymptomsList.tsx              # Список симптомов
+│   └── TestNameAutocomplete.tsx      # Автодополнение по каталогу тестов
 │
 ├── services/                          # Бизнес-логика и IPC вызовы
 │   └── diseaseService.ts             # Основной сервис заболеваний
@@ -80,9 +84,12 @@ src/modules/diseases/
     └── diseaseJsonTemplate.json      # Шаблон JSON для импорта
 
 electron/modules/diseases/
-├── service.cjs                       # Backend бизнес-логика
+├── service.cjs                       # Backend бизнес-логика (upsert + дедупликация)
 ├── handlers.cjs                      # IPC handlers для заболеваний
 └── validator.cjs                     # Валидация заболеваний
+
+electron/utils/
+└── diseaseNormalization.cjs          # normalizeTestName, jaroWinkler, normalizeDiseaseData
 ```
 
 ## 🎯 Основной функционал
@@ -261,7 +268,94 @@ electron/modules/diseases/
 - Предпросмотр перед сохранением
 - Предупреждения о недостающих данных
 
-### 9. Валидация
+### 9. Нормализация и дедупликация диагностических тестов
+
+Исторически одно и то же исследование могло храниться под разными именами в разных заболеваниях («Общий анализ крови», «Общий клинический анализ крови», «ОАК»). Реализована трёхуровневая защита.
+
+#### Уровень 1 — Write-time нормализация (`electron/utils/diseaseNormalization.cjs`)
+
+Функция `normalizeTestName(testName)` применяется ко всем тестам при каждом сохранении:
+- убирает пробелы по краям
+- сжимает множественные пробелы в один
+- делает заглавной первую букву
+
+Функция `_deduplicateDiagnosticPlan()` в `service.cjs` убирает точные дубликаты внутри одной болезни (ключ: `"type|test.toLowerCase()"`).
+
+#### Уровень 2 — Fuzzy-matching при импорте JSON
+
+`normalizeDiseaseData(data, availableTestNames?)` принимает необязательный список всех известных названий тестов. Для каждого входящего теста вычисляется схожесть по **Jaro-Winkler**:
+
+```
+jaroWinkler(inputName, candidate) >= 0.92 → заменяется каноническим именем
+```
+
+При `upsert()` backend автоматически подгружает все существующие названия тестов из БД и передаёт их в `normalizeDiseaseData`, поэтому импорт JSON автоматически выравнивается по уже сохранённым именам.
+
+#### Уровень 3 — UI автодополнение (`TestNameAutocomplete.tsx`)
+
+В форме редактирования болезни поле `test` в плане диагностики заменено на `<TestNameAutocomplete>`:
+- при монтировании формы загружается список канонических названий из `DiagnosticTestCatalog` через `diseaseService.getDiagnosticCatalogTestNames()`
+- при вводе фильтрует список по подстроке (без учёта регистра), показывает до 12 подсказок
+- выбор из дропдауна вставляет каноническое имя
+- при `blur` выполняется проверка по алиасам через `diseaseService.resolveDiagnosticTestName()`; если найдено соответствие, поле автоматически заменяется на каноническое имя
+- если совпадений нет — разрешается ввести новое имя
+
+#### Модель `DiagnosticTestCatalog` (Prisma)
+
+Добавлена в Phase 3 как постоянный справочник:
+
+```prisma
+model DiagnosticTestCatalog {
+  id         Int      @id @default(autoincrement())
+  nameRu     String   @unique @map("name_ru")   // каноническое имя
+  type       String                              // 'lab' | 'instrumental'
+  aliases    String   @default("[]")             // JSON: список вариантов написания
+  isStandard Boolean  @default(false)            // из официальных стандартов?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([type])
+  @@map("diagnostic_test_catalog")
+}
+```
+
+Миграция: `prisma/migrations/20260331120000_add_diagnostic_test_catalog/migration.sql`
+
+#### Пополнение каталога (алиасы)
+
+Все записи каталога хранятся в массиве `CATALOG` в файле [scripts/seed-diagnostic-catalog.py](../../../scripts/seed-diagnostic-catalog.py). Скрипт идемпотентен: повторный запуск обновляет существующие записи и добавляет новые, ничего не удаляя.
+
+**Добавить новый тест:**
+
+```python
+{
+    "name_ru": "Анализ кала на скрытую кровь",  # каноническое имя (как будет сохранено в БД)
+    "type": "lab",                               # 'lab' или 'instrumental'
+    "aliases": '["Скрытая кровь в кале", "Проба Грегерсена", "Реакция Грегерсена"]',
+    "is_standard": 1,
+},
+```
+
+**Добавить алиас к существующему тесту** — найти нужную запись и расширить строку `aliases`:
+
+```python
+# Было:
+"aliases": '["ОАК", "Анализ крови"]',
+# Стало:
+"aliases": '["ОАК", "Анализ крови", "Гемограмма развёрнутая"]',
+```
+
+После любых правок применить:
+
+```powershell
+python scripts/seed-diagnostic-catalog.py
+```
+
+Вывод покажет количество созданных и обновлённых записей (`Created: N, Updated: M`).
+
+> **Важно**: Node.js версия (`seed-diagnostic-catalog.cjs`) не работает из-за несовместимости `better-sqlite3` с системным Node. Используйте только `.py` версию.
+
+### 10. Валидация
 
 Модуль использует **двойную валидацию**:
 
@@ -315,6 +409,7 @@ electron/modules/diseases/
 **Особенности**:
 - Валидация ICD-10 кодов
 - Динамическое управление списками
+- При монтировании загружает каталог тестов (`diseaseService.getDiagnosticCatalogTestNames()`) для автодополнения
 - Клик по чипу симптома открывает полное редактирование записи
 - Для симптомов доступны категории: клинические, физикальные, лабораторные и прочие
 - Тип критерия меняется только внутри полного редактирования записи симптома
@@ -323,6 +418,27 @@ electron/modules/diseases/
 - Backend сохраняет и возвращает категорию `laboratory` без отката в `other`
 - В карточке просмотра болезни доступен быстрый фильтр по типам критериев
 - Предпросмотр импортированных данных
+
+### `TestNameAutocomplete.tsx`
+
+Компонент автодополнения для поля названия теста в плане диагностики:
+
+```typescript
+interface TestNameAutocompleteProps {
+  value: string;
+  onChange: (value: string) => void;
+  onBlurValue?: (value: string) => void;
+  availableTests: string[];
+  isLoading?: boolean;
+  placeholder?: string;
+}
+```
+
+- Фильтрует `availableTests` по подстроке (case-insensitive)
+- Показывает до 12 подсказок
+- Закрывается по клику вне компонента или при выборе варианта
+- Может вызвать внешний обработчик `onBlurValue` для проверок/нормализации после ввода
+- Если совпадений нет — отображает «Совпадений не найдено. Разрешается добавить новое название.»
 
 ### `DiseaseDetailPage.tsx`
 
@@ -426,6 +542,8 @@ diseaseService.updateGuideline(id, title)     // Обновить рекомен
 diseaseService.deleteGuideline(id)            // Удалить рекомендацию
 diseaseService.reindexGuidelineChunks()        // Пересобрать GuidelineChunk + FTS
 diseaseService.importFromJson(jsonString)     // Импорт из JSON
+diseaseService.getDiagnosticCatalogTestNames() // Список канонических названий тестов
+diseaseService.resolveDiagnosticTestName(name) // Нормализация теста по каталогу/алиасам
 ```
 
 **Особенности сервиса**:
@@ -475,6 +593,16 @@ diseaseService.importFromJson(jsonString)     // Импорт из JSON
 - Удобства обработки
 - Сохранения иерархии данных
 - Поддержки сложных структур (массивы объектов)
+
+### Модель DiagnosticTestCatalog (Prisma)
+
+Справочник канонических названий диагностических тестов. Добавлен в Phase 3 дедупликации.
+
+Основные поля:
+- `id`, `nameRu` (UNIQUE), `type` (`lab` | `instrumental`)
+- `aliases`: JSON-массив вариантов написания
+- `isStandard`: признак официального стандарта
+- `createdAt`, `updatedAt`
 
 ### Связи
 
@@ -538,12 +666,15 @@ AI является **опциональным усилителем**:
 6. **Парсите JSON поля** только на границе с базой данных (в backend service)
 7. **Используйте GuidelinePlan API**: Для получения нормализованных планов диагностики и лечения
 8. **Нормализуйте данные**: Используйте `normalizeDisease` перед использованием данных
+9. **Никогда не сохраняйте название теста вручную** без прохода через `normalizeTestName()` — используйте `normalizeDiseaseData()` или компонент `TestNameAutocomplete`
+10. **Не дублируйте дедупликацию**: логика дедупликации живёт в `diseaseNormalization.cjs` и `service.cjs`, не копируйте её в компоненты
 
 ## 🔄 Миграции
 
 При изменении структуры данных заболевания:
 1. Обновите `prisma/schema.prisma`
-2. Создайте миграцию: `npx prisma migrate dev --name description`
+2. Создайте миграцию: `npx prisma migrate dev --name description`  
+   > ⚠️ Если в БД есть FTS5-таблицы (`guideline_chunks_fts`), Prisma обнаружит drift и потребует сброс. В этом случае используйте ручной подход (см. `MIGRATION_INSTRUCTIONS.md`): создайте `migration.sql` вручную, примените через Python/SQLite, затем `npx prisma migrate resolve --applied <name>`
 3. Обновите TypeScript типы в `src/types.ts`
 4. Обновите Zod схемы в `validators/disease.validator.ts`
 5. Обновите компоненты и сервисы
@@ -563,4 +694,5 @@ AI является **опциональным усилителем**:
 - `src/validators/disease.validator.ts` - Схемы валидации
 - `templates/diseaseJsonTemplate.json` - Шаблон для импорта из JSON
 - В шаблоне `symptoms` можно и рекомендуется задавать в формате `{ "text": string, "category": "clinical" | "physical" | "laboratory" | "other" }`, чтобы после импорта критерии сразу отображались в нужных разделах и участвовали в фильтрах просмотра
-- `src/utils/diseaseNormalization.cjs` - Нормализация данных заболеваний
+- `electron/utils/diseaseNormalization.cjs` — нормализация данных: `normalizeTestName`, `normalizeDiseaseData`, `jaroWinkler`, `findBestMatchingTestName`
+- `prisma/migrations/20260331120000_add_diagnostic_test_catalog/` — миграция каталога тестов

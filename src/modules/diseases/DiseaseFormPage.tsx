@@ -7,6 +7,7 @@ import { Disease, SymptomCategory, CategorizedSymptom, DiseaseRecommendationItem
 import { logger } from '../../services/logger';
 import { Card } from '../../components/ui/Card';
 import { SymptomsList } from './components/SymptomsList';
+import { TestNameAutocomplete } from './components/TestNameAutocomplete';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -76,6 +77,28 @@ export const DiseaseFormPage: React.FC = () => {
         needsReview: boolean;
     } | null>(null);
 
+    // Available test names for autocomplete
+    const [availableTestNames, setAvailableTestNames] = useState<string[]>([]);
+    const [isLoadingTests, setIsLoadingTests] = useState(false);
+    const [testResolutionHints, setTestResolutionHints] = useState<Record<number, string>>({});
+
+    useEffect(() => {
+        // Load available test names for autocomplete
+        const loadTestNames = async () => {
+            setIsLoadingTests(true);
+            try {
+                const testNames = await diseaseService.getDiagnosticCatalogTestNames();
+                setAvailableTestNames(testNames);
+            } catch (error) {
+                logger.error('[DiseaseFormPage] Failed to load test names', { error });
+            } finally {
+                setIsLoadingTests(false);
+            }
+        };
+
+        loadTestNames();
+    }, []);
+
     useEffect(() => {
         if (isEdit) {
             loadDisease();
@@ -108,6 +131,7 @@ export const DiseaseFormPage: React.FC = () => {
             });
 
             setFormData(parsed);
+            setTestResolutionHints({});
         } catch (err) {
             setError('Не удалось загрузить данные заболевания');
         }
@@ -212,16 +236,58 @@ export const DiseaseFormPage: React.FC = () => {
         });
     };
 
+    const clearTestHint = (index: number) => {
+        setTestResolutionHints(prev => {
+            if (!(index in prev)) return prev;
+            const next = { ...prev };
+            delete next[index];
+            return next;
+        });
+    };
+
     const updateDiagnosticPlanItem = (index: number, updates: any) => {
         const items = [...(formData.diagnosticPlan || [])];
         items[index] = { ...items[index], ...updates };
         setFormData({ ...formData, diagnosticPlan: items });
+
+        if (typeof updates?.test === 'string') {
+            clearTestHint(index);
+        }
+    };
+
+    const resolveDiagnosticTestAlias = async (index: number, rawValue: string) => {
+        const input = String(rawValue || '').trim();
+        if (!input) {
+            clearTestHint(index);
+            return;
+        }
+
+        const result = await diseaseService.resolveDiagnosticTestName(input);
+        if (result.changed && result.resolvedName) {
+            updateDiagnosticPlanItem(index, { test: result.resolvedName });
+            setTestResolutionHints(prev => ({
+                ...prev,
+                [index]: `Название нормализовано по каталогу: ${result.resolvedName}`
+            }));
+            return;
+        }
+
+        clearTestHint(index);
     };
 
     const removeDiagnosticPlanItem = (index: number) => {
         setFormData({
             ...formData,
             diagnosticPlan: (formData.diagnosticPlan || []).filter((_, i) => i !== index)
+        });
+        setTestResolutionHints(prev => {
+            const next = {} as Record<number, string>;
+            Object.entries(prev).forEach(([key, value]) => {
+                const numericKey = Number(key);
+                if (numericKey < index) next[numericKey] = value;
+                if (numericKey > index) next[numericKey - 1] = value;
+            });
+            return next;
         });
     };
 
@@ -530,6 +596,7 @@ export const DiseaseFormPage: React.FC = () => {
                 ...formData,
                 ...previewData,
             });
+            setTestResolutionHints({});
             setShowPreview(false);
             setPreviewData(null);
             setValidationResult(null);
@@ -753,12 +820,20 @@ export const DiseaseFormPage: React.FC = () => {
                                     </div>
                                     <div className="flex flex-col gap-2 md:col-span-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Исследование</label>
-                                        <Input
+                                        <TestNameAutocomplete
                                             value={item.test || ''}
-                                            onChange={e => updateDiagnosticPlanItem(idx, { test: e.target.value })}
+                                            onChange={value => updateDiagnosticPlanItem(idx, { test: value })}
+                                            onBlurValue={value => resolveDiagnosticTestAlias(idx, value)}
+                                            availableTests={availableTestNames}
+                                            isLoading={isLoadingTests}
                                             placeholder="Например: ОАК"
                                             className="h-10"
                                         />
+                                        {testResolutionHints[idx] && (
+                                            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 ml-1">
+                                                {testResolutionHints[idx]}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         <label className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">Приоритет</label>

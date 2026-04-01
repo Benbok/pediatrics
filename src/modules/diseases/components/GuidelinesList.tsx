@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { ClinicalGuideline, UploadBatchFinishedEvent, UploadProgress } from '../../../types';
-import { diseaseService } from '../services/diseaseService';
+import { diseaseService, RejectedUploadFile } from '../services/diseaseService';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
-import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload, Edit3, Check, X } from 'lucide-react';
+import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload, Edit3, Check, X, AlertCircle } from 'lucide-react';
 import { useToast } from '../../../context/ToastContext';
 
 interface GuidelinesListProps {
@@ -27,10 +27,14 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     const [isUpdating, setIsUpdating] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<Map<string, UploadProgress>>(new Map());
     const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+    const [rejectedFiles, setRejectedFiles] = useState<RejectedUploadFile[]>([]);
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; guidelineId: number | null }>({
         isOpen: false,
         guidelineId: null
     });
+
+    const uploadItems = Array.from(uploadProgress.values());
+    const activeUploadsCount = uploadItems.filter(item => item.status === 'queued' || item.status === 'processing').length;
 
     // Subscribe to upload progress events
     useEffect(() => {
@@ -57,6 +61,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
 
     useEffect(() => {
         loadGuidelines();
+        setRejectedFiles([]);
         // Clear completed uploads when loading fresh data
         setUploadProgress(prev => {
             const next = new Map(prev);
@@ -130,6 +135,30 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
         return title.replace(/^Клинические рекомендации:\s*/, '');
     };
 
+    const renderRejectedFiles = () => {
+        if (rejectedFiles.length === 0) return null;
+
+        return (
+            <Card className="p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/60 dark:bg-amber-950/20">
+                <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                        <div className="font-bold text-sm text-amber-900 dark:text-amber-200 mb-2">
+                            Отклоненные файлы
+                        </div>
+                        <div className="space-y-1">
+                            {rejectedFiles.map((item, index) => (
+                                <div key={`${item.fileName}-${item.reason}-${index}`} className="text-xs text-amber-800 dark:text-amber-300 break-words">
+                                    {item.fileName}: {item.reason}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </Card>
+        );
+    };
+
     const handleStartEdit = (guideline: ClinicalGuideline) => {
         setEditingId(guideline.id);
         setEditingTitle(cleanTitle(guideline.title));
@@ -158,36 +187,36 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
 
     const handleFileUpload = async () => {
         try {
-            const result = await window.electronAPI.openFile({
-                filters: [{ name: 'PDF Documents', extensions: ['pdf'] }],
-                properties: ['openFile', 'multiSelections'] // Разрешаем выбор нескольких файлов
-            });
+            const selectedFilePaths = await diseaseService.selectGuidelineFiles();
+            if (selectedFilePaths.length === 0) {
+                return;
+            }
 
-            if (!result.canceled && result.filePaths.length > 0) {
-                setIsUploading(true);
+            const { validFilePaths, rejectedFiles: localRejected } = diseaseService.filterGuidelineUploadCandidates(selectedFilePaths, guidelines);
 
-                try {
-                    // Используем async upload для неблокирующей загрузки
-                    const { batchId, jobs } = await diseaseService.uploadGuidelinesAsync(diseaseId, result.filePaths);
-                    setActiveBatchId(batchId);
+            setRejectedFiles(localRejected);
 
-                    // Initialize progress tracking
-                    const progressMap = new Map<string, UploadProgress>();
-                    jobs.forEach(job => {
-                        progressMap.set(job.jobId, {
-                            jobId: job.jobId,
-                            fileName: job.fileName,
-                            status: 'queued',
-                            progress: 0
-                        });
-                    });
-                    setUploadProgress(progressMap);
+            if (localRejected.length > 0) {
+                showToast(`Отклонено файлов: ${localRejected.length}`, 'warning');
+            }
 
-                } catch (error: any) {
-                    showToast(error?.message || 'Ошибка при загрузке или обработке PDF', 'error');
-                } finally {
-                    setIsUploading(false);
-                }
+            if (validFilePaths.length === 0) {
+                return;
+            }
+
+            setIsUploading(true);
+
+            try {
+                const { batchId, jobs } = await diseaseService.uploadGuidelinesAsync(diseaseId, validFilePaths);
+                setActiveBatchId(batchId);
+                setUploadProgress(diseaseService.createUploadProgressMap(jobs));
+                showToast(`Файлы добавлены в очередь: ${jobs.length}`, 'info');
+            } catch (error: any) {
+                const backendRejected = diseaseService.parseGuidelineUploadError(error?.message || '', validFilePaths);
+                setRejectedFiles(prev => [...prev, ...backendRejected]);
+                showToast(error?.message || 'Ошибка при загрузке или обработке PDF', 'error');
+            } finally {
+                setIsUploading(false);
             }
         } catch (error: any) {
             showToast(error?.message || 'Ошибка при выборе файлов', 'error');
@@ -205,6 +234,55 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     if (guidelines.length === 0) {
         return (
             <div className="space-y-4">
+                {renderRejectedFiles()}
+
+                {activeUploadsCount > 0 && (
+                    <Card className="p-4 rounded-2xl border-2 border-primary-200 bg-primary-50/30 dark:bg-primary-950/10">
+                        <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                            <Loader2 className="w-4 h-4 animate-spin text-primary-600 dark:text-primary-400" />
+                            <span>Идет фоновая обработка файлов: {activeUploadsCount}</span>
+                        </div>
+                    </Card>
+                )}
+
+                {uploadItems.map((progress) => (
+                    <Card
+                        key={progress.jobId}
+                        className="p-4 rounded-2xl border-2 border-primary-200 bg-primary-50/30 dark:bg-primary-950/10"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                                {progress.status === 'completed' ? (
+                                    <Check className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                                ) : progress.status === 'failed' ? (
+                                    <X className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                ) : (
+                                    <Loader2 className="w-5 h-5 text-primary-600 dark:text-primary-400 animate-spin" />
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="font-bold text-sm text-slate-800 dark:text-white truncate">
+                                    {progress.fileName}
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                    {progress.status === 'queued' && 'В очереди...'}
+                                    {progress.status === 'processing' && (progress.step || 'Обработка...')}
+                                    {progress.status === 'completed' && 'Загружено успешно'}
+                                    {progress.status === 'failed' && `Ошибка: ${progress.error}`}
+                                </div>
+                                {progress.status === 'processing' && progress.progress !== undefined && (
+                                    <div className="mt-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
+                                        <div
+                                            className="bg-primary-500 h-1.5 rounded-full transition-all duration-300"
+                                            style={{ width: `${progress.progress}%` }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </Card>
+                ))}
+
                 <div className="text-center py-12 text-slate-400">
                     <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm mb-4">Нет загруженных файлов</p>
@@ -224,6 +302,17 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
 
     return (
         <div className="space-y-3">
+            {renderRejectedFiles()}
+
+            {activeUploadsCount > 0 && (
+                <Card className="p-4 rounded-2xl border-2 border-primary-200 bg-primary-50/30 dark:bg-primary-950/10">
+                    <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary-600 dark:text-primary-400" />
+                        <span>Идет фоновая обработка файлов: {activeUploadsCount}</span>
+                    </div>
+                </Card>
+            )}
+
             <div className="flex justify-end mb-2">
                 <Button
                     variant="secondary"
@@ -238,7 +327,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
             </div>
 
             {/* Upload progress cards */}
-            {Array.from(uploadProgress.values()).map((progress) => (
+            {uploadItems.map((progress) => (
                 <Card
                     key={progress.jobId}
                     className="p-4 rounded-2xl border-2 border-primary-200 bg-primary-50/30 dark:bg-primary-950/10"

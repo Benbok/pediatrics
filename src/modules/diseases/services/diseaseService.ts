@@ -1,6 +1,19 @@
-import { Disease, ClinicalGuideline, GuidelinePlan, CategorizedSymptom, SymptomCategory } from '../../../types';
+import { Disease, ClinicalGuideline, GuidelinePlan, CategorizedSymptom, SymptomCategory, UploadProgress } from '../../../types';
 import { dataEvents } from '../../../services/dataEvents';
 import { logger } from '../../../services/logger';
+
+export interface RejectedUploadFile {
+    fileName: string;
+    reason: string;
+}
+
+const getFileNameFromPath = (filePath: string): string => {
+    const normalizedPath = String(filePath || '').replace(/\\/g, '/');
+    return normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1);
+};
+
+const normalizeFileLikeName = (value: string): string => value.trim().toLowerCase();
+const stripExtension = (value: string): string => value.replace(/\.[^/.]+$/, '');
 
 /**
  * Сервис для работы с заболеваниями
@@ -45,6 +58,91 @@ const normalizeDisease = <T extends Disease>(data: T): T => {
 };
 
 export const diseaseService = {
+    async selectGuidelineFiles(): Promise<string[]> {
+        const result = await window.electronAPI.openFile({
+            filters: [{ name: 'PDF Documents', extensions: ['pdf'] }],
+            properties: ['openFile', 'multiSelections']
+        });
+
+        if (result.canceled || !Array.isArray(result.filePaths)) {
+            return [];
+        }
+
+        return result.filePaths;
+    },
+
+    filterGuidelineUploadCandidates(filePaths: string[], guidelines: ClinicalGuideline[]): { validFilePaths: string[]; rejectedFiles: RejectedUploadFile[] } {
+        const selected = filePaths.map(filePath => ({
+            filePath,
+            fileName: getFileNameFromPath(filePath)
+        }));
+
+        const existingNames = new Set(
+            guidelines
+                .map(g => normalizeFileLikeName(String(g.title || '').replace(/^Клинические рекомендации:\s*/, '')))
+                .flatMap(name => [name, stripExtension(name)])
+                .filter(Boolean)
+        );
+
+        const selectedNameSet = new Set<string>();
+        const rejectedFiles: RejectedUploadFile[] = [];
+        const validFilePaths: string[] = [];
+
+        for (const item of selected) {
+            const normalized = normalizeFileLikeName(item.fileName);
+            const stem = stripExtension(normalized);
+
+            if (selectedNameSet.has(normalized)) {
+                rejectedFiles.push({
+                    fileName: item.fileName,
+                    reason: 'Дубликат в текущем выборе (одноименный файл)'
+                });
+                continue;
+            }
+
+            selectedNameSet.add(normalized);
+
+            if (existingNames.has(normalized) || existingNames.has(stem)) {
+                rejectedFiles.push({
+                    fileName: item.fileName,
+                    reason: 'Файл с таким именем уже загружен'
+                });
+                continue;
+            }
+
+            validFilePaths.push(item.filePath);
+        }
+
+        return { validFilePaths, rejectedFiles };
+    },
+
+    parseGuidelineUploadError(message: string, fallbackFilePaths: string[]): RejectedUploadFile[] {
+        const normalizedMessage = message || 'Ошибка проверки загрузки файла';
+        const colonIndex = normalizedMessage.indexOf(':');
+        const reason = colonIndex >= 0 ? normalizedMessage.slice(0, colonIndex).trim() : normalizedMessage;
+        const namesPart = colonIndex >= 0 ? normalizedMessage.slice(colonIndex + 1) : '';
+        const parsedNames = namesPart
+            .split(',')
+            .map(name => name.trim())
+            .filter(Boolean);
+        const fallbackNames = fallbackFilePaths.map(getFileNameFromPath);
+        const names = parsedNames.length > 0 ? parsedNames : fallbackNames;
+        return names.map(fileName => ({ fileName, reason }));
+    },
+
+    createUploadProgressMap(jobs: Array<{ jobId: string; fileName: string }>): Map<string, UploadProgress> {
+        const progressMap = new Map<string, UploadProgress>();
+        jobs.forEach(job => {
+            progressMap.set(job.jobId, {
+                jobId: job.jobId,
+                fileName: job.fileName,
+                status: 'queued',
+                progress: 0
+            });
+        });
+        return progressMap;
+    },
+
     /**
      * Fetch all diseases
      */
@@ -217,6 +315,38 @@ export const diseaseService = {
                 success: false,
                 error: error.message || 'Не удалось импортировать данные из JSON'
             };
+        }
+    },
+
+    /**
+     * Resolve input test name to canonical name from DiagnosticTestCatalog.
+     */
+    async resolveDiagnosticTestName(inputName: string): Promise<{
+        inputName: string;
+        resolvedName: string;
+        changed: boolean;
+    }> {
+        try {
+            return await window.electronAPI.resolveDiseaseTestName(inputName);
+        } catch (error) {
+            logger.error('[DiseaseService] Failed to resolve diagnostic test name', { error, inputName });
+            return {
+                inputName,
+                resolvedName: inputName,
+                changed: false
+            };
+        }
+    },
+
+    /**
+     * Get canonical diagnostic test names from catalog.
+     */
+    async getDiagnosticCatalogTestNames(): Promise<string[]> {
+        try {
+            return await window.electronAPI.getDiseaseCatalogTestNames();
+        } catch (error) {
+            logger.error('[DiseaseService] Failed to fetch diagnostic catalog test names', { error });
+            return [];
         }
     }
 };

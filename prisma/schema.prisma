@@ -316,6 +316,21 @@ model PdfNote {
   @@map("pdf_notes")
 }
 
+// ============= DIAGNOSTIC TEST CATALOG =============
+
+model DiagnosticTestCatalog {
+  id           Int      @id @default(autoincrement())
+  nameRu       String   @unique @map("name_ru")
+  type         String   // 'lab' | 'instrumental'
+  aliases      String   @default("[]") @map("aliases") // JSON array of alternative names
+  isStandard   Boolean  @default(false) @map("is_standard") // true if from official standards
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([type])
+  @@map("diagnostic_test_catalog")
+}
+
 model Medication {
   id                 Int     @id @default(autoincrement())
   nameRu             String  @map("name_ru")

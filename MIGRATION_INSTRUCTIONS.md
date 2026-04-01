@@ -2,28 +2,29 @@
 
 ---
 
-## Текущий статус проекта (после исправления)
+## Текущий статус проекта
 
-> **Вывод: добавлять новые модули безопасно.** `npx prisma migrate dev --name add_new_module` работает корректно.
+> **Вывод: при наличии FTS5-таблиц `npx prisma migrate dev` завершается drift-ошибкой.** Используйте ручной подход (Проблема 3) — данные не теряются.
 
-### Почему будущие миграции не пострадают
+### Почему Prisma видит drift при наличии FTS5
 
-1. **`guideline_chunks_fts` и все shadow-таблицы физически существуют в `dev.db`** — они никогда не были реально удалены. Команда `prisma migrate resolve --applied` только пометила миграцию как применённую в `_prisma_migrations`, не выполняя SQL.
+1. **`guideline_chunks_fts` физически существует в `dev.db`**, но создана через raw SQL и не является моделью в `schema.prisma`.
 
-2. **Prisma игнорирует FTS-таблицы при проверке синхронизации** — потому что `guideline_chunks_fts` создана через raw SQL и **не является моделью в `schema.prisma`**. Prisma сравнивает только то, что знает из схемы.
+2. **При запуске `migrate dev`** Prisma создаёт shadow DB, прогоняет все миграции и сравнивает результат с реальной БД. FTS-таблицы в реальной БД есть, в shadow DB — нет → Prisma выводит `Drift detected` и отказывается продолжать.
 
 3. **Триггеры FTS продолжают работать** — `guideline_chunks_ai`, `guideline_chunks_ad`, `guideline_chunks_au` ссылаются на `guideline_chunks_fts`, которая по-прежнему существует.
 
-4. **Shadow DB валидация чистая** — при создании новой миграции Prisma прогоняет все 32 миграции в shadow DB, включая `20260319080016` (DROP IF EXISTS). Финальное состояние shadow DB совпадает с `schema.prisma` → drift не обнаруживается.
+4. **Решение** — создавать `migration.sql` вручную, применять через Python/SQLite и регистрировать через `prisma migrate resolve --applied`. Подробнее см. **Проблема 3**.
 
-### Текущее состояние миграций
+### Текущее состояние миграций (34 миграции, 31.03.2026)
 
 | Имя | Статус | Содержимое |
 |-----|--------|------------|
 | `20260319075808_add_nutrition_module` | ✅ applied | CREATE TABLE для 6 nutrition-таблиц + RedefineTables для `children` |
 | `20260319080016_add_nutrition_module` | ✅ applied (resolve) | DROP TABLE IF EXISTS для FTS-таблиц (фактически не выполнялся) |
+| `20260331120000_add_diagnostic_test_catalog` | ✅ applied (manual) | CREATE TABLE `diagnostic_test_catalog` + UNIQUE/TYPE индексы |
 
-> ⚠️ **Особенность:** оба folder имеют суффикс `_add_nutrition_module`. Это нормально — они различаются по timestamp. Не удалять ни один из них.
+> ⚠️ **Особенность:** `20260319075808` и `20260319080016` имеют одинаковый суффикс `_add_nutrition_module`. Различаются по timestamp. Не удалять ни один из них.
 
 ---
 
@@ -235,6 +236,119 @@ npx prisma generate
    del prisma\dev.db-wal
    del prisma\dev.db-shm
    ```
+
+---
+
+## Проблема 3: `migrate dev` завершается Drift detected — ручной подход без потери данных
+
+### Симптом
+
+```
+Drift detected: Your database schema is not in sync with your migration history.
+
+[+] Added tables
+  - guideline_chunks_fts
+  - guideline_chunks_fts_config
+  ...
+
+We need to reset the SQLite database "dev.db"
+All data will be lost.
+
+Command exited with code 1
+```
+
+### Причина
+
+Prisma видит FTS5-таблицы в реальной БД, которых нет в shadow DB (они созданы через raw SQL, не через schema.prisma). Предлагает `migrate reset` — это удалит все данные. Делать это не нужно.
+
+### Решение: ручное создание и регистрация миграции
+
+**Шаг 1.** Убедиться, что схема в порядке и пишет нужный SQL:
+
+```bash
+npx prisma migrate status
+# Ожидается: "Database schema is up to date!" (могут быть pending изменения, но не reset)
+```
+
+**Шаг 2.** Создать папку для миграции с нужным timestamp:
+
+```powershell
+New-Item -ItemType Directory -Path "prisma/migrations/YYYYMMDDHHMMSS_<name>" -Force
+```
+
+**Шаг 3.** Написать `migration.sql` вручную на основе diff схемы (взять из `npx prisma migrate diff` или написать самому).
+
+Пример (`20260331120000_add_diagnostic_test_catalog/migration.sql`):
+
+```sql
+-- CreateTable
+CREATE TABLE "diagnostic_test_catalog" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "name_ru" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "aliases" TEXT NOT NULL DEFAULT '[]',
+    "is_standard" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "diagnostic_test_catalog_name_ru_key" ON "diagnostic_test_catalog"("name_ru");
+
+-- CreateIndex
+CREATE INDEX "diagnostic_test_catalog_type_idx" ON "diagnostic_test_catalog"("type");
+```
+
+**Шаг 4.** Применить SQL напрямую к `dev.db` через Python:
+
+```python
+# scripts/apply-catalog-migration.py (пример)
+import sqlite3
+
+db = sqlite3.connect('prisma/dev.db')
+c = db.cursor()
+c.execute("""
+CREATE TABLE IF NOT EXISTS "diagnostic_test_catalog" (
+    ...
+)
+""")
+db.commit()
+db.close()
+```
+
+```bash
+python scripts/apply-catalog-migration.py
+```
+
+**Шаг 5.** Зарегистрировать миграцию в `_prisma_migrations` без выполнения SQL:
+
+```bash
+npx prisma migrate resolve --applied 20260331120000_add_diagnostic_test_catalog
+```
+
+**Шаг 6.** Регенерировать Prisma Client:
+
+```bash
+npx prisma generate
+```
+
+**Шаг 7.** Проверить:
+
+```bash
+npx prisma migrate status
+# Ожидается: "Database schema is up to date!" и все миграции applied
+```
+
+### Почему это безопасно
+
+- SQL применяется напрямую к `dev.db` через Python — Prisma не трогает данные
+- `migrate resolve --applied` только записывает строку в `_prisma_migrations`, не выполняет DDL
+- Все существующие таблицы и данные остаются нетронутыми
+- FTS-таблицы и триггеры продолжают работать
+
+### Когда использовать этот подход
+
+Всегда, когда `npx prisma migrate dev` завершается с `Drift detected` и предлагает reset. Применяется в этом проекте для всех миграций пока в БД присутствует `guideline_chunks_fts`.
 
 ---
 

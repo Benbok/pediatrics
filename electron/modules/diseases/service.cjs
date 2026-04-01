@@ -4,6 +4,7 @@ const { z } = require('zod');
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { app, BrowserWindow } = require('electron');
 const util = require('util');
 const execPromise = util.promisify(exec);
@@ -11,7 +12,8 @@ const { generateEmbedding, cosineSimilarity, getCachedSearch, cacheSearch } = re
 const { normalizeSymptoms } = require('../../utils/cdssVocabulary.cjs');
 const { normalizeWithAI } = require('../../services/aiSymptomNormalizer.cjs');
 const { logDegradation } = require('../../logger.cjs');
-const { normalizeDiseaseData } = require('../../utils/diseaseNormalization.cjs');
+const { normalizeDiseaseData, resolveTestNameFromCatalog, normalizeTestName } = require('../../utils/diseaseNormalization.cjs');
+const { CacheService } = require('../../services/cacheService.cjs');
 const { ChunkIndexService } = require('../../services/chunkIndexService.cjs');
 
 // Upload job queue
@@ -29,6 +31,28 @@ function generateJobId() {
 
 function generateBatchId() {
     return `batch-${Date.now()}-${++jobIdCounter}`;
+}
+
+function normalizeFileName(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function stripExtension(value) {
+    return String(value || '').replace(/\.[^/.]+$/, '');
+}
+
+function normalizeGuidelineTitle(value) {
+    return normalizeFileName(String(value || '').replace(/^Клинические рекомендации:\s*/i, ''));
+}
+
+function hashFile(filePath) {
+    return new Promise((resolve, reject) => {
+        const hash = crypto.createHash('sha256');
+        const stream = fs.createReadStream(filePath);
+        stream.on('error', reject);
+        stream.on('data', chunk => hash.update(chunk));
+        stream.on('end', () => resolve(hash.digest('hex')));
+    });
 }
 
 function sendProgressEvent(jobId, data) {
@@ -221,7 +245,137 @@ function _parseSymptoms(symptomsJson) {
     })).filter(s => s.text.length > 0);
 }
 
+function _deduplicateDiagnosticPlan(diagnosticPlan) {
+    if (!Array.isArray(diagnosticPlan)) return [];
+    
+    const seen = new Map(); // Key: "type|test_lowercase_trimmed"
+    const result = [];
+    
+    for (const item of diagnosticPlan) {
+        if (!item || typeof item !== 'object' || !item.test || !item.type) continue;
+        
+        const key = `${item.type}|${String(item.test).toLowerCase().trim()}`;
+        
+        if (!seen.has(key)) {
+            seen.set(key, true);
+            result.push(item);
+        }
+    }
+    
+    return result;
+}
+
 const DiseaseService = {
+    async _validateGuidelineDuplicates(diseaseId, pdfPaths) {
+        const normalizedDiseaseId = Number(diseaseId);
+        const paths = Array.isArray(pdfPaths) ? pdfPaths.filter(Boolean) : [];
+        if (paths.length === 0) return;
+
+        const selectedByName = new Map();
+        const selectedHashes = new Map();
+        const duplicateNamesInSelection = new Set();
+
+        for (const p of paths) {
+            const fileName = path.basename(p);
+            const normalizedName = normalizeFileName(fileName);
+
+            if (!selectedByName.has(normalizedName)) {
+                selectedByName.set(normalizedName, []);
+            }
+            selectedByName.get(normalizedName).push(p);
+
+            if (selectedByName.get(normalizedName).length > 1) {
+                duplicateNamesInSelection.add(fileName);
+            }
+        }
+
+        if (duplicateNamesInSelection.size > 0) {
+            throw new Error(`Выбраны одноименные файлы: ${Array.from(duplicateNamesInSelection).slice(0, 5).join(', ')}`);
+        }
+
+        const queuedNames = new Set();
+        for (const [, job] of uploadQueue.jobs.entries()) {
+            if (Number(job.diseaseId) !== normalizedDiseaseId) continue;
+            if (job.status !== 'queued' && job.status !== 'processing') continue;
+            queuedNames.add(normalizeFileName(job.fileName));
+        }
+
+        const conflictWithQueue = [];
+        for (const p of paths) {
+            const fileName = path.basename(p);
+            if (queuedNames.has(normalizeFileName(fileName))) {
+                conflictWithQueue.push(fileName);
+            }
+        }
+
+        if (conflictWithQueue.length > 0) {
+            throw new Error(`Файлы уже находятся в обработке: ${Array.from(new Set(conflictWithQueue)).slice(0, 5).join(', ')}`);
+        }
+
+        const existing = await prisma.clinicalGuideline.findMany({
+            where: { diseaseId: normalizedDiseaseId },
+            select: { id: true, title: true, pdfPath: true }
+        });
+
+        const existingNames = new Set();
+        for (const g of existing) {
+            const title = normalizeGuidelineTitle(g.title);
+            if (title) {
+                existingNames.add(title);
+                existingNames.add(stripExtension(title));
+            }
+        }
+
+        const conflictByName = [];
+        for (const p of paths) {
+            const fileName = path.basename(p);
+            const normalizedName = normalizeFileName(fileName);
+            const stem = stripExtension(normalizedName);
+            if (existingNames.has(normalizedName) || existingNames.has(stem)) {
+                conflictByName.push(fileName);
+            }
+        }
+
+        if (conflictByName.length > 0) {
+            throw new Error(`Файл с таким именем уже загружен: ${Array.from(new Set(conflictByName)).slice(0, 5).join(', ')}`);
+        }
+
+        const existingHashes = new Map();
+        for (const g of existing) {
+            if (!g.pdfPath || !fs.existsSync(g.pdfPath)) continue;
+            try {
+                const fileHash = await hashFile(g.pdfPath);
+                if (!existingHashes.has(fileHash)) {
+                    existingHashes.set(fileHash, g.title || path.basename(g.pdfPath));
+                }
+            } catch (_) {
+                // Skip unreadable old files; name checks above still protect basic duplicates.
+            }
+        }
+
+        const conflictByContent = [];
+        for (const p of paths) {
+            if (!fs.existsSync(p)) continue;
+            try {
+                let fileHash = selectedHashes.get(p);
+                if (!fileHash) {
+                    fileHash = await hashFile(p);
+                    selectedHashes.set(p, fileHash);
+                }
+                const existingTitle = existingHashes.get(fileHash);
+                if (existingTitle) {
+                    conflictByContent.push(`${path.basename(p)} (= ${existingTitle})`);
+                }
+            } catch (_) {
+                // Do not fail whole upload on unreadable candidate file at this stage.
+            }
+        }
+
+        if (conflictByContent.length > 0) {
+            throw new Error(`Такой же файл уже загружен: ${Array.from(new Set(conflictByContent)).slice(0, 5).join(', ')}`);
+        }
+    },
+
     /**
      * Get all diseases
      */
@@ -306,10 +460,86 @@ const DiseaseService = {
     },
 
     /**
+     * Load diagnostic test catalog entries for test-name normalization.
+     * Falls back to flat list of existing disease test names if catalog is unavailable.
+     */
+    async loadDiagnosticTestCatalog() {
+        const cacheKey = 'diagnostic_test_catalog';
+        const cached = CacheService.get('diseases', cacheKey);
+        if (cached) return cached;
+
+        let catalogEntries = [];
+        try {
+            catalogEntries = await prisma.diagnosticTestCatalog.findMany({
+                select: { nameRu: true, aliases: true }
+            });
+        } catch (error) {
+            logger.warn('[DiseaseService] Failed to load DiagnosticTestCatalog, falling back to flat list', { error });
+            try {
+                const allDiseases = await prisma.disease.findMany({ select: { diagnosticPlan: true } });
+                const testSet = new Set();
+                for (const disease of allDiseases) {
+                    const plan = safeJsonParse(disease.diagnosticPlan, []);
+                    plan.forEach(item => {
+                        if (item && item.test) testSet.add(String(item.test).trim());
+                    });
+                }
+                catalogEntries = Array.from(testSet);
+            } catch (_) {}
+        }
+
+        CacheService.set('diseases', cacheKey, catalogEntries);
+        return catalogEntries;
+    },
+
+    /**
+     * Resolve a single input test name to canonical catalog name if possible.
+     */
+    async resolveDiagnosticTestName(inputName) {
+        const raw = typeof inputName === 'string' ? inputName : '';
+        const trimmed = normalizeTestName(raw.trim());
+        if (!trimmed) {
+            return {
+                inputName: raw,
+                resolvedName: raw,
+                changed: false
+            };
+        }
+
+        const catalogEntries = await this.loadDiagnosticTestCatalog();
+        const resolvedName = resolveTestNameFromCatalog(trimmed, catalogEntries);
+
+        return {
+            inputName: raw,
+            resolvedName,
+            changed: resolvedName.toLowerCase() !== trimmed.toLowerCase()
+        };
+    },
+
+    /**
+     * Get canonical test names for UI autocomplete from DiagnosticTestCatalog.
+     */
+    async getDiagnosticCatalogTestNames() {
+        const catalogEntries = await this.loadDiagnosticTestCatalog();
+        if (!Array.isArray(catalogEntries)) return [];
+
+        const names = catalogEntries
+            .map(entry => {
+                if (typeof entry === 'string') return entry.trim();
+                return entry && entry.nameRu ? String(entry.nameRu).trim() : '';
+            })
+            .filter(Boolean);
+
+        return Array.from(new Set(names));
+    },
+
+    /**
      * Create or update disease
      */
     async upsert(data) {
-        const normalizedInput = normalizeDiseaseData(data);
+        const catalogEntries = await this.loadDiagnosticTestCatalog();
+
+        const normalizedInput = normalizeDiseaseData(data, catalogEntries);
         const validated = DiseaseSchema.parse(normalizedInput);
         const { id, ...rest } = validated;
 
@@ -350,7 +580,7 @@ const DiseaseService = {
             ...rest,
             icd10Codes: JSON.stringify(rest.icd10Codes),
             symptoms: JSON.stringify(rest.symptoms),
-            diagnosticPlan: JSON.stringify(rest.diagnosticPlan || []),
+            diagnosticPlan: JSON.stringify(_deduplicateDiagnosticPlan(rest.diagnosticPlan || [])),
             treatmentPlan: JSON.stringify(rest.treatmentPlan || []),
             differentialDiagnosis: JSON.stringify(rest.differentialDiagnosis || []),
             redFlags: JSON.stringify(rest.redFlags || []),
@@ -492,6 +722,8 @@ const DiseaseService = {
      * Queue multiple guidelines for async upload
      */
     async uploadGuidelinesAsync(diseaseId, pdfPaths) {
+        await this._validateGuidelineDuplicates(diseaseId, pdfPaths);
+
         const jobIds = [];
 
         const batchId = generateBatchId();
@@ -901,6 +1133,7 @@ const DiseaseService = {
      * Legacy synchronous upload (for single file compatibility)
      */
     async uploadGuideline(diseaseId, pdfPath) {
+        await this._validateGuidelineDuplicates(diseaseId, [pdfPath]);
         return await this.uploadGuidelineSingle(diseaseId, pdfPath, null);
     },
 

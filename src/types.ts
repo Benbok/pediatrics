@@ -968,6 +968,12 @@ declare global {
         };
         error?: string;
       }>;
+      resolveDiseaseTestName: (inputName: string) => Promise<{
+        inputName: string;
+        resolvedName: string;
+        changed: boolean;
+      }>;
+      getDiseaseCatalogTestNames: () => Promise<string[]>;
 
       // Disease Notes (Personal or Shared)
       getDiseaseNotes: (diseaseId: number) => Promise<DiseaseNote[]>;

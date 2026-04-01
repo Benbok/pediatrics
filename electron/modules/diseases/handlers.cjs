@@ -73,6 +73,7 @@ const setupDiseaseHandlers = () => {
             // Инвалидируем кеш заболеваний
             CacheService.invalidate('diseases', 'all'); // Список всех заболеваний
             CacheService.invalidate('visits', 'all_diagnostic_tests');
+            CacheService.invalidate('diseases', 'diagnostic_test_catalog');
             if (result.id) {
                 CacheService.invalidate('diseases', `id_${result.id}`); // Конкретное заболевание
             }
@@ -93,6 +94,7 @@ const setupDiseaseHandlers = () => {
         // Инвалидируем кеш заболеваний
         CacheService.invalidate('diseases', 'all');
         CacheService.invalidate('visits', 'all_diagnostic_tests');
+        CacheService.invalidate('diseases', 'diagnostic_test_catalog');
         CacheService.invalidate('diseases', `id_${id}`);
 
         return true;
@@ -178,6 +180,15 @@ const setupDiseaseHandlers = () => {
         return await DiseaseService.getGuidelinePlan(diseaseId);
     }));
 
+    ipcMain.handle('diseases:get-diagnostic-catalog-test-names', ensureAuthenticated(async () => {
+        return await DiseaseService.getDiagnosticCatalogTestNames();
+    }));
+
+    ipcMain.handle('diseases:resolve-test-name', ensureAuthenticated(async (_, inputName) => {
+        const validated = z.string().max(500).parse(inputName);
+        return await DiseaseService.resolveDiagnosticTestName(validated);
+    }));
+
     ipcMain.handle('diseases:reindex-guideline-chunks', ensureAuthenticated(async () => {
         const ok = await DiseaseService.reindexGuidelineChunks();
         logAudit('GUIDELINE_CHUNKS_REINDEXED', { ok });
@@ -243,7 +254,8 @@ const setupDiseaseHandlers = () => {
                 diseaseData.symptoms = diseaseData.symptoms.map(text => ({ text: String(text).trim(), category: 'other' })).filter(s => s.text.length > 0);
             }
 
-            diseaseData = normalizeDiseaseData(diseaseData);
+            const catalogEntries = await DiseaseService.loadDiagnosticTestCatalog();
+            diseaseData = normalizeDiseaseData(diseaseData, catalogEntries);
 
             // Валидация через DiseaseValidator
             const validator = new DiseaseValidator();
