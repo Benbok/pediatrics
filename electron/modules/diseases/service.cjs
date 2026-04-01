@@ -113,6 +113,10 @@ const RecommendationItemSchema = z.object({
     priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
 });
 
+function _normalizeDuplicateValue(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 function getGuidelineText(value) {
     if (!value || typeof value !== 'string') return null;
     const trimmed = value.trim();
@@ -228,6 +232,51 @@ const DiseaseSchema = z.object({
     clinicalRecommendations: z.array(RecommendationItemSchema).optional().default([]),
     differentialDiagnosis: z.array(z.string()).optional().default([]),
     redFlags: z.array(z.string()).optional().default([]),
+}).superRefine((data, ctx) => {
+    const diagnosticSeen = new Set();
+    data.diagnosticPlan.forEach((item, index) => {
+        const key = _normalizeDuplicateValue(item.test);
+        if (!key) return;
+        if (diagnosticSeen.has(key)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['diagnosticPlan', index, 'test'],
+                message: `Исследование "${item.test}" уже добавлено в план диагностики`,
+            });
+            return;
+        }
+        diagnosticSeen.add(key);
+    });
+
+    const treatmentSeen = new Set();
+    data.treatmentPlan.forEach((item, index) => {
+        const key = _normalizeDuplicateValue(item.description);
+        if (!key) return;
+        if (treatmentSeen.has(key)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['treatmentPlan', index, 'description'],
+                message: `Пункт лечения "${item.description}" уже добавлен`,
+            });
+            return;
+        }
+        treatmentSeen.add(key);
+    });
+
+    const recommendationSeen = new Set();
+    data.clinicalRecommendations.forEach((item, index) => {
+        const key = _normalizeDuplicateValue(item.text);
+        if (!key) return;
+        if (recommendationSeen.has(key)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['clinicalRecommendations', index, 'text'],
+                message: `Рекомендация "${item.text}" уже добавлена`,
+            });
+            return;
+        }
+        recommendationSeen.add(key);
+    });
 });
 
 /**
@@ -534,6 +583,39 @@ const DiseaseService = {
     },
 
     /**
+     * Auto-add unknown test names to DiagnosticTestCatalog after disease save.
+     * Non-fatal: errors are logged but do not block the caller.
+     * @param {Array} diagnosticPlanItems - normalized diagnosticPlan array
+     * @param {Array} existingCatalog - already-loaded catalog entries (avoids extra DB call)
+     */
+    async _ensureTestNamesInCatalog(diagnosticPlanItems, existingCatalog) {
+        if (!Array.isArray(diagnosticPlanItems) || diagnosticPlanItems.length === 0) return;
+        try {
+            const knownNames = new Set(
+                (existingCatalog || [])
+                    .map(e => typeof e === 'string' ? e.toLowerCase() : (e?.nameRu ? String(e.nameRu).toLowerCase() : ''))
+                    .filter(Boolean)
+            );
+            const toAdd = diagnosticPlanItems.filter(
+                item => item?.test && typeof item.test === 'string' && !knownNames.has(item.test.trim().toLowerCase())
+            );
+            if (toAdd.length === 0) return;
+            for (const item of toAdd) {
+                const nameRu = item.test.trim();
+                const type = item.type || 'lab';
+                await prisma.diagnosticTestCatalog.upsert({
+                    where: { nameRu },
+                    create: { nameRu, type, aliases: '[]', isStandard: false },
+                    update: {},
+                });
+                logger.info(`[DiseaseService] Auto-added test to catalog: "${nameRu}" (${type})`);
+            }
+        } catch (error) {
+            logger.warn('[DiseaseService] Failed to auto-add test names to catalog:', error.message);
+        }
+    },
+
+    /**
      * Create or update disease
      */
     async upsert(data) {
@@ -596,18 +678,13 @@ const DiseaseService = {
             redFlags: (rest.redFlags || []).length
         });
 
-        if (id) {
-            const updated = await prisma.disease.update({
-                where: { id },
-                data: dbData,
-            });
-            return { ...updated, symptoms: _parseSymptoms(updated.symptoms) };
-        }
+        const savedDisease = id
+            ? await prisma.disease.update({ where: { id }, data: dbData })
+            : await prisma.disease.create({ data: dbData });
 
-        const created = await prisma.disease.create({
-            data: dbData,
-        });
-        return { ...created, symptoms: _parseSymptoms(created.symptoms) };
+        await this._ensureTestNamesInCatalog(rest.diagnosticPlan || [], catalogEntries);
+
+        return { ...savedDisease, symptoms: _parseSymptoms(savedDisease.symptoms) };
     },
 
     /**

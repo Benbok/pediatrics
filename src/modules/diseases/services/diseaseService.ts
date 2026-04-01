@@ -1,6 +1,7 @@
 import { Disease, ClinicalGuideline, GuidelinePlan, CategorizedSymptom, SymptomCategory, UploadProgress } from '../../../types';
 import { dataEvents } from '../../../services/dataEvents';
 import { logger } from '../../../services/logger';
+import { DiseaseSchema } from '../../../validators/disease.validator';
 
 export interface RejectedUploadFile {
     fileName: string;
@@ -174,7 +175,8 @@ export const diseaseService = {
      */
     async upsertDisease(data: Disease): Promise<Disease> {
         try {
-            const result = await window.electronAPI.upsertDisease(data);
+            const validated = DiseaseSchema.parse(normalizeDisease(data));
+            const result = await window.electronAPI.upsertDisease(validated);
             // Уведомляем об изменении для инвалидации кеша
             dataEvents.notifyUpdated('diseases', result.id);
             return result;

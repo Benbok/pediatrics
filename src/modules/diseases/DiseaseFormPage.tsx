@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { diseaseService, parseSymptoms } from './services/diseaseService';
 import { useToast } from '../../context/ToastContext';
@@ -81,6 +81,44 @@ export const DiseaseFormPage: React.FC = () => {
     const [availableTestNames, setAvailableTestNames] = useState<string[]>([]);
     const [isLoadingTests, setIsLoadingTests] = useState(false);
     const [testResolutionHints, setTestResolutionHints] = useState<Record<number, string>>({});
+    const transientErrorTimeoutRef = useRef<number | null>(null);
+
+    const showTransientError = (message: string) => {
+        if (transientErrorTimeoutRef.current) {
+            window.clearTimeout(transientErrorTimeoutRef.current);
+        }
+
+        setError(null);
+        window.requestAnimationFrame(() => {
+            setError(message);
+        });
+        showToast(message, 'warning');
+
+        transientErrorTimeoutRef.current = window.setTimeout(() => {
+            setError(null);
+            transientErrorTimeoutRef.current = null;
+        }, 3000);
+    };
+
+    const normalizeDuplicateValue = (value: string) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+    const isDuplicateDiagnosticItem = (items: any[], index: number, nextItem: any) => {
+        const normalizedTest = normalizeDuplicateValue(nextItem?.test || '');
+        if (!normalizedTest) return false;
+        return items.some((item, itemIndex) => itemIndex !== index && normalizeDuplicateValue(item?.test || '') === normalizedTest);
+    };
+
+    const isDuplicateTreatmentItem = (items: any[], index: number, nextItem: any) => {
+        const normalizedDescription = normalizeDuplicateValue(nextItem?.description || '');
+        if (!normalizedDescription) return false;
+        return items.some((item, itemIndex) => itemIndex !== index && normalizeDuplicateValue(item?.description || '') === normalizedDescription);
+    };
+
+    const isDuplicateRecommendationItem = (items: DiseaseRecommendationItem[], index: number, nextItem: DiseaseRecommendationItem) => {
+        const normalizedText = normalizeDuplicateValue(nextItem?.text || '');
+        if (!normalizedText) return false;
+        return items.some((item, itemIndex) => itemIndex !== index && normalizeDuplicateValue(item?.text || '') === normalizedText);
+    };
 
     useEffect(() => {
         // Load available test names for autocomplete
@@ -97,6 +135,12 @@ export const DiseaseFormPage: React.FC = () => {
         };
 
         loadTestNames();
+
+        return () => {
+            if (transientErrorTimeoutRef.current) {
+                window.clearTimeout(transientErrorTimeoutRef.current);
+            }
+        };
     }, []);
 
     useEffect(() => {
@@ -172,8 +216,7 @@ export const DiseaseFormPage: React.FC = () => {
             .filter(text => {
                 const isDuplicate = existingTextsLower.includes(text.toLowerCase());
                 if (isDuplicate) {
-                    setError(`Симптом "${text}" уже добавлен`);
-                    setTimeout(() => setError(null), 3000);
+                    showTransientError(`Симптом "${text}" уже добавлен`);
                 }
                 return !isDuplicate;
             })
@@ -214,8 +257,7 @@ export const DiseaseFormPage: React.FC = () => {
             s => s.text.toLowerCase() === trimmedNewText.toLowerCase() && s.text !== oldText
         );
         if (isDuplicate) {
-            setError(`Симптом "${trimmedNewText}" уже существует`);
-            setTimeout(() => setError(null), 3000);
+            showTransientError(`Симптом "${trimmedNewText}" уже существует`);
             return;
         }
         setFormData({
@@ -227,12 +269,19 @@ export const DiseaseFormPage: React.FC = () => {
     };
 
     const addDiagnosticPlanItem = () => {
-        setFormData({
-            ...formData,
+        setFormData(prev => ({
+            ...prev,
             diagnosticPlan: [
-                ...(formData.diagnosticPlan || []),
-                { type: 'lab', test: '', priority: 'medium', rationale: '' }
+                { type: 'lab', test: '', priority: 'medium', rationale: '' },
+                ...(prev.diagnosticPlan || [])
             ]
+        }));
+        setTestResolutionHints(prev => {
+            const next = {} as Record<number, string>;
+            Object.entries(prev).forEach(([key, value]) => {
+                next[Number(key) + 1] = value;
+            });
+            return next;
         });
     };
 
@@ -247,12 +296,19 @@ export const DiseaseFormPage: React.FC = () => {
 
     const updateDiagnosticPlanItem = (index: number, updates: any) => {
         const items = [...(formData.diagnosticPlan || [])];
-        items[index] = { ...items[index], ...updates };
+        const nextItem = { ...items[index], ...updates };
+        if (isDuplicateDiagnosticItem(items, index, nextItem)) {
+            showTransientError(`Исследование "${nextItem.test}" уже добавлено в план диагностики`);
+            return false;
+        }
+        items[index] = nextItem;
         setFormData({ ...formData, diagnosticPlan: items });
 
         if (typeof updates?.test === 'string') {
             clearTestHint(index);
         }
+
+        return true;
     };
 
     const resolveDiagnosticTestAlias = async (index: number, rawValue: string) => {
@@ -264,7 +320,8 @@ export const DiseaseFormPage: React.FC = () => {
 
         const result = await diseaseService.resolveDiagnosticTestName(input);
         if (result.changed && result.resolvedName) {
-            updateDiagnosticPlanItem(index, { test: result.resolvedName });
+            const updated = updateDiagnosticPlanItem(index, { test: result.resolvedName });
+            if (!updated) return;
             setTestResolutionHints(prev => ({
                 ...prev,
                 [index]: `Название нормализовано по каталогу: ${result.resolvedName}`
@@ -292,18 +349,23 @@ export const DiseaseFormPage: React.FC = () => {
     };
 
     const addTreatmentPlanItem = () => {
-        setFormData({
-            ...formData,
+        setFormData(prev => ({
+            ...prev,
             treatmentPlan: [
-                ...(formData.treatmentPlan || []),
-                { category: 'symptomatic', description: '', priority: 'medium' }
+                { category: 'symptomatic', description: '', priority: 'medium' },
+                ...(prev.treatmentPlan || [])
             ]
-        });
+        }));
     };
 
     const updateTreatmentPlanItem = (index: number, updates: any) => {
         const items = [...(formData.treatmentPlan || [])];
-        items[index] = { ...items[index], ...updates };
+        const nextItem = { ...items[index], ...updates };
+        if (isDuplicateTreatmentItem(items, index, nextItem)) {
+            showTransientError(`Пункт лечения "${nextItem.description}" уже добавлен`);
+            return;
+        }
+        items[index] = nextItem;
         setFormData({ ...formData, treatmentPlan: items });
     };
 
@@ -315,18 +377,23 @@ export const DiseaseFormPage: React.FC = () => {
     };
 
     const addRecommendationItem = () => {
-        setFormData({
-            ...formData,
+        setFormData(prev => ({
+            ...prev,
             clinicalRecommendations: [
-                ...(formData.clinicalRecommendations || []),
-                { category: 'other' as DiseaseRecommendationCategory, text: '', priority: 'medium' }
+                { category: 'other' as DiseaseRecommendationCategory, text: '', priority: 'medium' },
+                ...(prev.clinicalRecommendations || [])
             ]
-        });
+        }));
     };
 
     const updateRecommendationItem = (index: number, updates: Partial<DiseaseRecommendationItem>) => {
         const items = [...(formData.clinicalRecommendations || [])];
-        items[index] = { ...items[index], ...updates };
+        const nextItem = { ...items[index], ...updates } as DiseaseRecommendationItem;
+        if (isDuplicateRecommendationItem(items, index, nextItem)) {
+            showTransientError(`Рекомендация "${nextItem.text}" уже добавлена`);
+            return;
+        }
+        items[index] = nextItem;
         setFormData({ ...formData, clinicalRecommendations: items });
     };
 
@@ -779,7 +846,7 @@ export const DiseaseFormPage: React.FC = () => {
                         onRemove={removeSymptom}
                         onCategoryChange={updateSymptomCategory}
                         onUpdate={updateSymptom}
-                        onError={msg => { setError(msg); setTimeout(() => setError(null), 3000); }}
+                        onError={showTransientError}
                         editable={true}
                     />
                 </Card>

@@ -3,6 +3,7 @@ import { VisitSchema, AnalyzeVisitSchema } from '../src/validators/visit.validat
 import { MedicationSchema, CalculateDoseSchema, LinkMedicationToDiseaseSchema } from '../src/validators/medication.validator';
 import { PdfNoteSchema, PdfNoteUpdateSchema } from '../src/validators/pdfNote.validator';
 import { PatientAllergySchema } from '../src/validators/patientAllergy.validator';
+import { DiseaseSchema } from '../src/validators/disease.validator';
 
 describe('Visit Validators', () => {
     describe('VisitSchema', () => {
@@ -247,6 +248,57 @@ describe('Medication Validators', () => {
             const result = LinkMedicationToDiseaseSchema.safeParse(invalidLink);
             expect(result.success).toBe(false);
         });
+    });
+});
+
+describe('Disease Validators', () => {
+    const baseDisease = {
+        icd10Code: 'J00',
+        icd10Codes: ['J00'],
+        nameRu: 'ОРВИ',
+        description: 'Описание',
+        symptoms: [],
+        diagnosticPlan: [],
+        treatmentPlan: [],
+        clinicalRecommendations: [],
+        differentialDiagnosis: [],
+        redFlags: [],
+    };
+
+    it('should reject duplicate diagnostic tests', () => {
+        const result = DiseaseSchema.safeParse({
+            ...baseDisease,
+            diagnosticPlan: [
+                { type: 'lab', test: 'Общий анализ крови', priority: 'medium' },
+                { type: 'instrumental', test: '  общий   анализ крови ', priority: 'high' },
+            ],
+        });
+
+        expect(result.success).toBe(false);
+    });
+
+    it('should reject duplicate treatment items', () => {
+        const result = DiseaseSchema.safeParse({
+            ...baseDisease,
+            treatmentPlan: [
+                { category: 'symptomatic', description: 'Постельный режим', priority: 'medium' },
+                { category: 'other', description: ' постельный   режим ', priority: 'low' },
+            ],
+        });
+
+        expect(result.success).toBe(false);
+    });
+
+    it('should reject duplicate clinical recommendations', () => {
+        const result = DiseaseSchema.safeParse({
+            ...baseDisease,
+            clinicalRecommendations: [
+                { category: 'education', text: 'Обильное питье', priority: 'medium' },
+                { category: 'followup', text: '  обильное   питье ', priority: 'high' },
+            ],
+        });
+
+        expect(result.success).toBe(false);
     });
 });
 

@@ -28,6 +28,7 @@ export const TestNameAutocomplete: React.FC<TestNameAutocompleteProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const isSelectingOptionRef = useRef(false);
 
     // Derived list should be computed, not stored as state.
     const filtered = useMemo(() => {
@@ -73,13 +74,24 @@ export const TestNameAutocomplete: React.FC<TestNameAutocompleteProps> = ({
         }
     };
 
+    const handleBlur = () => {
+        // Clicking a suggestion triggers input blur before click handler.
+        // Ignore this blur to avoid overwriting the selected option.
+        if (isSelectingOptionRef.current) {
+            isSelectingOptionRef.current = false;
+            return;
+        }
+
+        onBlurValue?.(value);
+    };
+
     return (
         <div className="relative w-full" ref={dropdownRef}>
             <Input
                 ref={inputRef}
                 value={value}
                 onChange={e => onChange(e.target.value)}
-                onBlur={() => onBlurValue?.(value)}
+                onBlur={handleBlur}
                 onFocus={handleFocus}
                 placeholder={placeholder}
                 className={className}
@@ -100,6 +112,11 @@ export const TestNameAutocomplete: React.FC<TestNameAutocompleteProps> = ({
                         <button
                             key={`${test}-${idx}`}
                             type="button"
+                            onMouseDown={e => {
+                                // Keep focus handling predictable while selecting from dropdown.
+                                e.preventDefault();
+                                isSelectingOptionRef.current = true;
+                            }}
                             onClick={() => handleSelect(test)}
                             className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors first:rounded-t-lg last:rounded-b-lg"
                         >
