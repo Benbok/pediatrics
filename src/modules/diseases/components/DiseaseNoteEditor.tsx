@@ -8,8 +8,20 @@ import {
     Tag as TagIcon,
     Share2,
     Pin,
-    AlertCircle
+    AlertCircle,
+    Bold,
+    Italic,
+    Heading1,
+    Heading2,
+    List,
+    ListOrdered,
+    Quote,
+    Code,
+    Pencil,
+    Eye,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface DiseaseNoteEditorProps {
     note?: DiseaseNote | null; // null for new note
@@ -24,6 +36,7 @@ export const DiseaseNoteEditor: React.FC<DiseaseNoteEditorProps> = ({
     onSave,
     onCancel
 }) => {
+    const contentTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [tags, setTags] = useState<string[]>([]);
@@ -32,6 +45,7 @@ export const DiseaseNoteEditor: React.FC<DiseaseNoteEditorProps> = ({
     const [isShared, setIsShared] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [editorMode, setEditorMode] = useState<'edit' | 'preview'>('edit');
 
     useEffect(() => {
         if (note) {
@@ -48,6 +62,7 @@ export const DiseaseNoteEditor: React.FC<DiseaseNoteEditorProps> = ({
             setIsPinned(false);
             setIsShared(false);
         }
+        setEditorMode('edit');
     }, [note]);
 
     const handleAddTag = () => {
@@ -94,6 +109,54 @@ export const DiseaseNoteEditor: React.FC<DiseaseNoteEditorProps> = ({
         }
     };
 
+    const applyWrapFormat = (prefix: string, suffix = '', placeholder = 'текст') => {
+        const textarea = contentTextareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selected = content.slice(start, end);
+        const insertText = `${prefix}${selected || placeholder}${suffix}`;
+
+        const nextValue = `${content.slice(0, start)}${insertText}${content.slice(end)}`;
+        setContent(nextValue);
+
+        requestAnimationFrame(() => {
+            textarea.focus();
+            if (selected) {
+                textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+            } else {
+                textarea.setSelectionRange(start + prefix.length, start + prefix.length + placeholder.length);
+            }
+        });
+    };
+
+    const applyLinePrefixFormat = (prefix: string) => {
+        const textarea = contentTextareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+
+        const lineStart = content.lastIndexOf('\n', start - 1) + 1;
+        const lineEndIndex = content.indexOf('\n', end);
+        const lineEnd = lineEndIndex === -1 ? content.length : lineEndIndex;
+        const selectedBlock = content.slice(lineStart, lineEnd);
+
+        const transformedBlock = selectedBlock
+            .split('\n')
+            .map(line => (line.trim() ? `${prefix}${line}` : line))
+            .join('\n');
+
+        const nextValue = `${content.slice(0, lineStart)}${transformedBlock}${content.slice(lineEnd)}`;
+        setContent(nextValue);
+
+        requestAnimationFrame(() => {
+            textarea.focus();
+            textarea.setSelectionRange(lineStart, lineStart + transformedBlock.length);
+        });
+    };
+
     return (
         <Card className="p-6 rounded-[32px] border-none shadow-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
@@ -125,12 +188,94 @@ export const DiseaseNoteEditor: React.FC<DiseaseNoteEditorProps> = ({
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
                         Текст заметки
                     </label>
-                    <textarea
-                        value={content}
-                        onChange={e => setContent(e.target.value)}
-                        placeholder="Ваши наблюдения, советы по лечению, практические нюансы..."
-                        className="w-full min-h-[200px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all outline-none text-slate-800 dark:text-slate-200 text-sm leading-relaxed"
-                    />
+                    <div className="mb-2 space-y-2 p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <div className="grid grid-cols-2 rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/60">
+                            <button
+                                type="button"
+                                onClick={() => setEditorMode('edit')}
+                                className={`h-9 px-3 rounded-md text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-1.5 transition-all ${editorMode === 'edit'
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 shadow-sm'
+                                    : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700/70'}`}
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Редактирование
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setEditorMode('preview')}
+                                className={`h-9 px-3 rounded-md text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-1.5 transition-all ${editorMode === 'preview'
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 shadow-sm'
+                                    : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700/70'}`}
+                            >
+                                <Eye className="w-3.5 h-3.5" />
+                                Предпросмотр
+                            </button>
+                        </div>
+
+                        {editorMode === 'edit' && (
+                            <div className="flex flex-wrap gap-1.5">
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg" onClick={() => applyWrapFormat('**', '**')} title="Жирный">
+                                    <Bold className="w-4 h-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg" onClick={() => applyWrapFormat('*', '*')} title="Курсив">
+                                    <Italic className="w-4 h-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg" onClick={() => applyLinePrefixFormat('# ')} title="Заголовок H1">
+                                    <Heading1 className="w-4 h-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg" onClick={() => applyLinePrefixFormat('## ')} title="Заголовок H2">
+                                    <Heading2 className="w-4 h-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-[11px] font-bold" onClick={() => applyLinePrefixFormat('### ')} title="Заголовок H3">
+                                    H3
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-[11px] font-bold" onClick={() => applyLinePrefixFormat('#### ')} title="Заголовок H4">
+                                    H4
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg" onClick={() => applyLinePrefixFormat('- ')} title="Маркированный список">
+                                    <List className="w-4 h-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg" onClick={() => applyLinePrefixFormat('1. ')} title="Нумерованный список">
+                                    <ListOrdered className="w-4 h-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg" onClick={() => applyLinePrefixFormat('> ')} title="Цитата">
+                                    <Quote className="w-4 h-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 rounded-lg" onClick={() => applyWrapFormat('`', '`')} title="Код">
+                                    <Code className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        )}
+                        {editorMode === 'preview' && (
+                            <div className="h-8 px-2 flex items-center text-xs font-medium text-slate-500 dark:text-slate-400">
+                                Режим предпросмотра: ниже показан итоговый вид форматирования.
+                            </div>
+                        )}
+                    </div>
+                    {editorMode === 'edit' ? (
+                        <textarea
+                            ref={contentTextareaRef}
+                            value={content}
+                            onChange={e => setContent(e.target.value)}
+                            placeholder="Ваши наблюдения, советы по лечению, практические нюансы..."
+                            className="w-full min-h-[220px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all outline-none text-slate-800 dark:text-slate-200 text-sm leading-relaxed"
+                        />
+                    ) : (
+                        <div className="min-h-[220px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 overflow-auto">
+                            {content.trim() ? (
+                                <div className="prose prose-sm max-w-none text-slate-700 dark:text-slate-300 prose-headings:text-slate-900 dark:prose-headings:text-slate-100 prose-strong:text-slate-900 dark:prose-strong:text-slate-100 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-blockquote:my-2 prose-blockquote:border-primary-300 dark:prose-blockquote:border-primary-700 prose-blockquote:text-slate-600 dark:prose-blockquote:text-slate-300 prose-code:text-primary-700 dark:prose-code:text-primary-300 prose-code:before:content-none prose-code:after:content-none">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {content}
+                                    </ReactMarkdown>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-slate-400">Нет текста для предпросмотра</p>
+                            )}
+                        </div>
+                    )}
+                    <p className="mt-2 ml-1 text-xs text-slate-500 dark:text-slate-400">
+                        Поддерживается Markdown: жирный, курсив, заголовки, списки, цитаты и код.
+                    </p>
                 </div>
 
                 {/* Tags */}

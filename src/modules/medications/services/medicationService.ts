@@ -127,6 +127,18 @@ export const medicationService = {
     },
 
     /**
+     * Unlink medication from a disease
+     */
+    async unlinkFromDisease(diseaseId: number, medicationId: number): Promise<boolean> {
+        try {
+            return await window.electronAPI.unlinkMedicationFromDisease(diseaseId, medicationId);
+        } catch (error: any) {
+            logger.error('[MedicationService] Unlink from disease failed', { error, diseaseId, medicationId });
+            throw new Error(error.message || 'Ошибка при удалении связи с заболеванием');
+        }
+    },
+
+    /**
      * Get medications for a specific disease by ICD-10 matching
      */
     async getMedicationsByDisease(diseaseId: number): Promise<Medication[]> {

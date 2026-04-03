@@ -104,6 +104,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     upsertMedication: (data, source) => ipcRenderer.invoke('medications:upsert', data, source),
     deleteMedication: (id) => ipcRenderer.invoke('medications:delete', id),
     linkMedicationToDisease: (data) => ipcRenderer.invoke('medications:link-disease', data),
+    unlinkMedicationFromDisease: (diseaseId, medicationId) => ipcRenderer.invoke('medications:unlink-disease', diseaseId, medicationId),
     calculateDose: (params) => ipcRenderer.invoke('medications:calculate-dose', params),
     getMedicationsByDisease: (diseaseId) => ipcRenderer.invoke('medications:get-by-disease', diseaseId),
     checkDuplicateMedication: (nameRu, excludeId) => ipcRenderer.invoke('medications:checkDuplicate', nameRu, excludeId),

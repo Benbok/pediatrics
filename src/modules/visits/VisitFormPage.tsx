@@ -6,6 +6,7 @@ import { diseaseService } from '../diseases/services/diseaseService';
 import { patientService } from '../../services/patient.service';
 import { logger } from '../../services/logger';
 import { draftService } from '../../services/draftService';
+import type { VisitDraftCachePayload } from '../../services/draftService';
 import { useTabs } from '../../context/TabsContext';
 import { useVisitAnalysis } from '../../hooks/useVisitAnalysis';
 import debounce from 'lodash/debounce';
@@ -165,6 +166,7 @@ export const VisitFormPage: React.FC = () => {
     // Восстановление черновика
     const [showRestoreModal, setShowRestoreModal] = useState(false);
     const [savedDraft, setSavedDraft] = useState<Partial<Visit> | null>(null);
+    const [savedDraftMeta, setSavedDraftMeta] = useState<{ recommendations: string[]; suggestions: DiagnosisSuggestion[] } | null>(null);
     const [hasLocalChanges, setHasLocalChanges] = useState(false);
     const initialLoadDone = useRef(false);
     const tabRegistered = useRef(false);
@@ -179,7 +181,7 @@ export const VisitFormPage: React.FC = () => {
     // Обработчик выхода из формы: при наличии изменений сохраняем черновик (localStorage + бэкенд), затем закрываем
     const handleBack = useCallback(async () => {
         if (hasLocalChanges && formData) {
-            draftService.saveDraft(draftKey, formData);
+            draftService.saveDraft(draftKey, draftService.buildVisitDraftPayload(formData, recommendations, suggestions));
             const childIdNum = formData.childId ?? (childId ? Number(childId) : 0);
             const doctorIdNum = formData.doctorId ?? currentUser?.id;
             const visitDateStr = formData.visitDate;
@@ -201,7 +203,7 @@ export const VisitFormPage: React.FC = () => {
         setTimeout(() => {
             navigate(`/patients/${childId}/visits`);
         }, 0);
-    }, [closeTab, tabId, navigate, childId, hasLocalChanges, formData, draftKey, recommendations, currentUser?.id]);
+    }, [closeTab, tabId, navigate, childId, hasLocalChanges, formData, draftKey, recommendations, suggestions, currentUser?.id]);
 
     // Регистрация вкладки ТОЛЬКО после загрузки данных ребенка
     useEffect(() => {
@@ -242,9 +244,9 @@ export const VisitFormPage: React.FC = () => {
 
     // Debounced автосохранение черновика в localStorage
     const debouncedSaveDraft = useMemo(
-        () => debounce((data: Partial<Visit>) => {
+        () => debounce((data: Partial<Visit>, recs: string[], aiSuggestions: DiagnosisSuggestion[]) => {
             if (!initialLoadDone.current) return;
-            draftService.saveDraft(draftKey, data);
+            draftService.saveDraft(draftKey, draftService.buildVisitDraftPayload(data, recs, aiSuggestions));
             setDirty(true);
             logger.info('[VisitFormPage] Draft auto-saved to localStorage', { draftKey });
         }, 800),
@@ -280,14 +282,14 @@ export const VisitFormPage: React.FC = () => {
     // Автосохранение при изменении formData (localStorage + бэкенд)
     useEffect(() => {
         if (hasLocalChanges && initialLoadDone.current) {
-            debouncedSaveDraft(formData);
+            debouncedSaveDraft(formData, recommendations, suggestions);
             debouncedBackendSave(formData, recommendations);
         }
         return () => {
             debouncedSaveDraft.cancel();
             debouncedBackendSave.cancel();
         };
-    }, [formData, hasLocalChanges, recommendations, debouncedSaveDraft, debouncedBackendSave]);
+    }, [formData, hasLocalChanges, recommendations, suggestions, debouncedSaveDraft, debouncedBackendSave]);
 
     // Регистрация обработчика сохранения черновика при закрытии вкладки (для модалки «Сохранить черновик» в TabBar)
     const saveDraftForCloseRef = useRef<() => Promise<void>>(async () => {});
@@ -321,10 +323,15 @@ export const VisitFormPage: React.FC = () => {
     // Проверка черновика при загрузке
     useEffect(() => {
         if (!initialLoadDone.current && !isEdit) {
-            const draft = draftService.loadDraft<Partial<Visit>>(draftKey);
+            const draft = draftService.loadDraft<Partial<Visit> | VisitDraftCachePayload>(draftKey);
             if (draft && draft.data) {
+                const parsedDraft = draftService.parseVisitDraftPayload(draft.data);
                 // Показываем модальное окно восстановления
-                setSavedDraft(draft.data);
+                setSavedDraft(parsedDraft.formData);
+                setSavedDraftMeta({
+                    recommendations: parsedDraft.recommendations,
+                    suggestions: parsedDraft.suggestions
+                });
                 setShowRestoreModal(true);
             }
         }
@@ -334,8 +341,13 @@ export const VisitFormPage: React.FC = () => {
     const handleRestoreDraft = () => {
         if (savedDraft) {
             setFormData(savedDraft);
+            if (savedDraftMeta) {
+                setRecommendations(savedDraftMeta.recommendations);
+                setSuggestions(savedDraftMeta.suggestions);
+            }
             setShowRestoreModal(false);
             setSavedDraft(null);
+            setSavedDraftMeta(null);
             setHasLocalChanges(true);
             logger.info('[VisitFormPage] Draft restored', { draftKey });
         }
@@ -346,6 +358,7 @@ export const VisitFormPage: React.FC = () => {
         draftService.removeDraft(draftKey);
         setShowRestoreModal(false);
         setSavedDraft(null);
+        setSavedDraftMeta(null);
         logger.info('[VisitFormPage] Draft discarded', { draftKey });
     };
 
@@ -360,12 +373,12 @@ export const VisitFormPage: React.FC = () => {
         const onBeforeUnload = () => {
             const { draftKey: key, hasLocalChanges: dirty, formData: data } = draftSnapshotRef.current;
             if (dirty && data) {
-                draftService.saveDraft(key, data);
+                draftService.saveDraft(key, draftService.buildVisitDraftPayload(data, recommendations, suggestions));
             }
         };
         window.addEventListener('beforeunload', onBeforeUnload);
         return () => window.removeEventListener('beforeunload', onBeforeUnload);
-    }, []);
+    }, [recommendations, suggestions]);
 
     const loadData = async () => {
         try {
@@ -638,11 +651,13 @@ export const VisitFormPage: React.FC = () => {
         // Проверяем, есть ли данные для анализа
         const hasClinicalData =
             formData.complaints?.trim() ||
-            formData.diseaseHistory?.trim() ||
+            formData.diseaseOnset?.trim() ||
+            formData.diseaseCourse?.trim() ||
+            formData.treatmentBeforeVisit?.trim() ||
             formData.physicalExam?.trim();
 
         if (!hasClinicalData) {
-            setError('Введите жалобы, анамнез или данные осмотра для анализа');
+            setError('Введите жалобы, анамнез заболевания или данные осмотра для анализа');
             return;
         }
 
@@ -671,6 +686,7 @@ export const VisitFormPage: React.FC = () => {
                 // Выполняем AI-анализ (использует расширенные поля из service)
                 const results = await visitService.analyzeVisit(visitId!);
                 setSuggestions(results);
+                setHasLocalChanges(true);
 
                 const duration = Date.now() - startTime;
                 logger.info(`[VisitFormPage] Analysis completed in ${duration}ms`, { visitId, duration });
@@ -683,6 +699,7 @@ export const VisitFormPage: React.FC = () => {
             });
 
             setSuggestions(results);
+            setHasLocalChanges(true);
         } catch (err: any) {
             logger.error('[VisitFormPage] Analysis failed', { error: err, visitId: formData.id });
             setError(err.message || 'Ошибка анализа. Попробуйте еще раз.');

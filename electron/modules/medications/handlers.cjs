@@ -99,7 +99,16 @@ const setupMedicationHandlers = () => {
     }));
 
     ipcMain.handle('medications:link-disease', ensureAuthenticated(async (_, data) => {
-        return await MedicationService.linkToDisease(data);
+        const result = await MedicationService.linkToDisease(data);
+        CacheService.invalidate('medications', `id_${data.medicationId}`);
+        return result;
+    }));
+
+    ipcMain.handle('medications:unlink-disease', ensureAuthenticated(async (_, diseaseId, medicationId) => {
+        const result = await MedicationService.unlinkFromDisease(diseaseId, medicationId);
+        logAudit('MEDICATION_DISEASE_UNLINKED', { diseaseId, medicationId });
+        CacheService.invalidate('medications', `id_${medicationId}`);
+        return result;
     }));
 
     ipcMain.handle('medications:calculate-dose', ensureAuthenticated(async (_, params) => {

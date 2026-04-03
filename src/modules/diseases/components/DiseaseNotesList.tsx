@@ -9,7 +9,6 @@ import {
     Plus,
     MessageSquare,
     Search,
-    Filter,
     ClipboardList
 } from 'lucide-react';
 
@@ -148,8 +147,10 @@ export const DiseaseNotesList: React.FC<DiseaseNotesListProps> = ({ diseaseId })
             ) : (
                 <>
                     <div className="flex flex-col md:flex-row gap-4">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <div className="relative flex-1 group">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-4">
+                                <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-colors group-focus-within:text-indigo-500" />
+                            </div>
                             <input
                                 type="text"
                                 value={searchTerm}

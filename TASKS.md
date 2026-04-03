@@ -37,12 +37,14 @@
 - ✅ Добавлены структурные поля диагностики/лечения для заболеваний (diagnosticPlan, treatmentPlan, redFlags)
 - ✅ Обновлены схемы форм выпуска и дозировок: formId, mg/ml, конвертация дозы и проверки связей
 - ✅ Добавлен GuidelinePlan API с canonical schema и fallback на текст рекомендаций
+- ✅ VisitForm draft cache: сохранение/восстановление AI suggestions и recommendations в localStorage; маппинг payload вынесен из `VisitFormPage.tsx` в `draftService.ts`
 
 **Результаты:**
 - Устранены прямые IPC вызовы из UI компонентов
 - Реализована двойная валидация (frontend + backend) для Visit и Medication
 - Единое логирование через IPC с централизованным хранением в `electron/logger.cjs`
 - Улучшена обработка ошибок с контекстной информацией в логах
+- Черновики VisitForm теперь восстанавливают результаты AI-анализа между открытиями формы
 
 **Затронутые файлы:**
 - Валидаторы: `src/validators/visit.validator.ts`, `src/validators/medication.validator.ts`

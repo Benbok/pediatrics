@@ -204,31 +204,23 @@ export const DiseaseFormPage: React.FC = () => {
     };
 
     const addSymptom = () => {
-        if (!newSymptom.trim()) return;
+        const symptomText = newSymptom.trim();
+        if (!symptomText) return;
 
-        const inputSymptoms = newSymptom
-            .split(/[,;]/)
-            .map(s => s.trim())
-            .filter(s => s.length > 0);
+        const isDuplicate = (formData.symptoms || []).some(
+            s => s.text.toLowerCase() === symptomText.toLowerCase()
+        );
 
-        const existingTextsLower = (formData.symptoms || []).map(s => s.text.toLowerCase());
-        const symptomsToAdd = inputSymptoms
-            .filter(text => {
-                const isDuplicate = existingTextsLower.includes(text.toLowerCase());
-                if (isDuplicate) {
-                    showTransientError(`Симптом "${text}" уже добавлен`);
-                }
-                return !isDuplicate;
-            })
-            .map(text => ({ text, category: newSymptomCategory }));
-
-        if (symptomsToAdd.length > 0) {
-            setFormData({
-                ...formData,
-                symptoms: [...(formData.symptoms || []), ...symptomsToAdd]
-            });
-            setNewSymptom('');
+        if (isDuplicate) {
+            showTransientError(`Симптом "${symptomText}" уже добавлен`);
+            return;
         }
+
+        setFormData({
+            ...formData,
+            symptoms: [...(formData.symptoms || []), { text: symptomText, category: newSymptomCategory }]
+        });
+        setNewSymptom('');
     };
 
     const removeSymptom = (symptom: CategorizedSymptom) => {
@@ -824,7 +816,7 @@ export const DiseaseFormPage: React.FC = () => {
                             value={newSymptom}
                             onChange={e => setNewSymptom(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addSymptom())}
-                            placeholder="Введите симптом или несколько через запятую..."
+                            placeholder="Введите симптом или клинический признак..."
                             className="h-12 rounded-xl flex-1 min-w-[200px]"
                         />
                         <div className="w-48">

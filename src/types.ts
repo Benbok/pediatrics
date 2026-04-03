@@ -1007,6 +1007,7 @@ declare global {
       upsertMedication: (data: Medication) => Promise<Medication>;
       deleteMedication: (id: number) => Promise<boolean>;
       linkMedicationToDisease: (data: { diseaseId: number; medicationId: number; priority?: number; dosing?: string; duration?: string }) => Promise<any>;
+      unlinkMedicationFromDisease: (diseaseId: number, medicationId: number) => Promise<boolean>;
       calculateDose: (params: { medicationId: number; weight: number; ageMonths: number; height?: number | null; ruleIndex?: number }) => Promise<DoseCalculationResult>;
       getMedicationsByDisease: (diseaseId: number) => Promise<Medication[]>;
       checkDuplicateMedication: (nameRu: string, excludeId?: number) => Promise<{

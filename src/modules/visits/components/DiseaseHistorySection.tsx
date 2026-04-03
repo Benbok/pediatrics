@@ -21,6 +21,13 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
     canAnalyze = true,
     errors = {},
 }) => {
+    const hasDiseaseHistoryData = Boolean(
+        formData.complaints?.trim() ||
+        formData.diseaseOnset?.trim() ||
+        formData.diseaseCourse?.trim() ||
+        formData.treatmentBeforeVisit?.trim()
+    );
+
     return (
         <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl overflow-hidden">
             <div className="flex items-center justify-between mb-6">
@@ -37,7 +44,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                         variant="secondary"
                         size="sm"
                         onClick={onAnalyze}
-                        disabled={isAnalyzing || !canAnalyze || !formData.complaints?.trim()}
+                        disabled={isAnalyzing || !canAnalyze || !hasDiseaseHistoryData}
                         className="flex items-center gap-2"
                     >
                         {isAnalyzing ? (

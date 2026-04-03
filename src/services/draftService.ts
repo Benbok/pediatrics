@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import type { DiagnosisSuggestion, Visit } from '../types';
 
 /**
  * Структура черновика в localStorage
@@ -7,6 +8,15 @@ export interface DraftData<T = unknown> {
     data: T;
     timestamp: number;
     version: number;
+}
+
+/**
+ * Структура черновика формы приема с метаданными AI
+ */
+export interface VisitDraftCachePayload {
+    formData: Partial<Visit>;
+    recommendations: string[];
+    suggestions: DiagnosisSuggestion[];
 }
 
 /**
@@ -221,6 +231,47 @@ export const draftService = {
      */
     getVisitDraftKey(childId: number, visitId?: number | null): string {
         return visitId ? `visit_${childId}_${visitId}` : `visit_${childId}_new`;
+    },
+
+    /**
+     * Создает единый payload черновика формы приема.
+     */
+    buildVisitDraftPayload(
+        formData: Partial<Visit>,
+        recommendations: string[] = [],
+        suggestions: DiagnosisSuggestion[] = []
+    ): VisitDraftCachePayload {
+        return {
+            formData,
+            recommendations,
+            suggestions,
+        };
+    },
+
+    /**
+     * Парсит payload черновика формы приема с обратной совместимостью
+     * (старый формат: только formData).
+     */
+    parseVisitDraftPayload(rawDraftData: unknown): VisitDraftCachePayload {
+        if (
+            rawDraftData &&
+            typeof rawDraftData === 'object' &&
+            !Array.isArray(rawDraftData) &&
+            'formData' in rawDraftData
+        ) {
+            const parsed = rawDraftData as Partial<VisitDraftCachePayload>;
+            return {
+                formData: parsed.formData || {},
+                recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
+                suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+            };
+        }
+
+        return {
+            formData: (rawDraftData || {}) as Partial<Visit>,
+            recommendations: [],
+            suggestions: [],
+        };
     },
 
     /**

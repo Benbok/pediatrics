@@ -46,6 +46,31 @@ export function parseSymptoms(symptoms: any): CategorizedSymptom[] {
     })).filter((s: CategorizedSymptom) => s.text.length > 0);
 }
 
+const capitalizeFirstLetter = (value: string): string => {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    return text.charAt(0).toLocaleUpperCase() + text.slice(1);
+};
+
+const normalizeSymptomsForSave = (symptoms: any): CategorizedSymptom[] => {
+    const parsed = parseSymptoms(symptoms);
+    const seen = new Set<string>();
+    const normalized: CategorizedSymptom[] = [];
+
+    for (const symptom of parsed) {
+        const text = capitalizeFirstLetter(symptom.text);
+        if (!text) continue;
+
+        const key = text.toLocaleLowerCase();
+        if (seen.has(key)) continue;
+
+        seen.add(key);
+        normalized.push({ ...symptom, text });
+    }
+
+    return normalized;
+};
+
 const normalizeDisease = <T extends Disease>(data: T): T => {
     return {
         ...data,
@@ -175,7 +200,11 @@ export const diseaseService = {
      */
     async upsertDisease(data: Disease): Promise<Disease> {
         try {
-            const validated = DiseaseSchema.parse(normalizeDisease(data));
+            const normalized = normalizeDisease(data);
+            const validated = DiseaseSchema.parse({
+                ...normalized,
+                symptoms: normalizeSymptomsForSave(normalized.symptoms)
+            });
             const result = await window.electronAPI.upsertDisease(validated);
             // Уведомляем об изменении для инвалидации кеша
             dataEvents.notifyUpdated('diseases', result.id);

@@ -330,6 +330,19 @@ const MedicationService = {
     },
 
     /**
+     * Unlink medication from a disease
+     */
+    async unlinkFromDisease(diseaseId, medicationId) {
+        await prisma.diseaseMedication.deleteMany({
+            where: {
+                diseaseId: Number(diseaseId),
+                medicationId: Number(medicationId),
+            }
+        });
+        return true;
+    },
+
+    /**
      * Build short label for a dosing rule (for rule selector UI)
      */
     _buildRuleLabel(rule, ruleIndex) {

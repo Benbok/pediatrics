@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { medicationService } from './services/medicationService';
-import { Medication } from '../../types';
+import { diseaseService } from '../diseases/services/diseaseService';
+import { Medication, Disease } from '../../types';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -24,9 +25,12 @@ import {
     History,
     Trash2,
     Copy,
-    FileText
+    FileText,
+    Stethoscope,
+    ExternalLink
 } from 'lucide-react';
 import { ChangeHistoryPanel } from './components/ChangeHistoryPanel';
+import { MedicationDiseasesTab } from './components/MedicationDiseasesTab';
 import VIDAL_JSON_TEMPLATE from './templates/vidalJsonTemplate.json';
 
 export const MedicationFormPage: React.FC = () => {
@@ -53,6 +57,12 @@ export const MedicationFormPage: React.FC = () => {
         indications: [],
     });
     const [icd10Input, setIcd10Input] = useState('');
+
+    // Вкладки (только в режиме редактирования)
+    const [activeTab, setActiveTab] = useState<'form' | 'diseases'>('form');
+
+    // Список болезней для inline preview МКБ-10
+    const [allDiseases, setAllDiseases] = useState<Disease[]>([]);
 
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -88,6 +98,47 @@ export const MedicationFormPage: React.FC = () => {
             loadMedication();
         }
     }, [isEdit, id]);
+
+    // Загрузка всех болезней для inline preview МКБ-10
+    useEffect(() => {
+        diseaseService.getDiseases()
+            .then(setAllDiseases)
+            .catch(() => { /* некритично — preview просто не покажется */ });
+    }, []);
+
+    // Производный список болезней, совпадающих с текущими кодами МКБ-10
+    const matchingDiseases = useMemo(() => {
+        const codes = formData.icd10Codes ?? [];
+        if (codes.length === 0 || allDiseases.length === 0) return [];
+
+        return allDiseases.filter(disease => {
+            const diseaseCodes = [disease.icd10Code, ...(disease.icd10Codes ?? [])];
+            return codes.some(medCode =>
+                diseaseCodes.some(dc =>
+                    dc === medCode ||
+                    dc.startsWith(medCode + '.') ||
+                    medCode.startsWith(dc + '.')
+                )
+            );
+        });
+    }, [formData.icd10Codes, allDiseases]);
+
+    // Коды без совпадений (для предупреждения)
+    const unmatchedCodes = useMemo(() => {
+        const codes = formData.icd10Codes ?? [];
+        if (codes.length === 0 || allDiseases.length === 0) return [];
+
+        return codes.filter(medCode => {
+            return !allDiseases.some(disease => {
+                const diseaseCodes = [disease.icd10Code, ...(disease.icd10Codes ?? [])];
+                return diseaseCodes.some(dc =>
+                    dc === medCode ||
+                    dc.startsWith(medCode + '.') ||
+                    medCode.startsWith(dc + '.')
+                );
+            });
+        });
+    }, [formData.icd10Codes, allDiseases]);
 
     // Проверка дубликатов при изменении названия
     const checkForDuplicates = async (name: string) => {
@@ -400,6 +451,57 @@ export const MedicationFormPage: React.FC = () => {
                 </div>
             </div>
 
+            {/* Переключатель вкладок (только в режиме редактирования) */}
+            {isEdit && (
+                <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('form')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                            activeTab === 'form'
+                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                        }`}
+                    >
+                        <Pill className="w-4 h-4" />
+                        Основная информация
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('diseases')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                            activeTab === 'diseases'
+                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                        }`}
+                    >
+                        <Stethoscope className="w-4 h-4" />
+                        Болезни
+                        {matchingDiseases.length > 0 && (
+                            <span className="ml-1 px-2 py-0.5 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-xs font-bold">
+                                {matchingDiseases.length}
+                            </span>
+                        )}
+                    </button>
+                </div>
+            )}
+
+            {/* Режим: вкладка Болезни */}
+            {isEdit && activeTab === 'diseases' && (
+                <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl">
+                    <MedicationDiseasesTab
+                        medicationId={Number(id)}
+                        icd10Codes={formData.icd10Codes ?? []}
+                        onIcd10CodesUpdated={(codes) => {
+                            setFormData(prev => ({ ...prev, icd10Codes: codes }));
+                            setIcd10Input(codes.join(', '));
+                        }}
+                    />
+                </Card>
+            )}
+
+            {/* Режим: форма */}
+            {activeTab === 'form' && (
             <form onSubmit={handleSave} className="space-y-6 pb-20">
                 <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl">
                     <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
@@ -468,7 +570,7 @@ export const MedicationFormPage: React.FC = () => {
                             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
                                 Коды МКБ-10 (через запятую)
                             </label>
-                            <Input
+                            <textarea
                                 value={icd10Input}
                                 onChange={e => setIcd10Input(e.target.value)}
                                 onBlur={() => setFormData({
@@ -476,8 +578,46 @@ export const MedicationFormPage: React.FC = () => {
                                     icd10Codes: parseIcd10Codes(icd10Input)
                                 })}
                                 placeholder="J00, J20.9, R50"
-                                className="h-14 rounded-2xl font-mono"
+                                rows={3}
+                                className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm font-mono resize-none"
                             />
+
+                            {/* Inline preview совпавших болезней */}
+                            {(formData.icd10Codes ?? []).length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                    {matchingDiseases.length > 0 && (
+                                        <div className="flex flex-wrap gap-2">
+                                            {matchingDiseases.map(disease => (
+                                                <button
+                                                    key={disease.id}
+                                                    type="button"
+                                                    onClick={() => navigate(`/diseases/${disease.id}`)}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors group"
+                                                >
+                                                    <Stethoscope className="w-3.5 h-3.5 shrink-0" />
+                                                    <span className="font-mono font-bold">{disease.icd10Code}</span>
+                                                    <span className="text-emerald-600 dark:text-emerald-400 max-w-[160px] truncate">{disease.nameRu}</span>
+                                                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {unmatchedCodes.length > 0 && (
+                                        <div className="flex flex-wrap gap-2">
+                                            {unmatchedCodes.map(code => (
+                                                <span
+                                                    key={code}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-xs font-medium"
+                                                >
+                                                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                                    <span className="font-mono font-bold">{code}</span>
+                                                    <span className="text-amber-600 dark:text-amber-400">нет в базе</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                         <div className="md:col-span-3">
                             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
@@ -958,6 +1098,7 @@ export const MedicationFormPage: React.FC = () => {
                     </div>
                 </div>
             </form>
+            )} {/* end activeTab === 'form' */}
 
             {/* Диалог импорта из Видаль */}
             {showImportDialog && (

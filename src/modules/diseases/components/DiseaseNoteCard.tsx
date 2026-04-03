@@ -13,6 +13,8 @@ import {
     Tag
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface DiseaseNoteCardProps {
     note: DiseaseNote;
@@ -29,8 +31,45 @@ export const DiseaseNoteCard: React.FC<DiseaseNoteCardProps> = ({
     onDelete,
     onTogglePin
 }) => {
+    const [isExpanded, setIsExpanded] = React.useState(false);
+    const PREVIEW_CHAR_LIMIT = 320;
     const isAuthor = note.authorId === currentUserId;
     const formattedDate = new Date(note.createdAt).toLocaleDateString();
+
+    const trimmedContent = note.content.trim();
+    const canExpand = trimmedContent.length > PREVIEW_CHAR_LIMIT;
+
+    const collapsedPreviewMarkdown = React.useMemo(() => {
+        if (!canExpand) return note.content;
+
+        const blocks = note.content.split(/\n{2,}/);
+        const selectedBlocks: string[] = [];
+        let totalLength = 0;
+
+        for (const block of blocks) {
+            const blockLength = block.length;
+            if (selectedBlocks.length > 0 && totalLength + blockLength > PREVIEW_CHAR_LIMIT) {
+                break;
+            }
+
+            if (selectedBlocks.length === 0 && blockLength > PREVIEW_CHAR_LIMIT) {
+                const shortened = block.slice(0, PREVIEW_CHAR_LIMIT);
+                const lastSpace = shortened.lastIndexOf(' ');
+                selectedBlocks.push((lastSpace > 120 ? shortened.slice(0, lastSpace) : shortened).trim());
+                totalLength = PREVIEW_CHAR_LIMIT;
+                break;
+            }
+
+            selectedBlocks.push(block);
+            totalLength += blockLength;
+        }
+
+        return `${selectedBlocks.join('\n\n').trim()}\n\n...`;
+    }, [canExpand, note.content]);
+
+    React.useEffect(() => {
+        setIsExpanded(false);
+    }, [note.id]);
 
     return (
         <Card className={clsx(
@@ -97,8 +136,31 @@ export const DiseaseNoteCard: React.FC<DiseaseNoteCardProps> = ({
                 </div>
             </div>
 
-            <div className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed whitespace-pre-wrap mb-4">
-                {note.content}
+            <div className="mb-4">
+                <div className="relative">
+                    {isExpanded ? (
+                        <div className="prose prose-sm max-w-none text-slate-600 dark:text-slate-300 prose-headings:text-slate-900 dark:prose-headings:text-slate-100 prose-strong:text-slate-900 dark:prose-strong:text-slate-100 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-blockquote:my-2 prose-blockquote:border-primary-300 dark:prose-blockquote:border-primary-700 prose-blockquote:text-slate-600 dark:prose-blockquote:text-slate-300 prose-code:text-primary-700 dark:prose-code:text-primary-300 prose-code:before:content-none prose-code:after:content-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {note.content}
+                            </ReactMarkdown>
+                        </div>
+                    ) : (
+                        <div className="prose prose-sm max-w-none text-slate-600 dark:text-slate-300 prose-headings:text-slate-900 dark:prose-headings:text-slate-100 prose-strong:text-slate-900 dark:prose-strong:text-slate-100 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-blockquote:my-2 prose-blockquote:border-primary-300 dark:prose-blockquote:border-primary-700 prose-blockquote:text-slate-600 dark:prose-blockquote:text-slate-300 prose-code:text-primary-700 dark:prose-code:text-primary-300 prose-code:before:content-none prose-code:after:content-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {collapsedPreviewMarkdown}
+                            </ReactMarkdown>
+                        </div>
+                    )}
+                </div>
+                {canExpand && (
+                    <button
+                        type="button"
+                        onClick={() => setIsExpanded(prev => !prev)}
+                        className="mt-3 text-xs font-bold uppercase tracking-wide text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                    >
+                        {isExpanded ? 'Свернуть' : 'Показать полностью'}
+                    </button>
+                )}
             </div>
 
             {note.tags && note.tags.length > 0 && (
