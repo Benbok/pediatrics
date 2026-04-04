@@ -54,8 +54,18 @@ export const medicationService = {
      * Create or update a medication
      */
     async upsertMedication(data: Medication, source: 'manual' | 'vidal_import' = 'manual'): Promise<Medication> {
+        // Normalize Vidal using status fields before validation
+        const VALID_VIDAL_USING = new Set(['Can', 'Care', 'Not', 'Qwes']);
+        const sanitizeVidalUsing = (v: unknown) =>
+            v && typeof v === 'string' && VALID_VIDAL_USING.has(v) ? v : null;
+        const sanitized = {
+            ...data,
+            childUsing: sanitizeVidalUsing(data.childUsing),
+            renalUsing: sanitizeVidalUsing(data.renalUsing),
+            hepatoUsing: sanitizeVidalUsing(data.hepatoUsing),
+        };
         // Validate data using Zod
-        const normalized = normalizeMedicationRoutes(data);
+        const normalized = normalizeMedicationRoutes(sanitized as Medication);
         const validation = MedicationSchema.safeParse(normalized);
         if (!validation.success) {
             const errorMsg = validation.error.issues.map(i => i.message).join(', ');

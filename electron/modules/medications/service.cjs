@@ -20,6 +20,23 @@ function safeJsonParse(value, defaultValue = []) {
     }
 }
 
+function normalizeVidalUsingStatus(value) {
+    if (value == null) return null;
+    if (typeof value !== 'string') return value;
+
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === '—' || trimmed === '-') {
+        return null;
+    }
+
+    return trimmed;
+}
+
+const VidalUsingSchema = z.preprocess(
+    normalizeVidalUsingStatus,
+    z.enum(['Can', 'Care', 'Not', 'Qwes']).nullable()
+);
+
 // Medication Validation Schema
 const MedicationSchema = z.object({
     id: z.number().optional(),
@@ -93,11 +110,11 @@ const MedicationSchema = z.object({
     isOtc: z.boolean().optional().default(false),
     overdose: z.string().optional().nullable(),
     childDosing: z.string().optional().nullable(),
-    childUsing: z.enum(['Can', 'Care', 'Not', 'Qwes']).optional().nullable(),
+    childUsing: VidalUsingSchema.optional(),
     renalInsuf: z.string().optional().nullable(),
-    renalUsing: z.enum(['Can', 'Care', 'Not', 'Qwes']).optional().nullable(),
+    renalUsing: VidalUsingSchema.optional(),
     hepatoInsuf: z.string().optional().nullable(),
-    hepatoUsing: z.enum(['Can', 'Care', 'Not', 'Qwes']).optional().nullable(),
+    hepatoUsing: VidalUsingSchema.optional(),
     specialInstruction: z.string().optional().nullable(),
     pharmacokinetics: z.string().optional().nullable(),
     pharmacodynamics: z.string().optional().nullable(),
@@ -323,7 +340,16 @@ const MedicationService = {
      * Upsert medication
      */
     async upsert(data, userId = null, source = 'manual') {
-        const normalizedInput = normalizeMedicationRoutes(data);
+        const VALID_VIDAL_USING = new Set(['Can', 'Care', 'Not', 'Qwes']);
+        const sanitizeVidalUsing = (v) =>
+            v && typeof v === 'string' && VALID_VIDAL_USING.has(v) ? v : null;
+        const sanitizedData = {
+            ...data,
+            childUsing: sanitizeVidalUsing(data.childUsing),
+            renalUsing: sanitizeVidalUsing(data.renalUsing),
+            hepatoUsing: sanitizeVidalUsing(data.hepatoUsing),
+        };
+        const normalizedInput = normalizeMedicationRoutes(sanitizedData);
         const validated = MedicationSchema.parse(normalizedInput);
         const { id, ...rest } = validated;
 

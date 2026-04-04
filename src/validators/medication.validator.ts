@@ -15,6 +15,23 @@ const RouteOfAdminSchema = z.enum([
     'transdermal',
 ]);
 
+const normalizeVidalUsingStatus = (value: unknown) => {
+    if (value == null) return null;
+    if (typeof value !== 'string') return value;
+
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === '—' || trimmed === '-') {
+        return null;
+    }
+
+    return trimmed;
+};
+
+const VidalUsingSchema = z.preprocess(
+    normalizeVidalUsingStatus,
+    z.enum(['Can', 'Care', 'Not', 'Qwes']).nullable()
+);
+
 const MedicationFormSchema = z.object({
     id: z.string().min(1, 'ID формы обязателен'),
     type: z.string().min(1, 'Тип формы обязателен'),
@@ -107,11 +124,11 @@ export const MedicationSchema = z.object({
     isOtc: z.boolean().optional(),
     overdose: z.string().nullable().optional(),
     childDosing: z.string().nullable().optional(),
-    childUsing: z.enum(['Can', 'Care', 'Not', 'Qwes']).nullable().optional(),
+    childUsing: VidalUsingSchema.optional(),
     renalInsuf: z.string().nullable().optional(),
-    renalUsing: z.enum(['Can', 'Care', 'Not', 'Qwes']).nullable().optional(),
+    renalUsing: VidalUsingSchema.optional(),
     hepatoInsuf: z.string().nullable().optional(),
-    hepatoUsing: z.enum(['Can', 'Care', 'Not', 'Qwes']).nullable().optional(),
+    hepatoUsing: VidalUsingSchema.optional(),
     specialInstruction: z.string().nullable().optional(),
     pharmacokinetics: z.string().nullable().optional(),
     pharmacodynamics: z.string().nullable().optional(),
