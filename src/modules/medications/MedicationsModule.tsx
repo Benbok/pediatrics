@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { medicationService } from './services/medicationService';
 import { MedicationListItem } from '../../types';
 import { MedicationCard } from './components/MedicationCard';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { Search, Plus, Pill, AlertCircle, Beaker, Star, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { Search, Plus, Pill, AlertCircle, Beaker, Star, ChevronLeft, ChevronRight, SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { PharmGroupFilter } from './components/PharmGroupFilter';
 import { FormTypeFilter } from './components/FormTypeFilter';
 
@@ -14,16 +14,28 @@ const PAGE_SIZE = 60;
 
 export const MedicationsModule: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const initialSearch = searchParams.get('q') ?? '';
+    const initialFavorites = searchParams.get('fav') === '1';
+    const initialGroup = searchParams.get('group') || null;
+    const initialFormType = searchParams.get('form') || null;
+    const initialWithPediatricDosing = searchParams.get('pd') === '1';
+    const initialPage = Math.max(1, Number(searchParams.get('page') || '1'));
+    const initialShowFilters = searchParams.get('filters') === '1';
+
     const [medications, setMedications] = useState<MedicationListItem[]>([]);
-    const [searchInput, setSearchInput] = useState('');
-    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [searchInput, setSearchInput] = useState(initialSearch);
+    const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
     const [error, setError] = useState<string | null>(null);
-    const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-    const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-    const [selectedFormType, setSelectedFormType] = useState<string | null>(null);
-    const [showFiltersPanel, setShowFiltersPanel] = useState(false);
+    const [showFavoritesOnly, setShowFavoritesOnly] = useState(initialFavorites);
+    const [selectedGroup, setSelectedGroup] = useState<string | null>(initialGroup);
+    const [selectedFormType, setSelectedFormType] = useState<string | null>(initialFormType);
+    const [withPediatricDosing, setWithPediatricDosing] = useState(initialWithPediatricDosing);
+    const [showFiltersPanel, setShowFiltersPanel] = useState(initialShowFilters);
     const [isLoading, setIsLoading] = useState(false);
-    const [page, setPage] = useState(1);
+    const [page, setPage] = useState(initialPage);
     const [total, setTotal] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
     const latestRequestId = useRef(0);
@@ -33,14 +45,27 @@ export const MedicationsModule: React.FC = () => {
         favoritesOnly: showFavoritesOnly,
         group: selectedGroup,
         formType: selectedFormType,
-    }), [debouncedSearch, showFavoritesOnly, selectedGroup, selectedFormType]);
+        hasPediatricDosing: withPediatricDosing,
+    }), [debouncedSearch, showFavoritesOnly, selectedGroup, selectedFormType, withPediatricDosing]);
 
     const nonFavoriteFilterCount = useMemo(() => {
         let count = 0;
         if (selectedGroup) count += 1;
         if (selectedFormType) count += 1;
+        if (withPediatricDosing) count += 1;
         return count;
-    }, [selectedGroup, selectedFormType]);
+    }, [selectedGroup, selectedFormType, withPediatricDosing]);
+
+    const hasActiveListState = useMemo(() => {
+        return Boolean(
+            searchInput.trim() ||
+            showFavoritesOnly ||
+            selectedGroup ||
+            selectedFormType ||
+            withPediatricDosing ||
+            page > 1
+        );
+    }, [searchInput, showFavoritesOnly, selectedGroup, selectedFormType, withPediatricDosing, page]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -48,6 +73,34 @@ export const MedicationsModule: React.FC = () => {
         }, 300);
         return () => window.clearTimeout(timer);
     }, [searchInput]);
+
+    useEffect(() => {
+        const params = new URLSearchParams();
+
+        if (debouncedSearch) {
+            params.set('q', debouncedSearch);
+        }
+        if (showFavoritesOnly) {
+            params.set('fav', '1');
+        }
+        if (selectedGroup) {
+            params.set('group', selectedGroup);
+        }
+        if (selectedFormType) {
+            params.set('form', selectedFormType);
+        }
+        if (withPediatricDosing) {
+            params.set('pd', '1');
+        }
+        if (page > 1) {
+            params.set('page', String(page));
+        }
+        if (showFiltersPanel) {
+            params.set('filters', '1');
+        }
+
+        setSearchParams(params, { replace: true });
+    }, [debouncedSearch, showFavoritesOnly, selectedGroup, selectedFormType, withPediatricDosing, page, showFiltersPanel, setSearchParams]);
 
     useEffect(() => {
         setPage(1);
@@ -67,6 +120,7 @@ export const MedicationsModule: React.FC = () => {
                     favoritesOnly: activeFilters.favoritesOnly,
                     group: activeFilters.group,
                     formType: activeFilters.formType,
+                    hasPediatricDosing: activeFilters.hasPediatricDosing,
                 });
 
                 if (cancelled || requestId !== latestRequestId.current) {
@@ -105,6 +159,7 @@ export const MedicationsModule: React.FC = () => {
                 favoritesOnly: activeFilters.favoritesOnly,
                 group: activeFilters.group,
                 formType: activeFilters.formType,
+                    hasPediatricDosing: activeFilters.hasPediatricDosing,
             });
             setMedications(result.items);
             setTotal(result.total);
@@ -112,6 +167,18 @@ export const MedicationsModule: React.FC = () => {
         } catch {
             // noop: main loader handles error display
         }
+    };
+
+    const handleResetListState = () => {
+        setSearchInput('');
+        setDebouncedSearch('');
+        setShowFavoritesOnly(false);
+        setSelectedGroup(null);
+        setSelectedFormType(null);
+        setWithPediatricDosing(false);
+        setPage(1);
+        setShowFiltersPanel(false);
+        setSearchParams(new URLSearchParams(), { replace: true });
     };
 
     return (
@@ -134,7 +201,7 @@ export const MedicationsModule: React.FC = () => {
                 <div className="flex items-center gap-2">
                     <Button
                         variant="primary"
-                        onClick={() => navigate('/medications/new')}
+                        onClick={() => navigate(`/medications/new${location.search}`)}
                         className="h-12 px-6 rounded-xl shadow-lg shadow-primary-500/20"
                     >
                         <Plus className="w-5 h-5 mr-2" />
@@ -180,11 +247,51 @@ export const MedicationsModule: React.FC = () => {
                 </Button>
             </div>
 
+            {hasActiveListState && (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/40 px-4 py-3">
+                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                        Активны поиск или фильтры. Можно быстро вернуться к полному списку.
+                    </div>
+                    <Button
+                        variant="ghost"
+                        onClick={handleResetListState}
+                        className="rounded-xl text-slate-600 dark:text-slate-300"
+                    >
+                        <RotateCcw className="w-4 h-4 mr-2" />
+                        Сбросить все
+                    </Button>
+                </div>
+            )}
+
             {/* Фильтры */}
             {(total > 0 || isLoading) && (showFiltersPanel || nonFavoriteFilterCount > 0) && (
                 <div className="space-y-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            Настройка выдачи
+                        </div>
+                        {hasActiveListState && (
+                            <button
+                                type="button"
+                                onClick={handleResetListState}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Сбросить все
+                            </button>
+                        )}
+                    </div>
                     <PharmGroupFilter onGroupSelect={setSelectedGroup} />
                     <FormTypeFilter onFormTypeSelect={setSelectedFormType} />
+                    <div className="flex items-center gap-2 pt-1">
+                        <Button
+                            variant={withPediatricDosing ? 'primary' : 'secondary'}
+                            onClick={() => setWithPediatricDosing((prev) => !prev)}
+                            className="h-10 rounded-xl text-sm"
+                        >
+                            С педиатрическим дозированием
+                        </Button>
+                    </div>
                 </div>
             )}
 
@@ -216,7 +323,7 @@ export const MedicationsModule: React.FC = () => {
                         <MedicationCard
                             key={med.id}
                             medication={med}
-                            onSelect={(id) => navigate(`/medications/${id}`)}
+                            onSelect={(id) => navigate(`/medications/${id}${location.search}`)}
                             onFavoriteToggle={handleFavoriteToggle}
                         />
                     ))}

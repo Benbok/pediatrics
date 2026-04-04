@@ -374,6 +374,7 @@ model Medication {
   specialInstruction String? @map("special_instruction") // Особые указания (HTML)
   pharmacokinetics   String? @map("pharmacokinetics") // Фармакокинетика (HTML)
   pharmacodynamics   String? @map("pharmacodynamics") // Фармакодинамика / механизм действия (HTML)
+  fullInstruction    String? @map("full_instruction")  // JSON: полная инструкция по применению из vidal-db (все разделы)
 
   // Избранное и теги
   isFavorite Boolean   @default(false) @map("is_favorite")

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { medicationService } from './services/medicationService';
 import { diseaseService } from '../diseases/services/diseaseService';
 import { Medication, Disease } from '../../types';
@@ -68,12 +68,14 @@ const VIDAL_USING_OPTIONS: Array<SelectOption<string>> = [
 export const MedicationFormPage: React.FC = () => {
     const { id } = useParams<{ id?: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
     const isEdit = !!id;
     
     // Определяем источник навигации
     const fromDisease = searchParams.get('from') === 'disease';
     const diseaseId = searchParams.get('diseaseId');
+    const medicationsListPath = `/medications${location.search}`;
 
     const [formData, setFormData] = useState<Partial<Medication>>({
         nameRu: '',
@@ -124,6 +126,17 @@ export const MedicationFormPage: React.FC = () => {
         duplicate: Medication | null;
     }>({ show: false, duplicate: null });
     const [ignoreDuplicate, setIgnoreDuplicate] = useState(false);
+
+    const fullInstructionText = useMemo(() => {
+        const value = formData.fullInstruction;
+        if (value == null) return '';
+        if (typeof value === 'string') return value;
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch {
+            return String(value);
+        }
+    }, [formData.fullInstruction]);
 
     useEffect(() => {
         if (isEdit && id) {
@@ -214,7 +227,7 @@ export const MedicationFormPage: React.FC = () => {
             const data = await medicationService.getMedication(Number(id));
             if (!data) {
                 setError('Препарат не найден');
-                setTimeout(() => navigate('/medications'), 2000);
+                setTimeout(() => navigate(medicationsListPath), 2000);
                 return;
             }
             setFormData(data);
@@ -248,7 +261,7 @@ export const MedicationFormPage: React.FC = () => {
             const icd10Codes = parseIcd10Codes(icd10Input);
             await medicationService.upsertMedication({ ...formData, icd10Codes } as Medication, source);
             setSuccess(true);
-            setTimeout(() => navigate('/medications'), 1500);
+            setTimeout(() => navigate(medicationsListPath), 1500);
         } catch (err: any) {
             setError(err.message || 'Произошла ошибка при сохранении');
         } finally {
@@ -436,7 +449,7 @@ export const MedicationFormPage: React.FC = () => {
             navigate(`/diseases/${diseaseId}`);
         } else {
             // Если открыто из модуля препаратов - вернуться к списку препаратов
-            navigate('/medications');
+            navigate(medicationsListPath);
         }
     };
 
@@ -451,7 +464,7 @@ export const MedicationFormPage: React.FC = () => {
             // Кеш инвалидируется автоматически через dataEvents в сервисе
             setSuccess(true);
             setTimeout(() => {
-                navigate('/medications');
+                navigate(medicationsListPath);
             }, 1000);
         } catch (err: any) {
             setError(err.message || 'Не удалось удалить препарат');
@@ -707,7 +720,7 @@ export const MedicationFormPage: React.FC = () => {
                                     <Button
                                         type="button"
                                         variant="primary"
-                                        onClick={() => navigate(`/medications/${duplicateWarning.duplicate?.id}`)}
+                                        onClick={() => navigate(`/medications/${duplicateWarning.duplicate?.id}${location.search}`)}
                                         className="rounded-xl"
                                     >
                                         Открыть существующий препарат
@@ -728,7 +741,7 @@ export const MedicationFormPage: React.FC = () => {
                                     <Button
                                         type="button"
                                         variant="ghost"
-                                        onClick={() => navigate('/medications')}
+                                        onClick={() => navigate(medicationsListPath)}
                                         className="rounded-xl"
                                     >
                                         Отменить
@@ -1034,6 +1047,18 @@ export const MedicationFormPage: React.FC = () => {
                     </h2>
 
                     <div className="space-y-6">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                Инструкция по применению (полная)
+                            </label>
+                            <textarea
+                                value={fullInstructionText}
+                                onChange={e => setFormData({ ...formData, fullInstruction: e.target.value || null })}
+                                className="w-full min-h-[180px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm font-mono"
+                                placeholder="Полная инструкция из Vidal (JSON/текст)..."
+                            />
+                        </div>
+
                         <div>
                             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
                                 Показания к применению

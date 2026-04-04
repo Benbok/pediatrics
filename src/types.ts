@@ -491,6 +491,7 @@ export interface Medication {
   specialInstruction?: string | null;
   pharmacokinetics?: string | null;
   pharmacodynamics?: string | null;
+  fullInstruction?: string | Record<string, unknown> | null;
   // Избранное и теги
   isFavorite?: boolean;
   userTags?: string[] | null;
@@ -1055,6 +1056,7 @@ declare global {
         group?: string | null;
         formType?: string | null;
         favoritesOnly?: boolean;
+        hasPediatricDosing?: boolean;
       }) => Promise<MedicationsPageResult>;
       getMedication: (id: number) => Promise<Medication & { diseases: any[] }>;
       upsertMedication: (data: Medication, source?: string) => Promise<Medication>;

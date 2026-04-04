@@ -29,18 +29,31 @@ def normalize_using(v):
 
 def infer_form_type(text):
     t = (text or "").lower()
+    # Most specific forms first, to avoid Composition 'порошок' in capsule overriding 'капс' from ZipInfo
+    if "капс" in t:
+        return "capsule"
+    if "таблет" in t:
+        return "tablet"
+    if "сироп" in t:
+        return "syrup"
+    if any(k in t for k in ("сусп", "суспенз")):
+        return "suspension"
     if "лиофилизат" in t or "порошок" in t:
         return "powder"
-    if "раствор" in t or "р-р" in t:
+    if "аэрозоль" in t:
+        return "spray"
+    if any(k in t for k in ("р-р д/ингал", "р-р д/инф", "раствор", "р-р")):
         return "solution"
+    if "капли" in t:
+        return "drops"
+    if "гел" in t:
+        return "gel"
     if "крем" in t:
         return "cream"
     if "маз" in t:
         return "ointment"
-    if "капли" in t:
-        return "drops"
-    if "таблет" in t:
-        return "tablet"
+    if any(k in t for k in ("спрей", "spray")):
+        return "spray"
     return "other"
 
 
@@ -266,6 +279,12 @@ def parse_pediatric_dosing(child_insuf, dosage_text, forms, route):
             "instruction": chunk,
         }
 
+        # Фильтр: пропускаем записи без дозы ИЛИ без хотя бы одной границы возраста
+        dose_ok = rule.get("dosing") is not None and rule["dosing"].get("mgPerKg") is not None
+        age_ok = rule.get("minAgeMonths") is not None or rule.get("maxAgeMonths") is not None
+        if not dose_ok or not age_ok:
+            continue
+
         # Дедуп по ключевым полям
         key = (
             rule["minAgeMonths"],
@@ -282,12 +301,39 @@ def parse_pediatric_dosing(child_insuf, dosage_text, forms, route):
     return rules
 
 
+def build_full_instruction(doc):
+    """Собирает полную инструкцию по применению как единый текст (без JSON-ключей)."""
+    parts = [
+        strip_html(doc["Indication"]),
+        strip_html(doc["ContraIndication"]),
+        strip_html(doc["Dosage"]),
+        strip_html(doc["SideEffects"]),
+        strip_html(doc["Interaction"]),
+        strip_html(doc["OverDosage"]),
+        strip_html(doc["SpecialInstruction"]),
+        strip_html(doc["PhInfluence"]),
+        strip_html(doc["PhKinetics"]),
+        strip_html(doc["PregnancyUsing"]),
+        strip_html(doc["NursingUsing"]),
+        strip_html(doc["RenalInsuf"]),
+        strip_html(doc["HepatoInsuf"]),
+        strip_html(doc["ChildInsuf"]),
+        strip_html(doc["ElderlyInsuf"]),
+        strip_html(doc["StorageCondition"]),
+    ]
+    parts = [p for p in parts if p and str(p).strip()]
+    return "\n\n".join(parts) if parts else None
+
+
 def parse_forms(zip_info, composition):
     source = " ".join([zip_info or "", strip_html(composition) or ""])
     if not source.strip():
         return []
 
-    form_type = infer_form_type(source)
+    # Prefer ZipInfo for type inference: Composition often contains 'порошок' описания наполнителей
+    form_type = infer_form_type(zip_info or "")
+    if form_type == "other":
+        form_type = infer_form_type(source)
     concentration = None
     mg_per_ml = None
     volume_ml = None
@@ -387,8 +433,11 @@ def main():
         d = cur.execute(
             """
             SELECT DocumentID, RusName, EngName, Indication, ContraIndication, SideEffects, Interaction,
-                   Lactation, OverDosage, ChildInsuf, ChildInsufUsing, RenalInsuf, RenalInsufUsing,
-                   HepatoInsuf, HepatoInsufUsing, SpecialInstruction, PhKinetics, PhInfluence, Dosage
+                   Lactation, NursingUsing, OverDosage, 
+                   ChildInsuf, ChildInsufUsing, RenalInsuf, RenalInsufUsing,
+                   HepatoInsuf, HepatoInsufUsing, ElderlyInsuf, ElderlyInsufUsing,
+                   SpecialInstruction, PhKinetics, PhInfluence, Dosage,
+                   PregnancyUsing, StorageCondition
             FROM Document
             WHERE DocumentID = ?
             """,
@@ -528,6 +577,7 @@ def main():
             "pharmacokinetics": strip_html(d["PhKinetics"]),
             "pharmacodynamics": strip_html(d["PhInfluence"]),
             "icd10Codes": icd_codes,
+            "fullInstruction": build_full_instruction(d),
         }
 
         file_name = f"doc_{doc_id}_{slug(d['EngName']) or slug(d['RusName'])}.json"

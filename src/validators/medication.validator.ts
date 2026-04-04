@@ -115,6 +115,12 @@ export const MedicationSchema = z.object({
     specialInstruction: z.string().nullable().optional(),
     pharmacokinetics: z.string().nullable().optional(),
     pharmacodynamics: z.string().nullable().optional(),
+    fullInstruction: z.union([z.string(), z.record(z.string(), z.any())]).nullable().optional()
+        .transform((value) => {
+            if (value == null) return null;
+            if (typeof value === 'string') return value;
+            return JSON.stringify(value, null, 2);
+        }),
     isFavorite: z.boolean().optional(),
     userTags: z.array(z.string()).nullable().optional(),
     usageCount: z.number().optional(),

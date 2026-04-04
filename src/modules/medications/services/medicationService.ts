@@ -16,6 +16,7 @@ export const medicationService = {
         group?: string | null;
         formType?: string | null;
         favoritesOnly?: boolean;
+        hasPediatricDosing?: boolean;
     }): Promise<MedicationsPageResult> {
         try {
             return await window.electronAPI.getMedicationsPaginated(params);

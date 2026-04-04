@@ -32,8 +32,9 @@ const setupMedicationHandlers = () => {
         const group = typeof params.group === 'string' ? params.group.trim() : '';
         const formType = typeof params.formType === 'string' ? params.formType.trim() : '';
         const favoritesOnly = Boolean(params.favoritesOnly);
+        const hasPediatricDosing = Boolean(params.hasPediatricDosing);
 
-        const cacheKey = `page_${page}_size_${pageSize}_q_${search}_group_${group}_form_${formType}_fav_${favoritesOnly}`;
+        const cacheKey = `page_${page}_size_${pageSize}_q_${search}_group_${group}_form_${formType}_fav_${favoritesOnly}_pd_${hasPediatricDosing}`;
         const cached = CacheService.get('medications', cacheKey);
         if (cached) {
             return cached;
@@ -46,6 +47,7 @@ const setupMedicationHandlers = () => {
             group,
             formType,
             favoritesOnly,
+            hasPediatricDosing,
         });
 
         CacheService.set('medications', cacheKey, result);

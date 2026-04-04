@@ -101,6 +101,7 @@ const MedicationSchema = z.object({
     specialInstruction: z.string().optional().nullable(),
     pharmacokinetics: z.string().optional().nullable(),
     pharmacodynamics: z.string().optional().nullable(),
+    fullInstruction: z.union([z.string(), z.record(z.string(), z.any())]).optional().nullable(),
     // Избранное и теги
     isFavorite: z.boolean().optional().default(false),
     userTags: z.array(z.string()).optional().nullable(),
@@ -138,6 +139,7 @@ const MedicationService = {
         const group = typeof params.group === 'string' ? params.group.trim() : '';
         const formType = typeof params.formType === 'string' ? params.formType.trim() : '';
         const favoritesOnly = Boolean(params.favoritesOnly);
+        const hasPediatricDosing = Boolean(params.hasPediatricDosing);
 
         const andConditions = [];
         if (search) {
@@ -162,6 +164,13 @@ const MedicationService = {
                     { forms: { contains: `"type": "${formType}"` } },
                     { packageDescription: { contains: formType } },
                 ],
+            });
+        }
+        if (hasPediatricDosing) {
+            andConditions.push({
+                pediatricDosing: {
+                    notIn: ['', '[]'],
+                },
             });
         }
 
@@ -352,6 +361,11 @@ const MedicationService = {
             contraindications: normalizeString(normalizedContraindications),
             cautionConditions: Array.isArray(rest.cautionConditions) ? JSON.stringify(rest.cautionConditions) : (rest.cautionConditions || null),
             userTags: rest.userTags ? JSON.stringify(normalizeArray(rest.userTags)) : null,
+            fullInstruction: rest.fullInstruction == null
+                ? null
+                : (typeof rest.fullInstruction === 'string'
+                    ? rest.fullInstruction
+                    : JSON.stringify(rest.fullInstruction, null, 2)),
             routeOfAdmin: Array.isArray(rest.routeOfAdmin) ? rest.routeOfAdmin[0] : rest.routeOfAdmin,
             // Новые поля сохраняются как есть (они уже валидированы Zod)
         };

@@ -18,6 +18,21 @@ DEFAULT_DATA_DIR = os.path.join(
     'aminoglycosides',
 )
 
+KNOWN_JSON_KEYS = {
+    'nameRu', 'nameEn', 'activeSubstance', 'atcCode', 'icd10Codes',
+    'packageDescription', 'manufacturer', 'forms',
+    'pediatricDosing', 'adultDosing',
+    'contraindications', 'cautionConditions', 'sideEffects', 'interactions',
+    'pregnancy', 'lactation', 'indications', 'vidalUrl',
+    'clinicalPharmGroup', 'pharmTherapyGroup',
+    'minInterval', 'maxDosesPerDay', 'maxDurationDays',
+    'routeOfAdmin', 'isFavorite', 'userTags',
+    'isOtc', 'overdose', 'childDosing', 'childUsing',
+    'renalInsuf', 'renalUsing', 'hepatoInsuf', 'hepatoUsing',
+    'specialInstruction', 'pharmacokinetics', 'pharmacodynamics',
+    'fullInstruction',
+}
+
 
 def to_json(value):
     if value is None:
@@ -81,6 +96,30 @@ def normalize_forms(forms):
             item['description'] = strip_html(item.get('description'))
         out.append(item)
     return out
+
+
+def sanitize_full_instruction(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return strip_html(value)
+    if isinstance(value, dict):
+        parts = []
+        for item in value.values():
+            if item is None:
+                continue
+            clean = strip_html(item) if isinstance(item, str) else strip_html(str(item))
+            if clean:
+                parts.append(clean)
+        return "\n\n".join(parts) if parts else None
+    if isinstance(value, list):
+        parts = []
+        for item in value:
+            clean = strip_html(item) if isinstance(item, str) else strip_html(str(item))
+            if clean:
+                parts.append(clean)
+        return "\n\n".join(parts) if parts else None
+    return strip_html(str(value))
 
 
 def normalize_route(value):
@@ -204,6 +243,7 @@ def map_payload(data):
     pediatric = normalize_dosing_rules(data.get('pediatricDosing') or [])
     adult = normalize_dosing_rules(data.get('adultDosing') or [])
     forms = normalize_forms(data.get('forms') or [])
+    full_instruction = sanitize_full_instruction(data.get('fullInstruction'))
 
     name_ru = strip_html(data.get('nameRu')) or ''
     active_substance = strip_html(data.get('activeSubstance')) or name_ru
@@ -254,6 +294,7 @@ def map_payload(data):
         'special_instruction': data.get('specialInstruction'),
         'pharmacokinetics': data.get('pharmacokinetics'),
         'pharmacodynamics': data.get('pharmacodynamics'),
+        'full_instruction': full_instruction,
     }
 
 
@@ -294,7 +335,56 @@ def parse_args():
         action='store_true',
         help='Parse and validate files without writing to DB'
     )
+    parser.add_argument(
+        '--upsert-by',
+        choices=['name_ru', 'name_ru_atc', 'name_ru_active_substance'],
+        default='name_ru',
+        help='Upsert matching strategy (default: name_ru)'
+    )
+    parser.add_argument(
+        '--strict-keys',
+        action='store_true',
+        help='Fail file import when JSON has unknown top-level keys'
+    )
     return parser.parse_args()
+
+
+def validate_payload_keys(payload, strict_keys=False):
+    unknown = sorted(set(payload.keys()) - KNOWN_JSON_KEYS)
+    if not unknown:
+        return
+    msg = f'Unknown keys: {", ".join(unknown)}'
+    if strict_keys:
+        raise ValueError(msg)
+    print(f'Warning: {msg}')
+
+
+def build_upsert_match(row, strategy):
+    if strategy == 'name_ru':
+        return (
+            'name_ru = :match_name_ru',
+            {'match_name_ru': row['name_ru']}
+        )
+
+    if strategy == 'name_ru_atc':
+        return (
+            'name_ru = :match_name_ru AND COALESCE(atc_code, "") = COALESCE(:match_atc_code, "")',
+            {
+                'match_name_ru': row['name_ru'],
+                'match_atc_code': row['atc_code'],
+            }
+        )
+
+    if strategy == 'name_ru_active_substance':
+        return (
+            'name_ru = :match_name_ru AND COALESCE(active_substance, "") = COALESCE(:match_active_substance, "")',
+            {
+                'match_name_ru': row['name_ru'],
+                'match_active_substance': row['active_substance'],
+            }
+        )
+
+    raise ValueError(f'Unsupported upsert strategy: {strategy}')
 
 
 def main():
@@ -317,24 +407,37 @@ def main():
     created = 0
     updated = 0
     errors = 0
+    warnings = 0
 
     for file_path in files:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 payload = json.load(f)
+
+            pre_warn_count = warnings
+            unknown_keys = sorted(set(payload.keys()) - KNOWN_JSON_KEYS)
+            if unknown_keys:
+                validate_payload_keys(payload, strict_keys=args.strict_keys)
+                if not args.strict_keys:
+                    warnings += 1
+
             row = map_payload(payload)
             if not row['name_ru']:
                 raise ValueError('nameRu is required')
 
-            existing = cur.execute('SELECT id FROM medications WHERE name_ru = ?', (row['name_ru'],)).fetchone()
+            where_sql, match_params = build_upsert_match(row, args.upsert_by)
+            existing = cur.execute(
+                f'SELECT id FROM medications WHERE {where_sql}',
+                match_params,
+            ).fetchone()
             ts = now_iso()
 
             if existing and args.on_duplicate == 'update':
                 row['updated_at'] = ts
-                row['name_ru_where'] = row['name_ru']
+                row.update(match_params)
                 if not args.dry_run:
                     cur.execute(
-                        '''
+                        f'''
                         UPDATE medications SET
                             name_en = :name_en,
                             active_substance = :active_substance,
@@ -372,8 +475,9 @@ def main():
                             special_instruction = :special_instruction,
                             pharmacokinetics = :pharmacokinetics,
                             pharmacodynamics = :pharmacodynamics,
+                            full_instruction = :full_instruction,
                             updated_at = :updated_at
-                        WHERE name_ru = :name_ru_where
+                        WHERE {where_sql}
                         ''',
                         row,
                     )
@@ -396,7 +500,7 @@ def main():
                             route_of_admin, is_favorite, user_tags,
                             is_otc, overdose, child_dosing, child_using,
                             renal_insuf, renal_using, hepato_insuf, hepato_using,
-                            special_instruction, pharmacokinetics, pharmacodynamics,
+                            special_instruction, pharmacokinetics, pharmacodynamics, full_instruction,
                             created_at, updated_at
                         ) VALUES (
                             :name_ru, :name_en, :active_substance, :atc_code, :icd10_codes,
@@ -408,7 +512,7 @@ def main():
                             :route_of_admin, :is_favorite, :user_tags,
                             :is_otc, :overdose, :child_dosing, :child_using,
                             :renal_insuf, :renal_using, :hepato_insuf, :hepato_using,
-                            :special_instruction, :pharmacokinetics, :pharmacodynamics,
+                            :special_instruction, :pharmacokinetics, :pharmacodynamics, :full_instruction,
                             :created_at, :updated_at
                         )
                         ''',
@@ -431,7 +535,9 @@ def main():
     print(f'DB path: {args.db_path}')
     mode = 'DRY-RUN' if args.dry_run else 'WRITE'
     print(f'Mode: {mode} | on-duplicate={args.on_duplicate}')
+    print(f'Upsert strategy: {args.upsert_by} | strict-keys={args.strict_keys}')
     print(f'Created: {created}, Updated: {updated}, Errors: {errors}')
+    print(f'Warnings: {warnings}')
     print(f'Total medications in DB: {total}')
 
 
