@@ -6,7 +6,7 @@ import { MedicationCard } from './components/MedicationCard';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { Search, Plus, Pill, AlertCircle, Beaker, Star, ChevronLeft, ChevronRight, SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { Search, Plus, Pill, AlertCircle, Beaker, Star, ChevronLeft, ChevronRight, SlidersHorizontal, RotateCcw, X } from 'lucide-react';
 import { PharmGroupFilter } from './components/PharmGroupFilter';
 import { FormTypeFilter } from './components/FormTypeFilter';
 
@@ -224,6 +224,8 @@ export const MedicationsModule: React.FC = () => {
                             }}
                             placeholder="Поиск по названию, веществу или АТХ-коду..."
                             className="pl-12 h-14 rounded-2xl bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800"
+                            rightIcon={searchInput ? <X className="w-4 h-4" /> : undefined}
+                            onRightIconClick={searchInput ? () => setSearchInput('') : undefined}
                         />
                     </div>
                 </div>
