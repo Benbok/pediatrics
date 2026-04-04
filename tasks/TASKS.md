@@ -9,8 +9,8 @@
 | Дата | ID | Модуль | Задача | Статус | Детали |
 |------|----|--------|--------|--------|--------|
 | 02.04.2026 | TASK-001 | visits/cdss | Консервативный AI-ранжинг при размытых жалобах | 🔄 IN_PROGRESS | [→](tasks/02.04.2026/TASK-001.md) |
-| 03.04.2026 | TASK-002 | medications | Связь препаратов с болезнями через коды МКБ-10 (inline preview + вкладка «Болезни») | ✅ DONE | [→](tasks/02.04.2026/TASK-002.md) |
-| 03.04.2026 | TASK-003 | medications | Расширение модели Medication полями из Vidal (overdose, childDosing, renalInsuf, hepatoInsuf, specialInstruction, pharmacokinetics, pharmacodynamics, isOtc и др.) | 🔄 IN_PROGRESS | [→](tasks/03.04.2026/TASK-003.md) |
+| 03.04.2026 | TASK-011 | medications/data | Генерация и импорт макролидов/азалидов (32 МНН) из vidal-db | 🔄 IN_PROGRESS | [→](tasks/03.04.2026/TASK-011.md) |
+
 
 ---
 
@@ -18,7 +18,15 @@
 
 | Дата | ID | Модуль | Задача | Итог |
 |------|----|--------|--------|------|
-| — | — | — | *Пусто* | — |
+| 03.04.2026 | TASK-010 | medications | Интеграция PrettySelect в выпадающие поля формы редактирования препарата | ✅ DONE | [→](tasks/03.04.2026/TASK-010.md) |
+| 03.04.2026 | TASK-009 | medications/data | Нормализация route_of_admin на основании vidal-db ZipInfo паттернов | ✅ DONE | [→](tasks/03.04.2026/TASK-009.md) |
+| 03.04.2026 | TASK-008 | medications | Перевод фильтров Препаратов на кастомные dropdown | ✅ DONE | [→](tasks/03.04.2026/TASK-008.md) |
+| 03.04.2026 | TASK-007 | medications | Экстремальная минимизация UI фильтров на странице Препараты | ✅ DONE | [→](tasks/03.04.2026/TASK-007.md) |
+| 03.04.2026 | TASK-006 | medications | UX-оптимизация фильтра клинико-фармакологических групп + очистка HTML-тегов | ✅ DONE | [→](tasks/03.04.2026/TASK-006.md) |
+| 03.04.2026 | TASK-005 | medications | Оптимизация производительности страницы Препараты (пагинация + серверный поиск) | ✅ DONE | [→](tasks/03.04.2026/TASK-005.md) |
+| 03.04.2026 | TASK-004 | medications | Импорт препаратов из vidal.db в нашу базу данных (6 831 МНН с клиническими данными) | ✅ DONE | [→](tasks/03.04.2026/TASK-004.md) |
+| 03.04.2026 | TASK-002 | medications | Связь препаратов с болезнями через коды МКБ-10 (inline preview + вкладка «Болезни») | ✅ DONE | [→](tasks/02.04.2026/TASK-002.md) |
+| 03.04.2026 | TASK-003 | medications | Расширение модели Medication полями из Vidal (overdose, childDosing, renalInsuf, hepatoInsuf, specialInstruction, pharmacokinetics, pharmacodynamics, isOtc и др.) | ✅ DONE | [→](tasks/03.04.2026/TASK-003.md) |
 
 ---
 

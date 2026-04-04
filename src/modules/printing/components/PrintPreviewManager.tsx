@@ -19,10 +19,11 @@ export const PrintPreviewManager: React.FC = () => {
     } | null>(null);
 
     useEffect(() => {
-        return printEventBus.on((payload: PrintPreviewEventPayload) => {
+        const cleanup = printEventBus.on((payload: PrintPreviewEventPayload) => {
             const { templateId, data, metadata, options } = payload;
             setPreviewState({ isOpen: true, templateId, data, metadata, options });
         });
+        return () => { cleanup(); };
     }, []);
 
     const handleClose = () => {

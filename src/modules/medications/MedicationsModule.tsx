@@ -1,161 +1,118 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { medicationService } from './services/medicationService';
-import { useDataCache } from '../../context/DataCacheContext';
-import { Medication } from '../../types';
+import { MedicationListItem } from '../../types';
 import { MedicationCard } from './components/MedicationCard';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { Search, Plus, Filter, Pill, AlertCircle, Beaker, Star } from 'lucide-react';
+import { Search, Plus, Pill, AlertCircle, Beaker, Star, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { PharmGroupFilter } from './components/PharmGroupFilter';
 import { FormTypeFilter } from './components/FormTypeFilter';
 
+const PAGE_SIZE = 60;
+
 export const MedicationsModule: React.FC = () => {
     const navigate = useNavigate();
-    const { medications: cachedMedications, loadMedications, invalidate, isLoadingMedications } = useDataCache();
-    const [medications, setMedications] = useState<Medication[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [medications, setMedications] = useState<MedicationListItem[]>([]);
+    const [searchInput, setSearchInput] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
     const [selectedFormType, setSelectedFormType] = useState<string | null>(null);
+    const [showFiltersPanel, setShowFiltersPanel] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
+    const latestRequestId = useRef(0);
 
-    const formTypeLabelMap: Record<string, string> = {
-        tablet: 'Таблетки',
-        solution: 'Раствор',
-        syrup: 'Сироп',
-        suspension: 'Суспензия',
-        injection: 'Инъекция',
-        capsule: 'Капсулы',
-        suppository: 'Свечи',
-        powder: 'Порошок',
-        drops: 'Капли',
-        ointment: 'Мазь',
-        gel: 'Гель',
-        cream: 'Крем',
-        spray: 'Спрей',
-        patch: 'Пластырь'
-    };
+    const activeFilters = useMemo(() => ({
+        search: debouncedSearch,
+        favoritesOnly: showFavoritesOnly,
+        group: selectedGroup,
+        formType: selectedFormType,
+    }), [debouncedSearch, showFavoritesOnly, selectedGroup, selectedFormType]);
 
-    const getFormTypeLabel = (type: string) => formTypeLabelMap[type] || type;
-
-    const formTypeAliasesMap: Record<string, string[]> = {
-        tablet: ['таблет'],
-        solution: ['раствор'],
-        syrup: ['сироп'],
-        suspension: ['суспенз'],
-        injection: ['инъек', 'укол', 'ампул'],
-        capsule: ['капсул'],
-        suppository: ['свеч', 'суппозит', 'суппозитор'],
-        powder: ['порош'],
-        drops: ['капли', 'кап'],
-        ointment: ['маз'],
-        gel: ['гель'],
-        cream: ['крем'],
-        spray: ['спрей', 'аэрозол'],
-        patch: ['пластыр']
-    };
-
-    const getFormTypeMatchTerms = (selectedType: string): string[] => {
-        const normalizedType = selectedType.toLowerCase();
-        const normalizedLabel = getFormTypeLabel(selectedType).toLowerCase();
-        const aliases = formTypeAliasesMap[normalizedType] ?? [];
-        return Array.from(new Set([normalizedType, normalizedLabel, ...aliases].filter(Boolean)));
-    };
+    const nonFavoriteFilterCount = useMemo(() => {
+        let count = 0;
+        if (selectedGroup) count += 1;
+        if (selectedFormType) count += 1;
+        return count;
+    }, [selectedGroup, selectedFormType]);
 
     useEffect(() => {
-        // Загружаем данные из кеша или делаем запрос
-        const initializeData = async () => {
+        const timer = window.setTimeout(() => {
+            setDebouncedSearch(searchInput.trim());
+        }, 300);
+        return () => window.clearTimeout(timer);
+    }, [searchInput]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [activeFilters.search, activeFilters.favoritesOnly, activeFilters.group, activeFilters.formType]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const requestId = ++latestRequestId.current;
+
+        const loadPage = async () => {
+            setIsLoading(true);
             try {
-                const data = await loadMedications();
-                setMedications(data);
-                setError(null);
-                
-                // Отладка: проверяем первый препарат
-                if (data.length > 0) {
-                    console.log('[MedicationsModule] Sample medication data:', {
-                        name: data[0].nameRu,
-                        forms: data[0].forms,
-                        formsType: typeof data[0].forms,
-                        formsIsArray: Array.isArray(data[0].forms)
-                    });
+                const result = await medicationService.getMedicationsPaginated({
+                    page,
+                    pageSize: PAGE_SIZE,
+                    search: activeFilters.search,
+                    favoritesOnly: activeFilters.favoritesOnly,
+                    group: activeFilters.group,
+                    formType: activeFilters.formType,
+                });
+
+                if (cancelled || requestId !== latestRequestId.current) {
+                    return;
                 }
+
+                setMedications(result.items);
+                setTotal(result.total);
+                setTotalPages(result.totalPages);
+                setError(null);
             } catch (err) {
-                setError('Не удалось загрузить базу препаратов');
-                console.error(err);
+                if (!cancelled) {
+                    setError('Не удалось загрузить базу препаратов');
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                }
             }
         };
 
-        // Если данные уже в кеше - используем их, иначе загружаем
-        if (cachedMedications) {
-            setMedications(cachedMedications);
-            // Отладка кешированных данных
-            if (cachedMedications.length > 0) {
-                console.log('[MedicationsModule] Cached medication data:', {
-                    name: cachedMedications[0].nameRu,
-                    forms: cachedMedications[0].forms,
-                    formsType: typeof cachedMedications[0].forms,
-                    formsIsArray: Array.isArray(cachedMedications[0].forms)
-                });
-            }
-        } else {
-            initializeData();
-        }
-    }, [cachedMedications, loadMedications]);
+        loadPage();
 
-    // Синхронизируем локальное состояние с кешем (автоматическое обновление при изменении кеша)
-    useEffect(() => {
-        if (cachedMedications) {
-            setMedications(cachedMedications);
-        } else if (medications.length > 0) {
-            // Кеш был инвалидирован - перезагружаем данные
-            loadMedications(true).then(data => setMedications(data)).catch(err => {
-                console.error('Failed to reload medications:', err);
-            });
-        }
-    }, [cachedMedications, loadMedications, medications.length]);
+        return () => {
+            cancelled = true;
+        };
+    }, [page, activeFilters]);
 
     // Обновление при изменении избранного (кеш инвалидируется автоматически через dataEvents)
     const handleFavoriteToggle = async () => {
-        // Данные обновятся автоматически через useEffect при изменении cachedMedications
+        try {
+            const result = await medicationService.getMedicationsPaginated({
+                page,
+                pageSize: PAGE_SIZE,
+                search: activeFilters.search,
+                favoritesOnly: activeFilters.favoritesOnly,
+                group: activeFilters.group,
+                formType: activeFilters.formType,
+            });
+            setMedications(result.items);
+            setTotal(result.total);
+            setTotalPages(result.totalPages);
+        } catch {
+            // noop: main loader handles error display
+        }
     };
-
-    const filteredMeds = medications.filter(m => {
-        const matchesSearch = m.nameRu.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                             m.activeSubstance.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                             (m.atcCode || '').toLowerCase().includes(searchQuery.toLowerCase());
-        
-        const matchesFavorite = !showFavoritesOnly || m.isFavorite;
-        
-        const matchesGroup = !selectedGroup || m.clinicalPharmGroup === selectedGroup;
-        
-        const matchesFormType = !selectedFormType || (() => {
-            if (!selectedFormType) return true;
-            const matchTerms = getFormTypeMatchTerms(selectedFormType);
-
-            if (Array.isArray(m.forms) && m.forms.length > 0) {
-                const hasStructuredMatch = m.forms.some(form => {
-                    if (!form) return false;
-                    if (typeof form === 'string') {
-                        const text = form.toLowerCase();
-                        return matchTerms.some((t) => text.includes(t));
-                    }
-                    if (typeof form.type === 'string') {
-                        const text = form.type.toLowerCase();
-                        return matchTerms.some((t) => text.includes(t));
-                    }
-                    return false;
-                });
-                if (hasStructuredMatch) return true;
-            }
-
-            const descriptionText = (m.packageDescription || '').toLowerCase();
-            return matchTerms.some((t) => descriptionText.includes(t));
-        })();
-        
-        return matchesSearch && matchesFavorite && matchesGroup && matchesFormType;
-    });
 
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -187,13 +144,13 @@ export const MedicationsModule: React.FC = () => {
             </div>
 
             {/* Search & Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                 <div className="md:col-span-3">
                     <div className="relative group">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
                         <Input
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
                             placeholder="Поиск по названию, веществу или АТХ-коду..."
                             className="pl-12 h-14 rounded-2xl bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800"
                         />
@@ -207,11 +164,25 @@ export const MedicationsModule: React.FC = () => {
                     <Star className={`w-5 h-5 mr-2 ${showFavoritesOnly ? 'fill-yellow-400' : ''}`} />
                     Избранное
                 </Button>
+
+                <Button
+                    variant={showFiltersPanel || nonFavoriteFilterCount > 0 ? 'primary' : 'secondary'}
+                    onClick={() => setShowFiltersPanel((prev) => !prev)}
+                    className="h-14 rounded-2xl font-bold border-slate-200 dark:border-slate-800"
+                >
+                    <SlidersHorizontal className="w-5 h-5 mr-2" />
+                    Фильтры
+                    {nonFavoriteFilterCount > 0 && (
+                        <span className="ml-2 inline-flex items-center justify-center rounded-full bg-white/20 px-2 py-0.5 text-xs">
+                            {nonFavoriteFilterCount}
+                        </span>
+                    )}
+                </Button>
             </div>
 
             {/* Фильтры */}
-            {medications.length > 0 && (
-                <div className="space-y-4">
+            {(total > 0 || isLoading) && (showFiltersPanel || nonFavoriteFilterCount > 0) && (
+                <div className="space-y-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
                     <PharmGroupFilter onGroupSelect={setSelectedGroup} />
                     <FormTypeFilter onFormTypeSelect={setSelectedFormType} />
                 </div>
@@ -227,21 +198,21 @@ export const MedicationsModule: React.FC = () => {
             {/* Stats Row */}
             <div className="grid grid-cols-1 gap-4">
                 <Card className="p-4 border-slate-100 dark:border-slate-800 flex flex-col items-center max-w-xs">
-                    <span className="text-2xl font-black text-slate-900 dark:text-white">{medications.length}</span>
+                    <span className="text-2xl font-black text-slate-900 dark:text-white">{total}</span>
                     <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Всего препаратов</span>
                 </Card>
             </div>
 
             {/* Medications Grid */}
-            {isLoadingMedications && medications.length === 0 ? (
+            {isLoading && medications.length === 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[1, 2, 3, 4, 5, 6].map(i => (
                         <div key={i} className="h-44 bg-slate-100 dark:bg-slate-800/50 animate-pulse rounded-2xl" />
                     ))}
                 </div>
-            ) : filteredMeds.length > 0 ? (
+            ) : medications.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredMeds.map(med => (
+                    {medications.map(med => (
                         <MedicationCard
                             key={med.id}
                             medication={med}
@@ -256,14 +227,45 @@ export const MedicationsModule: React.FC = () => {
                         <Beaker className="w-12 h-12 text-slate-400" />
                     </div>
                     <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
-                        {searchQuery ? 'Ничего не найдено' : 'Справочник пуст'}
+                        {searchInput || selectedGroup || selectedFormType || showFavoritesOnly ? 'Ничего не найдено' : 'Справочник пуст'}
                     </h3>
                     <p className="text-slate-500 max-w-sm">
-                        {searchQuery
+                        {searchInput || selectedGroup || selectedFormType || showFavoritesOnly
                             ? 'Попробуйте изменить запрос или добавьте новый препарат вручную'
                             : 'Начните с добавления первого препарата для автоматического расчета дозировок'
                         }
                     </p>
+                </div>
+            )}
+
+            {total > 0 && (
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-2">
+                    <div className="text-sm text-slate-500">
+                        Показано {medications.length} из {total} препаратов
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="secondary"
+                            className="h-10 px-4"
+                            disabled={page <= 1 || isLoading}
+                            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                        >
+                            <ChevronLeft className="w-4 h-4 mr-1" />
+                            Назад
+                        </Button>
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 px-2">
+                            Страница {page} / {totalPages}
+                        </span>
+                        <Button
+                            variant="secondary"
+                            className="h-10 px-4"
+                            disabled={page >= totalPages || isLoading}
+                            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                        >
+                            Вперёд
+                            <ChevronRight className="w-4 h-4 ml-1" />
+                        </Button>
+                    </div>
                 </div>
             )}
         </div>

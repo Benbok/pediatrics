@@ -100,6 +100,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // MEDICATIONS MODULE API
     getMedications: () => ipcRenderer.invoke('medications:list'),
+    getMedicationsPaginated: (params) => ipcRenderer.invoke('medications:list-paginated', params),
     getMedication: (id) => ipcRenderer.invoke('medications:get-by-id', id),
     upsertMedication: (data, source) => ipcRenderer.invoke('medications:upsert', data, source),
     deleteMedication: (id) => ipcRenderer.invoke('medications:delete', id),

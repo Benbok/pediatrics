@@ -25,6 +25,33 @@ function safeJsonParse(value, defaultValue = []) {
 }
 
 const setupMedicationHandlers = () => {
+    ipcMain.handle('medications:list-paginated', ensureAuthenticated(async (_, params = {}) => {
+        const page = Number(params.page) > 0 ? Number(params.page) : 1;
+        const pageSize = Number(params.pageSize) > 0 ? Number(params.pageSize) : 60;
+        const search = typeof params.search === 'string' ? params.search.trim() : '';
+        const group = typeof params.group === 'string' ? params.group.trim() : '';
+        const formType = typeof params.formType === 'string' ? params.formType.trim() : '';
+        const favoritesOnly = Boolean(params.favoritesOnly);
+
+        const cacheKey = `page_${page}_size_${pageSize}_q_${search}_group_${group}_form_${formType}_fav_${favoritesOnly}`;
+        const cached = CacheService.get('medications', cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const result = await MedicationService.listPaginated({
+            page,
+            pageSize,
+            search,
+            group,
+            formType,
+            favoritesOnly,
+        });
+
+        CacheService.set('medications', cacheKey, result);
+        return result;
+    }));
+
     ipcMain.handle('medications:list', ensureAuthenticated(async () => {
         const cacheKey = 'all';
         
@@ -278,12 +305,28 @@ const setupMedicationHandlers = () => {
 
     // Получить фармакологические группы
     ipcMain.handle('medications:getPharmacologicalGroups', ensureAuthenticated(async () => {
-        return await MedicationService.getPharmacologicalGroups();
+        const cacheKey = 'groups';
+        const cached = CacheService.get('medications', cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const result = await MedicationService.getPharmacologicalGroups();
+        CacheService.set('medications', cacheKey, result);
+        return result;
     }));
 
     // Получить типы форм выпуска
     ipcMain.handle('medications:getFormTypes', ensureAuthenticated(async () => {
-        return await MedicationService.getFormTypes();
+        const cacheKey = 'form_types';
+        const cached = CacheService.get('medications', cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const result = await MedicationService.getFormTypes();
+        CacheService.set('medications', cacheKey, result);
+        return result;
     }));
 
     // Поиск по группе
@@ -294,16 +337,14 @@ const setupMedicationHandlers = () => {
     // Избранное
     ipcMain.handle('medications:toggleFavorite', ensureAuthenticated(async (_, medicationId) => {
         await MedicationService.toggleFavorite(medicationId);
-        CacheService.invalidate('medications', 'all');
-        CacheService.invalidate('medications', `id_${medicationId}`);
+        CacheService.invalidate('medications');
         return true;
     }));
 
     // Добавить тег
     ipcMain.handle('medications:addTag', ensureAuthenticated(async (_, medicationId, tag) => {
         await MedicationService.addTag(medicationId, tag);
-        CacheService.invalidate('medications', 'all');
-        CacheService.invalidate('medications', `id_${medicationId}`);
+        CacheService.invalidate('medications');
         return true;
     }));
 

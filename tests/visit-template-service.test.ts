@@ -22,7 +22,7 @@ describe('VisitTemplateService Logic', () => {
                 complaints: 'Шаблонные жалобы',
                 diseaseHistory: 'Шаблонный анамнез',
             });
-            const existingData = {
+            const existingData: { id?: number; childId: number; doctorId: number; visitDate: string } = {
                 childId: 1,
                 doctorId: 1,
                 visitDate: '2025-01-19',

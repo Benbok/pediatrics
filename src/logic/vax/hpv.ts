@@ -15,6 +15,7 @@ export const hpvRules: VaxRule = (vaccine, context) => {
     const { profile, records, ageInMonths } = context;
 
     // const isGirl = profile.gender === 'female'; // Gender not in profile yet
+    const isGirl = context.child.gender === 'female';
     const isMoscow = profile.hpvRiskFactors?.includes(HpvRiskFactor.REGION_MOSCOW);
 
     // Filter HPV records

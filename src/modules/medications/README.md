@@ -109,6 +109,14 @@ electron/modules/medications/
 - Проверка на дубликаты
 - Предпросмотр перед сохранением
 
+#### Массовый импорт из локальной vidal.db
+- Источник: локальная база `C:/Users/Arty/Desktop/ru.medsolutions/vidal.db`
+- Скрипт: `python scripts/import-vidal-medications.py`
+- Уровень импорта: один `Document` = одна запись `Medication`
+- Повторный запуск безопасен: скрипт идемпотентный
+- При повторном запуске обновляются Vidal-поля и справочные поля, но не затираются вручную заполненные `pediatricDosing`, `adultDosing`, `forms`, `icd10Codes`
+- Если у `Document` нет связанной `MoleculeName`, используется fallback: `Document.RusName` → `activeSubstance`
+
 #### Валидация импорта
 - Проверка обязательных полей
 - Валидация структуры дозировок
@@ -155,6 +163,16 @@ electron/modules/medications/
 - **Взаимодействия** (`interactions`): Взаимодействие с другими препаратами
 - **Беременность** (`pregnancy`): Применение при беременности
 - **Лактация** (`lactation`): Применение при лактации
+
+#### Дополнительные поля Vidal
+- **OTC-флаг** (`isOtc`): безрецептурный препарат
+- **Передозировка** (`overdose`): текст из Vidal
+- **Применение у детей** (`childDosing`, `childUsing`): текст + статус `Can | Care | Not | Qwes`
+- **Почечная недостаточность** (`renalInsuf`, `renalUsing`): текст + статус
+- **Печеночная недостаточность** (`hepatoInsuf`, `hepatoUsing`): текст + статус
+- **Особые указания** (`specialInstruction`): HTML-текст из Vidal
+- **Фармакокинетика** (`pharmacokinetics`): HTML-текст из Vidal
+- **Фармакодинамика** (`pharmacodynamics`): HTML-текст из Vidal
 
 #### Классификация
 - **ICD-10 коды** (`icd10Codes`): Массив кодов МКБ-10 для связи с заболеваниями
@@ -393,6 +411,13 @@ medicationService.getChangeHistory(id)              // Получить исто
 - `vidalUrl`, `packageDescription`
 - `createdAt`, `updatedAt`
 
+Поля Vidal:
+- `isOtc`, `overdose`
+- `childDosing`, `childUsing`
+- `renalInsuf`, `renalUsing`
+- `hepatoInsuf`, `hepatoUsing`
+- `specialInstruction`, `pharmacokinetics`, `pharmacodynamics`
+
 ### JSON поля
 
 Структурированные данные хранятся в JSON полях для:
@@ -463,7 +488,7 @@ medicationService.getChangeHistory(id)              // Получить исто
 
 При изменении структуры данных препарата:
 1. Обновите `prisma/schema.prisma`
-2. Создайте миграцию: `npx prisma migrate dev --name description`
+2. Для обычных изменений создайте миграцию. Для текущего проекта учитывайте drift из-за FTS-таблиц: используйте ручной SQL + apply script + `prisma migrate resolve --applied`, если `migrate dev` блокируется
 3. Обновите TypeScript типы в `src/types.ts`
 4. Обновите Zod схемы в `validators/medication.validator.ts`
 5. Обновите компоненты и сервисы
@@ -483,3 +508,48 @@ medicationService.getChangeHistory(id)              // Получить исто
 - `src/validators/medication.validator.ts` - Схемы валидации
 - `src/utils/routeOfAdmin.ts` - Нормализация маршрутов введения
 - `templates/vidalJsonTemplate.json` - Шаблон для импорта из Видаль
+
+## Changelog
+
+### 03.04.2026 — TASK-003
+- Модель `Medication` расширена 11 полями Vidal: `isOtc`, `overdose`, `childDosing`, `childUsing`, `renalInsuf`, `renalUsing`, `hepatoInsuf`, `hepatoUsing`, `specialInstruction`, `pharmacokinetics`, `pharmacodynamics`
+- Обновлены frontend/backend Zod-схемы и TypeScript-типы
+- В `MedicationFormPage.tsx` добавлена секция "Данные Vidal" и блок предпросмотра импорта
+- В `MedicationCard.tsx` добавлен OTC badge
+- Обновлён `templates/vidalJsonTemplate.json`
+
+### 03.04.2026 — TASK-004
+- Добавлен массовый импорт препаратов из локальной `vidal.db` через `scripts/import-vidal-medications.py`
+- Реализован идемпотентный upsert по `name_ru` с сохранением вручную заполненных `pediatricDosing`, `adultDosing`, `forms`, `icd10Codes`
+- В `medications` импортировано 6 008 записей после дедупликации по нормализованному `name_ru`
+- Подтверждён повторный безопасный запуск скрипта для обновления данных из новой версии `vidal.db`
+
+### 03.04.2026 — TASK-005
+- Страница `MedicationsModule` переведена с полной загрузки на серверную пагинацию
+- Добавлен IPC endpoint `medications:list-paginated` с фильтрами (`search`, `favoritesOnly`, `group`, `formType`) и параметризованным кеш-ключом
+- В backend `MedicationService` добавлен `listPaginated` (Prisma `where + skip/take + count`) с облегчённой выборкой полей для карточек
+- На frontend добавлен debounce поиска (300ms), постраничная навигация и новый API `getMedicationsPaginated`
+- Для справочников фильтров добавлено кеширование `groups` и `form_types`
+
+### 03.04.2026 — TASK-006
+- Фильтр `Клинико-фармакологические группы` переработан для больших списков: добавлены поиск, collapsed-режим, expand/collapse и кнопка сброса
+- Для предотвращения захвата всего экрана длинным списком добавлен ограниченный контейнер с прокруткой
+- Добавлена утилита `sanitizeDisplayText` (`src/utils/textSanitizers.ts`) для очистки HTML-тегов и HTML-сущностей в названиях
+- Очищенное отображение групп применено в `PharmGroupFilter` и в карточке препарата `MedicationCard`
+
+### 03.04.2026 — TASK-007
+- Фильтры на странице Препараты минимизированы до компактного режима: скрываются за кнопкой `Фильтры` и не занимают экран по умолчанию
+- `PharmGroupFilter` упрощён до одной строки с поиском через `datalist` + быстрый сброс
+- `FormTypeFilter` переведён из набора чипов в компактный `select`
+- Снижена визуальная перегрузка экрана при работе с большим числом фильтров
+
+### 03.04.2026 — TASK-008
+- Фильтры страницы Препараты переведены с нативных dropdown (`datalist`/`select`) на единый кастомный компонент `PrettySelect`
+- `PharmGroupFilter` использует `PrettySelect` в searchable-режиме
+- `FormTypeFilter` использует `PrettySelect` для выбора типа формы
+- Дизайн и поведение выпадающих списков унифицированы с остальными модулями приложения
+
+### 03.04.2026 — TASK-010
+- В `MedicationFormPage` нативные `select` переведены на `PrettySelect` для единого UI
+- На `PrettySelect` переведены поля: `Путь введения`, `Тип дозирования`, `Статус у детей`, `Статус (почки)`, `Статус (печень)`
+- Для dropdown-полей добавлены типизированные наборы `SelectOption[]`, чтобы упростить поддержку и унифицировать поведение

@@ -339,7 +339,6 @@ export const MultipleDiagnosisSelector: React.FC<MultipleDiagnosisSelectorProps>
                             placeholder="Код МКБ (необязательно)"
                             value={manualCode}
                             onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-                            size="sm"
                         />
                         <div className="flex gap-2">
                             <Input
@@ -347,7 +346,6 @@ export const MultipleDiagnosisSelector: React.FC<MultipleDiagnosisSelectorProps>
                                 value={manualName}
                                 onChange={(e) => setManualName(e.target.value)}
                                 className="flex-1"
-                                size="sm"
                             />
                             <Button
                                 type="button"

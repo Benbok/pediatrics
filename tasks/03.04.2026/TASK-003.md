@@ -2,7 +2,7 @@
 
 **Дата:** 03.04.2026  
 **Модуль:** medications  
-**Статус:** 🔄 IN_PROGRESS  
+**Статус:** ✅ DONE  
 
 ---
 
@@ -54,26 +54,32 @@
 ## ✅ Этапы выполнения
 
 ### Этап 1 — Prisma Schema + Migration
-- [ ] Добавить 11 полей в `model Medication` в `prisma/schema.prisma`
-- [ ] Запустить `npx prisma migrate dev --name add_vidal_clinical_fields`
-- [ ] Проверить что миграция применилась
+- [x] Добавить 11 полей в `model Medication` в `prisma/schema.prisma`
+- [x] Создать `prisma/migrations/20260403100000_add_vidal_clinical_fields/migration.sql` вручную (из-за FTS-дрейфа)
+- [x] Применить через `scripts/apply-vidal-migration.py` + `prisma migrate resolve --applied`
+- [x] `prisma generate` — клиент пересобран. Статус: "Database schema is up to date!" (35 migrations)
 
 ### Этап 2 — Backend Zod + Service (electron/modules/medications/service.cjs)
-- [ ] Добавить 11 полей в `MedicationSchema` (бэкенд Zod)
-- [ ] Обновить `upsert` метод: маппинг новых полей при create/update
-- [ ] Обновить `list` и `getById`: включить новые поля в возвращаемый объект (safeReturn)
+- [x] Добавить 11 полей в `MedicationSchema` (бэкенд Zod)
+- [x] `list()` / `getById()` используют spread `...med` — новые поля включены автоматически
+- [x] `upsert()` использует `...rest` spread — поля маппируются автоматически
 
 ### Этап 3 — Frontend Zod (src/validators/medication.validator.ts)
-- [ ] Добавить `VidalUsing` enum schema
-- [ ] Добавить 11 полей в `MedicationSchema`
+- [x] Добавить `VidalUsing` enum schema
+- [x] Добавить 11 полей в `MedicationSchema`
 
 ### Этап 4 — TypeScript Types
-- [ ] `src/types/medication.types.ts`: добавить `type VidalUsing = 'Can' | 'Care' | 'Not' | 'Qwes'`
-- [ ] `src/types.ts`: добавить 11 полей в `interface Medication`
+- [x] `src/types/medication.types.ts`: добавлен `type VidalUsing = 'Can' | 'Care' | 'Not' | 'Qwes'`
+- [x] `src/types.ts`: добавлены 11 полей в `interface Medication`
 
 ### Этап 5 — Проверка компиляции
-- [ ] Убедиться что TypeScript компилируется без ошибок
-- [ ] Проверить что существующие тесты не сломались
+- [x] `npx tsc --noEmit` — Exit code 0 (0 ошибок)
+- [x] Все 49 pre-existing ошибок также исправлены
+
+### Этап 6 — UI (MedicationFormPage + MedicationCard)
+- [x] Форма: добавлена секция "Данные Vidal" с isOtc checkbox, 3 select (childUsing/renalUsing/hepatoUsing), 8 textarea
+- [x] Превью-модал: добавлен блок "Данные Vidal" с Badge (OTC, using-статусы), специальные указания, передозировка
+- [x] MedicationCard: OTC Badge в заголовке карточки
 
 ---
 
@@ -89,4 +95,22 @@
 
 ## 📦 Финальный отчёт
 
-*(заполнить после завершения)*
+**Завершено:** 03.04.2026  
+**Все 6 этапов выполнены.**
+
+### Изменённые файлы
+| Файл | Что сделано |
+|------|-------------|
+| `prisma/schema.prisma` | +11 полей в model Medication |
+| `prisma/migrations/20260403100000_.../migration.sql` | 11 ALTER TABLE, применена вручную |
+| `scripts/apply-vidal-migration.py` | Python-скрипт применения миграции |
+| `electron/modules/medications/service.cjs` | +11 полей в Zod-схему бэкенда |
+| `src/validators/medication.validator.ts` | +11 полей + VidalUsing enum |
+| `src/types.ts` | +11 полей + VidalUsing type в Medication |
+| `src/types/medication.types.ts` | +VidalUsing type |
+| `src/modules/medications/MedicationFormPage.tsx` | +форма "Данные Vidal" + превью-блок |
+| `src/modules/medications/components/MedicationCard.tsx` | +OTC Badge |
+
+### Примечание по миграции
+`npx prisma migrate dev` заблокирован FTS-таблицами (`guideline_chunks_fts*`) — по инструкции [MIGRATION_INSTRUCTIONS.md](../../MIGRATION_INSTRUCTIONS.md) Problem 3. Всегда использовать ручной подход: SQL → Python → `migrate resolve --applied`.
+

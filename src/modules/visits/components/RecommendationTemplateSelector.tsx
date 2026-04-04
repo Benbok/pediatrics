@@ -146,7 +146,7 @@ export const RecommendationTemplateSelector: React.FC<RecommendationTemplateSele
                             )}
                         </div>
                         
-                        <Badge variant="secondary" size="sm">
+                        <Badge variant="default" size="sm">
                             {itemCount} рекомендаций
                         </Badge>
                     </div>

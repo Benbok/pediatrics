@@ -1,27 +1,38 @@
 import React from 'react';
 import { Card } from '../../../components/ui/Card';
-import { Medication } from '../../../types';
+import { Badge } from '../../../components/ui/Badge';
+import { Medication, MedicationListItem } from '../../../types';
 import { Pill, Beaker, Star } from 'lucide-react';
 import { medicationService } from '../services/medicationService';
+import { logger } from '../../../services/logger';
+import { sanitizeDisplayText } from '../../../utils/textSanitizers';
 
 interface MedicationCardProps {
-    medication: Medication;
+    medication: Medication | MedicationListItem;
     onSelect: (id: number) => void;
     onFavoriteToggle?: () => void;
 }
 
 export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSelect, onFavoriteToggle }) => {
+    const medicationId = medication.id;
+
+    const medicationName = React.useMemo(() => {
+        return sanitizeDisplayText(medication.nameRu);
+    }, [medication.nameRu]);
+
     const handleToggleFavorite = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (medication.id) {
-            try {
-                await medicationService.toggleFavorite(medication.id);
-                if (onFavoriteToggle) {
-                    onFavoriteToggle();
-                }
-            } catch (error) {
-                console.error('Failed to toggle favorite:', error);
+        if (!medicationId) {
+            return;
+        }
+
+        try {
+            await medicationService.toggleFavorite(medicationId);
+            if (onFavoriteToggle) {
+                onFavoriteToggle();
             }
+        } catch (error) {
+            logger.error('[MedicationCard] Failed to toggle favorite', { error, medicationId });
         }
     };
 
@@ -41,7 +52,9 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
                         capsule: 'Капсулы',
                         suppository: 'Свечи',
                         powder: 'Порошок',
-                        drops: 'Капли'
+                        drops: 'Капли',
+                        cream: 'Крем',
+                        ointment: 'Мазь'
                     };
                     
                     const typeName = typeMap[form.type] || form.type || 'Форма';
@@ -61,25 +74,32 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
         return 'Формы выпуска не указаны';
     }, [medication.forms, medication.packageDescription]);
 
+    const clinicalGroupLabel = React.useMemo(() => {
+        return sanitizeDisplayText(medication.clinicalPharmGroup);
+    }, [medication.clinicalPharmGroup]);
+
     return (
         <Card
             className="p-4 hover:border-primary-500 transition-colors cursor-pointer group"
-            onClick={() => medication.id && onSelect(medication.id)}
+            onClick={() => medicationId && onSelect(medicationId)}
         >
             <div className="flex items-start justify-between">
                 <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-primary-600 transition-colors">
-                            {medication.nameRu}
+                            {medicationName}
                         </h3>
                         {medication.isFavorite && (
                             <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                         )}
+                        {medication.isOtc && (
+                            <Badge variant="success" size="sm">OTC</Badge>
+                        )}
                     </div>
 
-                    {medication.clinicalPharmGroup && (
+                    {clinicalGroupLabel && (
                         <div className="text-xs text-primary-600 dark:text-primary-400 font-medium mb-1">
-                            {medication.clinicalPharmGroup}
+                            {clinicalGroupLabel}
                         </div>
                     )}
 

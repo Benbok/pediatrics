@@ -21,7 +21,7 @@ export interface PdfOutlineItem {
 }
 
 export interface RenderTextLayerOptions {
-    scale: number;
+    scale?: number;
     searchQuery?: string;
 }
 
@@ -144,7 +144,7 @@ export const pdfViewerService = {
         await page.render({
             canvasContext: context,
             viewport
-        }).promise;
+        } as any).promise;
 
         textLayer.innerHTML = '';
         textLayer.style.width = `${viewport.width}px`;
@@ -203,7 +203,7 @@ export const pdfViewerService = {
         await page.render({
             canvasContext: context,
             viewport
-        }).promise;
+        } as any).promise;
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         setCacheValue(cacheKey, dataUrl);

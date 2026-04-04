@@ -1,4 +1,4 @@
-import { Medication } from '../../../types';
+import { Medication, MedicationsPageResult } from '../../../types';
 import type { DoseCalculationResult } from '../../../types/medication.types';
 import { dataEvents } from '../../../services/dataEvents';
 import { MedicationSchema, CalculateDoseSchema, LinkMedicationToDiseaseSchema } from '../../../validators/medication.validator';
@@ -6,6 +6,25 @@ import { normalizeMedicationRoutes } from '../../../utils/routeOfAdmin';
 import { logger } from '../../../services/logger';
 
 export const medicationService = {
+    /**
+     * Fetch paginated medications for list page
+     */
+    async getMedicationsPaginated(params: {
+        page: number;
+        pageSize: number;
+        search?: string;
+        group?: string | null;
+        formType?: string | null;
+        favoritesOnly?: boolean;
+    }): Promise<MedicationsPageResult> {
+        try {
+            return await window.electronAPI.getMedicationsPaginated(params);
+        } catch (error) {
+            logger.error('[MedicationService] Failed to fetch paginated medications', { error, params });
+            throw error;
+        }
+    },
+
     /**
      * Fetch all medications
      */

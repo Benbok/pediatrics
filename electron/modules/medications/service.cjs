@@ -89,6 +89,18 @@ const MedicationSchema = z.object({
     maxDosesPerDay: z.number().int().min(1).max(10).optional().nullable(),
     maxDurationDays: z.number().int().min(1).max(365).optional().nullable(),
     routeOfAdmin: z.enum(['oral', 'rectal', 'iv', 'im', 'sublingual', 'topical', 'inhalation', 'iv_bolus', 'iv_infusion', 'iv_slow', 'sc', 'intranasal', 'transdermal']).optional().nullable(),
+    // Клинические поля из Vidal (Document)
+    isOtc: z.boolean().optional().default(false),
+    overdose: z.string().optional().nullable(),
+    childDosing: z.string().optional().nullable(),
+    childUsing: z.enum(['Can', 'Care', 'Not', 'Qwes']).optional().nullable(),
+    renalInsuf: z.string().optional().nullable(),
+    renalUsing: z.enum(['Can', 'Care', 'Not', 'Qwes']).optional().nullable(),
+    hepatoInsuf: z.string().optional().nullable(),
+    hepatoUsing: z.enum(['Can', 'Care', 'Not', 'Qwes']).optional().nullable(),
+    specialInstruction: z.string().optional().nullable(),
+    pharmacokinetics: z.string().optional().nullable(),
+    pharmacodynamics: z.string().optional().nullable(),
     // Избранное и теги
     isFavorite: z.boolean().optional().default(false),
     userTags: z.array(z.string()).optional().nullable(),
@@ -113,6 +125,81 @@ const MedicationService = {
             icd10Codes: safeJsonParse(med.icd10Codes, []),
             userTags: safeJsonParse(med.userTags, [])
         }));
+    },
+
+    /**
+     * Get paginated medications list optimized for UI list rendering
+     */
+    async listPaginated(params = {}) {
+        const page = Number(params.page) > 0 ? Number(params.page) : 1;
+        const pageSizeRaw = Number(params.pageSize) > 0 ? Number(params.pageSize) : 60;
+        const pageSize = Math.min(pageSizeRaw, 200);
+        const search = typeof params.search === 'string' ? params.search.trim() : '';
+        const group = typeof params.group === 'string' ? params.group.trim() : '';
+        const formType = typeof params.formType === 'string' ? params.formType.trim() : '';
+        const favoritesOnly = Boolean(params.favoritesOnly);
+
+        const andConditions = [];
+        if (search) {
+            andConditions.push({
+                OR: [
+                    { nameRu: { contains: search } },
+                    { activeSubstance: { contains: search } },
+                    { atcCode: { contains: search } },
+                ],
+            });
+        }
+        if (group) {
+            andConditions.push({ clinicalPharmGroup: group });
+        }
+        if (favoritesOnly) {
+            andConditions.push({ isFavorite: true });
+        }
+        if (formType) {
+            andConditions.push({
+                OR: [
+                    { forms: { contains: `"type":"${formType}"` } },
+                    { forms: { contains: `"type": "${formType}"` } },
+                    { packageDescription: { contains: formType } },
+                ],
+            });
+        }
+
+        const where = andConditions.length > 0 ? { AND: andConditions } : undefined;
+
+        const [itemsRaw, total] = await prisma.$transaction([
+            prisma.medication.findMany({
+                where,
+                orderBy: { nameRu: 'asc' },
+                skip: (page - 1) * pageSize,
+                take: pageSize,
+                select: {
+                    id: true,
+                    nameRu: true,
+                    activeSubstance: true,
+                    atcCode: true,
+                    forms: true,
+                    packageDescription: true,
+                    clinicalPharmGroup: true,
+                    isFavorite: true,
+                    isOtc: true,
+                },
+            }),
+            prisma.medication.count({ where }),
+        ]);
+
+        const items = itemsRaw.map((med) => ({
+            ...med,
+            forms: safeJsonParse(med.forms, []),
+        }));
+
+        return {
+            items,
+            total,
+            page,
+            pageSize,
+            totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        };
     },
 
     /**
@@ -624,6 +711,12 @@ const MedicationService = {
      */
     async getPharmacologicalGroups() {
         const medications = await prisma.medication.findMany({
+            where: {
+                clinicalPharmGroup: {
+                    not: null,
+                },
+            },
+            distinct: ['clinicalPharmGroup'],
             select: {
                 clinicalPharmGroup: true
             }

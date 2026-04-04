@@ -16,6 +16,7 @@ export interface PrintableDocument {
  * Метаданные документа
  */
 export interface DocumentMetadata {
+    [key: string]: unknown;
     /** Название документа */
     title: string;
     /** Дата создания */

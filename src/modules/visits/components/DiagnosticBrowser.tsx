@@ -318,7 +318,7 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
                                                             Добавлено
                                                         </Badge>
                                                         <Badge 
-                                                            variant="destructive" 
+                                                            variant="error" 
                                                             size="sm" 
                                                             className="flex items-center gap-1 transition-all duration-300 opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 absolute right-0"
                                                         >

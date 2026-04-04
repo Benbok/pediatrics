@@ -71,9 +71,9 @@ export const AnamnesisSection: React.FC<AnamnesisSectionProps> = ({
         }
         
         // Обратная совместимость: преобразуем старые boolean значения в новые строковые
-        if (parsed.breastfeeding === true) {
+        if ((parsed.breastfeeding as any) === true) {
             parsed.breastfeeding = 'yes';
-        } else if (parsed.breastfeeding === false) {
+        } else if ((parsed.breastfeeding as any) === false) {
             parsed.breastfeeding = 'no';
         }
         

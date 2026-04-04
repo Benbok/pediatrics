@@ -3,6 +3,12 @@
  */
 
 /**
+ * Статус применения при состоянии (почки/печень/дети)
+ * Can — можно, Care — с осторожностью, Not — нельзя, Qwes — под вопросом
+ */
+export type VidalUsing = 'Can' | 'Care' | 'Not' | 'Qwes';
+
+/**
  * Форма выпуска препарата
  */
 export interface MedicationForm {
@@ -114,4 +120,6 @@ export interface DoseCalculationResult {
   matchingRulesSummary?: MatchingRuleSummary[];
   /** Пошаговый расчёт для прозрачности */
   calculationBreakdown?: CalculationBreakdown;
+  /** Путь введения, если определён */
+  routeOfAdmin?: string | null;
 }

@@ -31,7 +31,39 @@ import {
 } from 'lucide-react';
 import { ChangeHistoryPanel } from './components/ChangeHistoryPanel';
 import { MedicationDiseasesTab } from './components/MedicationDiseasesTab';
+import { PrettySelect, type SelectOption } from '../vaccination/components/PrettySelect';
 import VIDAL_JSON_TEMPLATE from './templates/vidalJsonTemplate.json';
+
+const ROUTE_OPTIONS: Array<SelectOption<string>> = [
+    { value: '', label: 'Не указано' },
+    { value: 'oral', label: 'Перорально' },
+    { value: 'rectal', label: 'Ректально' },
+    { value: 'iv_bolus', label: 'В/В болюсно' },
+    { value: 'iv_infusion', label: 'В/В капельно' },
+    { value: 'iv_slow', label: 'В/В медленно' },
+    { value: 'im', label: 'В/М' },
+    { value: 'sc', label: 'П/К' },
+    { value: 'sublingual', label: 'Сублингвально' },
+    { value: 'topical', label: 'Наружно' },
+    { value: 'inhalation', label: 'Ингаляционно' },
+    { value: 'intranasal', label: 'Интраназально' },
+    { value: 'transdermal', label: 'Трансдермально' },
+];
+
+const DOSING_TYPE_OPTIONS: Array<SelectOption<string>> = [
+    { value: 'weight_based', label: 'По весу (мг/кг)' },
+    { value: 'bsa_based', label: 'По ППТ (мг/м²)' },
+    { value: 'fixed', label: 'Фиксированная доза' },
+    { value: 'age_based', label: 'По возрасту' },
+];
+
+const VIDAL_USING_OPTIONS: Array<SelectOption<string>> = [
+    { value: '', label: '—' },
+    { value: 'Can', label: 'Can — можно' },
+    { value: 'Care', label: 'Care — с осторожностью' },
+    { value: 'Not', label: 'Not — нельзя' },
+    { value: 'Qwes', label: 'Qwes — под вопросом' },
+];
 
 export const MedicationFormPage: React.FC = () => {
     const { id } = useParams<{ id?: string }>();
@@ -845,38 +877,23 @@ export const MedicationFormPage: React.FC = () => {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                             <div className="flex flex-col gap-1.5">
                                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Путь введения</label>
-                                                <select
+                                                <PrettySelect
                                                     value={rule.routeOfAdmin || ''}
-                                                    onChange={e => updateDosingRule(idx, { routeOfAdmin: e.target.value || null })}
-                                                    className="h-10 w-full min-w-0 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
-                                                >
-                                                    <option value="">Не указано</option>
-                                                    <option value="oral">Перорально</option>
-                                                    <option value="rectal">Ректально</option>
-                                                    <option value="iv_bolus">В/В болюсно</option>
-                                                    <option value="iv_infusion">В/В капельно</option>
-                                                    <option value="iv_slow">В/В медленно</option>
-                                                    <option value="im">В/М</option>
-                                                    <option value="sc">П/К</option>
-                                                    <option value="sublingual">Сублингвально</option>
-                                                    <option value="topical">Наружно</option>
-                                                    <option value="inhalation">Ингаляционно</option>
-                                                    <option value="intranasal">Интраназально</option>
-                                                    <option value="transdermal">Трансдермально</option>
-                                                </select>
+                                                    onChange={(value) => updateDosingRule(idx, { routeOfAdmin: value || null })}
+                                                    options={ROUTE_OPTIONS}
+                                                    buttonClassName="h-10 rounded-xl"
+                                                    panelClassName="max-h-72"
+                                                />
                                             </div>
                                             <div className="flex flex-col gap-1.5">
                                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Тип дозирования</label>
-                                                <select
+                                                <PrettySelect
                                                     value={rule.dosing?.type || 'weight_based'}
-                                                    onChange={e => updateDosingRule(idx, { dosing: { ...rule.dosing, type: e.target.value } })}
-                                                    className="h-10 w-full min-w-0 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
-                                                >
-                                                    <option value="weight_based">По весу (мг/кг)</option>
-                                                    <option value="bsa_based">По ППТ (мг/м²)</option>
-                                                    <option value="fixed">Фиксированная доза</option>
-                                                    <option value="age_based">По возрасту</option>
-                                                </select>
+                                                    onChange={(value) => updateDosingRule(idx, { dosing: { ...rule.dosing, type: value } })}
+                                                    options={DOSING_TYPE_OPTIONS}
+                                                    buttonClassName="h-10 rounded-xl"
+                                                    panelClassName="max-h-72"
+                                                />
                                             </div>
                                             <div className="flex flex-col gap-1.5">
                                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -1038,6 +1055,163 @@ export const MedicationFormPage: React.FC = () => {
                                 onChange={e => setFormData({ ...formData, contraindications: e.target.value })}
                                 className="w-full min-h-[100px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm"
                                 placeholder="Абсолютные и относительные противопоказания..."
+                            />
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Данные Vidal */}
+                <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                        <FileText className="w-6 h-6 text-blue-500" />
+                        Данные Vidal
+                    </h2>
+
+                    <div className="space-y-6">
+                        {/* isOtc */}
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="checkbox"
+                                id="isOtc"
+                                checked={formData.isOtc ?? false}
+                                onChange={e => setFormData({ ...formData, isOtc: e.target.checked })}
+                                className="w-4 h-4 rounded text-primary-600"
+                            />
+                            <label htmlFor="isOtc" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                Безрецептурный препарат (OTC)
+                            </label>
+                        </div>
+
+                        {/* Передозировка */}
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                Передозировка
+                            </label>
+                            <textarea
+                                value={formData.overdose ?? ''}
+                                onChange={e => setFormData({ ...formData, overdose: e.target.value || null })}
+                                className="w-full min-h-[80px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm"
+                                placeholder="Симптомы и лечение передозировки..."
+                            />
+                        </div>
+
+                        {/* Применение у детей */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                    Применение у детей
+                                </label>
+                                <textarea
+                                    value={formData.childDosing ?? ''}
+                                    onChange={e => setFormData({ ...formData, childDosing: e.target.value || null })}
+                                    className="w-full min-h-[80px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm"
+                                    placeholder="Особенности применения у детей..."
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                    Статус у детей
+                                </label>
+                                <PrettySelect
+                                    value={formData.childUsing ?? ''}
+                                    onChange={(value) => setFormData({ ...formData, childUsing: (value as any) || null })}
+                                    options={VIDAL_USING_OPTIONS}
+                                    buttonClassName="h-12 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50"
+                                    panelClassName="max-h-72"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Почечная недостаточность */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                    Почечная недостаточность
+                                </label>
+                                <textarea
+                                    value={formData.renalInsuf ?? ''}
+                                    onChange={e => setFormData({ ...formData, renalInsuf: e.target.value || null })}
+                                    className="w-full min-h-[80px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm"
+                                    placeholder="Коррекция дозы при почечной недостаточности..."
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                    Статус (почки)
+                                </label>
+                                <PrettySelect
+                                    value={formData.renalUsing ?? ''}
+                                    onChange={(value) => setFormData({ ...formData, renalUsing: (value as any) || null })}
+                                    options={VIDAL_USING_OPTIONS}
+                                    buttonClassName="h-12 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50"
+                                    panelClassName="max-h-72"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Печёночная недостаточность */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                    Печёночная недостаточность
+                                </label>
+                                <textarea
+                                    value={formData.hepatoInsuf ?? ''}
+                                    onChange={e => setFormData({ ...formData, hepatoInsuf: e.target.value || null })}
+                                    className="w-full min-h-[80px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm"
+                                    placeholder="Коррекция дозы при печёночной недостаточности..."
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                    Статус (печень)
+                                </label>
+                                <PrettySelect
+                                    value={formData.hepatoUsing ?? ''}
+                                    onChange={(value) => setFormData({ ...formData, hepatoUsing: (value as any) || null })}
+                                    options={VIDAL_USING_OPTIONS}
+                                    buttonClassName="h-12 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50"
+                                    panelClassName="max-h-72"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Особые указания */}
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                Особые указания
+                            </label>
+                            <textarea
+                                value={formData.specialInstruction ?? ''}
+                                onChange={e => setFormData({ ...formData, specialInstruction: e.target.value || null })}
+                                className="w-full min-h-[80px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm"
+                                placeholder="Особые указания по применению..."
+                            />
+                        </div>
+
+                        {/* Фармакокинетика */}
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                Фармакокинетика
+                            </label>
+                            <textarea
+                                value={formData.pharmacokinetics ?? ''}
+                                onChange={e => setFormData({ ...formData, pharmacokinetics: e.target.value || null })}
+                                className="w-full min-h-[80px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm"
+                                placeholder="Всасывание, распределение, метаболизм, выведение..."
+                            />
+                        </div>
+
+                        {/* Фармакодинамика */}
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-1">
+                                Фармакодинамика
+                            </label>
+                            <textarea
+                                value={formData.pharmacodynamics ?? ''}
+                                onChange={e => setFormData({ ...formData, pharmacodynamics: e.target.value || null })}
+                                className="w-full min-h-[80px] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-primary-500 transition-all text-sm"
+                                placeholder="Механизм действия, фармакологические эффекты..."
                             />
                         </div>
                     </div>
@@ -1286,7 +1460,7 @@ export const MedicationFormPage: React.FC = () => {
                                         {previewData.pediatricDosing.map((rule: any, idx: number) => (
                                             <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border-l-4 border-primary-500">
                                                 <div className="flex items-center gap-2 mb-2">
-                                                    <Badge variant="secondary">
+                                                    <Badge variant="default">
                                                         {rule.minAgeMonths}-{rule.maxAgeMonths} мес
                                                     </Badge>
                                                     <Badge variant="primary">{rule.routeOfAdmin || 'oral'}</Badge>
@@ -1372,6 +1546,48 @@ export const MedicationFormPage: React.FC = () => {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Данные Vidal */}
+                            {(previewData.isOtc || previewData.overdose || previewData.childDosing || previewData.renalInsuf || previewData.hepatoInsuf || previewData.specialInstruction) && (
+                                <div>
+                                    <h3 className="text-lg font-bold mb-3">Данные Vidal</h3>
+                                    <div className="space-y-3">
+                                        {previewData.isOtc && (
+                                            <Badge variant="success">Безрецептурный (OTC)</Badge>
+                                        )}
+                                        {previewData.childUsing && (
+                                            <div className="flex items-center gap-2 text-sm">
+                                                <span className="font-medium text-slate-600 dark:text-slate-400">Дети:</span>
+                                                <Badge variant={previewData.childUsing === 'Can' ? 'success' : previewData.childUsing === 'Not' ? 'error' : 'warning'} size="sm">{previewData.childUsing}</Badge>
+                                            </div>
+                                        )}
+                                        {previewData.renalUsing && (
+                                            <div className="flex items-center gap-2 text-sm">
+                                                <span className="font-medium text-slate-600 dark:text-slate-400">Почки:</span>
+                                                <Badge variant={previewData.renalUsing === 'Can' ? 'success' : previewData.renalUsing === 'Not' ? 'error' : 'warning'} size="sm">{previewData.renalUsing}</Badge>
+                                            </div>
+                                        )}
+                                        {previewData.hepatoUsing && (
+                                            <div className="flex items-center gap-2 text-sm">
+                                                <span className="font-medium text-slate-600 dark:text-slate-400">Печень:</span>
+                                                <Badge variant={previewData.hepatoUsing === 'Can' ? 'success' : previewData.hepatoUsing === 'Not' ? 'error' : 'warning'} size="sm">{previewData.hepatoUsing}</Badge>
+                                            </div>
+                                        )}
+                                        {previewData.specialInstruction && (
+                                            <div>
+                                                <div className="text-xs font-bold text-slate-500 uppercase mb-1">Особые указания</div>
+                                                <p className="text-sm text-slate-700 dark:text-slate-300 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl" dangerouslySetInnerHTML={{ __html: previewData.specialInstruction }} />
+                                            </div>
+                                        )}
+                                        {previewData.overdose && (
+                                            <div>
+                                                <div className="text-xs font-bold text-slate-500 uppercase mb-1">Передозировка</div>
+                                                <p className="text-sm text-slate-700 dark:text-slate-300 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl" dangerouslySetInnerHTML={{ __html: previewData.overdose }} />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Результаты валидации */}
                             {validationResult && (validationResult.errors.length > 0 || validationResult.warnings.length > 0) && (

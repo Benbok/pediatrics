@@ -130,13 +130,13 @@ export const DiagnosticTemplateSelector: React.FC<DiagnosticTemplateSelectorProp
                         
                         <div className="flex items-center gap-2 flex-wrap">
                             {counts.lab > 0 && (
-                                <Badge variant="info" size="sm" className="flex items-center gap-1">
+                                <Badge variant="primary" size="sm" className="flex items-center gap-1">
                                     <FlaskConical className="w-3 h-3" />
                                     {counts.lab} лаб.
                                 </Badge>
                             )}
                             {counts.instrumental > 0 && (
-                                <Badge variant="secondary" size="sm" className="flex items-center gap-1">
+                                <Badge variant="default" size="sm" className="flex items-center gap-1">
                                     <FileBarChart className="w-3 h-3" />
                                     {counts.instrumental} инстр.
                                 </Badge>

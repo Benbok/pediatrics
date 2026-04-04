@@ -205,7 +205,7 @@ export const diseaseService = {
                 ...normalized,
                 symptoms: normalizeSymptomsForSave(normalized.symptoms)
             });
-            const result = await window.electronAPI.upsertDisease(validated);
+            const result = await window.electronAPI.upsertDisease(validated as unknown as Disease);
             // Уведомляем об изменении для инвалидации кеша
             dataEvents.notifyUpdated('diseases', result.id);
             return result;

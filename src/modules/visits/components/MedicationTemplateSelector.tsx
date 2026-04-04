@@ -85,7 +85,7 @@ export const MedicationTemplateSelector: React.FC<MedicationTemplateSelectorProp
                                         {template.name}
                                     </span>
                                     {items.length > 0 && (
-                                        <Badge variant="secondary" size="sm">
+                                        <Badge variant="default" size="sm">
                                             {items.length} препарат{items.length > 1 ? 'ов' : ''}
                                         </Badge>
                                     )}

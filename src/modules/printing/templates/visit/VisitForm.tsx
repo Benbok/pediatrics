@@ -156,7 +156,7 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
     for (const disease of infectiousDiseaseMap) {
         const entry = infectiousDiseasesData?.[disease.key];
         if (entry && typeof entry === 'object' && 'had' in entry && entry.had) {
-            const age = typeof entry.ageYears === 'number' ? ` (в ${entry.ageYears} лет)` : '';
+            const age = 'ageYears' in entry && typeof entry.ageYears === 'number' ? ` (в ${entry.ageYears} лет)` : '';
             infectiousItems.push(`${disease.label}${age}`);
         }
     }

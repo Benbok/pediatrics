@@ -362,6 +362,19 @@ model Medication {
   maxDurationDays Int?    @map("max_duration_days") // Макс длительность (дни)
   routeOfAdmin    String? @map("route_of_admin") // Путь введения: oral, rectal, iv, im
 
+  // Клинические поля из Vidal (Document)
+  isOtc              Boolean @default(false) @map("is_otc") // OTC (безрецептурный) / Rx
+  overdose           String? @map("overdose") // Передозировка: симптомы и лечение (HTML)
+  childDosing        String? @map("child_dosing") // Дозирование у детей — расширенный текст Vidal (HTML)
+  childUsing         String? @map("child_using") // Статус применения у детей: Can/Care/Not/Qwes
+  renalInsuf         String? @map("renal_insuf") // Применение при почечной недостаточности (HTML)
+  renalUsing         String? @map("renal_using") // Статус: Can/Care/Not/Qwes
+  hepatoInsuf        String? @map("hepato_insuf") // Применение при печёночной недостаточности (HTML)
+  hepatoUsing        String? @map("hepato_using") // Статус: Can/Care/Not/Qwes
+  specialInstruction String? @map("special_instruction") // Особые указания (HTML)
+  pharmacokinetics   String? @map("pharmacokinetics") // Фармакокинетика (HTML)
+  pharmacodynamics   String? @map("pharmacodynamics") // Фармакодинамика / механизм действия (HTML)
+
   // Избранное и теги
   isFavorite Boolean   @default(false) @map("is_favorite")
   userTags   String?   @map("user_tags") // JSON array

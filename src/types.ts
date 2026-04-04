@@ -10,6 +10,7 @@ export interface ChildProfile {
   patronymic?: string;
   birthDate: string; // ISO string YYYY-MM-DD
   gender: 'male' | 'female';
+  birthWeight?: number | null;
 }
 
 export interface PatientAllergy {
@@ -233,6 +234,7 @@ export interface AugmentedVaccine extends VaccineDefinition {
   userRecord?: UserVaccineRecord;
   dueDate: Date;
   alertMessage?: string;
+  note?: string;
 }
 
 // ============= CDSS MODULE TYPES =============
@@ -447,6 +449,8 @@ export type RouteOfAdmin =
   | 'intranasal'     // Интраназально
   | 'transdermal';   // Трансдермально
 
+export type VidalUsing = 'Can' | 'Care' | 'Not' | 'Qwes';
+
 export interface Medication {
   id?: number;
   nameRu: string;
@@ -475,6 +479,18 @@ export interface Medication {
   maxDosesPerDay?: number | null; // Макс доз в сутки
   maxDurationDays?: number | null; // Макс длительность (дни)
   routeOfAdmin?: RouteOfAdmin | null;
+  // Клинические поля из Vidal (Document)
+  isOtc?: boolean;
+  overdose?: string | null;
+  childDosing?: string | null;
+  childUsing?: VidalUsing | null;
+  renalInsuf?: string | null;
+  renalUsing?: VidalUsing | null;
+  hepatoInsuf?: string | null;
+  hepatoUsing?: VidalUsing | null;
+  specialInstruction?: string | null;
+  pharmacokinetics?: string | null;
+  pharmacodynamics?: string | null;
   // Избранное и теги
   isFavorite?: boolean;
   userTags?: string[] | null;
@@ -482,6 +498,26 @@ export interface Medication {
   lastUsedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface MedicationListItem {
+  id: number;
+  nameRu: string;
+  activeSubstance: string;
+  atcCode?: string | null;
+  forms: MedicationForm[];
+  packageDescription?: string | null;
+  clinicalPharmGroup?: string | null;
+  isFavorite?: boolean;
+  isOtc?: boolean;
+}
+
+export interface MedicationsPageResult {
+  items: MedicationListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface DiagnosisEntry {
@@ -628,6 +664,12 @@ export interface Visit {
   // Treatment
   prescriptions: any[];
   recommendations?: string | null;
+
+  // Анамнез заболевания / жизни (legacy поля)
+  diseaseHistory?: string | null;
+  lifeHistory?: string | null;
+  allergyHistory?: string | null;
+  previousDiseases?: string | null;
 
   // Исходы и маршрутизация
   outcome?: 'recovery' | 'improvement' | 'no_change' | 'worsening' | null;
@@ -850,6 +892,9 @@ declare global {
       checkLicense: () => Promise<{ valid: boolean; reason?: string; devMode?: boolean; data?: { userName: string; expiresAt: string | null } }>;
       importLicense: () => Promise<{ success: boolean; reason?: string; data?: { userName: string; expiresAt: string | null } }>;
 
+      // LOGGER API
+      log: (level: string, message: string, metadata?: Record<string, any>) => Promise<void>;
+
       // DASHBOARD MODULE API
       getDashboardSummary: (date?: string) => Promise<DashboardSummary>;
       updateVisitNotes: (visitId: number, notes: string) => Promise<boolean>;
@@ -1003,8 +1048,16 @@ declare global {
 
       // MEDICATIONS MODULE API
       getMedications: () => Promise<Medication[]>;
+      getMedicationsPaginated: (params: {
+        page: number;
+        pageSize: number;
+        search?: string;
+        group?: string | null;
+        formType?: string | null;
+        favoritesOnly?: boolean;
+      }) => Promise<MedicationsPageResult>;
       getMedication: (id: number) => Promise<Medication & { diseases: any[] }>;
-      upsertMedication: (data: Medication) => Promise<Medication>;
+      upsertMedication: (data: Medication, source?: string) => Promise<Medication>;
       deleteMedication: (id: number) => Promise<boolean>;
       linkMedicationToDisease: (data: { diseaseId: number; medicationId: number; priority?: number; dosing?: string; duration?: string }) => Promise<any>;
       unlinkMedicationFromDisease: (diseaseId: number, medicationId: number) => Promise<boolean>;
@@ -1104,7 +1157,7 @@ declare global {
       resetApiKey: (keyIndex: number) => Promise<boolean>;
       resetAllApiKeys: () => Promise<boolean>;
       reloadApiKeysFromEnv: () => Promise<{ success: boolean; keysCount: number }>;
-      onApiKeysLowWarning: (callback: (event: any, data: { remaining: number; total: number }) => void) => void;
+      onApiKeysLowWarning: (callback: (event: any, data: { remaining: number; total: number }) => void) => () => void;
 
       // NUTRITION MODULE API
       getNutritionAgeNorms: () => Promise<NutritionAgeNorm[]>;
@@ -1120,6 +1173,22 @@ declare global {
       getChildFeedingPlans: (childId: number) => Promise<ChildFeedingPlan[]>;
       saveChildFeedingPlan: (data: Partial<ChildFeedingPlan>) => Promise<ChildFeedingPlan>;
       deleteChildFeedingPlan: (id: number) => Promise<boolean>;
+
+      // EXAM TEXT TEMPLATES API
+      getExamTextTemplate: (id: number) => Promise<ExamTextTemplate | null>;
+      getExamTextTemplatesBySystem: (systemKey: string, userId: number) => Promise<ExamTextTemplate[]>;
+      getAllExamTextTemplates: (userId: number) => Promise<ExamTextTemplate[]>;
+      getExamTextTemplatesByTags: (params: { tags: string[]; userId: number }) => Promise<ExamTextTemplate[]>;
+      upsertExamTextTemplate: (data: ExamTextTemplate) => Promise<ExamTextTemplate>;
+      deleteExamTextTemplate: (id: number, userId: number) => Promise<boolean>;
+
+      // VISIT TEMPLATES API
+      getVisitTemplate: (id: number) => Promise<VisitTemplate | null>;
+      getAllVisitTemplates: () => Promise<VisitTemplate[]>;
+      getVisitTemplatesByType: (visitType: string) => Promise<VisitTemplate[]>;
+      upsertVisitTemplate: (data: VisitTemplate) => Promise<VisitTemplate>;
+      deleteVisitTemplate: (id: number) => Promise<boolean>;
+      applyVisitTemplate: (params: { templateId: number; existingData: Partial<Visit> }) => Promise<{ mergedData: Partial<Visit>; medicationTemplateId?: number | null; examTemplateSetId?: number | null }>;
     }
   }
 }
