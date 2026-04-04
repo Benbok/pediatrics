@@ -11,7 +11,27 @@ export const MAX_VISIT_TABS = 2;
 /**
  * Тип вкладки
  */
-export type TabType = 'visit-form' | 'other';
+export type TabType = 'visit-form' | 'medications' | 'diseases' | 'icd-codes' | 'other';
+
+/**
+ * Типы вкладок модулей (навигационные, 1 на модуль)
+ */
+export type ModuleTabType = 'medications' | 'diseases' | 'icd-codes';
+
+/**
+ * Конфигурация модульных вкладок
+ */
+export const MODULE_TAB_CONFIGS: { type: ModuleTabType; prefix: string; label: string }[] = [
+    { type: 'medications', prefix: '/medications', label: 'Препараты' },
+    { type: 'diseases',    prefix: '/diseases',    label: 'База знаний' },
+    { type: 'icd-codes',  prefix: '/icd-codes',   label: 'Коды МКБ' },
+];
+
+/**
+ * Проверяет, является ли тип вкладки модульным
+ */
+export const isModuleTabType = (type: TabType): type is ModuleTabType =>
+    type === 'medications' || type === 'diseases' || type === 'icd-codes';
 
 /**
  * Метаданные вкладки
@@ -58,6 +78,7 @@ interface TabsContextType {
     // Геттеры
     getTab: (tabId: string) => TabData | undefined;
     getVisitTabs: () => TabData[];
+    getModuleTabs: () => TabData[];
     canOpenVisitTab: () => boolean;
     
     // Модальные окна
@@ -131,23 +152,58 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [tabs]);
     
+    // Авто-открытие и обновление модульных вкладок при смене маршрута
+    useEffect(() => {
+        const fullRoute = location.pathname + location.search;
+        const moduleConfig = MODULE_TAB_CONFIGS.find(m => location.pathname.startsWith(m.prefix));
+
+        if (!moduleConfig) return;
+
+        setTabs(prev => {
+            const existing = prev.find(t => t.type === moduleConfig.type);
+            if (existing) {
+                // Обновляем маршрут, если он изменился (пользователь перешёл по модулю)
+                if (existing.route === fullRoute) return prev;
+                return prev.map(t => t.id === existing.id ? { ...t, route: fullRoute } : t);
+            }
+            // Открываем новую модульную вкладку
+            logger.info('[TabsContext] Opening module tab', { type: moduleConfig.type });
+            return [...prev, {
+                id: `module-${moduleConfig.type}`,
+                type: moduleConfig.type,
+                route: fullRoute,
+                label: moduleConfig.label,
+                isDirty: false,
+                createdAt: Date.now(),
+            }];
+        });
+    }, [location.pathname, location.search]);
+
     // Обновление активной вкладки при изменении роута
     useEffect(() => {
         const currentPath = location.pathname;
-        const matchingTab = tabs.find(t => t.route === currentPath);
-        
-        // Если текущий путь соответствует какой-то вкладке, делаем её активной
-        if (matchingTab) {
-            setActiveTabId(matchingTab.id);
+
+        // 1. Проверяем точное совпадение с вкладкой приёма
+        const visitTabMatch = tabs.find(t => t.type === 'visit-form' && t.route === currentPath);
+        if (visitTabMatch) {
+            setActiveTabId(visitTabMatch.id);
+            return;
         }
-        // Если нет активной вкладки, но есть открытые вкладки, 
-        // устанавливаем последнюю как активную (но не навигируем)
-        else if (tabs.length > 0 && !activeTabId) {
-            const lastTab = tabs[tabs.length - 1];
-            setActiveTabId(lastTab.id);
+
+        // 2. Проверяем модульные вкладки по префиксу
+        const moduleTab = tabs.find(t =>
+            isModuleTabType(t.type) &&
+            currentPath.startsWith(MODULE_TAB_CONFIGS.find(c => c.type === t.type)!.prefix)
+        );
+        if (moduleTab) {
+            setActiveTabId(moduleTab.id);
+            return;
         }
-        // ВАЖНО: Не делаем принудительную навигацию к активной вкладке,
-        // если пользователь находится на другой странице
+
+        // 3. Если нет активной вкладки, но есть открытые — ставим последнюю (без навигации)
+        if (tabs.length > 0 && !activeTabId) {
+            setActiveTabId(tabs[tabs.length - 1].id);
+        }
     }, [location.pathname, tabs, activeTabId]);
 
 
@@ -157,6 +213,13 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
      */
     const getVisitTabs = useCallback((): TabData[] => {
         return tabs.filter(t => t.type === 'visit-form');
+    }, [tabs]);
+
+    /**
+     * Получить модульные вкладки
+     */
+    const getModuleTabs = useCallback((): TabData[] => {
+        return tabs.filter(t => isModuleTabType(t.type));
     }, [tabs]);
     
     /**
@@ -243,11 +306,12 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const tab = tabs.find(t => t.id === tabId);
         if (tab) {
             setActiveTabId(tabId);
-            if (tab.route !== location.pathname) {
+            const currentFullPath = location.pathname + location.search;
+            if (tab.route !== currentFullPath) {
                 navigate(tab.route);
             }
         }
-    }, [tabs, location.pathname, navigate]);
+    }, [tabs, location.pathname, location.search, navigate]);
     
     /**
      * Пометить вкладку как "грязную" (с несохраненными изменениями)
@@ -290,6 +354,7 @@ export const TabsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         requestSave,
         getTab,
         getVisitTabs,
+        getModuleTabs,
         canOpenVisitTab,
         showMaxTabsWarning,
         setShowMaxTabsWarning,

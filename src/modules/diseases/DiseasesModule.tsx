@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { diseaseService } from './services/diseaseService';
 import { useDataCache } from '../../context/DataCacheContext';
 import { Disease } from '../../types';
@@ -11,9 +11,10 @@ import { Search, Plus, Filter, BookOpen, AlertCircle, Loader2 } from 'lucide-rea
 
 export const DiseasesModule: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { diseases: cachedDiseases, loadDiseases, invalidate, isLoadingDiseases } = useDataCache();
     const [diseases, setDiseases] = useState<Disease[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
     const [error, setError] = useState<string | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; diseaseId: number | null; diseaseName: string }>({
         isOpen: false,
@@ -41,6 +42,13 @@ export const DiseasesModule: React.FC = () => {
             initializeData();
         }
     }, [cachedDiseases, loadDiseases]);
+
+    // Синхронизируем поиск в URL
+    useEffect(() => {
+        const params: Record<string, string> = {};
+        if (searchQuery) params.q = searchQuery;
+        setSearchParams(params, { replace: true });
+    }, [searchQuery]);
 
     // Синхронизируем локальное состояние с кешем
     useEffect(() => {

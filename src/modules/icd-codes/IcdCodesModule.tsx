@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { icdCodeService } from '../../services/icdCode.service';
 import { diseaseService } from '../diseases/services/diseaseService';
 import { IcdCode } from '../../types';
@@ -14,10 +14,11 @@ const ITEMS_PER_PAGE = 50;
 
 export const IcdCodesModule: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [codes, setCodes] = useState<IcdCode[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(() => searchParams.get('cat') ?? null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSearching, setIsSearching] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -25,6 +26,14 @@ export const IcdCodesModule: React.FC = () => {
     const [total, setTotal] = useState(0);
 
     const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+    // Синхронизируем поиск и категорию в URL
+    useEffect(() => {
+        const params: Record<string, string> = {};
+        if (searchQuery) params.q = searchQuery;
+        if (selectedCategory) params.cat = selectedCategory;
+        setSearchParams(params, { replace: true });
+    }, [searchQuery, selectedCategory]);
 
     useEffect(() => {
         loadInitialData();
