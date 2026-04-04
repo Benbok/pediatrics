@@ -181,7 +181,12 @@ export const MedicationDiseasesTab: React.FC<MedicationDiseasesTabProps> = ({
                             <input
                                 type="text"
                                 value={searchQuery}
-                                onChange={e => { setSearchQuery(e.target.value); setShowDropdown(true); }}
+                                onChange={e => {
+                                    const value = e.target.value;
+                                    const capitalized = value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+                                    setSearchQuery(capitalized);
+                                    setShowDropdown(true);
+                                }}
                                 onFocus={() => searchQuery.trim() && setShowDropdown(true)}
                                 placeholder="Поиск по названию или коду МКБ..."
                                 className="w-full pl-9 pr-4 h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm outline-none focus:ring-2 focus:ring-primary-500 transition-all"

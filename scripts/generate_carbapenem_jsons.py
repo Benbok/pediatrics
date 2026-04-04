@@ -407,12 +407,12 @@ def main():
             ORDER BY p.ProductID
         """, (doc_id,)).fetchall()
 
-        atc = first_value(cur, """
+        atc = first_value(cur, f"""
             SELECT patc.ATCCode
             FROM Product_Document pd
             JOIN Product_ATC patc ON patc.ProductID = pd.ProductID
-            WHERE pd.DocumentID = ?
-            ORDER BY pd.ProductID
+            WHERE pd.DocumentID = ? AND ({where_atc})
+            ORDER BY pd.ProductID, patc.ATCCode
             LIMIT 1
         """, (doc_id,))
 

@@ -239,6 +239,43 @@ def normalize_dosing_rules(rules):
     return out
 
 
+def infer_route_candidates_from_forms(forms):
+    routes = []
+    seen = set()
+    for form in forms:
+        if not isinstance(form, dict):
+            continue
+        route = normalize_route(form.get('description'))
+        if route and route not in seen:
+            seen.add(route)
+            routes.append(route)
+    return routes
+
+
+def choose_route_of_admin(explicit_route, pediatric, adult, forms):
+    route_of_admin = normalize_route(explicit_route)
+    if route_of_admin is not None:
+        return route_of_admin
+
+    inferred_routes = []
+    seen = set()
+
+    for route in infer_route_candidates_from_forms(forms):
+        if route not in seen:
+            seen.add(route)
+            inferred_routes.append(route)
+
+    for rule in pediatric + adult:
+        route = rule.get('routeOfAdmin')
+        if route and route not in seen:
+            seen.add(route)
+            inferred_routes.append(route)
+
+    if len(inferred_routes) == 1:
+        return inferred_routes[0]
+    return None
+
+
 def map_payload(data):
     pediatric = normalize_dosing_rules(data.get('pediatricDosing') or [])
     adult = normalize_dosing_rules(data.get('adultDosing') or [])
@@ -248,13 +285,7 @@ def map_payload(data):
     name_ru = strip_html(data.get('nameRu')) or ''
     active_substance = strip_html(data.get('activeSubstance')) or name_ru
 
-    route_of_admin = normalize_route(data.get('routeOfAdmin'))
-    if route_of_admin is None:
-        # Fallback: try first non-null route in dosing rules
-        for rule in pediatric + adult:
-            if rule.get('routeOfAdmin'):
-                route_of_admin = rule['routeOfAdmin']
-                break
+    route_of_admin = choose_route_of_admin(data.get('routeOfAdmin'), pediatric, adult, forms)
 
     return {
         'name_ru': name_ru,

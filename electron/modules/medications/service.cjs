@@ -143,11 +143,23 @@ const MedicationService = {
 
         const andConditions = [];
         if (search) {
+            const searchVariants = Array.from(new Set([
+                search,
+                search.toLowerCase(),
+                search.toUpperCase(),
+            ]));
+
+            const buildContainsOr = (field) => ({
+                OR: searchVariants.map((value) => ({
+                    [field]: { contains: value },
+                })),
+            });
+
             andConditions.push({
                 OR: [
-                    { nameRu: { contains: search } },
-                    { activeSubstance: { contains: search } },
-                    { atcCode: { contains: search } },
+                    buildContainsOr('nameRu'),
+                    buildContainsOr('activeSubstance'),
+                    buildContainsOr('atcCode'),
                 ],
             });
         }

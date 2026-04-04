@@ -217,7 +217,11 @@ export const MedicationsModule: React.FC = () => {
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
                         <Input
                             value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                const capitalized = value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+                                setSearchInput(capitalized);
+                            }}
                             placeholder="Поиск по названию, веществу или АТХ-коду..."
                             className="pl-12 h-14 rounded-2xl bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800"
                         />
@@ -264,7 +268,7 @@ export const MedicationsModule: React.FC = () => {
             )}
 
             {/* Фильтры */}
-            {(total > 0 || isLoading) && (showFiltersPanel || nonFavoriteFilterCount > 0) && (
+            {(showFiltersPanel || nonFavoriteFilterCount > 0) && (
                 <div className="space-y-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
                     <div className="flex items-center justify-between gap-3">
                         <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -334,10 +338,10 @@ export const MedicationsModule: React.FC = () => {
                         <Beaker className="w-12 h-12 text-slate-400" />
                     </div>
                     <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
-                        {searchInput || selectedGroup || selectedFormType || showFavoritesOnly ? 'Ничего не найдено' : 'Справочник пуст'}
+                        {searchInput || selectedGroup || selectedFormType || showFavoritesOnly || withPediatricDosing ? 'Ничего не найдено' : 'Справочник пуст'}
                     </h3>
                     <p className="text-slate-500 max-w-sm">
-                        {searchInput || selectedGroup || selectedFormType || showFavoritesOnly
+                        {searchInput || selectedGroup || selectedFormType || showFavoritesOnly || withPediatricDosing
                             ? 'Попробуйте изменить запрос или добавьте новый препарат вручную'
                             : 'Начните с добавления первого препарата для автоматического расчета дозировок'
                         }
