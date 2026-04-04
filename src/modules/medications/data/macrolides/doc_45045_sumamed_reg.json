@@ -6,15 +6,32 @@
   "manufacturer": "PLIVA HRVATSKA",
   "clinicalPharmGroup": "Антибиотик группы макролидов - азалид",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; МАКРОЛИДЫ",
-  "packageDescription": "таб., покр. пленочной оболочкой, 125 мг: 6 шт.",
+  "packageDescription": "таб., покр. пленочной оболочкой, 125 мг: 6 шт. | таб., покр. пленочной оболочкой, 500 мг: 3 шт. | порошок д/пригот. сусп. д/приема внутрь 100 мг/5 мл: фл. 20.925 г 1 шт. в компл. с мерн. ложкой и/или шприцем д/дозирования",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_125mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб., покр. пленочной оболочкой, 125 мг: 6 шт.",
       "strengthMg": 125.0
+    },
+    {
+      "id": "tablet_500mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 500 мг: 3 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "suspension_100_5",
+      "type": "suspension",
+      "concentration": "100 мг/5 мл",
+      "unit": "ml",
+      "description": "порошок д/пригот. сусп. д/приема внутрь 100 мг/5 мл: фл. 20.925 г 1 шт. в компл. с мерн. ложкой и/или шприцем д/дозирования",
+      "mgPerMl": 20.0,
+      "volumeMl": 5.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +40,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "tablet_na",
+      "formId": "tablet_125mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

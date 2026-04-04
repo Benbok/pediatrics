@@ -6,14 +6,22 @@
   "manufacturer": "ДЖОДАС ЭКСПОИМ",
   "clinicalPharmGroup": "Антибиотик группы макролидов - азалид",
   "pharmTherapyGroup": "АНТИБИОТИК-АЗАЛИД",
-  "packageDescription": "лиоф. д/пригот. р-ра д/инфузий, 500 мг: 3 шт.",
+  "packageDescription": "лиоф. д/пригот. р-ра д/инфузий, 500 мг: 3 шт. | лиофилизат д/пригот. конц. д/пригот. р-ра д/инф., 500 мг: фл. 1, 5 или 10 шт.",
   "forms": [
     {
-      "id": "solution_na",
+      "id": "solution_500mg",
       "type": "solution",
       "concentration": null,
       "unit": "mg",
       "description": "лиоф. д/пригот. р-ра д/инфузий, 500 мг: 3 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "powder_500mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "лиофилизат д/пригот. конц. д/пригот. р-ра д/инф., 500 мг: фл. 1, 5 или 10 шт.",
       "strengthMg": 500.0
     }
   ],

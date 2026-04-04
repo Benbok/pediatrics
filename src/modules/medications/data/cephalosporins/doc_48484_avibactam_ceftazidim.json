@@ -9,7 +9,7 @@
   "packageDescription": "порошок д/пригот. концентрата д/пригот. р-ра д/инф. 2000 мг+500 мг: фл. 10 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_2000mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",

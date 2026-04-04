@@ -6,16 +6,25 @@
   "manufacturer": "SANOFI WINTHROP INDUSTRIE",
   "clinicalPharmGroup": "Антибиотик группы макролидов",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; МАКРОЛИДЫ, ЛИНКОЗАМИНЫ И СТРЕПТОГРАМИНЫ; МАКРОЛИДЫ",
-  "packageDescription": "таб., покр. пленочной оболочкой, 1.5 млн.МЕ: 16 шт.",
+  "packageDescription": "таб., покр. пленочной оболочкой, 1.5 млн.МЕ: 16 шт. | таб., покр. пленочной оболочкой, 3 млн.МЕ: 10 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_1mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб., покр. пленочной оболочкой, 1.5 млн.МЕ: 16 шт.",
       "volumeMl": 1.5,
       "strengthMg": 1.2
+    },
+    {
+      "id": "tablet_2mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 3 млн.МЕ: 10 шт.",
+      "volumeMl": 3.0,
+      "strengthMg": 2.4
     }
   ],
   "pediatricDosing": [],

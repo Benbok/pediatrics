@@ -6,15 +6,30 @@
   "manufacturer": "M.J. BIOPHARM",
   "clinicalPharmGroup": "Цефалоспорин III поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "порошок д/пригот. инъекц. р-ра 250 мг: фл. 1 шт.",
+  "packageDescription": "порошок д/пригот. инъекц. р-ра 250 мг: фл. 1 шт. | порошок д/пригот. инъекц. р-ра 500 мг: фл. 1 шт. | порошок д/пригот. инъекц. р-ра 1 г: фл. 1 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_250mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. инъекц. р-ра 250 мг: фл. 1 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "powder_500mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. инъекц. р-ра 500 мг: фл. 1 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. инъекц. р-ра 1 г: фл. 1 шт."
     }
   ],
   "pediatricDosing": [
@@ -23,7 +38,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +59,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

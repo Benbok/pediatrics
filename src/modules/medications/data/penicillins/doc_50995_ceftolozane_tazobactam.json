@@ -9,7 +9,7 @@
   "packageDescription": "порошок д/пригот. конц. д/пригот. р-ра д/инф. 1000 мг+500 мг: фл. 10 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_1000mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",

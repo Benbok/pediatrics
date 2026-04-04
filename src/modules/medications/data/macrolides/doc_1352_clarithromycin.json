@@ -6,15 +6,66 @@
   "manufacturer": "KRKA d.d., Novo mesto",
   "clinicalPharmGroup": "Антибиотик группы макролидов",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; МАКРОЛИДЫ, ЛИНКОЗАМИНЫ И СТРЕПТОГРАМИНЫ; МАКРОЛИДЫ",
-  "packageDescription": "таб., покр. пленочной оболочкой, 250 мг: 14 шт.",
+  "packageDescription": "таб., покр. пленочной оболочкой, 250 мг: 14 шт. | таб., покр. пленочной оболочкой, 500 мг: 10 или 14 шт. | лиофилизат д/пригот. р-ра д/инф. 500 мг: фл. 1 шт. | таб., покр. пленочной оболочкой, 250 мг: 4, 10, 28 или 40 шт. | таб., покр. пленочной оболочкой, 500 мг: 4, 10, 28 или 40 шт. | гранулы д/пригот. сусп. д/приема внутрь 125 мг/5 мл: фл. 1.75 г в компл. с растворителем и шприцем дозирующим | гранулы д/пригот. сусп. д/приема внутрь 250 мг/5 мл: фл. 2.5 г или 5 г в компл. с растворителем и шприцем дозирующим",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_250mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб., покр. пленочной оболочкой, 250 мг: 14 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "tablet_500mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 500 мг: 10 или 14 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "powder_500mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "лиофилизат д/пригот. р-ра д/инф. 500 мг: фл. 1 шт.",
+      "volumeMl": 1.0,
+      "strengthMg": 500.0
+    },
+    {
+      "id": "capsule_250mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 250 мг: 4, 10, 28 или 40 шт.",
+      "strengthMg": 250.0
+    },
+    {
+      "id": "capsule_500mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 500 мг: 4, 10, 28 или 40 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "suspension_125_5",
+      "type": "suspension",
+      "concentration": "125 мг/5 мл",
+      "unit": "ml",
+      "description": "гранулы д/пригот. сусп. д/приема внутрь 125 мг/5 мл: фл. 1.75 г в компл. с растворителем и шприцем дозирующим",
+      "mgPerMl": 25.0,
+      "volumeMl": 5.0
+    },
+    {
+      "id": "suspension_250_5",
+      "type": "suspension",
+      "concentration": "250 мг/5 мл",
+      "unit": "ml",
+      "description": "гранулы д/пригот. сусп. д/приема внутрь 250 мг/5 мл: фл. 2.5 г или 5 г в компл. с растворителем и шприцем дозирующим",
+      "mgPerMl": 50.0,
+      "volumeMl": 5.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +74,7 @@
       "maxAgeMonths": null,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "tablet_na",
+      "formId": "tablet_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

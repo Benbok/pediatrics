@@ -6,15 +6,32 @@
   "manufacturer": "БРЫНЦАЛОВ-А",
   "clinicalPharmGroup": "Антибиотик группы пенициллинов широкого спектра действия, резистентный к пенициллиназе",
   "pharmTherapyGroup": "АНТИБИОТИК КОМБИНИРОВАННЫЙ (ПЕНИЦИЛЛИНЫ ПОЛУСИНТЕТИЧЕСКИЕ)",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 133.4 мг+66.6 мг: фл. 5 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 133.4 мг+66.6 мг: фл. 5 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 333.5 мг+166.5 мг: фл. 5 шт. | порошок д/пригот. р-ра д/инъекц. 375 мг+125 мг: фл. 1, 5, 10, 50 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_133mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 133.4 мг+66.6 мг: фл. 5 шт.",
       "strengthMg": 133.4
+    },
+    {
+      "id": "powder_333mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 333.5 мг+166.5 мг: фл. 5 шт.",
+      "strengthMg": 333.5
+    },
+    {
+      "id": "powder_375mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/инъекц. 375 мг+125 мг: фл. 1, 5, 10, 50 шт.",
+      "volumeMl": 5.0,
+      "strengthMg": 375.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +40,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_133mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +61,7 @@
       "maxAgeMonths": 72,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_133mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -65,7 +82,7 @@
       "maxAgeMonths": 168,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_133mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

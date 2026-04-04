@@ -6,15 +6,39 @@
   "manufacturer": "БИОХИМИК",
   "clinicalPharmGroup": "Антибиотик группы пенициллинов широкого спектра действия с ингибитором бета-лактамаз",
   "pharmTherapyGroup": "АНТИБИОТИК, ПЕНИЦИЛЛИН ПОЛУСИНТЕТИЧЕСКИЙ + БЕТА-ЛАКТАМАЗ ИНГИБИТОР",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в введения 500 мг+100 мг: фл.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в введения 500 мг+100 мг: фл. | порошок д/пригот. р-ра д/в/в введения 1 г+200 мг: фл. | порошок д/пригот. р-ра д/в/в введения 1000 мг+200 мг: фл. 1 или 50 шт. | порошок для приготовления раствора для внутривенного введения 250 мг+50 мг",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_500mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в введения 500 мг+100 мг: фл.",
       "strengthMg": 500.0
+    },
+    {
+      "id": "powder_200mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в введения 1 г+200 мг: фл.",
+      "strengthMg": 200.0
+    },
+    {
+      "id": "powder_1000mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в введения 1000 мг+200 мг: фл. 1 или 50 шт.",
+      "strengthMg": 1000.0
+    },
+    {
+      "id": "powder_250mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок для приготовления раствора для внутривенного введения 250 мг+50 мг",
+      "strengthMg": 250.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +47,7 @@
       "maxAgeMonths": null,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +68,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

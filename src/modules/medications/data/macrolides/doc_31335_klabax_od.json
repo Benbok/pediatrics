@@ -9,7 +9,7 @@
   "packageDescription": "таб. с пролонгир. высвобождением, покр. пленочной оболочкой, 500 мг: 5, 7, 10 или 14 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_500mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",

@@ -9,7 +9,7 @@
   "packageDescription": "таб., покр. пленочной оболочкой, 150 мг: 10 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_150mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",

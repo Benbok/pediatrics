@@ -6,7 +6,7 @@
   "manufacturer": "ВЕРОФАРМ",
   "clinicalPharmGroup": "Антибиотик группы аминогликозидов",
   "pharmTherapyGroup": "АНТИБИОТИК-АМИНОГЛИКОЗИД",
-  "packageDescription": "р-р д/в/в и в/м введения 50 мг/2 мл: амп. 1 или 10 шт.",
+  "packageDescription": "р-р д/в/в и в/м введения 50 мг/2 мл: амп. 1 или 10 шт. | р-р д/в/в и в/м введения 200 мг/2 мл: амп. 1 или 10 шт.",
   "forms": [
     {
       "id": "solution_50_2",
@@ -15,6 +15,15 @@
       "unit": "ml",
       "description": "р-р д/в/в и в/м введения 50 мг/2 мл: амп. 1 или 10 шт.",
       "mgPerMl": 25.0,
+      "volumeMl": 2.0
+    },
+    {
+      "id": "solution_200_2",
+      "type": "solution",
+      "concentration": "200 мг/2 мл",
+      "unit": "ml",
+      "description": "р-р д/в/в и в/м введения 200 мг/2 мл: амп. 1 или 10 шт.",
+      "mgPerMl": 100.0,
       "volumeMl": 2.0
     }
   ],

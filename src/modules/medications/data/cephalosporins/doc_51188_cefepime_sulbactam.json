@@ -6,16 +6,23 @@
   "manufacturer": "АЛФАРМА",
   "clinicalPharmGroup": "Цефалоспорин IV поколения",
   "pharmTherapyGroup": "АНТИБИОТИК, ЦЕФАЛОСПОРИН + БЕТА-ЛАКТАМАЗ ИНГИБИТОР",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг+1000 мг: фл. 1 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг+1000 мг: фл. 1 шт. | порошок для приготовления раствора для внутривенного и внутримышечного введения 0.5 г+0.5 г",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_1000mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг+1000 мг: фл. 1 шт.",
       "volumeMl": 20.0,
       "strengthMg": 1000.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок для приготовления раствора для внутривенного и внутримышечного введения 0.5 г+0.5 г"
     }
   ],
   "pediatricDosing": [],

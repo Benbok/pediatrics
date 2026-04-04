@@ -9,7 +9,7 @@
   "packageDescription": "таб., покр. пленочной оболочкой, 3000000 МЕ: 10 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_630mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",

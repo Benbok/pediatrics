@@ -6,15 +6,23 @@
   "manufacturer": "HEMOFARM",
   "clinicalPharmGroup": "Цефалоспорин I поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "капс. 250 мг: 16 шт.",
+  "packageDescription": "капс. 250 мг: 16 шт. | капс. 500 мг: 16 шт.",
   "forms": [
     {
-      "id": "capsule_na",
+      "id": "capsule_250mg",
       "type": "capsule",
       "concentration": null,
       "unit": "mg",
       "description": "капс. 250 мг: 16 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "capsule_500mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "капс. 500 мг: 16 шт.",
+      "strengthMg": 500.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +31,7 @@
       "maxAgeMonths": 120,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "capsule_na",
+      "formId": "capsule_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

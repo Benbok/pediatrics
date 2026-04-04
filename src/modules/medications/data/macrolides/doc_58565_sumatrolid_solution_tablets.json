@@ -6,15 +6,23 @@
   "manufacturer": "ОЗОН",
   "clinicalPharmGroup": "Антибиотик группы макролидов - азалид",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; МАКРОЛИДЫ, ЛИНКОЗАМИНЫ И СТРЕПТОГРАМИНЫ; МАКРОЛИДЫ",
-  "packageDescription": "таб. диспергируемые 250 мг: 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 36, 42, 48, 54, 60 или 100 шт.",
+  "packageDescription": "таб. диспергируемые 250 мг: 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 36, 42, 48, 54, 60 или 100 шт. | таб. диспергируемые 500 мг: 3, 6, 9, 10, 12, 15, 18, 20, 21, 24, 27, 30, 36, 40, 42, 48, 50, 54, 60, 70, 80, 90 или 100 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_250mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб. диспергируемые 250 мг: 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 36, 42, 48, 54, 60 или 100 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "tablet_500mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. диспергируемые 500 мг: 3, 6, 9, 10, 12, 15, 18, 20, 21, 24, 27, 30, 36, 40, 42, 48, 50, 54, 60, 70, 80, 90 или 100 шт.",
+      "strengthMg": 500.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +31,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "tablet_na",
+      "formId": "tablet_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

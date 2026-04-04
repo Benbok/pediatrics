@@ -6,7 +6,7 @@
   "manufacturer": "CHIESI FARMACEUTICI",
   "clinicalPharmGroup": "Антибиотик группы аминогликозидов",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; АМИНОГЛИКОЗИДЫ; ДРУГИЕ АМИНОГЛИКОЗИДЫ",
-  "packageDescription": "р-р д/ингаляций 300 мг/4 мл: амп. 56 шт.",
+  "packageDescription": "р-р д/ингаляций 300 мг/4 мл: амп. 56 шт. | р-р д/ингаляций 60 мг/1 мл: амп. 5 мл 4, 16, 28 или 56 шт. | р-р д/ингаляций 75 мг/1 мл: амп. 4 мл 4, 16, 28 или 56 шт. | р-р д/ингаляций 300 мг/5 мл: амп. 56 шт.",
   "forms": [
     {
       "id": "solution_300_4",
@@ -16,6 +16,33 @@
       "description": "р-р д/ингаляций 300 мг/4 мл: амп. 56 шт.",
       "mgPerMl": 75.0,
       "volumeMl": 4.0
+    },
+    {
+      "id": "solution_60_1",
+      "type": "solution",
+      "concentration": "60 мг/1 мл",
+      "unit": "ml",
+      "description": "р-р д/ингаляций 60 мг/1 мл: амп. 5 мл 4, 16, 28 или 56 шт.",
+      "mgPerMl": 60.0,
+      "volumeMl": 1.0
+    },
+    {
+      "id": "solution_75_1",
+      "type": "solution",
+      "concentration": "75 мг/1 мл",
+      "unit": "ml",
+      "description": "р-р д/ингаляций 75 мг/1 мл: амп. 4 мл 4, 16, 28 или 56 шт.",
+      "mgPerMl": 75.0,
+      "volumeMl": 1.0
+    },
+    {
+      "id": "solution_300_5",
+      "type": "solution",
+      "concentration": "300 мг/5 мл",
+      "unit": "ml",
+      "description": "р-р д/ингаляций 300 мг/5 мл: амп. 56 шт.",
+      "mgPerMl": 60.0,
+      "volumeMl": 5.0
     }
   ],
   "pediatricDosing": [],

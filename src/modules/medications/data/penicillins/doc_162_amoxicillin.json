@@ -6,15 +6,86 @@
   "manufacturer": "HEMOFARM",
   "clinicalPharmGroup": "Антибиотик группы пенициллинов широкого спектра действия, разрушающийся пенициллиназой",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; БЕТА-ЛАКТАМНЫЕ АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА, ПЕНИЦИЛЛИНЫ; ПЕНИЦИЛЛИНЫ ШИРОКОГО СПЕКТРА ДЕЙСТВИЯ",
-  "packageDescription": "капс. 250 мг: 16 шт.",
+  "packageDescription": "капс. 250 мг: 16 шт. | капс. 500 мг: 16 шт. | таб. 250 мг: 10, 20 или 24 шт. | таб. 500 мг: 10, 20 или 24 шт. | таб. диспергируемые 125 мг: 10, 14, 20 или 28 шт. | таб. диспергируемые 1000 мг: 20 шт. | таб., покр. пленочной оболочкой, 1 г: 12 или 1000 шт. | таб. диспергируемые 125 мг: 10, 14, 20 или 28 шт. | таб. диспергируемые 1000 мг: 20 шт. | таб. диспергируемые 750 мг: 10, 14, 20, 28 или 40 шт.",
   "forms": [
     {
-      "id": "capsule_na",
+      "id": "capsule_250mg",
       "type": "capsule",
       "concentration": null,
       "unit": "mg",
       "description": "капс. 250 мг: 16 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "capsule_500mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "капс. 500 мг: 16 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "tablet_250mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. 250 мг: 10, 20 или 24 шт.",
+      "strengthMg": 250.0
+    },
+    {
+      "id": "tablet_500mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. 500 мг: 10, 20 или 24 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "tablet_125mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. диспергируемые 125 мг: 10, 14, 20 или 28 шт.",
+      "strengthMg": 125.0
+    },
+    {
+      "id": "tablet_1000mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. диспергируемые 1000 мг: 20 шт.",
+      "strengthMg": 1000.0
+    },
+    {
+      "id": "tablet_na",
+      "type": "tablet",
+      "concentration": null,
+      "unit": null,
+      "description": "таб., покр. пленочной оболочкой, 1 г: 12 или 1000 шт."
+    },
+    {
+      "id": "capsule_125mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. диспергируемые 125 мг: 10, 14, 20 или 28 шт.",
+      "strengthMg": 125.0
+    },
+    {
+      "id": "capsule_1000mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. диспергируемые 1000 мг: 20 шт.",
+      "strengthMg": 1000.0
+    },
+    {
+      "id": "tablet_750mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. диспергируемые 750 мг: 10, 14, 20, 28 или 40 шт.",
+      "strengthMg": 750.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +94,7 @@
       "maxAgeMonths": 60,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "capsule_na",
+      "formId": "capsule_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

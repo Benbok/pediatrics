@@ -6,15 +6,31 @@
   "manufacturer": "M.J. BIOPHARM",
   "clinicalPharmGroup": "Антибиотик группы макролидов",
   "pharmTherapyGroup": "АНТИБИОТИК-МАКРОЛИД",
-  "packageDescription": "таб., покр. пленочной оболочкой, 50 мг: 10, 20 или 30 шт.",
+  "packageDescription": "таб., покр. пленочной оболочкой, 50 мг: 10, 20 или 30 шт. | таб., покр. пленочной оболочкой, 100 мг: 10, 20 или 30 шт. | таб., покр. пленочной оболочкой, 150 мг: 10, 20 или 30 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_50mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб., покр. пленочной оболочкой, 50 мг: 10, 20 или 30 шт.",
       "strengthMg": 50.0
+    },
+    {
+      "id": "tablet_100mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 100 мг: 10, 20 или 30 шт.",
+      "strengthMg": 100.0
+    },
+    {
+      "id": "tablet_150mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 150 мг: 10, 20 или 30 шт.",
+      "strengthMg": 150.0
     }
   ],
   "pediatricDosing": [],

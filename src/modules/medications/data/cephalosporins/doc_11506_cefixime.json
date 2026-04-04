@@ -6,15 +6,49 @@
   "manufacturer": "CHEPLAPHARM ARZNEIMITTEL",
   "clinicalPharmGroup": "Цефалоспорин III поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "капс. 400 мг: 6 шт.",
+  "packageDescription": "капс. 400 мг: 6 шт. | гранулы д/пригот. сусп. д/приема внутрь 100 мг/5 мл: фл. 30.3-35.0 г в компл. с дозир. шприцем | таб. диспергируемые 400 мг: 1, 5, 7 или 10 шт. | таб., покр. пленочной оболочкой, 100 мг: 6, 12 или 24 шт. | порошок д/пригот. сусп. д/приема внутрь 20 мг/1 мл: фл. 26.5 г или 53 г в компл. с мерн. шприцем",
   "forms": [
     {
-      "id": "capsule_na",
+      "id": "capsule_400mg",
       "type": "capsule",
       "concentration": null,
       "unit": "mg",
       "description": "капс. 400 мг: 6 шт.",
       "strengthMg": 400.0
+    },
+    {
+      "id": "suspension_100_5",
+      "type": "suspension",
+      "concentration": "100 мг/5 мл",
+      "unit": "ml",
+      "description": "гранулы д/пригот. сусп. д/приема внутрь 100 мг/5 мл: фл. 30.3-35.0 г в компл. с дозир. шприцем",
+      "mgPerMl": 20.0,
+      "volumeMl": 5.0
+    },
+    {
+      "id": "tablet_400mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. диспергируемые 400 мг: 1, 5, 7 или 10 шт.",
+      "strengthMg": 400.0
+    },
+    {
+      "id": "tablet_100mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 100 мг: 6, 12 или 24 шт.",
+      "strengthMg": 100.0
+    },
+    {
+      "id": "suspension_20_1",
+      "type": "suspension",
+      "concentration": "20 мг/1 мл",
+      "unit": "ml",
+      "description": "порошок д/пригот. сусп. д/приема внутрь 20 мг/1 мл: фл. 26.5 г или 53 г в компл. с мерн. шприцем",
+      "mgPerMl": 20.0,
+      "volumeMl": 1.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +57,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "capsule_na",
+      "formId": "capsule_400mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

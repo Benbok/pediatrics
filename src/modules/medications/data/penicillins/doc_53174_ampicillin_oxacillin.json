@@ -9,7 +9,7 @@
   "packageDescription": "капс. 125 мг+125 мг: 10 или 20 шт.",
   "forms": [
     {
-      "id": "capsule_na",
+      "id": "capsule_125mg",
       "type": "capsule",
       "concentration": null,
       "unit": "mg",
@@ -23,7 +23,7 @@
       "maxAgeMonths": 84,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "capsule_na",
+      "formId": "capsule_125mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

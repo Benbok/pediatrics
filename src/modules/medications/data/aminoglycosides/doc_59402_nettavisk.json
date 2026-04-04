@@ -9,7 +9,7 @@
   "packageDescription": "мазь глазная 0.3%: туба 5 г",
   "forms": [
     {
-      "id": "ointment_na",
+      "id": "ointment_3mg",
       "type": "ointment",
       "concentration": null,
       "unit": "mg",

@@ -6,16 +6,42 @@
   "manufacturer": "СИНТЕЗ",
   "clinicalPharmGroup": "Антибактериальный препарат для местного применения в ЛОР-практике",
   "pharmTherapyGroup": "ПРЕПАРАТЫ ДЛЯ ЛЕЧЕНИЯ ЗАБОЛЕВАНИЙ НОСА; ДЕКОНГЕСТАНТЫ И ДРУГИЕ ПРЕПАРАТЫ ДЛЯ МЕСТНОГО ПРИМЕНЕНИЯ; ДРУГИЕ ПРЕПАРАТЫ ДЛЯ ЛЕЧЕНИЯ ЗАБОЛЕВАНИЙ НОСА",
-  "packageDescription": "спрей назальный 1.25%: фл. 10 мл, 15 мл или 20 мл с насадкой-распылителем",
+  "packageDescription": "спрей назальный 1.25%: фл. 10 мл, 15 мл или 20 мл с насадкой-распылителем | спрей назальный 1.25% | спрей назальный 12.5 мг/1 мл: фл. 15 мл | спрей назальный 12.5 мг/мл: фл. 1 шт.",
   "forms": [
     {
-      "id": "spray_na",
+      "id": "spray_12mg",
       "type": "spray",
       "concentration": null,
       "unit": "mg",
       "description": "спрей назальный 1.25%: фл. 10 мл, 15 мл или 20 мл с насадкой-распылителем",
       "volumeMl": 10.0,
       "strengthMg": 12.5
+    },
+    {
+      "id": "spray_na",
+      "type": "spray",
+      "concentration": null,
+      "unit": null,
+      "description": "спрей назальный 1.25%",
+      "volumeMl": 10.0
+    },
+    {
+      "id": "spray_12_5_1",
+      "type": "spray",
+      "concentration": "12.5 мг/1 мл",
+      "unit": "ml",
+      "description": "спрей назальный 12.5 мг/1 мл: фл. 15 мл",
+      "mgPerMl": 12.5,
+      "volumeMl": 1.0
+    },
+    {
+      "id": "spray_12_5",
+      "type": "spray",
+      "concentration": "12.5 мг/мл",
+      "unit": "ml",
+      "description": "спрей назальный 12.5 мг/мл: фл. 1 шт.",
+      "mgPerMl": 12.5,
+      "volumeMl": 1.0
     }
   ],
   "pediatricDosing": [],

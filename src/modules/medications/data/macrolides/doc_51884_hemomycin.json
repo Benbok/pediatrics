@@ -6,7 +6,7 @@
   "manufacturer": "HEMOFARM",
   "clinicalPharmGroup": "Антибиотик группы макролидов - азалид",
   "pharmTherapyGroup": "АНТИБИОТИК-АЗАЛИД",
-  "packageDescription": "порошок д/пригот. сусп. д/приема внутрь 200 мг/5 мл: фл. 1 шт. в компл. с мерн. ложкой",
+  "packageDescription": "порошок д/пригот. сусп. д/приема внутрь 200 мг/5 мл: фл. 1 шт. в компл. с мерн. ложкой | таб., покр. пленочной оболочкой, 500 мг: 3 шт. | порошок д/пригот. сусп. д/приема внутрь 100 мг/5 мл: фл. 1 шт. в компл. с мерн. ложкой | лиофилизат д/пригот. концентрата д/пригот. р-ра д/инф. 500 мг: фл. 1 шт. | капс. 250 мг: 6 шт.",
   "forms": [
     {
       "id": "suspension_200_5",
@@ -16,6 +16,40 @@
       "description": "порошок д/пригот. сусп. д/приема внутрь 200 мг/5 мл: фл. 1 шт. в компл. с мерн. ложкой",
       "mgPerMl": 40.0,
       "volumeMl": 5.0
+    },
+    {
+      "id": "tablet_500mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 500 мг: 3 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "suspension_100_5",
+      "type": "suspension",
+      "concentration": "100 мг/5 мл",
+      "unit": "ml",
+      "description": "порошок д/пригот. сусп. д/приема внутрь 100 мг/5 мл: фл. 1 шт. в компл. с мерн. ложкой",
+      "mgPerMl": 20.0,
+      "volumeMl": 5.0
+    },
+    {
+      "id": "powder_500mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "лиофилизат д/пригот. концентрата д/пригот. р-ра д/инф. 500 мг: фл. 1 шт.",
+      "volumeMl": 13.5,
+      "strengthMg": 500.0
+    },
+    {
+      "id": "capsule_250mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "капс. 250 мг: 6 шт.",
+      "strengthMg": 250.0
     }
   ],
   "pediatricDosing": [

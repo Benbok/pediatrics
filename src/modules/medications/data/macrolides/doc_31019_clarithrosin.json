@@ -6,15 +6,23 @@
   "manufacturer": "БИОКОМ ИНВЕСТ",
   "clinicalPharmGroup": "Антибиотик группы макролидов",
   "pharmTherapyGroup": "АНТИБИОТИК-МАКРОЛИД",
-  "packageDescription": "таб., покр. пленочной оболочкой, 250 мг: 5, 7, 10, 14 или 20 шт.",
+  "packageDescription": "таб., покр. пленочной оболочкой, 250 мг: 5, 7, 10, 14 или 20 шт. | таб., покр. пленочной оболочкой, 500 мг: 5, 7, 10, 14 или 20 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_250mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб., покр. пленочной оболочкой, 250 мг: 5, 7, 10, 14 или 20 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "tablet_500mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 500 мг: 5, 7, 10, 14 или 20 шт.",
+      "strengthMg": 500.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +31,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "tablet_na",
+      "formId": "tablet_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +52,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "tablet_na",
+      "formId": "tablet_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

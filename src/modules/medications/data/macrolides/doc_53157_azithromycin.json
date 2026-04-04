@@ -6,15 +6,73 @@
   "manufacturer": "СИНТЕЗ",
   "clinicalPharmGroup": "Антибиотик группы макролидов - азалид",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; МАКРОЛИДЫ",
-  "packageDescription": "капс. 250 мг: 6, 10, 12 или 20 шт.",
+  "packageDescription": "капс. 250 мг: 6, 10, 12 или 20 шт. | таб., покр. пленочной оболочкой, 125 мг: 6 шт. | таб., покр. пленочной оболочкой, 250 мг: 6 шт. | таб., покр. пленочной оболочкой, 500 мг: 3 шт. | капс. 500 мг: 3 или 6 шт. | порошок д/пригот. суспензии д/приема внутрь (для детей) 200 мг/5 мл: фл. 15 мл или 30 мл в компл. с растворителем, мерной ложкой на 5 мл и шприцем для дозирования | порошок д/пригот. сусп. д/приема внутрь 100 мг/5 мл: фл. в компл. со шприцем для дозирования и/или с мерной ложкой | таб., покр. пленочной оболочкой, 1000 мг: 3 шт.",
   "forms": [
     {
-      "id": "capsule_na",
+      "id": "capsule_250mg",
       "type": "capsule",
       "concentration": null,
       "unit": "mg",
       "description": "капс. 250 мг: 6, 10, 12 или 20 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "tablet_125mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 125 мг: 6 шт.",
+      "strengthMg": 125.0
+    },
+    {
+      "id": "tablet_250mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 250 мг: 6 шт.",
+      "strengthMg": 250.0
+    },
+    {
+      "id": "tablet_500mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 500 мг: 3 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "capsule_500mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "капс. 500 мг: 3 или 6 шт.",
+      "strengthMg": 500.0
+    },
+    {
+      "id": "suspension_200_5",
+      "type": "suspension",
+      "concentration": "200 мг/5 мл",
+      "unit": "ml",
+      "description": "порошок д/пригот. суспензии д/приема внутрь (для детей) 200 мг/5 мл: фл. 15 мл или 30 мл в компл. с растворителем, мерной ложкой на 5 мл и шприцем для дозирования",
+      "mgPerMl": 40.0,
+      "volumeMl": 5.0
+    },
+    {
+      "id": "suspension_100_5",
+      "type": "suspension",
+      "concentration": "100 мг/5 мл",
+      "unit": "ml",
+      "description": "порошок д/пригот. сусп. д/приема внутрь 100 мг/5 мл: фл. в компл. со шприцем для дозирования и/или с мерной ложкой",
+      "mgPerMl": 20.0,
+      "volumeMl": 5.0
+    },
+    {
+      "id": "tablet_1000mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 1000 мг: 3 шт.",
+      "strengthMg": 1000.0
     }
   ],
   "pediatricDosing": [],

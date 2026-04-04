@@ -6,15 +6,31 @@
   "manufacturer": "СИНТЕЗ",
   "clinicalPharmGroup": "Антибиотик группы пенициллинов, резистентный к пенициллиназе",
   "pharmTherapyGroup": "АНТИБИОТИК, ПЕНИЦИЛЛИН ПОЛУСИНТЕТИЧЕСКИЙ",
-  "packageDescription": "порошок д/пригот. р-ра д/в/м введения 250 мг: фл. 1, 5 или 10 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/м введения 250 мг: фл. 1, 5 или 10 шт. | порошок д/пригот. р-ра д/в/м введения 500 мг: фл. 1, 5 или 10 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл. 1, 5, 10 или 50 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_250mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/м введения 250 мг: фл. 1, 5 или 10 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "powder_500mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/м введения 500 мг: фл. 1, 5 или 10 шт.",
+      "volumeMl": 10.0,
+      "strengthMg": 500.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл. 1, 5, 10 или 50 шт."
     }
   ],
   "pediatricDosing": [
@@ -23,7 +39,7 @@
       "maxAgeMonths": 24,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +60,7 @@
       "maxAgeMonths": 24,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

@@ -6,16 +6,25 @@
   "manufacturer": "СИНТЕЗ",
   "clinicalPharmGroup": "Антибиотик группы пенициллинов широкого спектра действия, резистентный к пенициллиназе",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; БЕТА-ЛАКТАМНЫЕ АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА, ПЕНИЦИЛЛИНЫ; КОМБИНАЦИИ ПЕНИЦИЛЛИНОВ, ВКЛЮЧАЯ КОМБИНАЦИИ С ИНГИБИТОРАМИ БЕТА-ЛАКТАМАЗ",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 333.5 мг+166.5 мг: фл. 1 или 10 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 333.5 мг+166.5 мг: фл. 1 или 10 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 667+333 мг: фл. 1 или 10 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_333mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 333.5 мг+166.5 мг: фл. 1 или 10 шт.",
       "volumeMl": 10.0,
       "strengthMg": 333.5
+    },
+    {
+      "id": "powder_333mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 667+333 мг: фл. 1 или 10 шт.",
+      "volumeMl": 10.0,
+      "strengthMg": 333.0
     }
   ],
   "pediatricDosing": [
@@ -24,7 +33,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_333mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -45,7 +54,7 @@
       "maxAgeMonths": 84,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_333mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -66,7 +75,7 @@
       "maxAgeMonths": 168,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_333mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

@@ -6,15 +6,67 @@
   "manufacturer": "НПЦ ЭЛЬФА",
   "clinicalPharmGroup": "Цефалоспорин II поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 750 мг: фл. 1 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 750 мг: фл. 1 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 1.5 г: фл. 1, 10, 14, 25 или 50 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 250 мг: фл. в комплекте с растворителем | порошок д/пригот. р-ра д/в/в и в/м введения 1500 мг: фл. 1 шт. | пор. д/пригот. р-ра д/в/в введения и суспензии д/в/м введения 250 мг: фл. | пор. д/пригот. р-ра д/в/в введения и суспензии д/в/м введения 750 мг: фл. | пор. д/пригот. р-ра д/в/в введения и суспензии д/в/м введения 1500 мг: фл.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_750mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 750 мг: фл. 1 шт.",
       "strengthMg": 750.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1.5 г: фл. 1, 10, 14, 25 или 50 шт."
+    },
+    {
+      "id": "powder_250mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 250 мг: фл. в комплекте с растворителем",
+      "volumeMl": 2.0,
+      "strengthMg": 250.0
+    },
+    {
+      "id": "powder_1500mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1500 мг: фл. 1 шт.",
+      "volumeMl": 20.0,
+      "strengthMg": 1500.0
+    },
+    {
+      "id": "suspension_250mg",
+      "type": "suspension",
+      "concentration": null,
+      "unit": "mg",
+      "description": "пор. д/пригот. р-ра д/в/в введения и суспензии д/в/м введения 250 мг: фл.",
+      "volumeMl": 10.0,
+      "strengthMg": 250.0
+    },
+    {
+      "id": "suspension_750mg",
+      "type": "suspension",
+      "concentration": null,
+      "unit": "mg",
+      "description": "пор. д/пригот. р-ра д/в/в введения и суспензии д/в/м введения 750 мг: фл.",
+      "volumeMl": 10.0,
+      "strengthMg": 750.0
+    },
+    {
+      "id": "suspension_1500mg",
+      "type": "suspension",
+      "concentration": null,
+      "unit": "mg",
+      "description": "пор. д/пригот. р-ра д/в/в введения и суспензии д/в/м введения 1500 мг: фл.",
+      "volumeMl": 10.0,
+      "strengthMg": 1500.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +75,7 @@
       "maxAgeMonths": 3,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_750mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

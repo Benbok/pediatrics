@@ -9,7 +9,7 @@
   "packageDescription": "порошок д/пригот. р-ра д/в/в введения 4 г+0.5 г: фл. 1 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_4000mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
@@ -24,7 +24,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_4000mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

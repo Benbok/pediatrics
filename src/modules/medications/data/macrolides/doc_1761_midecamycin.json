@@ -9,7 +9,7 @@
   "packageDescription": "таб., покр. пленочной оболочкой, 400 мг: 16 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_400mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",

@@ -6,15 +6,22 @@
   "manufacturer": "КОМПАНИЯ ДЕКО",
   "clinicalPharmGroup": "Цефалоспорин II поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 500 мг: фл.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 500 мг: фл. | порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_500mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 500 мг: фл.",
       "strengthMg": 500.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл."
     }
   ],
   "pediatricDosing": [
@@ -23,7 +30,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

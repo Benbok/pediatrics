@@ -9,7 +9,7 @@
   "packageDescription": "порошок д/пригот. концентрата д/пригот. р-ра д/инфузий 600 мг: фл. 1 или 10 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_600mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",

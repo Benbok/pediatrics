@@ -6,15 +6,23 @@
   "manufacturer": "ABBOTT LABORATORIES",
   "clinicalPharmGroup": "Антибиотик группы макролидов",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; МАКРОЛИДЫ, ЛИНКОЗАМИНЫ И СТРЕПТОГРАМИНЫ; МАКРОЛИДЫ",
-  "packageDescription": "таб., покр. пленочной оболочкой, 250 мг: 10, 14 или 20 шт.",
+  "packageDescription": "таб., покр. пленочной оболочкой, 250 мг: 10, 14 или 20 шт. | таб., покр. пленочной оболочкой, 500 мг: 7, 10, 14, 20, 21, 28, 30 или 42 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_250mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб., покр. пленочной оболочкой, 250 мг: 10, 14 или 20 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "tablet_500mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 500 мг: 7, 10, 14, 20, 21, 28, 30 или 42 шт.",
+      "strengthMg": 500.0
     }
   ],
   "pediatricDosing": [],

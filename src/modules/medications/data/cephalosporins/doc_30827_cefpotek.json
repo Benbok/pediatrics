@@ -9,7 +9,7 @@
   "packageDescription": "таб., покр. пленочной оболочкой, 200 мг: 10, 14 или 20 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_200mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",

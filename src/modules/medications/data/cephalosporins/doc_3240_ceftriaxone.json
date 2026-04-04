@@ -6,15 +6,56 @@
   "manufacturer": "SUN PHARMACEUTICAL INDUSTRIES",
   "clinicalPharmGroup": "Цефалоспорин III поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 250 мг: фл. 1 шт. в компл. с растворителем",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 250 мг: фл. 1 шт. в компл. с растворителем | порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл. 1 шт. в компл. с растворителем | порошок д/пригот. р-ра д/в/в и в/м введения 500 мг: фл. 1, 5, 10 или 50 шт., фл. 1 шт. в компл. с растворителем | порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг: фл. 1 или 10 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 0.5 мг: фл. 1 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл. 1 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_250mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 250 мг: фл. 1 шт. в компл. с растворителем",
       "strengthMg": 250.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл. 1 шт. в компл. с растворителем"
+    },
+    {
+      "id": "powder_500mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 500 мг: фл. 1, 5, 10 или 50 шт., фл. 1 шт. в компл. с растворителем",
+      "volumeMl": 10.0,
+      "strengthMg": 500.0
+    },
+    {
+      "id": "powder_1000mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг: фл. 1 или 10 шт.",
+      "volumeMl": 15.0,
+      "strengthMg": 1000.0
+    },
+    {
+      "id": "powder_0mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 0.5 мг: фл. 1 шт.",
+      "strengthMg": 0.5
+    },
+    {
+      "id": "powder_1193mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл. 1 шт.",
+      "strengthMg": 1193.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +64,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +85,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

@@ -9,7 +9,7 @@
   "packageDescription": "таб., покр. пленочной оболочкой, 875 мг+125 мг: 14 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_875mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",

@@ -6,16 +6,50 @@
   "manufacturer": "КРАСФАРМА",
   "clinicalPharmGroup": "Антибиотик группы аминогликозидов",
   "pharmTherapyGroup": "АНТИБИОТИК-АМИНОГЛИКОЗИД",
-  "packageDescription": "порошок д/пригот. р-ра д/в/м введения 500 мг: фл. 1, 10 или 50 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/м введения 500 мг: фл. 1, 10 или 50 шт. | р-р д/в/в и в/м введения 250 мг/мл: амп. 10, 20 и 100 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 250 мг: фл. 1, 10 или 50 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг: фл. 1, 5 или 10 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 0.5 г: фл. 1, 5, 10, 15, 25, 50 или 100 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_500mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/м введения 500 мг: фл. 1, 10 или 50 шт.",
       "volumeMl": 10.0,
       "strengthMg": 500.0
+    },
+    {
+      "id": "solution_250",
+      "type": "solution",
+      "concentration": "250 мг/мл",
+      "unit": "ml",
+      "description": "р-р д/в/в и в/м введения 250 мг/мл: амп. 10, 20 и 100 шт.",
+      "mgPerMl": 250.0,
+      "volumeMl": 1.0
+    },
+    {
+      "id": "powder_250mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 250 мг: фл. 1, 10 или 50 шт.",
+      "volumeMl": 10.0,
+      "strengthMg": 250.0
+    },
+    {
+      "id": "powder_1000mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг: фл. 1, 5 или 10 шт.",
+      "strengthMg": 1000.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 0.5 г: фл. 1, 5, 10, 15, 25, 50 или 100 шт.",
+      "volumeMl": 10.0
     }
   ],
   "pediatricDosing": [],

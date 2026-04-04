@@ -6,14 +6,22 @@
   "manufacturer": "ПРОМОМЕД РУС",
   "clinicalPharmGroup": "Цефалоспорин I поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "таб., покр. оболочкой, 250 мг: 10 или 20 шт.",
+  "packageDescription": "таб., покр. оболочкой, 250 мг: 10 или 20 шт. | капс. 250 мг: 30 или 1500 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_250mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб., покр. оболочкой, 250 мг: 10 или 20 шт.",
+      "strengthMg": 250.0
+    },
+    {
+      "id": "capsule_250mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "капс. 250 мг: 30 или 1500 шт.",
       "strengthMg": 250.0
     }
   ],

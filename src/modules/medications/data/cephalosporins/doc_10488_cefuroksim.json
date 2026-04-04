@@ -6,15 +6,23 @@
   "manufacturer": "ПРОТЕК-СВМ",
   "clinicalPharmGroup": "Цефалоспорин II поколения",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; ДРУГИЕ БЕТА-ЛАКТАМНЫЕ АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА; ЦЕФАЛОСПОРИНЫ ВТОРОГО ПОКОЛЕНИЯ",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 750 мг: фл. 1 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 750 мг: фл. 1 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 1500 мг: фл. 1 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_750mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 750 мг: фл. 1 шт.",
       "strengthMg": 750.0
+    },
+    {
+      "id": "powder_1500mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1500 мг: фл. 1 шт.",
+      "strengthMg": 1500.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +31,7 @@
       "maxAgeMonths": 3,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_750mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +52,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_750mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

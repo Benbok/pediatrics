@@ -6,15 +6,22 @@
   "manufacturer": "АБОЛмед",
   "clinicalPharmGroup": "Антибиотик группы пенициллинов широкого спектра действия с ингибитором бета-лактамаз",
   "pharmTherapyGroup": "АНТИБИОТИК, ПЕНИЦИЛЛИН ПОЛУСИНТЕТИЧЕСКИЙ + БЕТА-ЛАКТАМАЗ ИНГИБИТОР",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 1 г+500 мг: фл. 1 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 1 г+500 мг: фл. 1 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 2 г+1г: фл. 1 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_500mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1 г+500 мг: фл. 1 шт.",
       "strengthMg": 500.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 2 г+1г: фл. 1 шт."
     }
   ],
   "pediatricDosing": [
@@ -23,7 +30,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +51,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

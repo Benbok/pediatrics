@@ -6,15 +6,23 @@
   "manufacturer": "ПОЛЛО",
   "clinicalPharmGroup": "Антибиотик группы пенициллинов широкого спектра действия, разрушающийся пенициллиназой",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; БЕТА-ЛАКТАМНЫЕ АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА, ПЕНИЦИЛЛИНЫ; ПЕНИЦИЛЛИНЫ ШИРОКОГО СПЕКТРА ДЕЙСТВИЯ",
-  "packageDescription": "таб. 250 мг: 10 или 20 шт.",
+  "packageDescription": "таб. 250 мг: 10 или 20 шт. | таб. 500 мг: 10 или 20 шт.",
   "forms": [
     {
-      "id": "capsule_na",
+      "id": "capsule_250mg",
       "type": "capsule",
       "concentration": null,
       "unit": "mg",
       "description": "таб. 250 мг: 10 или 20 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "capsule_500mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб. 500 мг: 10 или 20 шт.",
+      "strengthMg": 500.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +31,7 @@
       "maxAgeMonths": 120,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "capsule_na",
+      "formId": "capsule_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

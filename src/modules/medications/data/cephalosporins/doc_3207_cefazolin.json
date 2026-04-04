@@ -6,16 +6,40 @@
   "manufacturer": "КРАСФАРМА",
   "clinicalPharmGroup": "Цефалоспорин I поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "порошок д/пригот. р-ра д/в/м введения 500 мг: фл. 9, 10 или 15 мл, 1, 10 или 50 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/м введения 500 мг: фл. 9, 10 или 15 мл, 1, 10 или 50 шт. | порошок д/пригот. р-ра д/в/м введения 1 г: фл. по 9, 10 или 15 мл, 1, 10 или 50 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл. 1 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг: фл. 1 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_500mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/м введения 500 мг: фл. 9, 10 или 15 мл, 1, 10 или 50 шт.",
       "volumeMl": 15.0,
       "strengthMg": 500.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. р-ра д/в/м введения 1 г: фл. по 9, 10 или 15 мл, 1, 10 или 50 шт.",
+      "volumeMl": 15.0
+    },
+    {
+      "id": "powder_1048mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл. 1 шт.",
+      "strengthMg": 1048.0
+    },
+    {
+      "id": "powder_1000mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг: фл. 1 шт.",
+      "strengthMg": 1000.0
     }
   ],
   "pediatricDosing": [],

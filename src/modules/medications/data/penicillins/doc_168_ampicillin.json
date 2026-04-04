@@ -9,7 +9,7 @@
   "packageDescription": "таб. 250 мг: 10 или 20 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_250mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
@@ -23,7 +23,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "tablet_na",
+      "formId": "tablet_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +44,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "tablet_na",
+      "formId": "tablet_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

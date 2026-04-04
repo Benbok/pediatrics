@@ -6,15 +6,24 @@
   "manufacturer": "ASAL DUSH TICARET",
   "clinicalPharmGroup": "Антибиотик группы пенициллинов широкого спектра действия с ингибитором бета-лактамаз",
   "pharmTherapyGroup": "АНТИБИОТИК, ПЕНИЦИЛЛИН ПОЛУСИНТЕТИЧЕСКИЙ + БЕТА-ЛАКТАМАЗ ИНГИБИТОР",
-  "packageDescription": "таб., покр. пленочной оболочкой, 375 мг: 10 шт.",
+  "packageDescription": "таб., покр. пленочной оболочкой, 375 мг: 10 шт. | порошок д/пригот. сусп. д/приема внутрь 250 мг/5 мл: фл. 40 мл 1 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_375mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб., покр. пленочной оболочкой, 375 мг: 10 шт.",
       "strengthMg": 375.0
+    },
+    {
+      "id": "suspension_250_5",
+      "type": "suspension",
+      "concentration": "250 мг/5 мл",
+      "unit": "ml",
+      "description": "порошок д/пригот. сусп. д/приема внутрь 250 мг/5 мл: фл. 40 мл 1 шт.",
+      "mgPerMl": 50.0,
+      "volumeMl": 5.0
     }
   ],
   "pediatricDosing": [],

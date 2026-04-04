@@ -6,15 +6,23 @@
   "manufacturer": "SANDOZ",
   "clinicalPharmGroup": "Цефалоспорин II поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "таб., покр. пленочной оболочкой, 125 мг: 10 шт.",
+  "packageDescription": "таб., покр. пленочной оболочкой, 125 мг: 10 шт. | таб., покр. пленочной оболочкой, 250 мг: 10 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_125mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
       "description": "таб., покр. пленочной оболочкой, 125 мг: 10 шт.",
       "strengthMg": 125.0
+    },
+    {
+      "id": "tablet_250mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "description": "таб., покр. пленочной оболочкой, 250 мг: 10 шт.",
+      "strengthMg": 250.0
     }
   ],
   "pediatricDosing": [],

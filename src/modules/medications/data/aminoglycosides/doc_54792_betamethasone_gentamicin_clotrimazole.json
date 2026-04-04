@@ -6,15 +6,31 @@
   "manufacturer": "AGIO PHARMACEUTICALS",
   "clinicalPharmGroup": "Препарат с антибактериальным, противогрибковым и противовоспалительным действием для наружного применения",
   "pharmTherapyGroup": "ГЛЮКОКОРТИКОСТЕРОИД ДЛЯ МЕСТНОГО ПРИМЕНЕНИЯ + АНТИБИОТИК-АМИНОГЛИКОЗИД + ПРОТИВОГРИБКОВОЕ СРЕДСТВО",
-  "packageDescription": "◊ крем д/наружн. прим. 640 мкг+1 мг+10 мг/1 г: туба 15 г",
+  "packageDescription": "◊ крем д/наружн. прим. 640 мкг+1 мг+10 мг/1 г: туба 15 г | ◊ мазь д/наружн. прим. 0.5 мг+1 мг+10 мг: тубы 15 г или 30 г | ◊ крем д/наружн. прим. 0.5 мг+0.1%+1%: тубы 15 г, 20 г, 25 г или 30 г",
   "forms": [
     {
-      "id": "cream_na",
+      "id": "cream_1mg",
       "type": "cream",
       "concentration": null,
       "unit": "mg",
       "description": "◊ крем д/наружн. прим. 640 мкг+1 мг+10 мг/1 г: туба 15 г",
       "strengthMg": 1.0
+    },
+    {
+      "id": "ointment_0mg",
+      "type": "ointment",
+      "concentration": null,
+      "unit": "mg",
+      "description": "◊ мазь д/наружн. прим. 0.5 мг+1 мг+10 мг: тубы 15 г или 30 г",
+      "strengthMg": 0.5
+    },
+    {
+      "id": "cream_0mg",
+      "type": "cream",
+      "concentration": null,
+      "unit": "mg",
+      "description": "◊ крем д/наружн. прим. 0.5 мг+0.1%+1%: тубы 15 г, 20 г, 25 г или 30 г",
+      "strengthMg": 0.5
     }
   ],
   "pediatricDosing": [],

@@ -9,7 +9,7 @@
   "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 1 г: фл. 1,10 или 100 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_500mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
@@ -23,7 +23,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +44,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -65,7 +65,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

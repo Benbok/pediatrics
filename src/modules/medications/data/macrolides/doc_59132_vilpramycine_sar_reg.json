@@ -9,7 +9,7 @@
   "packageDescription": "таб. диспергируемые 1000 мг: 5, 7, 10, 14 или 28 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_1000mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
@@ -23,7 +23,7 @@
       "maxAgeMonths": null,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "tablet_na",
+      "formId": "tablet_1000mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

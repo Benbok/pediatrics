@@ -6,15 +6,23 @@
   "manufacturer": "ОТИСИФАРМ",
   "clinicalPharmGroup": "Антибиотик группы макролидов - азалид",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; МАКРОЛИДЫ, ЛИНКОЗАМИНЫ И СТРЕПТОГРАМИНЫ; МАКРОЛИДЫ",
-  "packageDescription": "капс. 250 мг: 6 шт.",
+  "packageDescription": "капс. 250 мг: 6 шт. | капс. 500 мг: 2 или 3 шт.",
   "forms": [
     {
-      "id": "capsule_na",
+      "id": "capsule_250mg",
       "type": "capsule",
       "concentration": null,
       "unit": "mg",
       "description": "капс. 250 мг: 6 шт.",
       "strengthMg": 250.0
+    },
+    {
+      "id": "capsule_500mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "description": "капс. 500 мг: 2 или 3 шт.",
+      "strengthMg": 500.0
     }
   ],
   "pediatricDosing": [
@@ -23,7 +31,7 @@
       "maxAgeMonths": null,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "capsule_na",
+      "formId": "capsule_250mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

@@ -9,7 +9,7 @@
   "packageDescription": "лиофилизат д/пригот. конц. д/пригот. р-ра д/инф. 500 мг: фл. 1 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_500mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",

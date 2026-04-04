@@ -9,7 +9,7 @@
   "packageDescription": "таб., покр. пленочной кишечнорастворимой оболочкой, 500 мг: 5, 10, 15, 20, 25 или 30 шт.",
   "forms": [
     {
-      "id": "solution_na",
+      "id": "solution_500mg",
       "type": "solution",
       "concentration": null,
       "unit": "mg",
@@ -23,7 +23,7 @@
       "maxAgeMonths": 216,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "solution_na",
+      "formId": "solution_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -44,7 +44,7 @@
       "maxAgeMonths": 216,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "solution_na",
+      "formId": "solution_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

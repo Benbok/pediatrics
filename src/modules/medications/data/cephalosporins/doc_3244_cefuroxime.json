@@ -6,7 +6,7 @@
   "manufacturer": "Laboratorios ATRAL",
   "clinicalPharmGroup": "Цефалоспорин II поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в введения 1.5 г: фл. 1 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в введения 1.5 г: фл. 1 шт. | порошок д/пригот. р-ра д/в/м введения 250 мг: фл. 1, 10 или 50 шт. | порошок д/пригот. р-ра д/в/м введения 750 мг: фл. 1, 10 или 50 шт.",
   "forms": [
     {
       "id": "powder_na",
@@ -14,6 +14,22 @@
       "concentration": null,
       "unit": null,
       "description": "порошок д/пригот. р-ра д/в/в введения 1.5 г: фл. 1 шт."
+    },
+    {
+      "id": "powder_250mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/м введения 250 мг: фл. 1, 10 или 50 шт.",
+      "strengthMg": 250.0
+    },
+    {
+      "id": "powder_750mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/м введения 750 мг: фл. 1, 10 или 50 шт.",
+      "strengthMg": 750.0
     }
   ],
   "pediatricDosing": [],

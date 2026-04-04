@@ -6,16 +6,25 @@
   "manufacturer": "СИНТЕЗ",
   "clinicalPharmGroup": "Антибиотик группы макролидов",
   "pharmTherapyGroup": "АНТИБИОТИК-МАКРОЛИД",
-  "packageDescription": "лиофилизат д/пригот. р-ра д/в/в введения 100 мг: фл. 10 или 50 шт.",
+  "packageDescription": "лиофилизат д/пригот. р-ра д/в/в введения 100 мг: фл. 10 или 50 шт. | лиофилизат д/пригот. р-ра д/в/в введения 200 мг: фл. 10 или 50 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_100mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "лиофилизат д/пригот. р-ра д/в/в введения 100 мг: фл. 10 или 50 шт.",
       "volumeMl": 10.0,
       "strengthMg": 100.0
+    },
+    {
+      "id": "powder_200mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "лиофилизат д/пригот. р-ра д/в/в введения 200 мг: фл. 10 или 50 шт.",
+      "volumeMl": 20.0,
+      "strengthMg": 200.0
     }
   ],
   "pediatricDosing": [],

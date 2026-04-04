@@ -6,16 +6,25 @@
   "manufacturer": "СИНТЕЗ",
   "clinicalPharmGroup": "Антибиотик группы пенициллинов широкого спектра действия с ингибитором бета-лактамаз",
   "pharmTherapyGroup": "АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА СИСТЕМНОГО ДЕЙСТВИЯ; БЕТА-ЛАКТАМНЫЕ АНТИБАКТЕРИАЛЬНЫЕ СРЕДСТВА, ПЕНИЦИЛЛИНЫ; КОМБИНАЦИИ ПЕНИЦИЛЛИНОВ, ВКЛЮЧАЯ КОМБИНАЦИИ С ИНГИБИТОРАМИ БЕТА-ЛАКТАМАЗ",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 500 мг+250 мг: фл. 1 или 10 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 500 мг+250 мг: фл. 1 или 10 шт. | порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг+500 мг: фл. 1 или 10 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_500mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 500 мг+250 мг: фл. 1 или 10 шт.",
       "volumeMl": 5.0,
       "strengthMg": 500.0
+    },
+    {
+      "id": "powder_1000mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг+500 мг: фл. 1 или 10 шт.",
+      "volumeMl": 5.0,
+      "strengthMg": 1000.0
     }
   ],
   "pediatricDosing": [
@@ -24,7 +33,7 @@
       "maxAgeMonths": 144,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

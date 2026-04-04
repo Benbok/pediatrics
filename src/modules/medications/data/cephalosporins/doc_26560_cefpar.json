@@ -6,7 +6,7 @@
   "manufacturer": "РУСЮРОФАРМ",
   "clinicalPharmGroup": "Цефалоспорин III поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "порошок д/пригот. р-ра д/в/м и в/в введения 1 г: фл. 1 или 50 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/м и в/в введения 1 г: фл. 1 или 50 шт. | порошок д/пригот. р-ра д/в/м и в/в введения 500 мг: фл. 1 или 50 шт.",
   "forms": [
     {
       "id": "powder_na",
@@ -14,6 +14,14 @@
       "concentration": null,
       "unit": null,
       "description": "порошок д/пригот. р-ра д/в/м и в/в введения 1 г: фл. 1 или 50 шт."
+    },
+    {
+      "id": "powder_500mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "description": "порошок д/пригот. р-ра д/в/м и в/в введения 500 мг: фл. 1 или 50 шт.",
+      "strengthMg": 500.0
     }
   ],
   "pediatricDosing": [

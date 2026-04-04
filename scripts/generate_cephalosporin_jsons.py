@@ -297,7 +297,7 @@ def parse_forms(zip_info, composition):
     if m4 and "/" not in source[max(0, m4.start() - 3):m4.end() + 3]:
         strength_mg = float(m4.group(1).replace(",", "."))
 
-    fid = re.sub(r"[^a-z0-9_]+", "_", f"{form_type}_{concentration or 'na'}").strip("_").lower()
+    fid = re.sub(r"[^a-z0-9_]+", "_", f"{form_type}_{concentration or (str(int(strength_mg)) + 'mg' if strength_mg is not None else 'na')}").strip("_").lower()
     item = {
         "id": fid[:48] if fid else "form_1",
         "type": form_type,
@@ -399,6 +399,14 @@ def main():
             WHERE pd.DocumentID = ? AND p.ZipInfo IS NOT NULL
         """, (doc_id,))
 
+        all_product_forms = cur.execute("""
+            SELECT DISTINCT p.ZipInfo, p.Composition
+            FROM Product p
+            JOIN Product_Document pd ON pd.ProductID = p.ProductID
+            WHERE pd.DocumentID = ? AND p.ZipInfo IS NOT NULL
+            ORDER BY p.ProductID
+        """, (doc_id,)).fetchall()
+
         atc = first_value(cur, """
             SELECT patc.ATCCode
             FROM Product_Document pd
@@ -461,13 +469,25 @@ def main():
 
         zip_info = product["ZipInfo"] if product else None
         composition = product["Composition"] if product else None
-        forms = parse_forms(zip_info, composition)
+
+        forms = []
+        seen_form_keys = set()
+        for pf in all_product_forms:
+            for f in parse_forms(pf["ZipInfo"], pf["Composition"]):
+                key = (f.get("type"), f.get("concentration"), f.get("strengthMg"))
+                if key not in seen_form_keys:
+                    seen_form_keys.add(key)
+                    forms.append(f)
+        if not forms:
+            forms = parse_forms(zip_info, composition)
 
         all_zip_combined = " ".join(z for z in all_zip_infos if z)
         inferred_route = (
             infer_route(all_zip_combined)
             or infer_route(all_zip_combined + " " + (d["Dosage"] or ""))
         )
+
+        package_description_combined = " | ".join([f.get("description", "") for f in forms if f.get("description")])
 
         data = {
             "nameRu": to_title_case(strip_html(d["RusName"]) or d["RusName"]),
@@ -477,7 +497,7 @@ def main():
             "manufacturer": mfr,
             "clinicalPharmGroup": clph,
             "pharmTherapyGroup": phth,
-            "packageDescription": strip_html(zip_info),
+            "packageDescription": package_description_combined or strip_html(zip_info),
             "forms": forms,
             "pediatricDosing": parse_pediatric_dosing(d["ChildInsuf"], d["Dosage"], forms, inferred_route),
             "adultDosing": [],

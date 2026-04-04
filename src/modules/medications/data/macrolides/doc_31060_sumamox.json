@@ -9,7 +9,7 @@
   "packageDescription": "капс. 250 мг: 6 шт.",
   "forms": [
     {
-      "id": "capsule_na",
+      "id": "capsule_250mg",
       "type": "capsule",
       "concentration": null,
       "unit": "mg",

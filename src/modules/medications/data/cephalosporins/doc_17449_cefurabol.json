@@ -6,16 +6,24 @@
   "manufacturer": "ПФК ПРЕБЕНД",
   "clinicalPharmGroup": "Цефалоспорин II поколения",
   "pharmTherapyGroup": "АНТИБИОТИК-ЦЕФАЛОСПОРИН",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 750 мг: фл. 1 или 5 шт. в компл. с растворителем или без него",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м введения 750 мг: фл. 1 или 5 шт. в компл. с растворителем или без него | порошок д/пригот. р-ра д/в/в и в/м введения 1.5 г: фл. 1 или 5 шт. в компл. с растворителем или без него",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_750mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м введения 750 мг: фл. 1 или 5 шт. в компл. с растворителем или без него",
       "volumeMl": 10.0,
       "strengthMg": 750.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1.5 г: фл. 1 или 5 шт. в компл. с растворителем или без него",
+      "volumeMl": 20.0
     }
   ],
   "pediatricDosing": [
@@ -24,7 +32,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_750mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -45,7 +53,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_750mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",
@@ -66,7 +74,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_750mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

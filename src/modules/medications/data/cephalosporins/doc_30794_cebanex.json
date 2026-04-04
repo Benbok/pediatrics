@@ -6,15 +6,22 @@
   "manufacturer": "МД ТРЕЙД",
   "clinicalPharmGroup": "Цефалоспорин III поколения с ингибитором бета-лактамаз",
   "pharmTherapyGroup": "АНТИБИОТИК, ЦЕФАЛОСПОРИН + БЕТА-ЛАКТАМАЗ ИНГИБИТОР",
-  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м инъекц. 500 мг+500 мг: фл. 1 или 50 шт.",
+  "packageDescription": "порошок д/пригот. р-ра д/в/в и в/м инъекц. 500 мг+500 мг: фл. 1 или 50 шт. | порошок д/пригот. р-ра д/в/в и в/м инъекц. 1 г+1 г: фл. 1 или 50 шт.",
   "forms": [
     {
-      "id": "powder_na",
+      "id": "powder_500mg",
       "type": "powder",
       "concentration": null,
       "unit": "mg",
       "description": "порошок д/пригот. р-ра д/в/в и в/м инъекц. 500 мг+500 мг: фл. 1 или 50 шт.",
       "strengthMg": 500.0
+    },
+    {
+      "id": "powder_na",
+      "type": "powder",
+      "concentration": null,
+      "unit": null,
+      "description": "порошок д/пригот. р-ра д/в/в и в/м инъекц. 1 г+1 г: фл. 1 или 50 шт."
     }
   ],
   "pediatricDosing": [
@@ -23,7 +30,7 @@
       "maxAgeMonths": 1,
       "minWeightKg": null,
       "maxWeightKg": null,
-      "formId": "powder_na",
+      "formId": "powder_500mg",
       "unit": "mg",
       "dosing": {
         "type": "weight_based",

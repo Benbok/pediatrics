@@ -9,7 +9,7 @@
   "packageDescription": "таб., покр. пленочной оболочкой, 500 мг: 3 шт.",
   "forms": [
     {
-      "id": "tablet_na",
+      "id": "tablet_500mg",
       "type": "tablet",
       "concentration": null,
       "unit": "mg",
