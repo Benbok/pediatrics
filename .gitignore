@@ -13,6 +13,11 @@ dist-ssr
 dist_electron
 *.local
 
+# Database files — too large for GitHub
+prisma/*.db
+prisma/*.db-shm
+prisma/*.db-wal
+
 # License keys — NEVER commit private key to git!
 keys/private.pem
 keys/*.pem
