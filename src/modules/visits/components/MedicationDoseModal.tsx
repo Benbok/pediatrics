@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { X, AlertCircle, Pill, Beaker, Calculator } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -185,9 +186,19 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                             <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
                                 Настройка дозировки
                             </h3>
-                            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                {medication.nameRu}
-                            </p>
+                            {medication.id ? (
+                                <Link
+                                    to={`/medications/${medication.id}`}
+                                    className="text-sm font-semibold text-primary-700 dark:text-primary-300 hover:underline"
+                                    title="Открыть карточку препарата в модуле Препараты"
+                                >
+                                    {medication.nameRu}
+                                </Link>
+                            ) : (
+                                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    {medication.nameRu}
+                                </p>
+                            )}
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-xs font-medium text-slate-500 dark:text-slate-500">Способ:</span>

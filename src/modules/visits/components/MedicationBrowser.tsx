@@ -6,6 +6,8 @@ import { Card } from '../../../components/ui/Card';
 import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
+import { PrettySelect, type SelectOption } from '../../vaccination/components/PrettySelect';
+import { sanitizeDisplayText } from '../../../utils/textSanitizers';
 import { Pill, Search, X, Plus, Loader2 } from 'lucide-react';
 
 const DISPLAY_LIMIT = 50;
@@ -26,6 +28,7 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
     const { medications: cachedMedications, loadMedications, isLoadingMedications } = useDataCache();
     const [searchTerm, setSearchTerm] = useState('');
     const [filterByIcd10, setFilterByIcd10] = useState(false);
+    const [selectedGroup, setSelectedGroup] = useState('');
     const [expandedIcdCodes, setExpandedIcdCodes] = useState<string[]>([]);
     const [displayCount, setDisplayCount] = useState(DISPLAY_LIMIT);
 
@@ -36,8 +39,9 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
             loadMedications();
         }
         loadExpandedIcdCodes();
-        // Сбрасываем поиск при открытии
+        // Сбрасываем поиск и фильтры при открытии
         setSearchTerm('');
+        setSelectedGroup('');
         setDisplayCount(DISPLAY_LIMIT);
     }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -66,6 +70,63 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
         }
     };
 
+    const hasDiagnosisMatch = (medicationCodes: string[], diagnosisCodes: string[]): boolean => {
+        return medicationCodes.some(medCode =>
+            diagnosisCodes.some(diseaseCode => {
+                const normalizedMed = medCode.toUpperCase();
+                const normalizedDisease = diseaseCode.toUpperCase();
+                if (normalizedMed === normalizedDisease) return true;
+                if (normalizedMed.startsWith(normalizedDisease + '.')) return true;
+                if (normalizedDisease.startsWith(normalizedMed + '.')) return true;
+                return false;
+            })
+        );
+    };
+
+    const diagnosisFilterCodes = useMemo(() => {
+        if (expandedIcdCodes.length > 0) {
+            return expandedIcdCodes;
+        }
+        return currentIcd10Codes;
+    }, [expandedIcdCodes, currentIcd10Codes]);
+
+    const medicationsForGroupOptions = useMemo(() => {
+        const source = cachedMedications ?? [];
+        if (!filterByIcd10 || diagnosisFilterCodes.length === 0) {
+            return source;
+        }
+        return source.filter(med => hasDiagnosisMatch(med.icd10Codes, diagnosisFilterCodes));
+    }, [cachedMedications, filterByIcd10, diagnosisFilterCodes]);
+
+    // Уникальные группы для фильтра (при включенном ICD-фильтре только релевантные диагнозу)
+    const groupSelectOptions = useMemo<Array<SelectOption<string>>>(() => {
+        const seen = new Map<string, string>(); // key(lower) → rawValue
+        medicationsForGroupOptions.forEach(med => {
+            if (med.clinicalPharmGroup) {
+                const label = sanitizeDisplayText(med.clinicalPharmGroup);
+                if (label) {
+                    const key = label.toLowerCase();
+                    if (!seen.has(key)) seen.set(key, med.clinicalPharmGroup);
+                }
+            }
+        });
+        const sorted = Array.from(seen.entries())
+            .map(([key, raw]) => ({ value: raw, label: sanitizeDisplayText(raw) }))
+            .sort((a, b) => a.label.localeCompare(b.label, 'ru'));
+        return [{ value: '', label: 'Все группы' }, ...sorted];
+    }, [medicationsForGroupOptions]);
+
+    useEffect(() => {
+        if (!selectedGroup) {
+            return;
+        }
+
+        const isSelectedGroupAvailable = groupSelectOptions.some(option => option.value === selectedGroup);
+        if (!isSelectedGroupAvailable) {
+            setSelectedGroup('');
+        }
+    }, [groupSelectOptions, selectedGroup]);
+
     // Фильтрация через useMemo — нет лишних re-renders и setState в useEffect
     const filteredMedications = useMemo(() => {
         let filtered = cachedMedications ?? [];
@@ -79,23 +140,16 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
             );
         }
 
-        if (filterByIcd10 && expandedIcdCodes.length > 0) {
-            filtered = filtered.filter(med =>
-                med.icd10Codes.some(medCode =>
-                    expandedIcdCodes.some(diseaseCode => {
-                        const normalizedMed = medCode.toUpperCase();
-                        const normalizedDisease = diseaseCode.toUpperCase();
-                        if (normalizedMed === normalizedDisease) return true;
-                        if (normalizedMed.startsWith(normalizedDisease + '.')) return true;
-                        if (normalizedDisease.startsWith(normalizedMed + '.')) return true;
-                        return false;
-                    })
-                )
-            );
+        if (selectedGroup) {
+            filtered = filtered.filter(med => med.clinicalPharmGroup === selectedGroup);
+        }
+
+        if (filterByIcd10 && diagnosisFilterCodes.length > 0) {
+            filtered = filtered.filter(med => hasDiagnosisMatch(med.icd10Codes, diagnosisFilterCodes));
         }
 
         return filtered;
-    }, [cachedMedications, searchTerm, filterByIcd10, expandedIcdCodes]);
+    }, [cachedMedications, searchTerm, selectedGroup, filterByIcd10, diagnosisFilterCodes]);
 
     // Сброс пагинации при смене результатов фильтрации
     useEffect(() => {
@@ -128,7 +182,7 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
                 </div>
 
                 {/* Search and Filters */}
-                <div className="p-6 border-b border-slate-200 dark:border-slate-800 space-y-4 flex-shrink-0">
+                <div className="p-6 border-b border-slate-200 dark:border-slate-800 space-y-3 flex-shrink-0">
                     <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <Input
@@ -138,6 +192,29 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-12 rounded-xl"
                         />
+                    </div>
+                    {/* Фильтр по клинико-фармакологической группе */}
+                    <div className="flex items-center gap-2">
+                        <PrettySelect
+                            value={selectedGroup}
+                            onChange={(val) => setSelectedGroup(val)}
+                            options={groupSelectOptions}
+                            searchable
+                            searchPlaceholder="Поиск группы..."
+                            emptyText="Группы не найдены"
+                            buttonClassName="h-9 rounded-xl text-sm min-w-[360px]"
+                            panelClassName="max-h-64"
+                        />
+                        {selectedGroup && (
+                            <button
+                                type="button"
+                                onClick={() => setSelectedGroup('')}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                title="Сбросить фильтр группы"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                     {currentIcd10Codes.length > 0 && (
                         <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
@@ -181,9 +258,14 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
                                             <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug mb-1 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors">
                                                 {med.nameRu}
                                             </p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                                                 {med.activeSubstance}
                                             </p>
+                                            {med.clinicalPharmGroup && (
+                                                <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mb-2 leading-snug truncate" title={sanitizeDisplayText(med.clinicalPharmGroup)}>
+                                                    {sanitizeDisplayText(med.clinicalPharmGroup)}
+                                                </p>
+                                            )}
                                             {med.icd10Codes && med.icd10Codes.length > 0 && (
                                                 <div className="flex flex-wrap gap-1">
                                                     {med.icd10Codes.slice(0, 3).map((code, idx) => (
