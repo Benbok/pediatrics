@@ -81,6 +81,19 @@ function sendBatchFinishedEvent(batchId, data) {
     }
 }
 
+function isPrismaUniqueConstraintError(error) {
+    return Boolean(error && error.code === 'P2002');
+}
+
+function buildDuplicateDiagnosticCatalogNameError(nameRu) {
+    const name = String(nameRu || '').trim();
+    return new Error(
+        name
+            ? `Исследование с названием "${name}" уже существует в каталоге. Используйте другое имя или отредактируйте существующую запись.`
+            : 'Исследование с таким названием уже существует в каталоге. Используйте другое имя или отредактируйте существующую запись.'
+    );
+}
+
 function safeJsonParse(value, defaultValue = []) {
     if (!value || value === null) return defaultValue;
     if (typeof value !== 'string') return defaultValue;
@@ -642,11 +655,19 @@ const DiseaseService = {
         const cleanAliases = Array.isArray(aliases)
             ? aliases.map(a => String(a).trim()).filter(Boolean)
             : [];
-        const entry = await prisma.diagnosticTestCatalog.create({
-            data: { nameRu: name, type: entryType, aliases: JSON.stringify(cleanAliases), isStandard: false },
-        });
-        CacheService.invalidate('diseases', 'diagnostic_test_catalog');
-        return entry;
+        try {
+            const entry = await prisma.diagnosticTestCatalog.create({
+                data: { nameRu: name, type: entryType, aliases: JSON.stringify(cleanAliases), isStandard: false },
+            });
+            CacheService.invalidate('diseases', 'diagnostic_test_catalog');
+            return entry;
+        } catch (error) {
+            if (isPrismaUniqueConstraintError(error)) {
+                logger.warn('[DiseaseService] Duplicate diagnostic catalog name on create', { nameRu: name });
+                throw buildDuplicateDiagnosticCatalogNameError(name);
+            }
+            throw error;
+        }
     },
 
     /**
@@ -665,9 +686,20 @@ const DiseaseService = {
             );
         }
         if (Object.keys(update).length === 0) throw new Error('[DiseaseService] updateCatalogEntry: nothing to update');
-        const updated = await prisma.diagnosticTestCatalog.update({ where: { id: entryId }, data: update });
-        CacheService.invalidate('diseases', 'diagnostic_test_catalog');
-        return updated;
+        try {
+            const updated = await prisma.diagnosticTestCatalog.update({ where: { id: entryId }, data: update });
+            CacheService.invalidate('diseases', 'diagnostic_test_catalog');
+            return updated;
+        } catch (error) {
+            if (isPrismaUniqueConstraintError(error)) {
+                logger.warn('[DiseaseService] Duplicate diagnostic catalog name on update', {
+                    id: entryId,
+                    nameRu: update.nameRu,
+                });
+                throw buildDuplicateDiagnosticCatalogNameError(update.nameRu);
+            }
+            throw error;
+        }
     },
 
     /**

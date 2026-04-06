@@ -254,17 +254,17 @@ function normalizeSymptomsToCategorized(symptoms) {
     if (!Array.isArray(symptoms)) return [];
     const isNewFormat = symptoms.length > 0 && typeof symptoms[0] === 'object' && symptoms[0] !== null && 'category' in symptoms[0];
     if (isNewFormat) {
+        // Preserve user-entered text as-is: do NOT run vocabulary normalization here.
+        // normalizeSymptomsWithPhrases does substring token matching and would replace
+        // long descriptive sentences (e.g. "Острое начало с температурой...") with a
+        // short vocabulary canonical ("Лихорадка"), destroying the original content.
         const seen = new Set();
         return symptoms
             .filter(s => s && typeof s.text === 'string' && String(s.text).trim())
-            .map(s => {
-                const raw = String(s.text).trim();
-                const normalizedTexts = normalizeSymptomsWithPhrases([raw]);
-                return {
-                    text: normalizedTexts[0] != null ? normalizedTexts[0] : raw,
-                    category: ['clinical', 'physical', 'laboratory', 'other'].includes(s.category) ? s.category : 'other',
-                };
-            })
+            .map(s => ({
+                text: String(s.text).trim(),
+                category: ['clinical', 'physical', 'laboratory', 'other'].includes(s.category) ? s.category : 'other',
+            }))
             .filter(item => {
                 const key = item.text.toLowerCase();
                 if (seen.has(key)) return false;

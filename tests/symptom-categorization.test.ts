@@ -114,4 +114,28 @@ describe('Symptom Categorization', () => {
         expect(parsed).toHaveLength(1);
         expect(parsed[0]).toEqual({ text: 'кашель', category: 'clinical' });
     });
+
+    it('should preserve long paragraph text without vocabulary replacement (backend)', () => {
+        // Regression test: long descriptive text must NOT be replaced by a short vocabulary
+        // canonical via substring token matching (e.g. "температурой" → "Лихорадка").
+        const longText =
+            'Острое начало заболевания с невысокой (субфебрильной) температурой, катаральными явлениями в виде ринита, фарингита или ларингита, осиплостью голоса';
+        const normalized = normalizeSymptomsToCategorized([
+            { text: longText, category: 'clinical' },
+        ]);
+        expect(normalized).toEqual([{ text: longText, category: 'clinical' }]);
+    });
+
+    it('should not deduplicate distinct long texts that share vocabulary tokens', () => {
+        // Two different clinical descriptions both mention "температур" — they must remain distinct.
+        const text1 = 'Острое начало с субфебрильной температурой и ринитом';
+        const text2 = 'Постепенное начало с высокой температурой и кашлем';
+        const normalized = normalizeSymptomsToCategorized([
+            { text: text1, category: 'clinical' },
+            { text: text2, category: 'clinical' },
+        ]);
+        expect(normalized).toHaveLength(2);
+        expect(normalized[0].text).toBe(text1);
+        expect(normalized[1].text).toBe(text2);
+    });
 });

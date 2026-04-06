@@ -33,6 +33,72 @@ import {
 } from 'lucide-react';
 import DISEASE_JSON_TEMPLATE from './templates/diseaseJsonTemplate.json';
 
+type ValidationIssue = {
+    code?: string;
+    path?: Array<string | number>;
+    message?: string;
+};
+
+type FormSectionKey = 'general' | 'symptoms' | 'diagnosticPlan' | 'treatmentPlan' | 'clinicalRecommendations' | 'differential';
+
+const FORM_SECTION_IDS: Record<FormSectionKey, string> = {
+    general: 'disease-form-section-general',
+    symptoms: 'disease-form-section-symptoms',
+    diagnosticPlan: 'disease-form-section-diagnostic-plan',
+    treatmentPlan: 'disease-form-section-treatment-plan',
+    clinicalRecommendations: 'disease-form-section-clinical-recommendations',
+    differential: 'disease-form-section-differential',
+};
+
+const FORM_SECTION_TITLES: Record<FormSectionKey, string> = {
+    general: 'Основная информация',
+    symptoms: 'Симптомы и клинические признаки',
+    diagnosticPlan: 'План диагностики',
+    treatmentPlan: 'План лечения',
+    clinicalRecommendations: 'Рекомендации',
+    differential: 'Дифференциальная диагностика и красные флаги',
+};
+
+const asValidationIssueArray = (value: unknown): ValidationIssue[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+        .filter(item => item && typeof item === 'object')
+        .map((item: any) => ({
+            code: typeof item.code === 'string' ? item.code : undefined,
+            path: Array.isArray(item.path) ? item.path : undefined,
+            message: typeof item.message === 'string' ? item.message : undefined,
+        }))
+        .filter(item => item.message || (item.path && item.path.length > 0));
+};
+
+const parseValidationIssues = (error: any): ValidationIssue[] => {
+    const directIssues = asValidationIssueArray(error?.issues || error?.errors);
+    if (directIssues.length > 0) return directIssues;
+
+    const rawMessage = typeof error?.message === 'string' ? error.message.trim() : '';
+    if (!rawMessage || !rawMessage.startsWith('[')) return [];
+
+    try {
+        const parsed = JSON.parse(rawMessage);
+        return asValidationIssueArray(parsed);
+    } catch {
+        return [];
+    }
+};
+
+const resolveSectionFromPath = (path?: Array<string | number>): FormSectionKey | null => {
+    const root = Array.isArray(path) && path.length > 0 ? String(path[0]) : '';
+
+    if (['icd10Code', 'icd10Codes', 'nameRu', 'nameEn', 'description'].includes(root)) return 'general';
+    if (root === 'symptoms') return 'symptoms';
+    if (root === 'diagnosticPlan') return 'diagnosticPlan';
+    if (root === 'treatmentPlan') return 'treatmentPlan';
+    if (root === 'clinicalRecommendations') return 'clinicalRecommendations';
+    if (root === 'differentialDiagnosis' || root === 'redFlags') return 'differential';
+
+    return null;
+};
+
 export const DiseaseFormPage: React.FC = () => {
     const { showToast } = useToast();
     const { id } = useParams<{ id?: string }>();
@@ -60,6 +126,7 @@ export const DiseaseFormPage: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [isParsing, setIsParsing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
     const [success, setSuccess] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -98,6 +165,7 @@ export const DiseaseFormPage: React.FC = () => {
         }
 
         setError(null);
+        setValidationIssues([]);
         window.requestAnimationFrame(() => {
             setError(message);
         });
@@ -195,6 +263,7 @@ export const DiseaseFormPage: React.FC = () => {
         e.preventDefault();
         setIsSaving(true);
         setError(null);
+        setValidationIssues([]);
 
         try {
             const savedDisease = await diseaseService.upsertDisease(formData as Disease);
@@ -207,7 +276,21 @@ export const DiseaseFormPage: React.FC = () => {
             setSuccess(true);
             setTimeout(() => navigate(`/diseases/${savedDisease.id}`), 1500);
         } catch (err: any) {
-            setError(err.message || 'Произошла ошибка при сохранении');
+            const issues = parseValidationIssues(err);
+            if (issues.length > 0) {
+                setValidationIssues(issues);
+                setError('Форма содержит ошибки. Исправьте поля в указанных разделах.');
+
+                const firstSection = resolveSectionFromPath(issues[0]?.path);
+                if (firstSection) {
+                    const target = document.getElementById(FORM_SECTION_IDS[firstSection]);
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
+            } else {
+                setError(err.message || 'Произошла ошибка при сохранении');
+            }
         } finally {
             setIsSaving(false);
         }
@@ -854,6 +937,7 @@ export const DiseaseFormPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSave} className="space-y-6">
+                <div id={FORM_SECTION_IDS.general} className="scroll-mt-24">
                 <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl overflow-hidden relative">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="md:col-span-2">
@@ -909,8 +993,10 @@ export const DiseaseFormPage: React.FC = () => {
                         </div>
                     </div>
                 </Card>
+                </div>
 
                 {/* Symptoms Section */}
+                <div id={FORM_SECTION_IDS.symptoms} className="scroll-mt-24">
                 <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                         <Activity className="w-6 h-6 text-primary-500" />
@@ -948,8 +1034,10 @@ export const DiseaseFormPage: React.FC = () => {
                         editable={true}
                     />
                 </Card>
+                </div>
 
                 {/* Diagnostic Plan Section */}
+                <div id={FORM_SECTION_IDS.diagnosticPlan} className="scroll-mt-24">
                 <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -1065,8 +1153,10 @@ export const DiseaseFormPage: React.FC = () => {
                         )}
                     </div>
                 </Card>
+                </div>
 
                 {/* Treatment Plan Section */}
+                <div id={FORM_SECTION_IDS.treatmentPlan} className="scroll-mt-24">
                 <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -1128,8 +1218,10 @@ export const DiseaseFormPage: React.FC = () => {
                         )}
                     </div>
                 </Card>
+                </div>
 
                 {/* Clinical Recommendations */}
+                <div id={FORM_SECTION_IDS.clinicalRecommendations} className="scroll-mt-24">
                 <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -1190,8 +1282,10 @@ export const DiseaseFormPage: React.FC = () => {
                         )}
                     </div>
                 </Card>
+                </div>
 
                 {/* Differential Diagnosis & Red Flags */}
+                <div id={FORM_SECTION_IDS.differential} className="scroll-mt-24">
                 <Card className="p-6 rounded-[32px] border-slate-200 shadow-lg">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
@@ -1260,6 +1354,7 @@ export const DiseaseFormPage: React.FC = () => {
                         </div>
                     </div>
                 </Card>
+                </div>
 
                 {/* Clinical Guideline List (ReadOnly in Form) */}
                 {isEdit && (
@@ -1317,9 +1412,45 @@ export const DiseaseFormPage: React.FC = () => {
                 {/* Status Messages */}
                 <div className="space-y-4">
                     {error && (
-                        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-600 animate-in fade-in slide-in-from-top-1">
-                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                            <p className="font-bold text-sm tracking-tight">{error}</p>
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 animate-in fade-in slide-in-from-top-1">
+                            <div className="flex items-center gap-3">
+                                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                                <p className="font-bold text-sm tracking-tight">{error}</p>
+                            </div>
+
+                            {validationIssues.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                    {validationIssues.map((issue, idx) => {
+                                        const section = resolveSectionFromPath(issue.path);
+                                        return (
+                                            <div key={`${issue.message || 'issue'}-${idx}`} className="p-3 rounded-xl border border-red-200 bg-white/70 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-semibold text-red-700 break-words">{issue.message || 'Некорректные данные'}</p>
+                                                    {section && (
+                                                        <p className="text-xs text-red-500 mt-1">Раздел: {FORM_SECTION_TITLES[section]}</p>
+                                                    )}
+                                                </div>
+                                                {section && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            const target = document.getElementById(FORM_SECTION_IDS[section]);
+                                                            if (target) {
+                                                                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                                            }
+                                                        }}
+                                                        className="h-8 px-3 rounded-lg text-red-700 hover:bg-red-100 whitespace-nowrap"
+                                                    >
+                                                        Перейти
+                                                        <ChevronRight className="w-4 h-4 ml-1" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     )}
 
