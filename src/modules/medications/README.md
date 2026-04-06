@@ -117,6 +117,14 @@ electron/modules/medications/
 - При повторном запуске обновляются Vidal-поля и справочные поля, но не затираются вручную заполненные `pediatricDosing`, `adultDosing`, `forms`, `icd10Codes`
 - Если у `Document` нет связанной `MoleculeName`, используется fallback: `Document.RusName` → `activeSubstance`
 
+#### Первая волна бронхолитиков из Vidal
+- Генератор: `python scripts/generate_bronchodilator_jsons.py`
+- Целевая директория JSON: `src/modules/medications/data/bronchodilators/`
+- Объём первой волны: `49` агрегатов `name_ru + atc_code`
+- Стратегия импорта: `python scripts/import_medications_json_batch.py --dir src/modules/medications/data/bronchodilators --db prisma/dev.db --upsert-by name_ru_atc --strict-keys`
+- Для ингаляционных растворов важна корректная нормализация формы как `solution`, иначе структурированные `pediatricDosing` не применяются к препаратам уровня `Беродуал ®` и `Атровент ®`
+- Первая волна сознательно исключает контроллерные комбинации `R03AK*`; импортированы только строгие бронходилататорные группы `R03AC*`, `R03AL*`, `R03BB*`, `R03CC*`, `R03DA*`, `R03DB*`
+
 #### Валидация импорта
 - Проверка обязательных полей
 - Валидация структуры дозировок

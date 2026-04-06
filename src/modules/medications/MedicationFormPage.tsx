@@ -222,6 +222,43 @@ export const MedicationFormPage: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [formData.nameRu, ignoreDuplicate, isEdit, id]);
 
+    const parseIcd10Codes = (value: string) => {
+        return value
+            .split(/[,\n;]/)
+            .map(code => code.trim().toUpperCase())
+            .filter(Boolean);
+    };
+
+    const normalizeIcd10Codes = (value: unknown): string[] => {
+        if (Array.isArray(value)) {
+            return value
+                .map(code => String(code).trim().toUpperCase())
+                .filter(Boolean);
+        }
+
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) return [];
+
+            if (trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) {
+                        return parsed
+                            .map(code => String(code).trim().toUpperCase())
+                            .filter(Boolean);
+                    }
+                } catch {
+                    // Fall back to comma-separated parsing for legacy values.
+                }
+            }
+
+            return parseIcd10Codes(trimmed);
+        }
+
+        return [];
+    };
+
     const loadMedication = async () => {
         try {
             const data = await medicationService.getMedication(Number(id));
@@ -230,18 +267,15 @@ export const MedicationFormPage: React.FC = () => {
                 setTimeout(() => navigate(medicationsListPath), 2000);
                 return;
             }
-            setFormData(data);
-            setIcd10Input((data.icd10Codes || []).join(', '));
+            const normalizedIcd10Codes = normalizeIcd10Codes(data.icd10Codes);
+            setFormData({
+                ...data,
+                icd10Codes: normalizedIcd10Codes,
+            });
+            setIcd10Input(normalizedIcd10Codes.join(', '));
         } catch (err: any) {
             setError(err?.message || 'Не удалось загрузить данные препарата');
         }
-    };
-
-    const parseIcd10Codes = (value: string) => {
-        return value
-            .split(/[,\n;]/)
-            .map(code => code.trim().toUpperCase())
-            .filter(Boolean);
     };
 
     const handleSave = async (e: React.FormEvent) => {
@@ -399,11 +433,13 @@ export const MedicationFormPage: React.FC = () => {
         }
         
         if (previewData) {
+            const normalizedIcd10Codes = normalizeIcd10Codes(previewData.icd10Codes);
             setFormData({
                 ...formData,
                 ...previewData,
+                icd10Codes: normalizedIcd10Codes,
             });
-            setIcd10Input((previewData.icd10Codes || []).join(', '));
+            setIcd10Input(normalizedIcd10Codes.join(', '));
             setShowPreview(false);
             setPreviewData(null);
             // Сохраняем validationResult для отображения в форме
