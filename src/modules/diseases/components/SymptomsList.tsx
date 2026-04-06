@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../../components/ui/Badge';
-import { X, Check } from 'lucide-react';
-import { CategorizedSymptom, SymptomCategory } from '../../../types';
+import { X, Check, Star } from 'lucide-react';
+import { CategorizedSymptom, SymptomCategory, SymptomSpecificity } from '../../../types';
 import { clsx } from 'clsx';
 import { PrettySelect, type SelectOption } from './PrettySelect';
 
@@ -9,7 +9,7 @@ interface SymptomsListProps {
     symptoms: CategorizedSymptom[];
     onRemove?: (symptom: CategorizedSymptom) => void;
     onCategoryChange?: (symptomText: string, category: SymptomCategory) => void;
-    onUpdate?: (oldText: string, newText: string, newCategory: SymptomCategory) => void;
+    onUpdate?: (oldText: string, newText: string, newCategory: SymptomCategory, specificity: SymptomSpecificity, isPathognomonic: boolean) => void;
     onError?: (message: string) => void;
     editable?: boolean;
     showQuickFilters?: boolean;
@@ -40,6 +40,26 @@ const CATEGORY_CONFIG: Record<SymptomCategory, { label: string; color: string; i
     },
 };
 
+const SPECIFICITY_CONFIG: Record<SymptomSpecificity, { label: string; dotColor: string; pillActive: string }> = {
+    low: {
+        label: 'Низкая',
+        dotColor: 'bg-slate-400',
+        pillActive: 'bg-slate-100 text-slate-700 border-slate-400 dark:bg-slate-700 dark:text-slate-200',
+    },
+    medium: {
+        label: 'Средняя',
+        dotColor: 'bg-amber-400',
+        pillActive: 'bg-amber-50 text-amber-700 border-amber-400 dark:bg-amber-900/30 dark:text-amber-200',
+    },
+    high: {
+        label: 'Высокая',
+        dotColor: 'bg-emerald-500',
+        pillActive: 'bg-emerald-50 text-emerald-700 border-emerald-400 dark:bg-emerald-900/30 dark:text-emerald-200',
+    },
+};
+
+const SPECIFICITY_OPTIONS: SymptomSpecificity[] = ['low', 'medium', 'high'];
+
 const CATEGORIES: SymptomCategory[] = ['clinical', 'physical', 'laboratory', 'other'];
 const CATEGORY_OPTIONS: Array<SelectOption<SymptomCategory>> = [
     { value: 'clinical', label: 'Клинические критерии' },
@@ -60,6 +80,8 @@ export const SymptomsList: React.FC<SymptomsListProps> = ({
     const [editingSymptom, setEditingSymptom] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
     const [editCategory, setEditCategory] = useState<SymptomCategory>('other');
+    const [editSpecificity, setEditSpecificity] = useState<SymptomSpecificity>('medium');
+    const [editIsPathognomonic, setEditIsPathognomonic] = useState(false);
     const [activeFilter, setActiveFilter] = useState<SymptomsFilter>('all');
     const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -74,6 +96,8 @@ export const SymptomsList: React.FC<SymptomsListProps> = ({
         setEditingSymptom(symptom.text);
         setEditText(symptom.text);
         setEditCategory(symptom.category);
+        setEditSpecificity(symptom.specificity ?? 'medium');
+        setEditIsPathognomonic(symptom.isPathognomonic ?? false);
     };
 
     const saveEdit = (oldText: string) => {
@@ -82,7 +106,7 @@ export const SymptomsList: React.FC<SymptomsListProps> = ({
                 onError?.('Текст симптома не может быть пустым');
                 return;
             }
-            onUpdate?.(oldText, editText.trim(), editCategory);
+            onUpdate?.(oldText, editText.trim(), editCategory, editSpecificity, editIsPathognomonic);
             setEditingSymptom(null);
         } catch {
             onError?.('Не удалось сохранить изменения');
@@ -93,6 +117,15 @@ export const SymptomsList: React.FC<SymptomsListProps> = ({
         setEditingSymptom(null);
         setEditText('');
         setEditCategory('other');
+        setEditSpecificity('medium');
+        setEditIsPathognomonic(false);
+    };
+
+    const handlePathognomicToggle = () => {
+        const next = !editIsPathognomonic;
+        setEditIsPathognomonic(next);
+        // Патогномоничный признак всегда = высокая специфичность
+        if (next) setEditSpecificity('high');
     };
 
     const groupedSymptoms = useMemo(
@@ -210,55 +243,115 @@ export const SymptomsList: React.FC<SymptomsListProps> = ({
                         </div>
 
                         <div className="flex flex-wrap gap-2">
-                            {categorySymptoms.map((symptom, idx) => (
-                                <div
-                                    key={`${symptom.text}-${idx}`}
-                                    className={clsx('relative min-w-0', editingSymptom === symptom.text && 'basis-full')}
-                                >
-                                    {editingSymptom === symptom.text ? (
-                                        <div className="w-full rounded-2xl border-2 border-primary-500/70 bg-white dark:bg-slate-900 shadow-lg p-4 space-y-4">
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-black text-slate-400 uppercase tracking-wider">
-                                                    Формулировка критерия
-                                                </label>
-                                                <textarea
-                                                    ref={editTextareaRef}
-                                                    rows={3}
-                                                    value={editText}
-                                                    onChange={(e) => setEditText(e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                                                            e.preventDefault();
-                                                            saveEdit(symptom.text);
-                                                        } else if (e.key === 'Escape') {
-                                                            e.preventDefault();
-                                                            cancelEdit();
-                                                        }
-                                                    }}
-                                                    className="w-full min-h-[96px] resize-none rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-700 dark:text-slate-100 leading-6 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                                                    placeholder="Введите формулировку симптома или критерия"
-                                                    autoFocus
-                                                />
-                                                <p className="text-xs text-slate-400">
-                                                    `Ctrl+Enter` или `Cmd+Enter` сохранить, `Escape` отменить
-                                                </p>
-                                            </div>
+                            {categorySymptoms.map((symptom, idx) => {
+                                const specificity = symptom.specificity ?? 'medium';
+                                const isPatho = symptom.isPathognomonic ?? false;
+                                const specConfig = SPECIFICITY_CONFIG[specificity];
 
-                                            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,280px)_auto] gap-3 items-end">
-                                                <div className="space-y-2 min-w-0">
+                                return (
+                                    <div
+                                        key={`${symptom.text}-${idx}`}
+                                        className={clsx('relative min-w-0', editingSymptom === symptom.text && 'basis-full')}
+                                    >
+                                        {editingSymptom === symptom.text ? (
+                                            <div className="w-full rounded-2xl border-2 border-primary-500/70 bg-white dark:bg-slate-900 shadow-lg p-4 space-y-4">
+                                                <div className="space-y-2">
                                                     <label className="text-xs font-black text-slate-400 uppercase tracking-wider">
-                                                        Тип критерия
+                                                        Формулировка критерия
                                                     </label>
-                                                    <PrettySelect
-                                                        value={editCategory}
-                                                        onChange={(value) => setEditCategory(value)}
-                                                        options={CATEGORY_OPTIONS}
-                                                        buttonClassName="h-11 rounded-xl px-4 font-medium"
-                                                        useFixedPanel
+                                                    <textarea
+                                                        ref={editTextareaRef}
+                                                        rows={3}
+                                                        value={editText}
+                                                        onChange={(e) => setEditText(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                saveEdit(symptom.text);
+                                                            } else if (e.key === 'Escape') {
+                                                                e.preventDefault();
+                                                                cancelEdit();
+                                                            }
+                                                        }}
+                                                        className="w-full min-h-[96px] resize-none rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-700 dark:text-slate-100 leading-6 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                                        placeholder="Введите формулировку симптома или критерия"
+                                                        autoFocus
                                                     />
+                                                    <p className="text-xs text-slate-400">
+                                                        `Ctrl+Enter` или `Cmd+Enter` сохранить, `Escape` отменить
+                                                    </p>
                                                 </div>
 
-                                                <div className="flex items-center gap-2 md:justify-end">
+                                                {/* Тип критерия + Специфичность + Патогномоничность */}
+                                                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,220px)_1fr_auto] gap-3 items-end">
+                                                    <div className="space-y-2 min-w-0">
+                                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                                                            Тип критерия
+                                                        </label>
+                                                        <PrettySelect
+                                                            value={editCategory}
+                                                            onChange={(value) => setEditCategory(value)}
+                                                            options={CATEGORY_OPTIONS}
+                                                            buttonClassName="h-11 rounded-xl px-4 font-medium"
+                                                            useFixedPanel
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                                                            Специфичность
+                                                        </label>
+                                                        <div className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800 h-11">
+                                                            {SPECIFICITY_OPTIONS.map((spec) => {
+                                                                const sc = SPECIFICITY_CONFIG[spec];
+                                                                const isActive = editSpecificity === spec;
+                                                                const isDisabled = editIsPathognomonic && spec !== 'high';
+                                                                return (
+                                                                    <button
+                                                                        key={spec}
+                                                                        type="button"
+                                                                        disabled={isDisabled}
+                                                                        onClick={() => !isDisabled && setEditSpecificity(spec)}
+                                                                        className={clsx(
+                                                                            'flex-1 flex items-center justify-center gap-1.5 h-full rounded-lg border text-xs font-medium transition-colors',
+                                                                            isActive ? sc.pillActive : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200',
+                                                                            isDisabled && 'opacity-40 cursor-not-allowed'
+                                                                        )}
+                                                                        aria-pressed={isActive}
+                                                                        title={isDisabled ? 'Патогномоничный признак всегда имеет высокую специфичность' : sc.label}
+                                                                    >
+                                                                        <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', sc.dotColor)} />
+                                                                        <span>{sc.label}</span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Патогномоничный toggle */}
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                                                            Патогномоничный
+                                                        </label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handlePathognomicToggle}
+                                                            className={clsx(
+                                                                'h-11 w-full min-w-[48px] rounded-xl border-2 flex items-center justify-center gap-2 px-3 transition-all font-medium text-sm',
+                                                                editIsPathognomonic
+                                                                    ? 'border-amber-400 bg-amber-50 text-amber-600 shadow-[0_0_0_1px_theme(colors.amber.300)] dark:bg-amber-900/30 dark:text-amber-300'
+                                                                    : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:border-amber-300 hover:text-amber-500 dark:hover:border-amber-600'
+                                                            )}
+                                                            aria-pressed={editIsPathognomonic}
+                                                            title="Патогномоничный признак — встречается только при данном заболевании"
+                                                        >
+                                                            <Star className={clsx('w-4 h-4', editIsPathognomonic ? 'fill-amber-400 text-amber-400' : '')} />
+                                                            <span className="hidden sm:inline">{editIsPathognomonic ? 'Да' : 'Нет'}</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 justify-end border-t border-slate-100 dark:border-slate-800 pt-3">
                                                     <button
                                                         type="button"
                                                         onClick={() => saveEdit(symptom.text)}
@@ -279,49 +372,60 @@ export const SymptomsList: React.FC<SymptomsListProps> = ({
                                                     </button>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ) : (
-                                        <Badge
-                                            className={clsx(
-                                                'max-w-full pl-3 pr-1 py-1.5 rounded-xl flex items-start gap-2 group border shadow-sm',
-                                                editable && 'cursor-pointer hover:shadow-md hover:-translate-y-px transition-all',
-                                                config.color
-                                            )}
-                                            onClick={editable ? () => startEdit(symptom) : undefined}
-                                            onKeyDown={editable ? (event) => {
-                                                if (event.key === 'Enter' || event.key === ' ') {
-                                                    event.preventDefault();
-                                                    startEdit(symptom);
-                                                }
-                                            } : undefined}
-                                            role={editable ? 'button' : undefined}
-                                            tabIndex={editable ? 0 : undefined}
-                                            aria-label={editable ? `Редактировать симптом ${symptom.text}` : undefined}
-                                        >
-                                            <span className="max-w-[min(100%,40rem)] whitespace-normal break-words leading-snug" title={symptom.text}>
-                                                {symptom.text}
-                                            </span>
-                                            {editable && (
-                                                <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(event) => {
-                                                            event.stopPropagation();
-                                                            onRemove?.(symptom);
-                                                        }}
-                                                        onKeyDown={(event) => event.stopPropagation()}
-                                                        className="p-1 hover:bg-white/20 rounded-lg transition-colors"
-                                                        title="Удалить"
-                                                        aria-label={`Удалить симптом ${symptom.text}`}
-                                                    >
-                                                        <X className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </Badge>
-                                    )}
-                                </div>
-                            ))}
+                                        ) : (
+                                            <Badge
+                                                className={clsx(
+                                                    'max-w-full pl-2.5 pr-1 py-1.5 rounded-xl flex items-start gap-2 group border shadow-sm',
+                                                    editable && 'cursor-pointer hover:shadow-md hover:-translate-y-px transition-all',
+                                                    isPatho
+                                                        ? 'border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-700'
+                                                        : config.color
+                                                )}
+                                                onClick={editable ? () => startEdit(symptom) : undefined}
+                                                onKeyDown={editable ? (event) => {
+                                                    if (event.key === 'Enter' || event.key === ' ') {
+                                                        event.preventDefault();
+                                                        startEdit(symptom);
+                                                    }
+                                                } : undefined}
+                                                role={editable ? 'button' : undefined}
+                                                tabIndex={editable ? 0 : undefined}
+                                                aria-label={editable ? `Редактировать симптом ${symptom.text}` : undefined}
+                                            >
+                                                {/* Specificity dot */}
+                                                <span
+                                                    className={clsx('w-2 h-2 rounded-full flex-shrink-0 mt-1', specConfig.dotColor)}
+                                                    title={`Специфичность: ${specConfig.label}`}
+                                                />
+
+                                                <span className="max-w-[min(100%,40rem)] whitespace-normal break-words leading-snug flex items-center gap-1.5 flex-wrap" title={symptom.text}>
+                                                    {isPatho && (
+                                                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 flex-shrink-0" aria-label="Патогномоничный признак" />
+                                                    )}
+                                                    {symptom.text}
+                                                </span>
+                                                {editable && (
+                                                    <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                onRemove?.(symptom);
+                                                            }}
+                                                            onKeyDown={(event) => event.stopPropagation()}
+                                                            className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                                                            title="Удалить"
+                                                            aria-label={`Удалить симптом ${symptom.text}`}
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 );

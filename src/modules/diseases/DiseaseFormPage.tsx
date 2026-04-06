@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { diseaseService, parseSymptoms } from './services/diseaseService';
 import { useToast } from '../../context/ToastContext';
 import { icdCodeService } from '../../services/icdCode.service';
-import { Disease, SymptomCategory, CategorizedSymptom, DiseaseRecommendationItem, DiseaseRecommendationCategory } from '../../types';
+import { Disease, SymptomCategory, SymptomSpecificity, CategorizedSymptom, DiseaseRecommendationItem, DiseaseRecommendationCategory } from '../../types';
 import { logger } from '../../services/logger';
 import { Card } from '../../components/ui/Card';
 import { SymptomsList } from './components/SymptomsList';
@@ -29,7 +29,8 @@ import {
     Trash2,
     Copy,
     Eye,
-    BookOpen
+    BookOpen,
+    Star,
 } from 'lucide-react';
 import DISEASE_JSON_TEMPLATE from './templates/diseaseJsonTemplate.json';
 
@@ -121,6 +122,8 @@ export const DiseaseFormPage: React.FC = () => {
 
     const [newSymptom, setNewSymptom] = useState('');
     const [newSymptomCategory, setNewSymptomCategory] = useState<SymptomCategory>('other');
+    const [newSymptomSpecificity, setNewSymptomSpecificity] = useState<SymptomSpecificity>('medium');
+    const [newIsPathognomonic, setNewIsPathognomonic] = useState(false);
     const [newDifferential, setNewDifferential] = useState('');
     const [newRedFlag, setNewRedFlag] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -309,11 +312,19 @@ export const DiseaseFormPage: React.FC = () => {
             return;
         }
 
+        const specificity = newIsPathognomonic ? 'high' : newSymptomSpecificity;
         setFormData({
             ...formData,
-            symptoms: [...(formData.symptoms || []), { text: symptomText, category: newSymptomCategory }]
+            symptoms: [...(formData.symptoms || []), {
+                text: symptomText,
+                category: newSymptomCategory,
+                specificity,
+                isPathognomonic: newIsPathognomonic,
+            }]
         });
         setNewSymptom('');
+        setNewSymptomSpecificity('medium');
+        setNewIsPathognomonic(false);
     };
 
     const removeSymptom = (symptom: CategorizedSymptom) => {
@@ -332,9 +343,9 @@ export const DiseaseFormPage: React.FC = () => {
         });
     };
 
-    const updateSymptom = (oldText: string, newText: string, newCategory: SymptomCategory) => {
+    const updateSymptom = (oldText: string, newText: string, newCategory: SymptomCategory, specificity: SymptomSpecificity = 'medium', isPathognomonic: boolean = false) => {
         if (!newText.trim()) {
-            removeSymptom({ text: oldText, category: newCategory });
+            removeSymptom({ text: oldText, category: newCategory, specificity, isPathognomonic });
             return;
         }
         const trimmedNewText = newText.trim();
@@ -348,7 +359,7 @@ export const DiseaseFormPage: React.FC = () => {
         setFormData({
             ...formData,
             symptoms: formData.symptoms?.map(s =>
-                s.text === oldText ? { text: trimmedNewText, category: newCategory } : s
+                s.text === oldText ? { text: trimmedNewText, category: newCategory, specificity, isPathognomonic } : s
             ) || []
         });
     };
@@ -1003,26 +1014,85 @@ export const DiseaseFormPage: React.FC = () => {
                         Симптомы и клинические признаки
                     </h2>
 
-                    <div className="flex gap-2 mb-4 flex-wrap">
-                        <Input
-                            value={newSymptom}
-                            onChange={e => setNewSymptom(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addSymptom())}
-                            placeholder="Введите симптом или клинический признак..."
-                            className="h-12 rounded-xl flex-1 min-w-[200px]"
-                        />
-                        <div className="w-48">
-                            <PrettySelect
-                                value={newSymptomCategory}
-                                onChange={(value) => setNewSymptomCategory(value)}
-                                options={symptomCategoryOptions}
-                                buttonClassName="h-12 px-4 rounded-xl font-bold"
-                                useFixedPanel
+                    {/* Add symptom row */}
+                    <div className="space-y-3 mb-5 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800">
+                        <div className="flex gap-2 flex-wrap">
+                            <Input
+                                value={newSymptom}
+                                onChange={e => setNewSymptom(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addSymptom())}
+                                placeholder="Введите симптом или клинический признак..."
+                                className="h-11 rounded-xl flex-1 min-w-[200px]"
                             />
+                            <div className="w-44 flex-shrink-0">
+                                <PrettySelect
+                                    value={newSymptomCategory}
+                                    onChange={(value) => setNewSymptomCategory(value)}
+                                    options={symptomCategoryOptions}
+                                    buttonClassName="h-11 px-4 rounded-xl font-bold"
+                                    useFixedPanel
+                                />
+                            </div>
                         </div>
-                        <Button type="button" onClick={addSymptom} variant="secondary" className="h-12 w-12 rounded-xl p-0">
-                            <Plus className="w-6 h-6" />
-                        </Button>
+
+                        {/* Specificity + Pathognomonic + Add button */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {/* Specificity pill-selector */}
+                            <div className="flex items-center rounded-xl border border-slate-200 dark:border-slate-700 p-1 bg-white dark:bg-slate-800 h-9 gap-1">
+                                {(['low', 'medium', 'high'] as const).map((spec) => {
+                                    const dotColors: Record<string, string> = { low: 'bg-slate-400', medium: 'bg-amber-400', high: 'bg-emerald-500' };
+                                    const activeColors: Record<string, string> = {
+                                        low: 'bg-slate-100 text-slate-700 border-slate-400 dark:bg-slate-700 dark:text-slate-200',
+                                        medium: 'bg-amber-50 text-amber-700 border-amber-400 dark:bg-amber-900/30 dark:text-amber-200',
+                                        high: 'bg-emerald-50 text-emerald-700 border-emerald-400 dark:bg-emerald-900/30 dark:text-emerald-200',
+                                    };
+                                    const labels: Record<string, string> = { low: 'Низкая', medium: 'Средняя', high: 'Высокая' };
+                                    const isActive = newSymptomSpecificity === spec;
+                                    const isDisabled = newIsPathognomonic && spec !== 'high';
+                                    return (
+                                        <button
+                                            key={spec}
+                                            type="button"
+                                            disabled={isDisabled}
+                                            onClick={() => !isDisabled && setNewSymptomSpecificity(spec)}
+                                            className={`flex items-center gap-1.5 px-3 h-full rounded-lg border text-xs font-medium transition-colors ${
+                                                isActive ? activeColors[spec] : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                            } ${isDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                            aria-pressed={isActive}
+                                            title={labels[spec]}
+                                        >
+                                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColors[spec]}`} />
+                                            {labels[spec]}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Pathognomonic toggle */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const next = !newIsPathognomonic;
+                                    setNewIsPathognomonic(next);
+                                    if (next) setNewSymptomSpecificity('high');
+                                }}
+                                className={`h-9 flex items-center gap-2 px-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                                    newIsPathognomonic
+                                        ? 'border-amber-400 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300'
+                                        : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:border-amber-300 hover:text-amber-500'
+                                }`}
+                                aria-pressed={newIsPathognomonic}
+                                title="Патогномоничный признак — характерен только для данного заболевания"
+                            >
+                                <Star className={`w-4 h-4 ${newIsPathognomonic ? 'fill-amber-400 text-amber-400' : ''}`} />
+                                <span>Патогномоничный</span>
+                            </button>
+
+                            <Button type="button" onClick={addSymptom} variant="secondary" className="h-9 px-4 rounded-xl ml-auto">
+                                <Plus className="w-4 h-4 mr-1" />
+                                Добавить
+                            </Button>
+                        </div>
                     </div>
 
                     <SymptomsList

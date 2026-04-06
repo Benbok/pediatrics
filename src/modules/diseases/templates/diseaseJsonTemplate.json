@@ -9,19 +9,27 @@
   "symptoms": [
     {
       "text": "Лихорадка выше 38,0°C продолжительностью более 3-х дней",
-      "category": "clinical"
+      "category": "clinical",
+      "specificity": "medium",
+      "isPathognomonic": false
     },
     {
       "text": "Локальные физикальные изменения: укорочение перкуторного звука",
-      "category": "physical"
+      "category": "physical",
+      "specificity": "high",
+      "isPathognomonic": false
     },
     {
       "text": "Лейкоцитоз >15х10⁹/л со сдвигом лейкоцитарной формулы влево",
-      "category": "laboratory"
+      "category": "laboratory",
+      "specificity": "medium",
+      "isPathognomonic": false
     },
     {
       "text": "Снижение аппетита, общее недомогание",
-      "category": "other"
+      "category": "other",
+      "specificity": "low",
+      "isPathognomonic": false
     }
   ],
   "diagnosticPlan": [

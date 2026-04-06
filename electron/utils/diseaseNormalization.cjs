@@ -264,6 +264,8 @@ function normalizeSymptomsToCategorized(symptoms) {
             .map(s => ({
                 text: String(s.text).trim(),
                 category: ['clinical', 'physical', 'laboratory', 'other'].includes(s.category) ? s.category : 'other',
+                specificity: ['low', 'medium', 'high'].includes(s.specificity) ? s.specificity : 'medium',
+                isPathognomonic: typeof s.isPathognomonic === 'boolean' ? s.isPathognomonic : false,
             }))
             .filter(item => {
                 const key = item.text.toLowerCase();

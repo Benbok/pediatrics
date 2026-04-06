@@ -17,9 +17,13 @@ const addDuplicateIssue = (
 export const SymptomCategoryEnum = z.enum(['clinical', 'physical', 'laboratory', 'other']);
 export type SymptomCategoryType = z.infer<typeof SymptomCategoryEnum>;
 
+export const SymptomSpecificityEnum = z.enum(['low', 'medium', 'high']);
+
 export const SymptomSchema = z.object({
     text: z.string().min(1, 'Текст симптома не может быть пустым'),
     category: SymptomCategoryEnum.default('other'),
+    specificity: SymptomSpecificityEnum.optional().default('medium'),
+    isPathognomonic: z.boolean().optional().default(false),
 });
 
 export const DiagnosticPlanItemSchema = z.object({

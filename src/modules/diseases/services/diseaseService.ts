@@ -1,4 +1,4 @@
-import { Disease, ClinicalGuideline, GuidelinePlan, CategorizedSymptom, SymptomCategory, UploadProgress } from '../../../types';
+import { Disease, ClinicalGuideline, GuidelinePlan, CategorizedSymptom, SymptomCategory, SymptomSpecificity, UploadProgress } from '../../../types';
 import { dataEvents } from '../../../services/dataEvents';
 import { logger } from '../../../services/logger';
 import { DiseaseSchema } from '../../../validators/disease.validator';
@@ -38,11 +38,18 @@ export function parseSymptoms(symptoms: any): CategorizedSymptom[] {
     const parsed = Array.isArray(symptoms) ? symptoms : safeJsonParse<any[]>(symptoms, []);
     if (parsed.length === 0) return [];
     if (typeof parsed[0] === 'string') {
-        return parsed.map((text: string) => ({ text: String(text).trim(), category: 'other' as SymptomCategory }));
+        return parsed.map((text: string) => ({
+            text: String(text).trim(),
+            category: 'other' as SymptomCategory,
+            specificity: 'medium' as SymptomSpecificity,
+            isPathognomonic: false,
+        }));
     }
     return parsed.map((s: any) => ({
         text: (s && s.text) ? String(s.text).trim() : '',
-        category: (s && s.category && ['clinical', 'physical', 'laboratory', 'other'].includes(s.category)) ? s.category as SymptomCategory : 'other' as SymptomCategory
+        category: (s && s.category && ['clinical', 'physical', 'laboratory', 'other'].includes(s.category)) ? s.category as SymptomCategory : 'other' as SymptomCategory,
+        specificity: (s && s.specificity && ['low', 'medium', 'high'].includes(s.specificity)) ? s.specificity as SymptomSpecificity : 'medium' as SymptomSpecificity,
+        isPathognomonic: (s && typeof s.isPathognomonic === 'boolean') ? s.isPathognomonic : false,
     })).filter((s: CategorizedSymptom) => s.text.length > 0);
 }
 

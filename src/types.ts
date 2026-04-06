@@ -286,10 +286,13 @@ export interface TreatmentPlanItem {
 }
 
 export type SymptomCategory = 'clinical' | 'physical' | 'laboratory' | 'other';
+export type SymptomSpecificity = 'low' | 'medium' | 'high';
 
 export interface CategorizedSymptom {
   text: string;
   category: SymptomCategory;
+  specificity?: SymptomSpecificity;
+  isPathognomonic?: boolean;
 }
 
 export type DiseaseRecommendationCategory = 'regimen' | 'nutrition' | 'followup' | 'activity' | 'education' | 'other';

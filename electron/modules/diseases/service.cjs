@@ -15,6 +15,12 @@ const { logDegradation } = require('../../logger.cjs');
 const { normalizeDiseaseData, resolveTestNameFromCatalog, normalizeTestName } = require('../../utils/diseaseNormalization.cjs');
 const { CacheService } = require('../../services/cacheService.cjs');
 const { ChunkIndexService } = require('../../services/chunkIndexService.cjs');
+const {
+    SYMPTOM_WEIGHT_PATHOGNOMONIC,
+    SYMPTOM_WEIGHT_HIGH,
+    SYMPTOM_WEIGHT_MEDIUM,
+    SYMPTOM_WEIGHT_LOW,
+} = require('../../config/cdssConfig.cjs');
 
 // Upload job queue
 const uploadQueue = {
@@ -225,10 +231,12 @@ function buildGuidelinePlan(disease, guideline) {
     };
 }
 
-// Symptom schema: { text, category } with backward compatibility for string[]
+// Symptom schema: { text, category, specificity, isPathognomonic } with backward compatibility for string[]
 const SymptomSchema = z.object({
     text: z.string().min(1),
     category: z.enum(['clinical', 'physical', 'laboratory', 'other']).default('other'),
+    specificity: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+    isPathognomonic: z.boolean().optional().default(false),
 });
 
 // Disease Validation Schema
@@ -293,17 +301,20 @@ const DiseaseSchema = z.object({
 });
 
 /**
- * Parse symptoms from DB JSON. Supports old format (string[]) and new format ({text, category}[]).
+ * Parse symptoms from DB JSON. Supports old format (string[]) and new format ({text, category, specificity, isPathognomonic}[]).
+ * Old records missing specificity/isPathognomonic default to 'medium' / false.
  */
 function _parseSymptoms(symptomsJson) {
     const parsed = safeJsonParse(symptomsJson, []);
     if (parsed.length === 0) return [];
     if (typeof parsed[0] === 'string') {
-        return parsed.map(text => ({ text: String(text).trim(), category: 'other' }));
+        return parsed.map(text => ({ text: String(text).trim(), category: 'other', specificity: 'medium', isPathognomonic: false }));
     }
     return parsed.map(s => ({
         text: (s && s.text) ? String(s.text).trim() : '',
         category: (s && s.category && ['clinical', 'physical', 'laboratory', 'other'].includes(s.category)) ? s.category : 'other',
+        specificity: (s && s.specificity && ['low', 'medium', 'high'].includes(s.specificity)) ? s.specificity : 'medium',
+        isPathognomonic: (s && typeof s.isPathognomonic === 'boolean') ? s.isPathognomonic : false,
     })).filter(s => s.text.length > 0);
 }
 
@@ -1512,26 +1523,57 @@ const DiseaseService = {
 
     /**
      * Semantic search по симптомам с использованием embeddings
-     * @param {string[]} symptoms - Массив симптомов для поиска
-     * @returns {Promise<Array>} Массив заболеваний, отсортированных по релевантности
+     * Поддерживает взвешенный запрос: патогномоничные симптомы повторяются SYMPTOM_WEIGHT_PATHOGNOMONIC раз,
+     * high-specificity — SYMPTOM_WEIGHT_HIGH раз, low — 1 раз (вес 0.5 означает не повторяется дополнительно).
+     * @param {Array<string|{text,category,specificity,isPathognomonic}>} symptoms
+     * @returns {Promise<Array>}
      */
     async searchBySymptoms(symptoms) {
-        const symptomTexts = Array.isArray(symptoms)
-            ? symptoms.map(s => (typeof s === 'string' ? s : (s && s.text) ? s.text : '')).filter(Boolean)
+        const symptomObjects = Array.isArray(symptoms)
+            ? symptoms.map(s => {
+                if (typeof s === 'string') return { text: s, specificity: 'medium', isPathognomonic: false };
+                return {
+                    text: (s && s.text) ? s.text : '',
+                    specificity: (s && s.specificity) ? s.specificity : 'medium',
+                    isPathognomonic: (s && s.isPathognomonic) ? Boolean(s.isPathognomonic) : false,
+                };
+            }).filter(s => Boolean(s.text))
             : [];
-        if (symptomTexts.length === 0) {
+
+        if (symptomObjects.length === 0) {
             return [];
         }
+
+        const symptomTexts = symptomObjects.map(s => s.text);
 
         // 1. Нормализация (словарь + опционально batch AI)
         const { normalized, source, aiUsed } = await normalizeWithAI(symptomTexts);
         logger.debug(`[DiseaseService] Normalization: ${source}, AI used: ${aiUsed}`);
 
-        const symptomsToUse = normalized.length > 0 ? normalized : symptomTexts;
-        const symptomsText = symptomsToUse.join(', ');
+        const normalizedTexts = normalized.length > 0 ? normalized : symptomTexts;
 
-        // Проверяем кэш
-        const cached = getCachedSearch(symptomsText);
+        // 2. Построение взвешенного текста: патогномоничные/high повторяются для усиления cos sim
+        const weightedParts = [];
+        normalizedTexts.forEach((text, idx) => {
+            const obj = symptomObjects[idx] || {};
+            let repeatCount = SYMPTOM_WEIGHT_MEDIUM;
+            if (obj.isPathognomonic) {
+                repeatCount = SYMPTOM_WEIGHT_PATHOGNOMONIC;
+            } else if (obj.specificity === 'high') {
+                repeatCount = SYMPTOM_WEIGHT_HIGH;
+            } else if (obj.specificity === 'low') {
+                repeatCount = 1; // low: включаем, но не повторяем
+            }
+            for (let i = 0; i < repeatCount; i++) {
+                weightedParts.push(text);
+            }
+        });
+
+        const symptomsText = weightedParts.join(', ');
+        const plainSymptomsText = normalizedTexts.join(', ');
+
+        // Проверяем кэш (по невзвешенному тексту для переиспользования)
+        const cached = getCachedSearch(plainSymptomsText);
         if (cached) {
             logger.debug('[DiseaseService] Using cached search results');
             return cached;
@@ -1555,7 +1597,7 @@ const DiseaseService = {
             if (diseases.length === 0) {
                 logger.warn('[DiseaseService] No diseases with embeddings found, falling back to keyword matching');
                 logDegradation('search', 'Keyword');
-                return this._fallbackKeywordSearch(symptomsToUse);
+                return this._fallbackKeywordSearch(normalizedTexts);
             }
 
             // Вычисляем similarity для каждого заболевания
@@ -1591,12 +1633,12 @@ const DiseaseService = {
             if (finalResults.length === 0) {
                 logger.warn('[DiseaseService] Semantic search returned 0 results, falling back to keyword matching');
                 logDegradation('search', 'Keyword');
-                return this._fallbackKeywordSearch(symptomsToUse);
+                return this._fallbackKeywordSearch(normalizedTexts);
             }
 
             logDegradation('search', 'Semantic');
             // Сохраняем в кэш
-            cacheSearch(symptomsText, finalResults);
+            cacheSearch(plainSymptomsText, finalResults);
 
             const duration = Date.now() - startTime;
             logger.info(`[DiseaseService] Semantic search found ${finalResults.length} results in ${duration}ms`);
@@ -1610,7 +1652,7 @@ const DiseaseService = {
         } catch (error) {
             logger.error('[DiseaseService] Semantic search failed, falling back to keyword matching:', error);
             logDegradation('search', 'Keyword');
-            return this._fallbackKeywordSearch(symptomsToUse);
+            return this._fallbackKeywordSearch(normalizedTexts);
         }
     },
 

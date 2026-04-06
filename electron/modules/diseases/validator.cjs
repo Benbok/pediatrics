@@ -141,7 +141,7 @@ class DiseaseValidator {
     }
 
     /**
-     * Проверка симптомов. Поддерживает формат string[] (старый) и {text, category}[] (новый).
+     * Проверка симптомов. Поддерживает формат string[] (старый) и {text, category, specificity, isPathognomonic}[] (новый).
      */
     validateSymptoms(data) {
         if (data.symptoms !== undefined && data.symptoms !== null) {
@@ -162,6 +162,7 @@ class DiseaseValidator {
             }
 
             const canonicalSymptoms = getCanonicalSet('symptoms');
+            const validSpecificities = ['low', 'medium', 'high'];
             const texts = [];
 
             data.symptoms.forEach((symptom, idx) => {
@@ -195,6 +196,18 @@ class DiseaseValidator {
                         severity: 'low'
                     });
                 }
+
+                // Validate specificity if present
+                if (typeof symptom === 'object' && symptom !== null && symptom.specificity !== undefined) {
+                    if (!validSpecificities.includes(symptom.specificity)) {
+                        this.warnings.push({
+                            field: `symptoms[${idx}].specificity`,
+                            message: `Недопустимое значение specificity: "${symptom.specificity}". Допустимые: low, medium, high`,
+                            severity: 'low'
+                        });
+                    }
+                }
+
                 texts.push(text.trim().toLowerCase());
             });
 
