@@ -395,5 +395,26 @@ export const diseaseService = {
             logger.error('[DiseaseService] Failed to link test alias', { error, aliasText, canonicalName });
             throw error;
         }
+    },
+
+    async listDiagnosticCatalogEntries(search?: string) {
+        try {
+            return await window.electronAPI.listDiagnosticCatalogEntries(search);
+        } catch (error) {
+            logger.error('[DiseaseService] Failed to list catalog entries', { error });
+            return [];
+        }
+    },
+
+    async createDiagnosticCatalogEntry(nameRu: string, type: 'lab' | 'instrumental', aliases: string[]) {
+        return await window.electronAPI.createDiagnosticCatalogEntry(nameRu, type, aliases);
+    },
+
+    async updateDiagnosticCatalogEntry(id: number, data: { nameRu?: string; type?: 'lab' | 'instrumental'; aliases?: string[] }) {
+        return await window.electronAPI.updateDiagnosticCatalogEntry(id, data);
+    },
+
+    async deleteDiagnosticCatalogEntry(id: number) {
+        return await window.electronAPI.deleteDiagnosticCatalogEntry(id);
     }
 };

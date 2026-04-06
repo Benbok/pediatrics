@@ -271,6 +271,14 @@ export interface DiagnosticPlanItem {
   rationale?: string | null;
 }
 
+export interface DiagnosticCatalogEntry {
+  id: number;
+  nameRu: string;
+  type: 'lab' | 'instrumental';
+  aliases: string; // JSON string array
+  isStandard: boolean;
+}
+
 export interface TreatmentPlanItem {
   category: 'symptomatic' | 'etiologic' | 'supportive' | 'other';
   description: string;
@@ -1024,6 +1032,11 @@ declare global {
         canonicalName: string;
         aliasAdded: boolean;
       }>;
+      // Diagnostic catalog CRUD
+      listDiagnosticCatalogEntries: (search?: string) => Promise<DiagnosticCatalogEntry[]>;
+      createDiagnosticCatalogEntry: (nameRu: string, type: 'lab' | 'instrumental', aliases: string[]) => Promise<DiagnosticCatalogEntry>;
+      updateDiagnosticCatalogEntry: (id: number, data: { nameRu?: string; type?: 'lab' | 'instrumental'; aliases?: string[] }) => Promise<DiagnosticCatalogEntry>;
+      deleteDiagnosticCatalogEntry: (id: number) => Promise<{ deleted: boolean; nameRu: string; diseaseUsageCount: number }>;
 
       // Disease Notes (Personal or Shared)
       getDiseaseNotes: (diseaseId: number) => Promise<DiseaseNote[]>;

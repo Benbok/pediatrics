@@ -1,9 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag } from 'lucide-react';
 import { getCurrentApiKey, setApiKey, validateApiKey } from '../../services/geminiService';
 import { apiKeyService, PoolStatus } from '../../services/apiKeyService';
 import { vaccinationService } from '../../services/vaccination.service';
-import { VaccineCatalogEntry } from '../../types';
+import { PrettySelect, type SelectOption } from '../diseases/components/PrettySelect';
+import { diseaseService } from '../diseases/services/diseaseService';
+import { VaccineCatalogEntry, DiagnosticCatalogEntry } from '../../types';
+
+const diagnosticTypeOptions: SelectOption<'lab' | 'instrumental'>[] = [
+    { value: 'lab', label: 'Лабораторный' },
+    { value: 'instrumental', label: 'Инструментальный' },
+];
 
 export const SettingsModule: React.FC = () => {
     const [apiKey, setLocalApiKey] = useState('');
@@ -32,9 +39,9 @@ export const SettingsModule: React.FC = () => {
     const [vaccineCatalog, setVaccineCatalog] = useState<VaccineCatalogEntry[]>([]);
     const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
     const [isSavingCatalog, setIsSavingCatalog] = useState(false);
-    const [catalogError, setCatalogError] = useState('');
+        const [vaccineCatalogError, setVaccineCatalogError] = useState('');
     const [catalogInfo, setCatalogInfo] = useState('');
-    const [catalogSearch, setCatalogSearch] = useState('');
+        const [vaccineCatalogSearch, setVaccineCatalogSearch] = useState('');
     const [isSyncingBaseline, setIsSyncingBaseline] = useState(false);
     const [planMonths, setPlanMonths] = useState('');
     const [planIntervals, setPlanIntervals] = useState('');
@@ -50,7 +57,24 @@ export const SettingsModule: React.FC = () => {
         availableBrands: []
     });
     const [brandDraft, setBrandDraft] = useState({ name: '', country: '', description: '' });
-    const [activeTab, setActiveTab] = useState<'api' | 'catalog' | 'cache' | 'security'>('api');
+    const [activeTab, setActiveTab] = useState<'api' | 'catalog' | 'cache' | 'security' | 'diseases'>('api');
+
+    // Diagnostic catalog CRUD state
+    const [catalogEntries, setCatalogEntries] = useState<DiagnosticCatalogEntry[]>([]);
+    const [catalogLoading, setCatalogLoading] = useState(false);
+    const [catalogSearch, setCatalogSearch] = useState('');
+    const [catalogError, setCatalogError] = useState<string | null>(null);
+    // New entry form
+    const [newEntryName, setNewEntryName] = useState('');
+    const [newEntryType, setNewEntryType] = useState<'lab' | 'instrumental'>('lab');
+    const [newEntryAliasInput, setNewEntryAliasInput] = useState('');
+    const [newEntryAliases, setNewEntryAliases] = useState<string[]>([]);
+    const [isCreatingEntry, setIsCreatingEntry] = useState(false);
+    // Edit state: id -> { nameRu, type, aliases, aliasInput }
+    const [editingEntries, setEditingEntries] = useState<Record<number, { nameRu: string; type: 'lab' | 'instrumental'; aliases: string[]; aliasInput: string }>>({});
+    const [savingEntryIds, setSavingEntryIds] = useState<Set<number>>(new Set());
+    const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
 
     useEffect(() => {
         // Load current API key and base URL on mount
@@ -75,18 +99,38 @@ export const SettingsModule: React.FC = () => {
         loadVaccineCatalog();
     }, []);
 
+    // Load diagnostic catalog when tab is opened
+    useEffect(() => {
+        if (activeTab === 'diseases') {
+            loadCatalogEntries(catalogSearch);
+        }
+    }, [activeTab]);
+
+    const loadCatalogEntries = useCallback(async (search?: string) => {
+        setCatalogLoading(true);
+        setCatalogError(null);
+        try {
+            const entries = await diseaseService.listDiagnosticCatalogEntries(search);
+            setCatalogEntries(entries);
+        } catch (e: any) {
+            setCatalogError(e.message || 'Ошибка загрузки каталога');
+        } finally {
+            setCatalogLoading(false);
+        }
+    }, []);
+
     const loadVaccineCatalog = async () => {
         setIsLoadingCatalog(true);
         try {
             const seedResult = await vaccinationService.ensureBaselineCatalogSeeded(false);
             const data = await vaccinationService.getVaccineCatalog();
             setVaccineCatalog(data);
-            setCatalogError('');
+                setVaccineCatalogError('');
             if (seedResult.inserted > 0) {
                 setCatalogInfo(`Каталог дополнен базовым календарём: добавлено ${seedResult.inserted} записей.`);
             }
         } catch (error: any) {
-            setCatalogError(error.message || 'Не удалось загрузить каталог вакцин');
+                setVaccineCatalogError(error.message || 'Не удалось загрузить каталог вакцин');
         } finally {
             setIsLoadingCatalog(false);
         }
@@ -94,7 +138,7 @@ export const SettingsModule: React.FC = () => {
 
     const handleSyncBaselineCatalog = async () => {
         setIsSyncingBaseline(true);
-        setCatalogError('');
+            setVaccineCatalogError('');
         setCatalogInfo('');
         try {
             const result = await vaccinationService.ensureBaselineCatalogSeeded(true);
@@ -102,7 +146,7 @@ export const SettingsModule: React.FC = () => {
             setVaccineCatalog(refreshed);
             setCatalogInfo(`Синхронизация завершена: добавлено ${result.inserted}, обновлено ${result.updated}.`);
         } catch (error: any) {
-            setCatalogError(error.message || 'Не удалось синхронизировать базовый календарь');
+                setVaccineCatalogError(error.message || 'Не удалось синхронизировать базовый календарь');
         } finally {
             setIsSyncingBaseline(false);
         }
@@ -123,7 +167,7 @@ export const SettingsModule: React.FC = () => {
         setPlanMonths('');
         setPlanIntervals('');
         setSingleDoseMonth('');
-        setCatalogError('');
+            setVaccineCatalogError('');
         setCatalogInfo('Поля формы очищены.');
     };
 
@@ -142,7 +186,7 @@ export const SettingsModule: React.FC = () => {
     const handleCatalogSave = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!catalogForm.name.trim() || !catalogForm.disease.trim()) {
-            setCatalogError('Заполните название и заболевание');
+                setVaccineCatalogError('Заполните название и заболевание');
             return;
         }
 
@@ -164,22 +208,22 @@ export const SettingsModule: React.FC = () => {
             : (singleDoseMonth.trim() ? [parsedSingleDoseMonth] : []);
 
         if (!monthsToSave.length) {
-            setCatalogError('Укажите план доз или возраст первой дозы');
+              setVaccineCatalogError('Укажите план доз или возраст первой дозы');
             return;
         }
 
         if (monthsToSave.some((value) => Number.isNaN(value) || value < 0 || value > 240)) {
-            setCatalogError('План доз должен содержать месяцы от 0 до 240, через запятую (дробные разрешены)');
+              setVaccineCatalogError('План доз должен содержать месяцы от 0 до 240, через запятую (дробные разрешены)');
             return;
         }
 
         if (parsedIntervals.some((value) => Number.isNaN(value) || !Number.isInteger(value) || value < 0 || value > 3650)) {
-            setCatalogError('Интервалы доз должны быть целыми днями от 0 до 3650, через запятую');
+              setVaccineCatalogError('Интервалы доз должны быть целыми днями от 0 до 3650, через запятую');
             return;
         }
 
         if (parsedIntervals.length > 0 && parsedIntervals.length !== monthsToSave.length) {
-            setCatalogError('Количество интервалов должно совпадать с количеством доз');
+              setVaccineCatalogError('Количество интервалов должно совпадать с количеством доз');
             return;
         }
 
@@ -200,10 +244,10 @@ export const SettingsModule: React.FC = () => {
             setVaccineCatalog(refreshedCatalog);
 
             resetCatalogForm();
-            setCatalogError('');
+                setVaccineCatalogError('');
             setCatalogInfo('Запись плана сохранена.');
         } catch (error: any) {
-            setCatalogError(error.message || 'Не удалось сохранить запись каталога');
+                setVaccineCatalogError(error.message || 'Не удалось сохранить запись каталога');
         } finally {
             setIsSavingCatalog(false);
         }
@@ -226,7 +270,7 @@ export const SettingsModule: React.FC = () => {
             const updated = await vaccinationService.setVaccineCatalogEntryDeleted(entry.vaccineId, !entry.isDeleted);
             setVaccineCatalog(prev => prev.map(item => item.vaccineId === updated.vaccineId ? updated : item));
         } catch (error: any) {
-            setCatalogError(error.message || 'Не удалось изменить статус записи');
+                setVaccineCatalogError(error.message || 'Не удалось изменить статус записи');
         }
     };
 
@@ -236,7 +280,7 @@ export const SettingsModule: React.FC = () => {
         const description = brandDraft.description.trim();
 
         if (!name || !country) {
-            setCatalogError('Для препарата заполните название и страну');
+              setVaccineCatalogError('Для препарата заполните название и страну');
             return;
         }
 
@@ -253,7 +297,7 @@ export const SettingsModule: React.FC = () => {
         }));
 
         setBrandDraft({ name: '', country: '', description: '' });
-        setCatalogError('');
+    setVaccineCatalogError('');
     };
 
     const handleBrandChange = (index: number, field: 'name' | 'country' | 'description', value: string) => {
@@ -278,9 +322,9 @@ export const SettingsModule: React.FC = () => {
         }));
     };
 
-    const normalizedCatalogSearch = catalogSearch.trim().toLowerCase();
+    const normalizedVaccineCatalogSearch = vaccineCatalogSearch.trim().toLowerCase();
     const filteredVaccineCatalog = vaccineCatalog.filter((entry) => {
-        if (!normalizedCatalogSearch) return true;
+        if (!normalizedVaccineCatalogSearch) return true;
 
         const haystack = [
             entry.vaccineId,
@@ -291,7 +335,7 @@ export const SettingsModule: React.FC = () => {
             .join(' ')
             .toLowerCase();
 
-        return haystack.includes(normalizedCatalogSearch);
+        return haystack.includes(normalizedVaccineCatalogSearch);
     });
 
     const loadPoolStatus = async () => {
@@ -338,6 +382,85 @@ export const SettingsModule: React.FC = () => {
             console.error('Failed to reload keys:', error);
         } finally {
             setIsReloading(false);
+        }
+    };
+
+    // ---- Diagnostic Catalog CRUD handlers ----
+
+    const handleCatalogSearch = (v: string) => {
+        setCatalogSearch(v);
+        loadCatalogEntries(v);
+    };
+
+    const handleCreateEntry = async () => {
+        const name = newEntryName.trim();
+        if (!name) return;
+        setIsCreatingEntry(true);
+        setCatalogError(null);
+        try {
+            const allAliases = newEntryAliasInput.trim()
+                ? [...newEntryAliases, newEntryAliasInput.trim()]
+                : newEntryAliases;
+            await diseaseService.createDiagnosticCatalogEntry(name, newEntryType, allAliases);
+            setNewEntryName('');
+            setNewEntryType('lab');
+            setNewEntryAliases([]);
+            setNewEntryAliasInput('');
+            await loadCatalogEntries(catalogSearch);
+        } catch (e: any) {
+            setCatalogError(e.message || 'Не удалось создать запись');
+        } finally {
+            setIsCreatingEntry(false);
+        }
+    };
+
+    const startEditing = (entry: DiagnosticCatalogEntry) => {
+        let aliases: string[] = [];
+        try { aliases = JSON.parse(entry.aliases || '[]'); } catch (_) {}
+        setEditingEntries(prev => ({
+            ...prev,
+            [entry.id]: { nameRu: entry.nameRu, type: entry.type as 'lab' | 'instrumental', aliases, aliasInput: '' }
+        }));
+    };
+
+    const cancelEditing = (id: number) => {
+        setEditingEntries(prev => { const n = { ...prev }; delete n[id]; return n; });
+    };
+
+    const saveEntry = async (id: number) => {
+        const draft = editingEntries[id];
+        if (!draft) return;
+        const allAliases = draft.aliasInput.trim()
+            ? [...draft.aliases, draft.aliasInput.trim()]
+            : draft.aliases;
+        setSavingEntryIds(prev => new Set(prev).add(id));
+        setCatalogError(null);
+        try {
+            await diseaseService.updateDiagnosticCatalogEntry(id, {
+                nameRu: draft.nameRu,
+                type: draft.type,
+                aliases: allAliases,
+            });
+            cancelEditing(id);
+            await loadCatalogEntries(catalogSearch);
+        } catch (e: any) {
+            setCatalogError(e.message || 'Не удалось сохранить запись');
+        } finally {
+            setSavingEntryIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+        }
+    };
+
+    const handleDeleteEntry = async (id: number) => {
+        setDeletingId(id);
+        setCatalogError(null);
+        try {
+            await diseaseService.deleteDiagnosticCatalogEntry(id);
+            setDeleteConfirmId(null);
+            await loadCatalogEntries(catalogSearch);
+        } catch (e: any) {
+            setCatalogError(e.message || 'Не удалось удалить запись');
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -464,7 +587,7 @@ export const SettingsModule: React.FC = () => {
             </div>
 
             <div className="mb-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
                     <button
                         onClick={() => setActiveTab('api')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -484,6 +607,16 @@ export const SettingsModule: React.FC = () => {
                         }`}
                     >
                         Каталог вакцин
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('diseases')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === 'diseases'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        }`}
+                    >
+                        Модуль болезни
                     </button>
                     <button
                         onClick={() => setActiveTab('cache')}
@@ -975,16 +1108,16 @@ export const SettingsModule: React.FC = () => {
                     </button>
                 </form>
 
-                {catalogError && (
-                    <div className="mb-3 text-sm text-red-600 dark:text-red-400">{catalogError}</div>
+                {vaccineCatalogError && (
+                    <div className="mb-3 text-sm text-red-600 dark:text-red-400">{vaccineCatalogError}</div>
                 )}
                 {catalogInfo && (
                     <div className="mb-3 text-sm text-green-600 dark:text-green-400">{catalogInfo}</div>
                 )}
 
                 <input
-                    value={catalogSearch}
-                    onChange={(e) => setCatalogSearch(e.target.value)}
+                    value={vaccineCatalogSearch}
+                    onChange={(e) => setVaccineCatalogSearch(e.target.value)}
                     placeholder="Поиск по названию, ID, заболеванию или препарату"
                     className="mb-3 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 />
@@ -1035,6 +1168,256 @@ export const SettingsModule: React.FC = () => {
                         )}
                     </div>
                 )}
+            </div>
+            )}
+
+            {activeTab === 'diseases' && (
+            <div className="space-y-6">
+                {/* Header */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                            <FlaskConical className="text-emerald-600 dark:text-emerald-400" size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Каталог диагностических тестов</h2>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">Управление каноническими именами и псевдонимами тестов</p>
+                        </div>
+                    </div>
+
+                    {/* Create new entry */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Новое исследование</p>
+                        <div className="flex gap-2 flex-wrap">
+                            <input
+                                type="text"
+                                value={newEntryName}
+                                onChange={e => setNewEntryName(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleCreateEntry()}
+                                placeholder="Название (канонический)"
+                                className="flex-1 min-w-[200px] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                            />
+                            <div className="w-full sm:w-[240px]">
+                                <PrettySelect
+                                    value={newEntryType}
+                                    onChange={setNewEntryType}
+                                    options={diagnosticTypeOptions}
+                                    buttonClassName="rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm min-h-[42px]"
+                                    panelClassName="rounded-xl"
+                                    useFixedPanel
+                                />
+                            </div>
+                        </div>
+                        {/* Aliases input for new entry */}
+                        <div className="flex flex-wrap gap-1 items-center">
+                            {newEntryAliases.map((a, i) => (
+                                <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-full">
+                                    <Tag size={10} />
+                                    {a}
+                                    <button type="button" onClick={() => setNewEntryAliases(prev => prev.filter((_, idx) => idx !== i))}>
+                                        <X size={10} className="hover:text-red-500" />
+                                    </button>
+                                </span>
+                            ))}
+                            <input
+                                type="text"
+                                value={newEntryAliasInput}
+                                onChange={e => setNewEntryAliasInput(e.target.value)}
+                                onKeyDown={e => {
+                                    if ((e.key === 'Enter' || e.key === ',') && newEntryAliasInput.trim()) {
+                                        e.preventDefault();
+                                        setNewEntryAliases(prev => [...prev, newEntryAliasInput.trim()]);
+                                        setNewEntryAliasInput('');
+                                    }
+                                }}
+                                placeholder="Псевдоним (Enter — добавить)"
+                                className="flex-1 min-w-[180px] px-3 py-1.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleCreateEntry}
+                            disabled={isCreatingEntry || !newEntryName.trim()}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                            {isCreatingEntry ? <Loader className="animate-spin" size={14} /> : <Plus size={14} />}
+                            Создать
+                        </button>
+                    </div>
+                </div>
+
+                {/* Search + list */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                    <div className="flex gap-3 mb-4">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                value={catalogSearch}
+                                onChange={e => handleCatalogSearch(e.target.value)}
+                                placeholder="Поиск по названию или псевдониму..."
+                                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm pr-10"
+                            />
+                            {catalogSearch && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleCatalogSearch('')}
+                                    className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                    title="Очистить поиск"
+                                    aria-label="Очистить поиск"
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => loadCatalogEntries(catalogSearch)}
+                            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            title="Обновить"
+                        >
+                            <RefreshCw size={16} className={catalogLoading ? 'animate-spin text-blue-500' : 'text-slate-500'} />
+                        </button>
+                    </div>
+
+                    {catalogError && (
+                        <div className="mb-3 flex items-center gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
+                            <AlertCircle size={16} />
+                            {catalogError}
+                        </div>
+                    )}
+
+                    {catalogLoading && catalogEntries.length === 0 ? (
+                        <div className="flex items-center justify-center py-10 text-slate-400">
+                            <Loader className="animate-spin mr-2" size={20} /> Загрузка...
+                        </div>
+                    ) : catalogEntries.length === 0 ? (
+                        <p className="text-sm text-slate-400 italic text-center py-6">Нет записей</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {catalogEntries.map(entry => {
+                                const editing = editingEntries[entry.id];
+                                let displayAliases: string[] = [];
+                                try { displayAliases = JSON.parse(entry.aliases || '[]'); } catch (_) {}
+                                return (
+                                    <div key={entry.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                                        {editing ? (
+                                            // ---- Edit mode ----
+                                            <div className="space-y-2">
+                                                <div className="flex gap-2 flex-wrap">
+                                                    <input
+                                                        type="text"
+                                                        value={editing.nameRu}
+                                                        onChange={e => setEditingEntries(prev => ({ ...prev, [entry.id]: { ...prev[entry.id], nameRu: e.target.value } }))}
+                                                        className="flex-1 min-w-[180px] px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-semibold"
+                                                    />
+                                                    <div className="w-full sm:w-[220px]">
+                                                        <PrettySelect
+                                                            value={editing.type}
+                                                            onChange={(value) => setEditingEntries(prev => ({ ...prev, [entry.id]: { ...prev[entry.id], type: value } }))}
+                                                            options={diagnosticTypeOptions}
+                                                            buttonClassName="rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs min-h-[38px]"
+                                                            panelClassName="rounded-xl"
+                                                            useFixedPanel
+                                                        />
+                                                    </div>
+                                                </div>
+                                                {/* Aliases editor */}
+                                                <div className="flex flex-wrap gap-1 items-center">
+                                                    {editing.aliases.map((a, i) => (
+                                                        <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                                                            <Tag size={10} />
+                                                            {a}
+                                                            <button type="button" onClick={() => setEditingEntries(prev => ({ ...prev, [entry.id]: { ...prev[entry.id], aliases: prev[entry.id].aliases.filter((_, idx) => idx !== i) } }))}>
+                                                                <X size={10} className="hover:text-red-500" />
+                                                            </button>
+                                                        </span>
+                                                    ))}
+                                                    <input
+                                                        type="text"
+                                                        value={editing.aliasInput}
+                                                        onChange={e => setEditingEntries(prev => ({ ...prev, [entry.id]: { ...prev[entry.id], aliasInput: e.target.value } }))}
+                                                        onKeyDown={e => {
+                                                            if ((e.key === 'Enter' || e.key === ',') && editing.aliasInput.trim()) {
+                                                                e.preventDefault();
+                                                                setEditingEntries(prev => ({
+                                                                    ...prev,
+                                                                    [entry.id]: { ...prev[entry.id], aliases: [...prev[entry.id].aliases, editing.aliasInput.trim()], aliasInput: '' }
+                                                                }));
+                                                            }
+                                                        }}
+                                                        placeholder="Псевдоним (Enter)"
+                                                        className="flex-1 min-w-[150px] px-3 py-1 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"
+                                                    />
+                                                </div>
+                                                <div className="flex items-center gap-2 pt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => saveEntry(entry.id)}
+                                                        disabled={savingEntryIds.has(entry.id)}
+                                                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 disabled:opacity-50"
+                                                    >
+                                                        {savingEntryIds.has(entry.id) ? <Loader className="animate-spin" size={12} /> : <Check size={12} />}
+                                                        Сохранить
+                                                    </button>
+                                                    <button type="button" onClick={() => cancelEditing(entry.id)} className="px-3 py-1.5 rounded-xl text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700">
+                                                        Отмена
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            // ---- View mode ----
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="font-semibold text-sm text-slate-900 dark:text-white truncate">{entry.nameRu}</span>
+                                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${entry.type === 'lab' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'}`}>
+                                                            {entry.type === 'lab' ? <><FlaskConical size={10} className="inline mr-1" />Лаб.</> : <><Stethoscope size={10} className="inline mr-1" />Инстр.</>}
+                                                        </span>
+                                                        {entry.isStandard && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">Стандарт</span>}
+                                                    </div>
+                                                    {displayAliases.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 mt-1.5">
+                                                            {displayAliases.map((a, i) => (
+                                                                <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs rounded-full">
+                                                                    <Tag size={9} />
+                                                                    {a}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-1 flex-shrink-0">
+                                                    <button type="button" onClick={() => startEditing(entry)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg" title="Редактировать">
+                                                        <RefreshCw size={14} />
+                                                    </button>
+                                                    {deleteConfirmId === entry.id ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteEntry(entry.id)}
+                                                                disabled={deletingId === entry.id}
+                                                                className="px-2 py-1 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-50"
+                                                            >
+                                                                {deletingId === entry.id ? <Loader className="animate-spin" size={12} /> : 'Удалить'}
+                                                            </button>
+                                                            <button type="button" onClick={() => setDeleteConfirmId(null)} className="px-2 py-1 rounded-lg text-xs text-slate-500 hover:text-slate-700 border border-slate-200 dark:border-slate-700">
+                                                                Отмена
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button type="button" onClick={() => setDeleteConfirmId(entry.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg" title="Удалить">
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             </div>
             )}
 

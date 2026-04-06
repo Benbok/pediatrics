@@ -198,6 +198,41 @@ const setupDiseaseHandlers = () => {
         return await DiseaseService.linkTestAlias(validated.aliasText, validated.canonicalName);
     }));
 
+    // ============= DIAGNOSTIC CATALOG CRUD =============
+
+    ipcMain.handle('diseases:catalog-list', ensureAuthenticated(async (_, search) => {
+        const term = search ? z.string().max(200).parse(search) : '';
+        return await DiseaseService.listDiagnosticCatalogEntries(term);
+    }));
+
+    ipcMain.handle('diseases:catalog-create', ensureAuthenticated(async (_, { nameRu, type, aliases }) => {
+        const schema = z.object({
+            nameRu: z.string().min(1).max(500),
+            type: z.enum(['lab', 'instrumental']).default('lab'),
+            aliases: z.array(z.string().max(500)).default([]),
+        });
+        const v = schema.parse({ nameRu, type, aliases });
+        return await DiseaseService.createCatalogEntry(v.nameRu, v.type, v.aliases);
+    }));
+
+    ipcMain.handle('diseases:catalog-update', ensureAuthenticated(async (_, { id, data }) => {
+        const schema = z.object({
+            id: z.number().int().positive(),
+            data: z.object({
+                nameRu: z.string().min(1).max(500).optional(),
+                type: z.enum(['lab', 'instrumental']).optional(),
+                aliases: z.array(z.string().max(500)).optional(),
+            }),
+        });
+        const v = schema.parse({ id, data });
+        return await DiseaseService.updateCatalogEntry(v.id, v.data);
+    }));
+
+    ipcMain.handle('diseases:catalog-delete', ensureAuthenticated(async (_, id) => {
+        const entryId = z.number().int().positive().parse(id);
+        return await DiseaseService.deleteCatalogEntry(entryId);
+    }));
+
     ipcMain.handle('diseases:reindex-guideline-chunks', ensureAuthenticated(async () => {
         const ok = await DiseaseService.reindexGuidelineChunks();
         logAudit('GUIDELINE_CHUNKS_REINDEXED', { ok });

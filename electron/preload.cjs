@@ -85,6 +85,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resolveDiseaseTestName: (inputName) => ipcRenderer.invoke('diseases:resolve-test-name', inputName),
     getDiseaseCatalogTestNames: () => ipcRenderer.invoke('diseases:get-diagnostic-catalog-test-names'),
     linkDiseaseTestAlias: (aliasText, canonicalName) => ipcRenderer.invoke('diseases:link-test-alias', { aliasText, canonicalName }),
+    // Diagnostic catalog CRUD
+    listDiagnosticCatalogEntries: (search) => ipcRenderer.invoke('diseases:catalog-list', search),
+    createDiagnosticCatalogEntry: (nameRu, type, aliases) => ipcRenderer.invoke('diseases:catalog-create', { nameRu, type, aliases }),
+    updateDiagnosticCatalogEntry: (id, data) => ipcRenderer.invoke('diseases:catalog-update', { id, data }),
+    deleteDiagnosticCatalogEntry: (id) => ipcRenderer.invoke('diseases:catalog-delete', id),
     getGuidelinePlan: (diseaseId) => ipcRenderer.invoke('diseases:get-guideline-plan', diseaseId),
 
     // Disease Notes

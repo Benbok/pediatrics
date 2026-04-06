@@ -617,6 +617,79 @@ const DiseaseService = {
     },
 
     /**
+     * List all DiagnosticTestCatalog entries, optionally filtered by search string.
+     * Searches nameRu and alias values. Returns full entry objects.
+     */
+    async listDiagnosticCatalogEntries(search) {
+        const all = await prisma.diagnosticTestCatalog.findMany({ orderBy: { nameRu: 'asc' } });
+        if (!search || !String(search).trim()) return all;
+        const term = String(search).toLowerCase().trim();
+        return all.filter(entry => {
+            if (String(entry.nameRu || '').toLowerCase().includes(term)) return true;
+            let aliases = [];
+            try { aliases = JSON.parse(entry.aliases || '[]'); } catch (_) {}
+            return aliases.some(a => typeof a === 'string' && a.toLowerCase().includes(term));
+        });
+    },
+
+    /**
+     * Create a new canonical entry in DiagnosticTestCatalog.
+     */
+    async createCatalogEntry(nameRu, type, aliases) {
+        const name = String(nameRu || '').trim();
+        if (!name) throw new Error('[DiseaseService] createCatalogEntry: nameRu is required');
+        const entryType = ['lab', 'instrumental'].includes(type) ? type : 'lab';
+        const cleanAliases = Array.isArray(aliases)
+            ? aliases.map(a => String(a).trim()).filter(Boolean)
+            : [];
+        const entry = await prisma.diagnosticTestCatalog.create({
+            data: { nameRu: name, type: entryType, aliases: JSON.stringify(cleanAliases), isStandard: false },
+        });
+        CacheService.invalidate('diseases', 'diagnostic_test_catalog');
+        return entry;
+    },
+
+    /**
+     * Update nameRu, type, and/or aliases of an existing catalog entry.
+     * Returns the updated entry.
+     */
+    async updateCatalogEntry(id, data) {
+        const entryId = Number(id);
+        if (!entryId) throw new Error('[DiseaseService] updateCatalogEntry: invalid id');
+        const update = {};
+        if (typeof data.nameRu === 'string') update.nameRu = data.nameRu.trim();
+        if (data.type && ['lab', 'instrumental'].includes(data.type)) update.type = data.type;
+        if (Array.isArray(data.aliases)) {
+            update.aliases = JSON.stringify(
+                data.aliases.map(a => String(a).trim()).filter(Boolean)
+            );
+        }
+        if (Object.keys(update).length === 0) throw new Error('[DiseaseService] updateCatalogEntry: nothing to update');
+        const updated = await prisma.diagnosticTestCatalog.update({ where: { id: entryId }, data: update });
+        CacheService.invalidate('diseases', 'diagnostic_test_catalog');
+        return updated;
+    },
+
+    /**
+     * Delete a DiagnosticTestCatalog entry by id.
+     * Also returns diseaseUsageCount — number of diseases that reference this test name.
+     */
+    async deleteCatalogEntry(id) {
+        const entryId = Number(id);
+        if (!entryId) throw new Error('[DiseaseService] deleteCatalogEntry: invalid id');
+        const entry = await prisma.diagnosticTestCatalog.findUnique({ where: { id: entryId } });
+        if (!entry) throw new Error(`[DiseaseService] deleteCatalogEntry: entry ${entryId} not found`);
+        // Count diseases that contain this test name in their diagnosticPlan JSON
+        const diseaseUsageCount = await prisma.disease.count({
+            where: { diagnosticPlan: { contains: entry.nameRu } },
+        });
+        await prisma.diagnosticTestCatalog.delete({ where: { id: entryId } });
+        CacheService.invalidate('diseases', 'diagnostic_test_catalog');
+        logger.info(`[DiseaseService] Deleted catalog entry "${entry.nameRu}" (used in ${diseaseUsageCount} diseases)`);
+        return { deleted: true, nameRu: entry.nameRu, diseaseUsageCount };
+    },
+
+    /**
      * Link an alias text to an existing canonical test name in DiagnosticTestCatalog.
      * If the alias is already present (case-insensitive), the call is a no-op.
      * Invalidates the catalog cache so the next autocomplete fetch includes the new alias.
