@@ -96,18 +96,41 @@ export interface CalculationBreakdown {
   steps: string[];
 }
 
+export interface CalculatedDoseForm {
+  id: string;
+  type: string;
+  concentration?: string | null;
+  unit?: string | null;
+  strengthMg?: number | null;
+  mgPerMl?: number | null;
+  volumeMl?: number | null;
+  description?: string | null;
+}
+
 /**
  * Результат расчета дозировки
  */
 export interface DoseCalculationResult {
   canUse: boolean;
   singleDoseMg?: number | null;
+  singleDoseMl?: number | null;
   dailyDoseMg?: number | null;
   timesPerDay: number;
+  intervalHours?: number | null;
   maxSingleDose?: number | null;
   maxDailyDose?: number | null;
   minInterval?: number | null; // часы
   maxDosesPerDay?: number | null;
+  routeOfAdmin?: string | null;
+  form?: CalculatedDoseForm | null;
+  infusion?: {
+    concentration?: string | null;
+    dilution?: string | null;
+    rate?: string | null;
+    duration?: string | null;
+    compatibility?: string[];
+    maxConcentration?: string | null;
+  } | null;
   instruction: string;
   warnings?: string[] | null;
   bsa?: number | null; // Площадь тела, если использовалась

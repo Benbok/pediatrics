@@ -84,6 +84,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     importDiseaseFromJson: (jsonString) => ipcRenderer.invoke('diseases:importFromJson', jsonString),
     resolveDiseaseTestName: (inputName) => ipcRenderer.invoke('diseases:resolve-test-name', inputName),
     getDiseaseCatalogTestNames: () => ipcRenderer.invoke('diseases:get-diagnostic-catalog-test-names'),
+    linkDiseaseTestAlias: (aliasText, canonicalName) => ipcRenderer.invoke('diseases:link-test-alias', { aliasText, canonicalName }),
     getGuidelinePlan: (diseaseId) => ipcRenderer.invoke('diseases:get-guideline-plan', diseaseId),
 
     // Disease Notes

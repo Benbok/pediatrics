@@ -1020,6 +1020,10 @@ declare global {
         changed: boolean;
       }>;
       getDiseaseCatalogTestNames: () => Promise<string[]>;
+      linkDiseaseTestAlias: (aliasText: string, canonicalName: string) => Promise<{
+        canonicalName: string;
+        aliasAdded: boolean;
+      }>;
 
       // Disease Notes (Personal or Shared)
       getDiseaseNotes: (diseaseId: number) => Promise<DiseaseNote[]>;

@@ -169,7 +169,9 @@ export const VisitSchema = z.object({
         duration: z.string().optional(),
         singleDoseMg: z.number().nullable().optional(),
         timesPerDay: z.number().nullable().optional(),
+        formId: z.string().nullable().optional(),
         routeOfAdmin: z.string().nullable().optional(),
+        packagingDescription: z.string().nullable().optional(),
         dilution: z.object({
             enabled: z.boolean(),
             diluentType: z.enum(['nacl_0_9', 'glucose_5', 'glucose_10', 'water_inj']).nullable().optional(),

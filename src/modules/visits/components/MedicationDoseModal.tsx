@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { X, AlertCircle, Pill, Beaker, Calculator } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import { Medication } from '../../../types';
+import { Medication, MedicationForm } from '../../../types';
 import type { MatchingRuleSummary, CalculationBreakdown } from '../../../types/medication.types';
 import { getRouteLabel, requiresDilution, ROUTE_LABELS, RouteOfAdmin } from '../../../utils/routeOfAdmin';
 import { getDiluentLabel, DILUENT_LABELS, DiluentType } from '../../../utils/diluentTypes';
@@ -35,6 +35,7 @@ export interface DoseData {
     dosing: string;
     duration: string;
     singleDoseMg?: number | null;
+    formId?: string | null;
     timesPerDay?: number | null;
     routeOfAdmin?: string | null;
     packagingDescription?: string | null;
@@ -47,6 +48,20 @@ export interface DoseData {
         volumeToDrawMl?: number | null;
     } | null;
 }
+
+const buildFormLabel = (form: MedicationForm): string => {
+    const parts = [form.type, form.concentration].filter(Boolean);
+    return parts.length > 0 ? parts.join(' • ') : form.id;
+};
+
+const buildFormDescription = (form: MedicationForm | null): string => {
+    if (!form) return '';
+    if (form.description) return form.description;
+
+    const parts = [form.type, form.concentration]
+        .filter((value): value is string => Boolean(value && String(value).trim()));
+    return parts.join(' • ');
+};
 
 export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
     isOpen,
@@ -68,7 +83,24 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
     const [singleDoseMg, setSingleDoseMg] = useState<string>(initialDoseData?.singleDoseMg?.toString() || '');
     const [timesPerDay, setTimesPerDay] = useState<string>(initialDoseData?.timesPerDay?.toString() || '');
     const [routeOfAdmin, setRouteOfAdmin] = useState<string>(initialDoseData?.routeOfAdmin || medication?.routeOfAdmin || '');
+    const [formId, setFormId] = useState<string>(initialDoseData?.formId || '');
     const [packagingDescription, setPackagingDescription] = useState(initialDoseData?.packagingDescription || '');
+
+    const forms = useMemo(() => {
+        if (!Array.isArray(medication?.forms)) return [];
+        return medication.forms.filter((form): form is MedicationForm => Boolean(form?.id));
+    }, [medication]);
+
+    const selectedForm = useMemo(() => {
+        if (!formId) return null;
+        return forms.find((form) => form.id === formId) || null;
+    }, [forms, formId]);
+
+    const singleDoseMlPreview = useMemo(() => {
+        const doseMg = singleDoseMg ? Number(singleDoseMg) : null;
+        if (!selectedForm?.mgPerMl || !doseMg || Number.isNaN(doseMg) || doseMg <= 0) return null;
+        return Math.round((doseMg / selectedForm.mgPerMl) * 100) / 100;
+    }, [singleDoseMg, selectedForm]);
 
     // Dilution state
     const [dilutionEnabled, setDilutionEnabled] = useState(initialDoseData?.dilution?.enabled || false);
@@ -115,7 +147,20 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             setSingleDoseMg(initialDoseData.singleDoseMg?.toString() || '');
             setTimesPerDay(initialDoseData.timesPerDay?.toString() || '');
             setRouteOfAdmin(initialDoseData.routeOfAdmin || medication?.routeOfAdmin || '');
-            setPackagingDescription(initialDoseData.packagingDescription || medication?.packageDescription || '');
+
+            const defaultRuleFormId =
+                appliedRuleIndex != null && medication?.pediatricDosing?.[appliedRuleIndex]?.formId
+                    ? medication.pediatricDosing[appliedRuleIndex].formId
+                    : '';
+            const resolvedFormId = initialDoseData.formId || defaultRuleFormId || '';
+            setFormId(resolvedFormId);
+
+            const resolvedForm = resolvedFormId
+                ? (medication?.forms || []).find((form) => form.id === resolvedFormId) || null
+                : null;
+            const autoPackaging = buildFormDescription(resolvedForm);
+            setPackagingDescription(initialDoseData.packagingDescription || autoPackaging || medication?.packageDescription || '');
+
             setDilutionEnabled(initialDoseData.dilution?.enabled || false);
             setDrugAmountMg(initialDoseData.dilution?.drugAmountMg?.toString() || '');
             setDiluentType(initialDoseData.dilution?.diluentType || '');
@@ -123,8 +168,15 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
         } else if (medication) {
             setRouteOfAdmin(medication.routeOfAdmin || '');
             setPackagingDescription(medication.packageDescription || '');
+
+            const defaultRuleFormId =
+                appliedRuleIndex != null && medication.pediatricDosing?.[appliedRuleIndex]?.formId
+                    ? medication.pediatricDosing[appliedRuleIndex].formId
+                    : '';
+            const fallbackFormId = defaultRuleFormId || medication.forms?.[0]?.id || '';
+            setFormId(fallbackFormId);
         }
-    }, [initialDoseData, medication]);
+    }, [initialDoseData, medication, appliedRuleIndex]);
 
     // Сброс при закрытии
     useEffect(() => {
@@ -133,6 +185,7 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             setDuration('5-7 дней');
             setSingleDoseMg('');
             setTimesPerDay('');
+            setFormId('');
             setPackagingDescription('');
             setDilutionEnabled(false);
             setDrugAmountMg('');
@@ -150,7 +203,8 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             singleDoseMg: singleDoseMg ? parseFloat(singleDoseMg) : null,
             timesPerDay: timesPerDay ? parseInt(timesPerDay) : null,
             routeOfAdmin: routeOfAdmin || null,
-            packagingDescription: packagingDescription.trim() || null,
+            formId: formId || null,
+            packagingDescription: packagingDescription.trim() || buildFormDescription(selectedForm) || null,
             dilution: dilutionEnabled && canShowDilution ? {
                 enabled: true,
                 drugAmountMg: drugAmountMg ? parseFloat(drugAmountMg) : null,
@@ -316,6 +370,33 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
 
                     {/* Описание упаковки */}
                     <div className="space-y-2">
+                        {forms.length > 0 && (
+                            <>
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    Форма выпуска
+                                </label>
+                                <select
+                                    value={formId}
+                                    onChange={(e) => setFormId(e.target.value)}
+                                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 text-slate-900 dark:text-white"
+                                >
+                                    <option value="">Без привязки к форме</option>
+                                    {forms.map((form) => (
+                                        <option key={form.id} value={form.id}>
+                                            {buildFormLabel(form)}
+                                        </option>
+                                    ))}
+                                </select>
+                                {selectedForm && (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        {selectedForm.description || `Тип: ${selectedForm.type}`}
+                                        {selectedForm.unit ? ` • Ед.: ${selectedForm.unit}` : ''}
+                                        {selectedForm.mgPerMl ? ` • Концентрация: ${selectedForm.mgPerMl} мг/мл` : ''}
+                                    </p>
+                                )}
+                            </>
+                        )}
+
                         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                             Описание формы выпуска и упаковки
                         </label>
@@ -359,6 +440,11 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                             <p className="text-xs text-slate-500 dark:text-slate-400">
                                 Опционально, для точного расчета
                             </p>
+                            {singleDoseMlPreview && (
+                                <p className="text-xs text-primary-600 dark:text-primary-400">
+                                    Примерно {singleDoseMlPreview} мл для выбранной формы
+                                </p>
+                            )}
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">

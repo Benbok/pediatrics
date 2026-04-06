@@ -556,7 +556,41 @@ const DiseaseService = {
         }
 
         const catalogEntries = await this.loadDiagnosticTestCatalog();
-        const resolvedName = resolveTestNameFromCatalog(trimmed, catalogEntries);
+        // Blur-normalization in UI must be conservative: only exact canonical/alias matches.
+        // Fuzzy matching remains in full disease normalization during save/import.
+        let resolvedName = trimmed;
+        const lower = trimmed.toLowerCase().trim();
+
+        if (Array.isArray(catalogEntries) && catalogEntries.length > 0) {
+            for (const entry of catalogEntries) {
+                if (!entry || typeof entry === 'string') continue;
+                if (String(entry.nameRu || '').toLowerCase().trim() === lower) {
+                    resolvedName = String(entry.nameRu).trim();
+                    break;
+                }
+            }
+
+            if (resolvedName === trimmed) {
+                for (const entry of catalogEntries) {
+                    if (!entry || typeof entry === 'string') continue;
+                    let aliases = [];
+                    try {
+                        aliases = JSON.parse(entry.aliases || '[]');
+                    } catch (_) {
+                        aliases = [];
+                    }
+
+                    const hasExactAlias = aliases.some(alias =>
+                        typeof alias === 'string' && alias.toLowerCase().trim() === lower
+                    );
+
+                    if (hasExactAlias) {
+                        resolvedName = String(entry.nameRu).trim();
+                        break;
+                    }
+                }
+            }
+        }
 
         return {
             inputName: raw,
@@ -583,8 +617,53 @@ const DiseaseService = {
     },
 
     /**
+     * Link an alias text to an existing canonical test name in DiagnosticTestCatalog.
+     * If the alias is already present (case-insensitive), the call is a no-op.
+     * Invalidates the catalog cache so the next autocomplete fetch includes the new alias.
+     *
+     * @param {string} aliasText - The user-typed string to record as an alias
+     * @param {string} canonicalName - The canonical nameRu of the target catalog entry
+     * @returns {{ canonicalName: string, aliasAdded: boolean }}
+     */
+    async linkTestAlias(aliasText, canonicalName) {
+        const alias = String(aliasText || '').trim();
+        const canonical = String(canonicalName || '').trim();
+
+        if (!alias || !canonical) {
+            throw new Error('[DiseaseService] linkTestAlias: aliasText and canonicalName are required');
+        }
+
+        const entry = await prisma.diagnosticTestCatalog.findUnique({ where: { nameRu: canonical } });
+        if (!entry) {
+            throw new Error(`[DiseaseService] linkTestAlias: canonical entry not found: "${canonical}"`);
+        }
+
+        let aliases = [];
+        try { aliases = JSON.parse(entry.aliases || '[]'); } catch (_) { aliases = []; }
+
+        const alreadyPresent = aliases.some(a => typeof a === 'string' && a.toLowerCase() === alias.toLowerCase());
+        if (alreadyPresent) {
+            logger.info(`[DiseaseService] linkTestAlias: alias already present, skip: "${alias}" → "${canonical}"`);
+            return { canonicalName: canonical, aliasAdded: false };
+        }
+
+        aliases.push(alias);
+        await prisma.diagnosticTestCatalog.update({
+            where: { nameRu: canonical },
+            data: { aliases: JSON.stringify(aliases) },
+        });
+
+        // Invalidate catalog cache so next autocomplete fetch is fresh
+        CacheService.invalidate('diseases', 'diagnostic_test_catalog');
+        logger.info(`[DiseaseService] linkTestAlias: registered alias "${alias}" → "${canonical}"`);
+        return { canonicalName: canonical, aliasAdded: true };
+    },
+
+    /**
      * Auto-add unknown test names to DiagnosticTestCatalog after disease save.
      * Non-fatal: errors are logged but do not block the caller.
+     * Items that carry an _aliasFor marker are skipped — they were already linked
+     * to an existing canonical entry by the user via the alias-linking UI.
      * @param {Array} diagnosticPlanItems - normalized diagnosticPlan array
      * @param {Array} existingCatalog - already-loaded catalog entries (avoids extra DB call)
      */
@@ -596,8 +675,9 @@ const DiseaseService = {
                     .map(e => typeof e === 'string' ? e.toLowerCase() : (e?.nameRu ? String(e.nameRu).toLowerCase() : ''))
                     .filter(Boolean)
             );
+            // Skip items that were explicitly linked as aliases (they store the canonical name as .test)
             const toAdd = diagnosticPlanItems.filter(
-                item => item?.test && typeof item.test === 'string' && !knownNames.has(item.test.trim().toLowerCase())
+                item => item?.test && typeof item.test === 'string' && !item._aliasFor && !knownNames.has(item.test.trim().toLowerCase())
             );
             if (toAdd.length === 0) return;
             for (const item of toAdd) {
@@ -621,7 +701,9 @@ const DiseaseService = {
     async upsert(data) {
         const catalogEntries = await this.loadDiagnosticTestCatalog();
 
-        const normalizedInput = normalizeDiseaseData(data, catalogEntries);
+        const normalizedInput = normalizeDiseaseData(data, catalogEntries, {
+            allowFuzzyCatalogMatch: false,
+        });
         const validated = DiseaseSchema.parse(normalizedInput);
         const { id, ...rest } = validated;
 

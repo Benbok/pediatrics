@@ -81,7 +81,16 @@ export const DiseaseFormPage: React.FC = () => {
     const [availableTestNames, setAvailableTestNames] = useState<string[]>([]);
     const [isLoadingTests, setIsLoadingTests] = useState(false);
     const [testResolutionHints, setTestResolutionHints] = useState<Record<number, string>>({});
+    // Alias widget: key = plan item index, value = { typedValue, selectedCanonical }
+    // selectedCanonical = '' means 'new entry' (default), non-empty = link as alias
+    const [pendingAliasWidgets, setPendingAliasWidgets] = useState<Record<number, { typedValue: string; selectedCanonical: string }>>({});
     const transientErrorTimeoutRef = useRef<number | null>(null);
+    const diagnosticResolveRequestIdRef = useRef<Record<number, number>>({});
+    const diagnosticPlanSnapshotRef = useRef<any[]>([]);
+
+    useEffect(() => {
+        diagnosticPlanSnapshotRef.current = formData.diagnosticPlan || [];
+    }, [formData.diagnosticPlan]);
 
     const showTransientError = (message: string) => {
         if (transientErrorTimeoutRef.current) {
@@ -176,6 +185,7 @@ export const DiseaseFormPage: React.FC = () => {
 
             setFormData(parsed);
             setTestResolutionHints({});
+            setPendingAliasWidgets({});
         } catch (err) {
             setError('Не удалось загрузить данные заболевания');
         }
@@ -275,6 +285,13 @@ export const DiseaseFormPage: React.FC = () => {
             });
             return next;
         });
+        setPendingAliasWidgets(prev => {
+            const next = {} as Record<number, { typedValue: string; selectedCanonical: string }>;
+            Object.entries(prev).forEach(([key, value]) => {
+                next[Number(key) + 1] = value;
+            });
+            return next;
+        });
     };
 
     const clearTestHint = (index: number) => {
@@ -286,18 +303,41 @@ export const DiseaseFormPage: React.FC = () => {
         });
     };
 
+    const clearAliasWidget = (index: number) => {
+        setPendingAliasWidgets(prev => {
+            if (!(index in prev)) return prev;
+            const next = { ...prev };
+            delete next[index];
+            return next;
+        });
+    };
+
     const updateDiagnosticPlanItem = (index: number, updates: any) => {
-        const items = [...(formData.diagnosticPlan || [])];
-        const nextItem = { ...items[index], ...updates };
-        if (isDuplicateDiagnosticItem(items, index, nextItem)) {
-            showTransientError(`Исследование "${nextItem.test}" уже добавлено в план диагностики`);
+        let hasDuplicate = false;
+        let duplicateValue = '';
+
+        setFormData(prev => {
+            const items = [...(prev.diagnosticPlan || [])];
+            const nextItem = { ...items[index], ...updates };
+
+            if (isDuplicateDiagnosticItem(items, index, nextItem)) {
+                hasDuplicate = true;
+                duplicateValue = String(nextItem?.test || '');
+                return prev;
+            }
+
+            items[index] = nextItem;
+            return { ...prev, diagnosticPlan: items };
+        });
+
+        if (hasDuplicate) {
+            showTransientError(`Исследование "${duplicateValue}" уже добавлено в план диагностики`);
             return false;
         }
-        items[index] = nextItem;
-        setFormData({ ...formData, diagnosticPlan: items });
 
         if (typeof updates?.test === 'string') {
             clearTestHint(index);
+            clearAliasWidget(index);
         }
 
         return true;
@@ -305,12 +345,26 @@ export const DiseaseFormPage: React.FC = () => {
 
     const resolveDiagnosticTestAlias = async (index: number, rawValue: string) => {
         const input = String(rawValue || '').trim();
+        diagnosticResolveRequestIdRef.current[index] = (diagnosticResolveRequestIdRef.current[index] || 0) + 1;
+        const requestId = diagnosticResolveRequestIdRef.current[index];
+
         if (!input) {
             clearTestHint(index);
+            clearAliasWidget(index);
             return;
         }
 
         const result = await diseaseService.resolveDiagnosticTestName(input);
+
+        if (diagnosticResolveRequestIdRef.current[index] !== requestId) {
+            return;
+        }
+
+        const currentValue = String((diagnosticPlanSnapshotRef.current || [])[index]?.test || '').trim();
+        if (currentValue !== input) {
+            return;
+        }
+
         if (result.changed && result.resolvedName) {
             const updated = updateDiagnosticPlanItem(index, { test: result.resolvedName });
             if (!updated) return;
@@ -318,10 +372,18 @@ export const DiseaseFormPage: React.FC = () => {
                 ...prev,
                 [index]: `Название нормализовано по каталогу: ${result.resolvedName}`
             }));
+            clearAliasWidget(index);
             return;
         }
 
+        // No match found — show alias-linking widget if there are known canonical names to choose from
         clearTestHint(index);
+        if (availableTestNames.length > 0) {
+            setPendingAliasWidgets(prev => ({
+                ...prev,
+                [index]: { typedValue: input, selectedCanonical: '' }
+            }));
+        }
     };
 
     const removeDiagnosticPlanItem = (index: number) => {
@@ -338,6 +400,49 @@ export const DiseaseFormPage: React.FC = () => {
             });
             return next;
         });
+        setPendingAliasWidgets(prev => {
+            const next = {} as Record<number, { typedValue: string; selectedCanonical: string }>;
+            Object.entries(prev).forEach(([key, value]) => {
+                const numericKey = Number(key);
+                if (numericKey < index) next[numericKey] = value;
+                if (numericKey > index) next[numericKey - 1] = value;
+            });
+            return next;
+        });
+    };
+
+    /**
+     * Confirm alias linking or dismiss the widget.
+     * If canonicalName is non-empty: register alias via IPC, then update item.test to canonical.
+     * If canonicalName is empty: dismiss widget — item stays as-is → auto-add as new canonical on save.
+     */
+    const confirmAliasLink = async (index: number, typedValue: string, canonicalName: string) => {
+        clearAliasWidget(index);
+        if (!canonicalName) {
+            // User chose "new entry" — no changes needed
+            return;
+        }
+        try {
+            await diseaseService.linkTestAlias(typedValue, canonicalName);
+        } catch {
+            showTransientError(`Не удалось зарегистрировать псевдоним. Название будет сохранено как новое исследование.`);
+            return;
+        }
+        // Update item.test to canonical name; mark as aliased so _ensureTestNamesInCatalog skips it
+        setFormData(prev => {
+            const items = [...(prev.diagnosticPlan || [])];
+            if (!items[index]) return prev;
+            items[index] = { ...items[index], test: canonicalName, _aliasFor: typedValue };
+            return { ...prev, diagnosticPlan: items };
+        });
+        setTestResolutionHints(prev => ({
+            ...prev,
+            [index]: `Псевдоним «${typedValue}» привязан к «${canonicalName}»`
+        }));
+        // Refresh availableTestNames so newly aliased name appears in autocomplete next time
+        diseaseService.getDiagnosticCatalogTestNames().then(names => {
+            if (names.length > 0) setAvailableTestNames(names);
+        }).catch(() => {});
     };
 
     const addTreatmentPlanItem = () => {
@@ -656,6 +761,7 @@ export const DiseaseFormPage: React.FC = () => {
                 ...previewData,
             });
             setTestResolutionHints({});
+            setPendingAliasWidgets({});
             setShowPreview(false);
             setPreviewData(null);
             setValidationResult(null);
@@ -892,6 +998,43 @@ export const DiseaseFormPage: React.FC = () => {
                                             <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 ml-1">
                                                 {testResolutionHints[idx]}
                                             </p>
+                                        )}
+                                        {pendingAliasWidgets[idx] && (
+                                            <div className="mt-2 p-3 rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 flex flex-col gap-2">
+                                                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                                                    Исследование <span className="font-bold">«{pendingAliasWidgets[idx].typedValue}»</span> не найдено в каталоге.
+                                                </p>
+                                                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                                                    <PrettySelect
+                                                        value={pendingAliasWidgets[idx].selectedCanonical}
+                                                        onChange={val => setPendingAliasWidgets(prev => ({
+                                                            ...prev,
+                                                            [idx]: { ...prev[idx], selectedCanonical: val }
+                                                        }))}
+                                                        options={[
+                                                            { value: '', label: 'Сохранить как новое исследование' },
+                                                            ...availableTestNames.map(n => ({ value: n, label: `Псевдоним для: ${n}` }))
+                                                        ]}
+                                                        buttonClassName="h-9 px-3 rounded-xl text-xs"
+                                                        useFixedPanel
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="secondary"
+                                                        onClick={() => confirmAliasLink(idx, pendingAliasWidgets[idx].typedValue, pendingAliasWidgets[idx].selectedCanonical)}
+                                                        className="h-9 px-4 rounded-xl text-xs whitespace-nowrap"
+                                                    >
+                                                        Подтвердить
+                                                    </Button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => clearAliasWidget(idx)}
+                                                        className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 underline"
+                                                    >
+                                                        Отмена
+                                                    </button>
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
                                     <div className="flex flex-col gap-2">

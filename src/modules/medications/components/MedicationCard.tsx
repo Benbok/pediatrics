@@ -10,11 +10,16 @@ import { sanitizeDisplayText } from '../../../utils/textSanitizers';
 interface MedicationCardProps {
     medication: Medication | MedicationListItem;
     onSelect: (id: number) => void;
-    onFavoriteToggle?: () => void;
+    onFavoriteToggle?: (medicationId: number, isFavorite: boolean) => void | Promise<void>;
 }
 
 export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSelect, onFavoriteToggle }) => {
     const medicationId = medication.id;
+    const [isFavorite, setIsFavorite] = React.useState(Boolean(medication.isFavorite));
+
+    React.useEffect(() => {
+        setIsFavorite(Boolean(medication.isFavorite));
+    }, [medication.isFavorite]);
 
     const medicationName = React.useMemo(() => {
         return sanitizeDisplayText(medication.nameRu);
@@ -26,12 +31,16 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
             return;
         }
 
+        const nextIsFavorite = !isFavorite;
+        setIsFavorite(nextIsFavorite);
+
         try {
             await medicationService.toggleFavorite(medicationId);
             if (onFavoriteToggle) {
-                onFavoriteToggle();
+                await onFavoriteToggle(medicationId, nextIsFavorite);
             }
         } catch (error) {
+            setIsFavorite(Boolean(medication.isFavorite));
             logger.error('[MedicationCard] Failed to toggle favorite', { error, medicationId });
         }
     };
@@ -89,7 +98,7 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-primary-600 transition-colors">
                             {medicationName}
                         </h3>
-                        {medication.isFavorite && (
+                        {isFavorite && (
                             <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                         )}
                         {medication.isOtc && (
@@ -117,12 +126,12 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
                     <button
                         onClick={handleToggleFavorite}
                         className={`p-2 rounded-lg transition-colors ${
-                            medication.isFavorite 
+                            isFavorite 
                                 ? 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' 
                                 : 'text-slate-400 hover:text-yellow-500 hover:bg-yellow-50/50'
                         }`}
                     >
-                        <Star className={`w-5 h-5 ${medication.isFavorite ? 'fill-current' : ''}`} />
+                        <Star className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''}`} />
                     </button>
                     <div className="p-2.5 bg-secondary-50 dark:bg-secondary-900/20 rounded-xl">
                         <Pill className="w-6 h-6 text-secondary-600 dark:text-secondary-400" />

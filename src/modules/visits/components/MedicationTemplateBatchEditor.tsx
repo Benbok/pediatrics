@@ -114,6 +114,10 @@ export const MedicationTemplateBatchEditor: React.FC<MedicationTemplateBatchEdit
                 duration: dose.duration || item.defaultDuration || '5-7 дней',
                 singleDoseMg: dose.singleDoseMg,
                 timesPerDay: dose.timesPerDay,
+                formId: dose.formId || null,
+                routeOfAdmin: dose.routeOfAdmin || null,
+                packagingDescription: dose.packagingDescription || null,
+                dilution: dose.dilution || null,
             };
         });
 

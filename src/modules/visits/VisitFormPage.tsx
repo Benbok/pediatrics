@@ -1115,7 +1115,9 @@ export const VisitFormPage: React.FC = () => {
                 duration: recommendation?.duration ?? '5-7 дней',
                 singleDoseMg: doseInfo?.singleDoseMg ?? recommendation?.recommendedDose?.singleDoseMg ?? null,
                 timesPerDay: doseInfo?.timesPerDay ?? recommendation?.recommendedDose?.timesPerDay ?? null,
-                routeOfAdmin: medication?.routeOfAdmin ?? null,
+                routeOfAdmin: doseInfo?.routeOfAdmin ?? medication?.routeOfAdmin ?? null,
+                formId: doseInfo?.form?.id ?? null,
+                packagingDescription: doseInfo?.form?.description ?? medication?.packageDescription ?? null,
                 dilution: null
             };
 
@@ -1169,7 +1171,9 @@ export const VisitFormPage: React.FC = () => {
                 duration: '5-7 дней',
                 singleDoseMg: doseInfo.singleDoseMg ?? null,
                 timesPerDay: doseInfo.timesPerDay ?? null,
-                routeOfAdmin: med?.routeOfAdmin ?? null,
+                routeOfAdmin: doseInfo.routeOfAdmin ?? med?.routeOfAdmin ?? null,
+                formId: doseInfo.form?.id ?? null,
+                packagingDescription: doseInfo.form?.description ?? med?.packageDescription ?? null,
                 dilution: null
             };
 
@@ -1203,7 +1207,9 @@ export const VisitFormPage: React.FC = () => {
             duration: doseData.duration,
             singleDoseMg: doseData.singleDoseMg,
             timesPerDay: doseData.timesPerDay,
+            formId: doseData.formId || null,
             routeOfAdmin: doseData.routeOfAdmin || selectedMedicationForDose.routeOfAdmin || null,
+            packagingDescription: doseData.packagingDescription || null,
             dilution: doseData.dilution || null
         };
 
@@ -1251,7 +1257,9 @@ export const VisitFormPage: React.FC = () => {
                 duration: calculatedDoseData?.duration ?? '5-7 дней',
                 singleDoseMg: result.singleDoseMg ?? null,
                 timesPerDay: result.timesPerDay ?? null,
+                formId: result.form?.id ?? calculatedDoseData?.formId ?? null,
                 routeOfAdmin: result.routeOfAdmin ?? selectedMedicationForDose.routeOfAdmin ?? null,
+                packagingDescription: result.form?.description ?? calculatedDoseData?.packagingDescription ?? selectedMedicationForDose.packageDescription ?? null,
                 dilution: null
             });
         } catch (err) {
@@ -2028,7 +2036,9 @@ export const VisitFormPage: React.FC = () => {
                                                         duration: p.duration || '5-7 дней',
                                                         singleDoseMg: p.singleDoseMg || null,
                                                         timesPerDay: p.timesPerDay || null,
+                                                        formId: p.formId || null,
                                                         routeOfAdmin: p.routeOfAdmin || med?.routeOfAdmin || null,
+                                                        packagingDescription: p.packagingDescription || med?.packageDescription || null,
                                                         dilution: p.dilution || null
                                                     });
                                                     setPendingMedicationId(p.medicationId);

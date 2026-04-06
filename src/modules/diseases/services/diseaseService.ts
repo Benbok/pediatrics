@@ -379,5 +379,21 @@ export const diseaseService = {
             logger.error('[DiseaseService] Failed to fetch diagnostic catalog test names', { error });
             return [];
         }
+    },
+
+    /**
+     * Register aliasText as an alias of canonicalName in DiagnosticTestCatalog.
+     * Returns { canonicalName, aliasAdded }.
+     */
+    async linkTestAlias(aliasText: string, canonicalName: string): Promise<{
+        canonicalName: string;
+        aliasAdded: boolean;
+    }> {
+        try {
+            return await window.electronAPI.linkDiseaseTestAlias(aliasText, canonicalName);
+        } catch (error) {
+            logger.error('[DiseaseService] Failed to link test alias', { error, aliasText, canonicalName });
+            throw error;
+        }
     }
 };

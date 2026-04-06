@@ -149,8 +149,29 @@ export const MedicationsModule: React.FC = () => {
         };
     }, [page, activeFilters]);
 
-    // Обновление при изменении избранного (кеш инвалидируется автоматически через dataEvents)
-    const handleFavoriteToggle = async () => {
+    const handleFavoriteToggle = async (medicationId: number, isFavorite: boolean) => {
+        // Мгновенно отражаем переключение избранного в локальном списке.
+        setMedications((prev) => {
+            if (showFavoritesOnly && !isFavorite) {
+                return prev.filter((item) => item.id !== medicationId);
+            }
+
+            return prev.map((item) => {
+                if (item.id !== medicationId) {
+                    return item;
+                }
+                return {
+                    ...item,
+                    isFavorite,
+                };
+            });
+        });
+
+        if (showFavoritesOnly && !isFavorite) {
+            setTotal((prev) => Math.max(0, prev - 1));
+        }
+
+        // Дополнительно подтягиваем свежие данные с сервера для консистентности total/страниц.
         try {
             const result = await medicationService.getMedicationsPaginated({
                 page,
@@ -159,7 +180,7 @@ export const MedicationsModule: React.FC = () => {
                 favoritesOnly: activeFilters.favoritesOnly,
                 group: activeFilters.group,
                 formType: activeFilters.formType,
-                    hasPediatricDosing: activeFilters.hasPediatricDosing,
+                hasPediatricDosing: activeFilters.hasPediatricDosing,
             });
             setMedications(result.items);
             setTotal(result.total);

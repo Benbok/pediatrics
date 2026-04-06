@@ -189,6 +189,15 @@ const setupDiseaseHandlers = () => {
         return await DiseaseService.resolveDiagnosticTestName(validated);
     }));
 
+    ipcMain.handle('diseases:link-test-alias', ensureAuthenticated(async (_, { aliasText, canonicalName }) => {
+        const schema = z.object({
+            aliasText: z.string().min(1).max(500),
+            canonicalName: z.string().min(1).max(500),
+        });
+        const validated = schema.parse({ aliasText, canonicalName });
+        return await DiseaseService.linkTestAlias(validated.aliasText, validated.canonicalName);
+    }));
+
     ipcMain.handle('diseases:reindex-guideline-chunks', ensureAuthenticated(async () => {
         const ok = await DiseaseService.reindexGuidelineChunks();
         logAudit('GUIDELINE_CHUNKS_REINDEXED', { ok });

@@ -26,6 +26,7 @@ export const TestNameAutocomplete: React.FC<TestNameAutocompleteProps> = ({
     className = 'h-10'
 }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const isSelectingOptionRef = useRef(false);
@@ -69,6 +70,7 @@ export const TestNameAutocomplete: React.FC<TestNameAutocompleteProps> = ({
     };
 
     const handleFocus = () => {
+        setIsFocused(true);
         if (value.trim() && filtered.length > 0) {
             setIsOpen(true);
         }
@@ -82,6 +84,7 @@ export const TestNameAutocomplete: React.FC<TestNameAutocompleteProps> = ({
             return;
         }
 
+        setIsFocused(false);
         onBlurValue?.(value);
     };
 
@@ -127,7 +130,7 @@ export const TestNameAutocomplete: React.FC<TestNameAutocompleteProps> = ({
             )}
 
             {/* Empty state when typing but no matches */}
-            {value.trim() && filtered.length === 0 && availableTests.length > 0 && (
+            {isFocused && value.trim() && filtered.length === 0 && availableTests.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-20 px-4 py-3">
                     <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />

@@ -108,11 +108,14 @@ function findBestMatchingTestName(inputName, availableTestNames, threshold = 0.9
  *
  * @param {string} inputName
  * @param {Array<{nameRu: string, aliases: string}>} catalogEntries
+ * @param {{ allowFuzzy?: boolean }} options
  */
-function resolveTestNameFromCatalog(inputName, catalogEntries) {
+function resolveTestNameFromCatalog(inputName, catalogEntries, options = {}) {
     if (!inputName || !Array.isArray(catalogEntries) || catalogEntries.length === 0) {
         return inputName;
     }
+
+    const allowFuzzy = options.allowFuzzy !== false;
 
     const lower = inputName.toLowerCase().trim();
 
@@ -133,27 +136,33 @@ function resolveTestNameFromCatalog(inputName, catalogEntries) {
             }
         }
     }
-    for (const entry of catalogEntries) {
-        let aliases = [];
-        try { aliases = JSON.parse(entry.aliases || '[]'); } catch (_) {}
-        for (const alias of aliases) {
-            if (typeof alias === 'string' && jaroWinkler(inputName, alias) >= 0.85) {
-                return entry.nameRu;
+    if (allowFuzzy) {
+        for (const entry of catalogEntries) {
+            let aliases = [];
+            try { aliases = JSON.parse(entry.aliases || '[]'); } catch (_) {}
+            for (const alias of aliases) {
+                if (typeof alias === 'string' && jaroWinkler(inputName, alias) >= 0.85) {
+                    return entry.nameRu;
+                }
             }
         }
     }
 
     // Tier 3: fuzzy match on nameRu
-    let bestMatch = inputName;
-    let bestScore = 0;
-    for (const entry of catalogEntries) {
-        const score = jaroWinkler(inputName, String(entry.nameRu));
-        if (score > bestScore) {
-            bestScore = score;
-            bestMatch = entry.nameRu;
+    if (allowFuzzy) {
+        let bestMatch = inputName;
+        let bestScore = 0;
+        for (const entry of catalogEntries) {
+            const score = jaroWinkler(inputName, String(entry.nameRu));
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = entry.nameRu;
+            }
         }
+        return bestScore >= 0.92 ? bestMatch : inputName;
     }
-    return bestScore >= 0.92 ? bestMatch : inputName;
+
+    return inputName;
 }
 
 function hasAnyToken(text, tokens) {
@@ -267,7 +276,7 @@ function normalizeSymptomsToCategorized(symptoms) {
     return phraseNormalized.map(text => ({ text, category: 'other' }));
 }
 
-function normalizeDiseaseData(diseaseData, testNamesOrCatalog) {
+function normalizeDiseaseData(diseaseData, testNamesOrCatalog, options = {}) {
     if (!diseaseData || typeof diseaseData !== 'object') return diseaseData;
 
     // Auto-detect: catalog entries (objects with nameRu) vs legacy flat string[]
@@ -295,7 +304,9 @@ function normalizeDiseaseData(diseaseData, testNamesOrCatalog) {
 
             if (isCatalog) {
                 // 3-tier: exact nameRu → alias exact/fuzzy → fuzzy nameRu
-                testName = resolveTestNameFromCatalog(testName, testNamesOrCatalog);
+                testName = resolveTestNameFromCatalog(testName, testNamesOrCatalog, {
+                    allowFuzzy: options.allowFuzzyCatalogMatch !== false,
+                });
             } else if (Array.isArray(testNamesOrCatalog) && testNamesOrCatalog.length > 0) {
                 // Legacy: flat string[] — fuzzy only
                 testName = findBestMatchingTestName(testName, testNamesOrCatalog);
