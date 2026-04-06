@@ -30,6 +30,7 @@ import { PdfViewerPage } from './pages/PdfViewerPage';
 import { ApiKeyWarningToast } from './components/ApiKeyWarningToast';
 import { ToastProvider } from './context/ToastContext';
 import { ToastContainer } from './components/ui/ToastContainer';
+import { UploadProgressProvider } from './context/UploadProgressContext';
 
 const router = createHashRouter([
     {
@@ -155,10 +156,12 @@ const AppContent: React.FC = () => {
         <DataCacheProvider>
             <ChildProvider>
                 <ToastProvider>
-                    <RouterProvider router={router} />
-                    <PrintPreviewManager />
-                    <ApiKeyWarningToast />
-                    <ToastContainer />
+                    <UploadProgressProvider>
+                        <RouterProvider router={router} />
+                        <PrintPreviewManager />
+                        <ApiKeyWarningToast />
+                        <ToastContainer />
+                    </UploadProgressProvider>
                 </ToastProvider>
             </ChildProvider>
         </DataCacheProvider>

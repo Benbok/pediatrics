@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClinicalGuideline, UploadBatchFinishedEvent, UploadProgress } from '../../../types';
+import { ClinicalGuideline, UploadBatchFinishedEvent } from '../../../types';
 import { diseaseService, RejectedUploadFile } from '../services/diseaseService';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
@@ -7,6 +7,7 @@ import { Badge } from '../../../components/ui/Badge';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload, Edit3, Check, X, AlertCircle } from 'lucide-react';
 import { useToast } from '../../../context/ToastContext';
+import { useUploadProgress } from '../../../context/UploadProgressContext';
 
 interface GuidelinesListProps {
     diseaseId: number;
@@ -18,6 +19,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     onGuidelineAdded
 }) => {
     const { showToast } = useToast();
+    const { registerBatch, getProgressForDisease, clearCompletedForDisease } = useUploadProgress();
     const [guidelines, setGuidelines] = useState<ClinicalGuideline[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
@@ -25,33 +27,23 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editingTitle, setEditingTitle] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState<Map<string, UploadProgress>>(new Map());
     const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
     const [rejectedFiles, setRejectedFiles] = useState<RejectedUploadFile[]>([]);
+
+    const uploadItems = getProgressForDisease(diseaseId);
+    const activeUploadsCount = uploadItems.filter(
+        item => item.status === 'queued' || item.status === 'processing',
+    ).length;
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; guidelineId: number | null }>({
         isOpen: false,
         guidelineId: null
     });
 
-    const uploadItems = Array.from(uploadProgress.values());
-    const activeUploadsCount = uploadItems.filter(item => item.status === 'queued' || item.status === 'processing').length;
-
-    // Subscribe to upload progress events
-    useEffect(() => {
-        const unsubscribe = window.electronAPI.onUploadProgress((event: any, progress: UploadProgress) => {
-            setUploadProgress(prev => new Map(prev).set(progress.jobId, progress));
-        });
-
-        return () => unsubscribe();
-    }, []);
-
-    // Subscribe to batch finished event (reload guidelines when batch completes)
+    // Subscribe to batch finished event (reload guidelines when this disease's batch completes).
+    // Toast notification is handled globally in ToastProvider.
     useEffect(() => {
         const unsubscribe = window.electronAPI.onUploadBatchFinished((event: any, data: UploadBatchFinishedEvent) => {
             if (!activeBatchId || data.batchId !== activeBatchId) return;
-
-            // Toast notification is now handled globally in ToastProvider
-            // Here we only handle local state cleanup and data reload
             setActiveBatchId(null);
             loadGuidelines();
         });
@@ -62,16 +54,9 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     useEffect(() => {
         loadGuidelines();
         setRejectedFiles([]);
-        // Clear completed uploads when loading fresh data
-        setUploadProgress(prev => {
-            const next = new Map(prev);
-            for (const [jobId, job] of prev.entries()) {
-                if (job.status === 'completed' || job.status === 'failed') {
-                    next.delete(jobId);
-                }
-            }
-            return next;
-        });
+        // Remove stale completed/failed entries from the global context on (re-)mount
+        // so the next visit to this disease starts with a clean slate.
+        clearCompletedForDisease(diseaseId);
     }, [diseaseId]);
 
     const loadGuidelines = async () => {
@@ -209,7 +194,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
             try {
                 const { batchId, jobs } = await diseaseService.uploadGuidelinesAsync(diseaseId, validFilePaths);
                 setActiveBatchId(batchId);
-                setUploadProgress(diseaseService.createUploadProgressMap(jobs));
+                registerBatch(diseaseId, jobs);
                 showToast(`Файлы добавлены в очередь: ${jobs.length}`, 'info');
             } catch (error: any) {
                 const backendRejected = diseaseService.parseGuidelineUploadError(error?.message || '', validFilePaths);
