@@ -110,6 +110,11 @@
   - `tests/disease-test-name-resolution.test.ts`
 - Результат: 4 files passed, 31 tests passed.
 
+### 07.04.2026 19:15 — Follow-up фикс UI прогресса
+- Исправлен merge обновлений progress-state в `UploadProgressContext`: промежуточные IPC-события без `fileName` больше не затирают уже известное имя файла.
+- Добавлен fallback имени `Файл загружается...` для ранних событий до полной инициализации.
+- Повторно прогнаны релевантные disease-тесты: 4 files passed, 31 tests passed.
+
 ---
 
 ## 🔗 Связанные файлы и ресурсы

@@ -36,7 +36,17 @@ export const UploadProgressProvider: React.FC<React.PropsWithChildren> = ({ chil
     useEffect(() => {
         if (!window.electronAPI?.onUploadProgress) return;
         const unsubscribe = window.electronAPI.onUploadProgress((_event: any, progress: UploadProgress) => {
-            setProgressMap(prev => new Map(prev).set(progress.jobId, progress));
+            setProgressMap(prev => {
+                const next = new Map(prev);
+                const previous = next.get(progress.jobId);
+                next.set(progress.jobId, {
+                    ...previous,
+                    ...progress,
+                    jobId: progress.jobId,
+                    fileName: progress.fileName || previous?.fileName || 'Файл загружается...'
+                });
+                return next;
+            });
         });
         return () => unsubscribe();
     }, []);
