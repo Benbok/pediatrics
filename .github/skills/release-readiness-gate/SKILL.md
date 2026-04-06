@@ -40,6 +40,7 @@ If required evidence is missing for touched areas, run missing prerequisite skil
 3. Testing
 - New functionality: required tests passed.
 - Non-feature changes: test decision recorded (run or approved skip).
+- If testing outcome is `SKIPPED_BY_USER_APPROVAL` for non-feature scope, treat testing dimension as PASS (documented waiver), not FAIL.
 
 4. Migration safety (if applicable)
 - Migration path is non-destructive and verified.
@@ -57,7 +58,7 @@ If required evidence is missing for touched areas, run missing prerequisite skil
 
 Return `GO` only if:
 - No open Critical/High blockers.
-- Required tests are passed or formally approved skip (non-feature).
+- Required tests are passed, or testing is formally waived by user approval for non-feature scope.
 - Required docs/status artifacts are updated.
 
 Otherwise return `NO_GO` with blocker list.
