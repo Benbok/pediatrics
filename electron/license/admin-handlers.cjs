@@ -30,6 +30,8 @@ const crypto       = require('crypto');
 const { logger, logAudit } = require('../logger.cjs');
 const { prisma } = require('../prisma-client.cjs');
 const bcrypt = require('bcryptjs');
+const { PUBLIC_KEY } = require('./verify.cjs');
+const { ensureAuthenticated, ensureAdmin } = require('../auth.cjs');
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +43,11 @@ const bcrypt = require('bcryptjs');
 function getPrivateKeyPath() {
     const userDataPath = path.join(app.getPath('userData'), 'private.pem');
     if (fs.existsSync(userDataPath)) return userDataPath;
-    return path.join(__dirname, '..', '..', 'keys', 'private.pem');
+    if (!app.isPackaged) {
+        const devFallbackPath = path.join(__dirname, '..', '..', 'keys', 'private.pem');
+        if (fs.existsSync(devFallbackPath)) return devFallbackPath;
+    }
+    return userDataPath;
 }
 
 /**
@@ -137,10 +143,35 @@ function isValidRsaPrivateKey(filePath) {
         const content = fs.readFileSync(filePath, 'utf8');
         if (!content.includes('PRIVATE KEY')) return false;
         crypto.createSign('RSA-SHA256').sign(content);
-        return true;
+
+        // Security hardening: imported private key must match embedded PUBLIC_KEY.
+        const probe = `pediassist-key-proof:${crypto.randomBytes(24).toString('hex')}`;
+        const sign = crypto.createSign('RSA-SHA256');
+        sign.update(probe);
+        const signature = sign.sign(content, 'base64');
+
+        const verify = crypto.createVerify('RSA-SHA256');
+        verify.update(probe);
+        return verify.verify(PUBLIC_KEY, signature, 'base64');
     } catch {
         return false;
     }
+}
+
+async function isFirstRun() {
+    return (await prisma.user.count()) === 0;
+}
+
+function withFirstRunOrAdmin(handler) {
+    return async (event, ...args) => {
+        if (await isFirstRun()) return handler(event, ...args);
+        const wrapped = ensureAuthenticated(ensureAdmin(handler));
+        return wrapped(event, ...args);
+    };
+}
+
+function withAdmin(handler) {
+    return ensureAuthenticated(ensureAdmin(handler));
 }
 
 // ─── IPC Handlers ─────────────────────────────────────────────────────────────
@@ -152,7 +183,7 @@ function isValidRsaPrivateKey(filePath) {
 function setupLicenseAdminHandlers() {
 
     // ── license-admin:list ────────────────────────────────────────────────────
-    ipcMain.handle('license-admin:list', async () => {
+    ipcMain.handle('license-admin:list', withAdmin(async () => {
         try {
             assertPrivateKeyExists();
             const registry = readRegistry();
@@ -161,11 +192,11 @@ function setupLicenseAdminHandlers() {
             logger.error('[LicenseAdmin] list error:', err.message);
             return { success: false, error: err.message };
         }
-    });
+    }));
 
     // ── license-admin:generate ────────────────────────────────────────────────
     // args: { fingerprint, userName, expiresAt: string|null, notes: string }
-    ipcMain.handle('license-admin:generate', async (_event, args) => {
+    ipcMain.handle('license-admin:generate', withAdmin(async (_event, args) => {
         try {
             assertPrivateKeyExists();
 
@@ -194,11 +225,11 @@ function setupLicenseAdminHandlers() {
             logger.error('[LicenseAdmin] generate error:', err.message);
             return { success: false, error: err.message };
         }
-    });
+    }));
 
     // ── license-admin:revoke ──────────────────────────────────────────────────
     // args: { id: string }
-    ipcMain.handle('license-admin:revoke', async (_event, args) => {
+    ipcMain.handle('license-admin:revoke', withAdmin(async (_event, args) => {
         try {
             assertPrivateKeyExists();
 
@@ -223,11 +254,11 @@ function setupLicenseAdminHandlers() {
             logger.error('[LicenseAdmin] revoke error:', err.message);
             return { success: false, error: err.message };
         }
-    });
+    }));
 
     // ── license-admin:extend ──────────────────────────────────────────────────
     // args: { id: string, expiresAt: string|null }
-    ipcMain.handle('license-admin:extend', async (_event, args) => {
+    ipcMain.handle('license-admin:extend', withAdmin(async (_event, args) => {
         try {
             assertPrivateKeyExists();
 
@@ -268,12 +299,12 @@ function setupLicenseAdminHandlers() {
             logger.error('[LicenseAdmin] extend error:', err.message);
             return { success: false, error: err.message };
         }
-    });
+    }));
 
     // ── license-admin:export ──────────────────────────────────────────────────
     // args: { id: string }
     // Возвращает JSON-строку файла лицензии для скачивания клиентом
-    ipcMain.handle('license-admin:export', async (_event, args) => {
+    ipcMain.handle('license-admin:export', withAdmin(async (_event, args) => {
         try {
             assertPrivateKeyExists();
 
@@ -299,7 +330,7 @@ function setupLicenseAdminHandlers() {
             logger.error('[LicenseAdmin] export error:', err.message);
             return { success: false, error: err.message };
         }
-    });
+    }));
 
     // ── license-admin:check-key ───────────────────────────────────────────────
     // Не требует аутентификации — используется на First Run Setup и в LicenseAdminPanel.
@@ -312,7 +343,7 @@ function setupLicenseAdminHandlers() {
     // ── license-admin:import-key ──────────────────────────────────────────────
     // Открывает диалог выбора файла → проверяет RSA key → копирует в userData.
     // Не требует аутентификации (используется на экране First Run Setup).
-    ipcMain.handle('license-admin:import-key', async (event) => {
+    ipcMain.handle('license-admin:import-key', withFirstRunOrAdmin(async (event) => {
         const { BrowserWindow } = require('electron');
         const win = BrowserWindow.fromWebContents(event.sender);
 
@@ -331,7 +362,7 @@ function setupLicenseAdminHandlers() {
 
         const sourcePath = filePaths[0];
         if (!isValidRsaPrivateKey(sourcePath)) {
-            return { success: false, error: 'Файл не является валидным RSA private key. Убедитесь, что выбран правильный файл private.pem.' };
+            return { success: false, error: 'Ключ отклонён. Требуется private.pem, соответствующий встроенному PUBLIC_KEY приложения.' };
         }
 
         try {
@@ -345,12 +376,12 @@ function setupLicenseAdminHandlers() {
             logger.error('[LicenseAdmin] import-key error:', err.message);
             return { success: false, error: `Ошибка копирования ключа: ${err.message}` };
         }
-    });
+    }));
 
     // ── license-admin:generate-own-license ────────────────────────────────────
     // Генерирует постоянную лицензию для ТЕКУЩЕЙ машины и сохраняет в userData.
     // Используется при First Run Setup.
-    ipcMain.handle('license-admin:generate-own-license', async () => {
+    ipcMain.handle('license-admin:generate-own-license', withFirstRunOrAdmin(async () => {
         try {
             assertPrivateKeyExists();
 
@@ -380,12 +411,12 @@ function setupLicenseAdminHandlers() {
             logger.error('[LicenseAdmin] generate-own-license error:', err.message);
             return { success: false, error: err.message };
         }
-    });
+    }));
 
     // ── license-admin:create-client-bundle ────────────────────────────────────
     // Создаёт юзера (doctor) + генерирует license.json за один атомарный шаг.
     // args: { fingerprint, clientName, username, password, expiresAt, notes }
-    ipcMain.handle('license-admin:create-client-bundle', async (_event, args) => {
+    ipcMain.handle('license-admin:create-client-bundle', withAdmin(async (_event, args) => {
         try {
             assertPrivateKeyExists();
 
@@ -463,7 +494,7 @@ function setupLicenseAdminHandlers() {
             logger.error('[LicenseAdmin] create-client-bundle error:', err.message);
             return { success: false, error: err.message };
         }
-    });
+    }));
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────

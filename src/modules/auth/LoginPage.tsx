@@ -5,10 +5,15 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { UserCircle, Lock, AlertCircle, Stethoscope, Eye, EyeOff } from 'lucide-react';
 
-export const LoginPage: React.FC = () => {
+interface LoginPageProps {
+    initialLogin?: string;
+    initialPassword?: string;
+}
+
+export const LoginPage: React.FC<LoginPageProps> = ({ initialLogin = 'admin', initialPassword = '' }) => {
     const { login } = useAuth();
-    const [loginInput, setLoginInput] = useState('admin');
-    const [password, setPassword] = useState('');
+    const [loginInput, setLoginInput] = useState(initialLogin);
+    const [password, setPassword] = useState(initialPassword);
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);

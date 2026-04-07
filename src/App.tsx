@@ -24,6 +24,8 @@ import './modules/printing/templates/visit/register';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './modules/auth/LoginPage';
 import FirstRunSetupPage from './modules/license/FirstRunSetupPage';
+import FirstRunScenarioPage from './modules/license/FirstRunScenarioPage';
+import FirstRunUserWaitPage from './modules/license/FirstRunUserWaitPage';
 import { ActivationPage } from './modules/license/ActivationPage';
 import { ChildProvider } from './context/ChildContext';
 import { DataCacheProvider } from './context/DataCacheContext';
@@ -124,10 +126,21 @@ const router = createHashRouter([
 
 const AppContent: React.FC = () => {
     const { isAuthenticated, isLoading } = useAuth();
+    const isDevMode = import.meta.env.DEV;
     const [licenseValid, setLicenseValid] = React.useState<boolean | null>(null);
     const [isFirstRun, setIsFirstRun] = React.useState<boolean | null>(null);
+    const [firstRunMode, setFirstRunMode] = React.useState<'choice' | 'admin' | 'user'>('choice');
+    const [loginPrefill, setLoginPrefill] = React.useState<{ login: string; password: string } | null>(null);
 
     React.useEffect(() => {
+        if (isDevMode) {
+            // Dev exception: go directly to login/password flow.
+            setIsFirstRun(false);
+            setLicenseValid(true);
+            setLoginPrefill({ login: 'admin', password: 'admin' });
+            return;
+        }
+
         // Check first-run before license (no users = first install)
         window.electronAPI?.isFirstRun?.().then((res) => {
             setIsFirstRun(res.isFirstRun);
@@ -140,7 +153,39 @@ const AppContent: React.FC = () => {
         }).catch(() => {
             setLicenseValid(false);
         });
-    }, []);
+    }, [isDevMode]);
+
+    if (isDevMode) {
+        if (isLoading) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 border-4 border-blue-600/30 border-t-blue-600 rounded-full animate-spin"></div>
+                        <span className="text-slate-500 font-medium">Загрузка системы...</span>
+                    </div>
+                </div>
+            );
+        }
+
+        if (!isAuthenticated) {
+            return <LoginPage initialLogin={loginPrefill?.login ?? 'admin'} initialPassword={loginPrefill?.password ?? 'admin'} />;
+        }
+
+        return (
+            <DataCacheProvider>
+                <ChildProvider>
+                    <ToastProvider>
+                        <UploadProgressProvider>
+                            <RouterProvider router={router} />
+                            <PrintPreviewManager />
+                            <ApiKeyWarningToast />
+                            <ToastContainer />
+                        </UploadProgressProvider>
+                    </ToastProvider>
+                </ChildProvider>
+            </DataCacheProvider>
+        );
+    }
 
     if (licenseValid === null || isLoading || isFirstRun === null) {
         return (
@@ -154,10 +199,35 @@ const AppContent: React.FC = () => {
     }
 
     if (isFirstRun) {
+        if (firstRunMode === 'choice') {
+            return (
+                <FirstRunScenarioPage
+                    onChooseAdmin={() => setFirstRunMode('admin')}
+                    onChooseUser={() => setFirstRunMode('user')}
+                />
+            );
+        }
+
+        if (firstRunMode === 'user') {
+            return (
+                <FirstRunUserWaitPage
+                    onBack={() => setFirstRunMode('choice')}
+                    onAccessGranted={() => {
+                        setIsFirstRun(false);
+                        window.electronAPI.checkLicense().then((result) => {
+                            setLicenseValid(result.valid);
+                        }).catch(() => setLicenseValid(false));
+                    }}
+                />
+            );
+        }
+
         return (
             <FirstRunSetupPage
                 onSetupComplete={() => {
                     setIsFirstRun(false);
+                    setFirstRunMode('choice');
+                    setLoginPrefill({ login: 'admin', password: 'admin' });
                     // Re-check license after setup (own license was auto-generated)
                     window.electronAPI.checkLicense().then((result) => {
                         setLicenseValid(result.valid);
@@ -172,7 +242,7 @@ const AppContent: React.FC = () => {
     }
 
     if (!isAuthenticated) {
-        return <LoginPage />;
+        return <LoginPage initialLogin={loginPrefill?.login} initialPassword={loginPrefill?.password} />;
     }
 
     return (

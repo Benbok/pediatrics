@@ -1,8 +1,12 @@
-const { ipcMain } = require('electron');
+const { ipcMain, app } = require('electron');
 const bcrypt = require('bcryptjs');
 const { prisma } = require('./prisma-client.cjs');
 const { z } = require('zod');
 const { logger, logAudit } = require('./logger.cjs');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { PUBLIC_KEY } = require('./license/verify.cjs');
 
 /**
  * AUTHENTICATION SERVICE (Backend)
@@ -93,6 +97,23 @@ async function setRolesForUser(tx, userId, roleKeys) {
         where: { id: userId },
         data: { isAdmin: roleKeys.includes('admin') }
     });
+}
+
+function privateKeyMatchesEmbeddedPublicKey(privateKeyPath) {
+    try {
+        const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
+        const probe = `pediassist-auth-proof:${crypto.randomBytes(24).toString('hex')}`;
+
+        const sign = crypto.createSign('RSA-SHA256');
+        sign.update(probe);
+        const signature = sign.sign(privateKey, 'base64');
+
+        const verify = crypto.createVerify('RSA-SHA256');
+        verify.update(probe);
+        return verify.verify(PUBLIC_KEY, signature, 'base64');
+    } catch {
+        return false;
+    }
 }
 
 function setupAuthHandlers() {
@@ -554,14 +575,23 @@ function setupAuthHandlers() {
                 return { success: false, error: 'Первоначальная настройка уже была выполнена' };
             }
 
-            // Guard 2: private key must exist in userData
-            const path = require('path');
-            const fs = require('fs');
-            const { app } = require('electron');
+            // Guard 2: private key must exist and match embedded PUBLIC_KEY
             const keyInUserData = path.join(app.getPath('userData'), 'private.pem');
             const keyDevFallback = path.join(__dirname, '..', 'keys', 'private.pem');
-            if (!fs.existsSync(keyInUserData) && !fs.existsSync(keyDevFallback)) {
+
+            let selectedKeyPath = null;
+            if (fs.existsSync(keyInUserData)) {
+                selectedKeyPath = keyInUserData;
+            } else if (!app.isPackaged && fs.existsSync(keyDevFallback)) {
+                selectedKeyPath = keyDevFallback;
+            }
+
+            if (!selectedKeyPath) {
                 return { success: false, error: 'Приватный ключ не найден. Сначала импортируйте private.pem.' };
+            }
+
+            if (!privateKeyMatchesEmbeddedPublicKey(selectedKeyPath)) {
+                return { success: false, error: 'Приватный ключ не соответствует PUBLIC_KEY приложения.' };
             }
 
             const passwordHash = await bcrypt.hash(password.trim(), 10);
