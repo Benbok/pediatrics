@@ -223,14 +223,22 @@ function getActiveKey() {
 }
 
 /**
+ * Определение: ошибка rate-limit (временная, не помечать ключ как failed)
+ */
+function isRateLimitError(error) {
+    const errorMsg = (error?.message || String(error) || '').toLowerCase();
+    return errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('resource_exhausted');
+}
+
+/**
  * Определение, нужно ли ротировать ключ при ошибке
  */
 function shouldRotateKey(error) {
     const errorMsg = (error?.message || String(error) || '').toLowerCase();
-    
-    // Rate limit / quota (429): not a key-specific problem. Rotating burns keys.
-    if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('resource_exhausted')) {
-        return false;
+
+    // Rate limit / quota (429): каждый ключ имеет свой независимый лимит — ротация оправдана.
+    if (isRateLimitError(error)) {
+        return true;
     }
 
     // Location / policy restrictions: also not a key problem.
@@ -362,12 +370,16 @@ async function retryWithRotation(operation, maxAttempts = 5) {
             logger.error(`[ApiKeyManager] Key ${currentIndex} failed:`, error.message);
             
             if (shouldRotateKey(error)) {
-                // Mark current key as failed
-                await markKeyAsFailed(currentIndex, error.message);
-                
-                // Check if need to notify
-                if (shouldNotifyUser()) {
-                    sendLowKeysWarning();
+                if (isRateLimitError(error)) {
+                    // Rate-limit: временная ошибка — ротируем без пометки ключа как failed
+                    logger.warn(`[ApiKeyManager] Key ${currentIndex} rate-limited, rotating without marking failed`);
+                } else {
+                    // Auth/invalid key: постоянная ошибка — помечаем как failed
+                    await markKeyAsFailed(currentIndex, error.message);
+                    // Check if need to notify
+                    if (shouldNotifyUser()) {
+                        sendLowKeysWarning();
+                    }
                 }
                 
                 // Rotate to next key
@@ -377,8 +389,8 @@ async function retryWithRotation(operation, maxAttempts = 5) {
                 }
                 
                 attempts++;
-                // Задержка перед следующей попыткой
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Небольшая задержка перед следующей попыткой
+                await new Promise(resolve => setTimeout(resolve, 500));
                 continue;
             }
             

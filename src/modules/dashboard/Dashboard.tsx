@@ -8,6 +8,7 @@ import { dashboardService } from '../../services/dashboard.service';
 import { DashboardSummary, DashboardVisitItem } from '../../types';
 import { getFormattedAge } from '../../utils/ageUtils';
 import { useAuth } from '../../context/AuthContext';
+import { KnowledgeQueryWidget } from './components/KnowledgeQueryWidget';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -326,6 +327,11 @@ export const Dashboard: React.FC = () => {
                     iconClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400"
                     loading={loading}
                 />
+            </section>
+
+            {/* Knowledge Query Widget */}
+            <section aria-label="Поиск по базе знаний">
+                <KnowledgeQueryWidget />
             </section>
 
             {/* Today's appointments */}

@@ -1211,8 +1211,41 @@ declare global {
       upsertVisitTemplate: (data: VisitTemplate) => Promise<VisitTemplate>;
       deleteVisitTemplate: (id: number) => Promise<boolean>;
       applyVisitTemplate: (params: { templateId: number; existingData: Partial<Visit> }) => Promise<{ mergedData: Partial<Visit>; medicationTemplateId?: number | null; examTemplateSetId?: number | null }>;
+
+      // KNOWLEDGE QUERY MODULE API
+      queryKnowledge: (params: { query: string }) => Promise<KnowledgeQueryResponse>;
+      getLastKnowledgeQuery: () => Promise<KnowledgeCachedEntry | null>;
     }
   }
+}
+
+// ============= KNOWLEDGE QUERY MODULE TYPES =============
+
+export interface KnowledgeSource {
+  type: 'disease' | 'medication';
+  name: string;
+  id: number;
+}
+
+export interface KnowledgeQueryResponse {
+  success: boolean;
+  answer: string | null;
+  sources: KnowledgeSource[];
+  disclaimer: string;
+  searchedAt: string;
+  noAiKey: boolean;
+  aiErrorMessage?: string | null;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMs?: number;
+  trace?: string[];
+  error?: string;
+}
+
+export interface KnowledgeCachedEntry {
+  query: string;
+  response: KnowledgeQueryResponse;
+  cachedAt: string;
 }
 
 // ============= NUTRITION MODULE TYPES =============
