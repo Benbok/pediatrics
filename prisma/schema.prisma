@@ -273,6 +273,7 @@ model ClinicalGuideline {
   rehabilitation  String? // 4. Медицинская реабилитация
   prevention      String? // 5. Профилактика
   medications     String? // Recommended medications (JSON array)
+  validUntil      DateTime? @map("valid_until") // Срок действия протокола (из «Пересмотр не позднее»)
 
   disease Disease @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
 
@@ -288,10 +289,11 @@ model GuidelineChunk {
   type        String   @default("other")
   pageStart   Int?     @map("page_start")
   pageEnd     Int?     @map("page_end")
-  sectionTitle String? @map("section_title")
-  text        String
+  sectionTitle  String? @map("section_title")
+  text          String
   embeddingJson String? @map("embedding_json")
-  createdAt   DateTime @default(now()) @map("created_at")
+  evidenceLevel String? @map("evidence_level") // Уровень доказательности (УУР А / УДД I / A-I и т.д.)
+  createdAt     DateTime @default(now()) @map("created_at")
 
   guideline ClinicalGuideline @relation(fields: [guidelineId], references: [id], onDelete: Cascade)
   disease   Disease           @relation(fields: [diseaseId], references: [id], onDelete: Cascade)

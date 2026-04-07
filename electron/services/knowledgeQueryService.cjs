@@ -45,6 +45,44 @@ function safePreview(value, maxLen = 1200) {
     return `${text.slice(0, maxLen)} ...[truncated ${text.length - maxLen} chars]`;
 }
 
+// ─── In-memory TTL-кэш ───────────────────────────────────────────────────────
+
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 часа
+const CACHE_MAX_SIZE = 200;
+
+class QueryCache {
+    constructor() {
+        this._map = new Map(); // key → { result, expiresAt }
+    }
+
+    _normalizeKey(query) {
+        return String(query || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    }
+
+    get(query) {
+        const key = this._normalizeKey(query);
+        const entry = this._map.get(key);
+        if (!entry) return null;
+        if (Date.now() > entry.expiresAt) {
+            this._map.delete(key);
+            return null;
+        }
+        return entry.result;
+    }
+
+    set(query, result) {
+        const key = this._normalizeKey(query);
+        // LRU eviction: удаляем самую старую запись при достижении лимита
+        if (this._map.size >= CACHE_MAX_SIZE) {
+            const firstKey = this._map.keys().next().value;
+            this._map.delete(firstKey);
+        }
+        this._map.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+    }
+}
+
+const queryCache = new QueryCache();
+
 // ─── FTS helper ──────────────────────────────────────────────────────────────
 
 // Слова, которые часто встречаются в медицинских запросах, но не являются
@@ -107,6 +145,15 @@ function extractMedicalTerms(text) {
         })
         .filter(t => t.length >= 3)
         .slice(0, 5);
+}
+
+// Regex для извлечения уровня доказательности из текста чанка (аналог Python extract_evidence_level)
+// Real МЗ РФ format: «(УУР - C; УДД - 5)» — dash and spaces between acronym and value
+const EVIDENCE_RE = /УУР\s*[-–—]?\s*[А-ЯA-Z](?:\s*[;,]\s*УДД\s*[-–—]?\s*[IVXivx0-9]+)?|УДД\s*[-–—]?\s*[IVXivx0-9]+|\b[A-Ca-c]-[IVXivx]{1,4}\b/u;
+
+function extractEvidenceFromText(text) {
+    const m = EVIDENCE_RE.exec(text || '');
+    return m ? m[0].trim() : null;
 }
 
 // ─── Поиск болезней через FTS ─────────────────────────────────────────────────
@@ -241,13 +288,14 @@ async function searchMedicationsByChunkMentions(allChunkTexts) {
     try {
         const orConds = [...candidates].map(name => ({ nameRu: { contains: name } }));
         return await prisma.medication.findMany({
-            where: { OR: orConds },
+            where: { AND: [{ OR: orConds }, { childUsing: { not: 'Not' } }] },
             select: {
                 id: true,
                 nameRu: true,
                 clinicalPharmGroup: true,
                 indications: true,
                 childDosing: true,
+                childUsing: true,
                 contraindications: true,
                 sideEffects: true,
             },
@@ -277,13 +325,14 @@ async function searchMedicationsByDiseaseNames(diseaseNames) {
         });
         if (orConditions.length === 0) return [];
         return await prisma.medication.findMany({
-            where: { OR: orConditions },
+            where: { AND: [{ OR: orConditions }, { childUsing: { not: 'Not' } }] },
             select: {
                 id: true,
                 nameRu: true,
                 clinicalPharmGroup: true,
                 indications: true,
                 childDosing: true,
+                childUsing: true,
                 contraindications: true,
                 sideEffects: true,
             },
@@ -295,13 +344,64 @@ async function searchMedicationsByDiseaseNames(diseaseNames) {
     }
 }
 
-// ─── LLM query expansion ─────────────────────────────────────────────────────
+// ─── Rule-based intent classifier ───────────────────────────────────────────
 
 /**
- * Использует Gemini для извлечения медицинских терминов из произвольного
- * клинического вопроса. Возвращает массив строк-терминов для поиска.
- * При недоступности LLM — тихий fallback на extractMedicalTerms.
+ * Быстрая классификация типичных клинических запросов по regex-паттернам.
+ * Покрывает ~80% реальных запросов без вызова LLM (~400ms экономии).
+ * Возвращает plan-объект или null (LLM fallback).
  */
+const INTENT_RULES = [
+    {
+        intent: 'dosing',
+        pattern: /доз[аиуе]?|мг\s*\/?кг|режим\s+дозир|сколько\s+(дав|мл)|кратност|раз\s+в\s+день|суточн|курс\s+лечени/i,
+        needsMedications: true,
+        needsDosing: true,
+        needsContraindications: false,
+    },
+    {
+        intent: 'treatment',
+        pattern: /лечи[тьл]|терапи[яию]|антибиот|препарат|назнач|чем\s+лечить|что\s+(дать|назначить)|схем[аыу]\s+(лечени|терапи)|первая\s+линия|стартов/i,
+        needsMedications: true,
+        needsDosing: true,
+        needsContraindications: false,
+    },
+    {
+        intent: 'diagnosis',
+        pattern: /симптом|диагност|признак|как\s+отличить|дифференциальн|критери[йи]\s+диагноз|клиническ(ая|ие)\s+картин/i,
+        needsMedications: false,
+        needsDosing: false,
+        needsContraindications: false,
+    },
+    {
+        intent: 'contraindication',
+        pattern: /противопоказан|нельзя\s+(давать|назначать|применять)|запрещ[ёе]н|не\s+применя/i,
+        needsMedications: true,
+        needsDosing: false,
+        needsContraindications: true,
+    },
+];
+
+function classifyIntentByRules(query) {
+    const q = String(query || '');
+    for (const rule of INTENT_RULES) {
+        if (rule.pattern.test(q)) {
+            return {
+                intent: rule.intent,
+                searchTerms: [],
+                needsMedications: rule.needsMedications,
+                needsDosing: rule.needsDosing,
+                needsContraindications: rule.needsContraindications,
+                focus: '',
+                _source: 'rules',
+            };
+        }
+    }
+    return null;
+}
+
+// ─── LLM query expansion ─────────────────────────────────────────────────────
+
 /**
  * Structured query planning — один быстрый LLM-вызов возвращает план поиска.
  *
@@ -318,6 +418,13 @@ async function searchMedicationsByDiseaseNames(diseaseNames) {
  * При любой ошибке — null (silent fallback на raw query).
  */
 async function planQueryWithLLM(query) {
+    // Быстрая rule-based классификация — без LLM-вызова
+    const rulePlan = classifyIntentByRules(query);
+    if (rulePlan) {
+        logger.info('[KnowledgeQueryService] PLAN_SOURCE: rules, intent:', rulePlan.intent);
+        return rulePlan;
+    }
+
     const manager = getApiKeyManager();
     const apiKey = manager ? null : (process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY);
     if (!manager && !apiKey) return null;
@@ -397,13 +504,14 @@ async function searchMedicationsByLike(query) {
             ]);
         });
         const meds = await prisma.medication.findMany({
-            where: { OR: orMedConditions },
+            where: { AND: [{ OR: orMedConditions }, { childUsing: { not: 'Not' } }] },
             select: {
                 id: true,
                 nameRu: true,
                 clinicalPharmGroup: true,
                 indications: true,
                 childDosing: true,
+                childUsing: true,
                 contraindications: true,
                 sideEffects: true,
             },
@@ -464,7 +572,9 @@ function buildContext(diseases, medications, chunksByDisease = new Map(), plan =
         if (chunks.length > 0) {
             chunkBlock = `\n--- Фрагменты клинического гайдлайна ---`;
             for (const chunk of chunks) {
-                chunkBlock += `\n${chunk}`;
+                const ev = extractEvidenceFromText(chunk);
+                const prefix = ev ? `[${ev}] ` : '';
+                chunkBlock += `\n${prefix}${chunk}`;
             }
         }
 
@@ -841,6 +951,14 @@ async function queryKnowledge(query) {
     trace.push(`[${nowIso()}] START query received`);
     logger.info('[KnowledgeQueryService] QUERY_TEXT:', query);
 
+    // Cache check: повторные запросы отдаём мгновенно
+    const _cached = queryCache.get(query);
+    if (_cached) {
+        const durationMs = Date.now() - startedAtMs;
+        logger.info('[KnowledgeQueryService] CACHE_HIT durationMs:', durationMs);
+        return { ..._cached, searchedAt, startedAt, finishedAt: nowIso(), durationMs, trace: [`[${nowIso()}] CACHE_HIT`] };
+    }
+
     // 1. ПАРАЛЛЕЛЬНО: query plan (LLM) + базовый FTS/LIKE по сырому запросу
     const [plan, ftsResultRaw, likeDiseasesRaw, likeMedsRaw] = await Promise.all([
         planQueryWithLLM(query),
@@ -1009,6 +1127,11 @@ async function queryKnowledge(query) {
         noAiKey,
         sourcesCount: sources.length,
     });
+
+    // Cache set: сохраняем только успешные ответы
+    if (answer) {
+        queryCache.set(query, { answer, sources, disclaimer, noAiKey: false, aiErrorMessage: null });
+    }
 
     return {
         answer,

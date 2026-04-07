@@ -12,6 +12,20 @@ const { URL } = require('url');
 const embeddingCache = new Map();
 const MAX_CACHE_SIZE = 1000;
 
+// Throttle для bulk-индексирования (free tier: 100 req/min = 1 req/600ms)
+// Применяется только при инициализации чанков (rotation: 'none'), не затрагивает поиск
+const BULK_EMBED_INTERVAL_MS = 650; // ~92 req/min — с запасом под лимит
+let _bulkEmbedLastTs = 0;
+
+async function _throttleBulkEmbed() {
+    const now = Date.now();
+    const wait = BULK_EMBED_INTERVAL_MS - (now - _bulkEmbedLastTs);
+    if (wait > 0) {
+        await new Promise(resolve => setTimeout(resolve, wait));
+    }
+    _bulkEmbedLastTs = Date.now();
+}
+
 // Кэш для результатов semantic search (TTL: 5 минут)
 const searchCache = new Map();
 const SEARCH_CACHE_TTL = 5 * 60 * 1000; // 5 минут
@@ -148,8 +162,10 @@ async function generateEmbedding(text, options = null) {
 
     const rotationMode = options && typeof options === 'object' ? options.rotation : null;
 
-    // Если явно запрещаем ротацию (например, при bulk indexing), делаем 1 попытку на активном ключе
+    // Если явно запрещаем ротацию (например, при bulk indexing), делаем 1 попытку на активном ключе.
+    // Throttle 650ms между запросами — не превышаем 100 req/min free tier.
     if (manager && rotationMode === 'none') {
+        await _throttleBulkEmbed();
         const apiKey = manager.getActiveKey();
         embedding = await _generateEmbeddingWithKey(apiKey, text);
     } else if (manager) {

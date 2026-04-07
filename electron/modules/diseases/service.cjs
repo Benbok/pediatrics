@@ -1187,7 +1187,7 @@ const DiseaseService = {
 
             // Clinical chunks with type + overlap (for CDSS search)
             const clinicalChunksScript = path.join(process.cwd(), 'scripts', 'create_clinical_chunks.py');
-            const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${pdfPath}" 700 100`);
+            const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${pdfPath}" 1400 250`);
             const clinicalChunks = JSON.parse(clinicalChunksStdout);
 
             // 3. Copy file to permanent storage
@@ -1204,6 +1204,18 @@ const DiseaseService = {
 
             // 4. Save to database
             if (jobId) sendProgressEvent(jobId, { progress: 90, step: 'Saving to database' });
+
+            // Parse valid_until from metadata (format: "YYYY-12-31" or null)
+            let validUntilDate = null;
+            if (metadata.valid_until) {
+                try {
+                    const d = new Date(metadata.valid_until);
+                    if (!isNaN(d.getTime())) validUntilDate = d;
+                } catch (_) {
+                    // Non-fatal: leave null
+                }
+            }
+
             const guideline = await prisma.clinicalGuideline.create({
                 data: {
                     diseaseId: Number(diseaseId),
@@ -1213,6 +1225,7 @@ const DiseaseService = {
                     // Keep legacy JSON chunks for backward compatibility
                     chunks: JSON.stringify(legacyChunks),
                     source: 'Минздрав РФ',
+                    validUntil: validUntilDate,
                 },
             });
 
@@ -1264,7 +1277,8 @@ const DiseaseService = {
                         pageEnd: page,
                         sectionTitle,
                         text,
-                        embeddingJson
+                        embeddingJson,
+                        evidenceLevel: (chunk && chunk.evidenceLevel) ? String(chunk.evidenceLevel).trim() : null,
                     });
                 }
 
@@ -1340,7 +1354,7 @@ const DiseaseService = {
 
             try {
                 const clinicalChunksScript = path.join(process.cwd(), 'scripts', 'create_clinical_chunks.py');
-                const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${g.pdfPath}" 700 100`);
+                const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${g.pdfPath}" 1400 250`);
                 const clinicalChunks = JSON.parse(clinicalChunksStdout);
 
                 await prisma.guidelineChunk.deleteMany({
@@ -1381,6 +1395,7 @@ const DiseaseService = {
                         sectionTitle,
                         text,
                         embeddingJson,
+                        evidenceLevel: (chunk && chunk.evidenceLevel) ? String(chunk.evidenceLevel).trim() : null,
                     });
                 }
 

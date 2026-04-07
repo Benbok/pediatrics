@@ -1,7 +1,7 @@
 module.exports = {
     // Chunking settings for clinical knowledge preprocessing
-    CHUNK_SIZE: 700,
-    CHUNK_OVERLAP: 100,
+    CHUNK_SIZE: 1400,
+    CHUNK_OVERLAP: 250,
 
     // Phase 1 prefiltering thresholds
     PREFILTER_TOKEN_MIN_LEN: 3,

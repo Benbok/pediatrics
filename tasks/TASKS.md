@@ -11,6 +11,9 @@
 | 02.04.2026 | TASK-001 | visits/cdss | Консервативный AI-ранжинг при размытых жалобах | 🔄 IN_PROGRESS | [→](tasks/02.04.2026/TASK-001.md) |
 | 06.04.2026 | TASK-026 | visits/medications | Актуализация модального окна "Настройка дозировки" под новую структуру Препаратов | 🔄 IN_PROGRESS | [→](tasks/06.04.2026/TASK-026.md) |
 | 07.04.2026 | TASK-037 | diseases/form | Специфичность и патогномоничность симптомов в базе знаний заболеваний | ✅ DONE | [→](tasks/07.04.2026/TASK-037.md) |
+| 07.04.2026 | TASK-038 | knowledge/rag | RAG-сервис: TTL-кэш запросов + педиатрический хард-фильтр + rule-based planner | ✅ DONE | [→](tasks/07.04.2026/TASK-038.md) |
+| 07.04.2026 | TASK-039 | diseases/guidelines | GuidelineChunk metadata: evidence_level + valid_until | ✅ DONE | [→](tasks/07.04.2026/TASK-039.md) |
+| 07.04.2026 | TASK-040 | diseases/guidelines | Chunk size optimization: 700→1400, overlap 100→250 | ✅ DONE | [→](tasks/07.04.2026/TASK-040.md) |
 
 
 ---

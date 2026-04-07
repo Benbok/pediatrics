@@ -52,14 +52,42 @@ def fix_mojibake(text: str) -> str:
         except:
             return text
 
+# Паттерны для извлечения года "Пересмотр не позднее"
+_VALID_UNTIL_PATTERNS = [
+    re.compile(r'Пересмотр\s+не\s+позднее[:\s]+(\d{4})', re.IGNORECASE),
+    re.compile(r'Дата\s+пересмотра[:\s]+(\d{4})', re.IGNORECASE),
+    re.compile(r'revision\s+no\s+later\s+than[:\s]+(\d{4})', re.IGNORECASE),
+]
+
+
+def extract_valid_until(text: str):
+    """Extract the review/expiry year from Russian MoH clinical guidelines.
+
+    Looks for strings like "Пересмотр не позднее: 2026"
+    Returns ISO date string "YYYY-12-31" or None.
+    """
+    if not text:
+        return None
+    for pattern in _VALID_UNTIL_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            year = int(m.group(1))
+            if 2020 <= year <= 2040:
+                return f"{year}-12-31"
+    return None
+
+
 def extract_metadata_locally(text: str) -> dict:
     """
-    Извлекает коды МКБ-10 из клинических рекомендаций.
-    
+    Извлекает коды МКБ-10 и valid_until из клинических рекомендаций.
+
     Структура клинических рекомендаций МЗ РФ:
     - Раздел 1.4: Особенности кодирования (содержит коды МКБ-10)
     """
-    metadata = {"icd10_codes": []}
+    metadata = {"icd10_codes": [], "valid_until": None}
+
+    # Извлекаем valid_until из титульной страницы / оглавления
+    metadata["valid_until"] = extract_valid_until(text)
     
     # ================== ИЗВЛЕЧЕНИЕ КОДОВ МКБ-10 ==================
     # Ищем раздел 1.4 "Особенности кодирования" 
@@ -196,7 +224,8 @@ if __name__ == "__main__":
     
     # Гарантируем наличие полей для фронтенда
     final_result = {
-        "icd10_codes": result.get("icd10_codes", [])
+        "icd10_codes": result.get("icd10_codes", []),
+        "valid_until": result.get("valid_until") or local_meta.get("valid_until"),
     }
-    
+
     print(json.dumps(final_result, ensure_ascii=False))
