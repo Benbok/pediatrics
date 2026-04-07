@@ -6,6 +6,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     checkLicense: () => ipcRenderer.invoke('license:check'),
     importLicense: () => ipcRenderer.invoke('license:import'),
 
+    // LICENSE ADMIN API (developer-only, requires private key on disk)
+    licenseAdminList:     ()       => ipcRenderer.invoke('license-admin:list'),
+    licenseAdminGenerate: (args)   => ipcRenderer.invoke('license-admin:generate', args),
+    licenseAdminRevoke:   (args)   => ipcRenderer.invoke('license-admin:revoke', args),
+    licenseAdminExtend:   (args)   => ipcRenderer.invoke('license-admin:extend', args),
+    licenseAdminExport:   (args)   => ipcRenderer.invoke('license-admin:export', args),
+
     // PATIENTS MODULE API
     getChildren: () => ipcRenderer.invoke('db:get-children'),
     getChild: (id) => ipcRenderer.invoke('db:get-child', id),

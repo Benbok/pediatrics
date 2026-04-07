@@ -14,6 +14,7 @@
 | 07.04.2026 | TASK-038 | knowledge/rag | RAG-сервис: TTL-кэш запросов + педиатрический хард-фильтр + rule-based planner | ✅ DONE | [→](tasks/07.04.2026/TASK-038.md) |
 | 07.04.2026 | TASK-039 | diseases/guidelines | GuidelineChunk metadata: evidence_level + valid_until | ✅ DONE | [→](tasks/07.04.2026/TASK-039.md) |
 | 07.04.2026 | TASK-040 | diseases/guidelines | Chunk size optimization: 700→1400, overlap 100→250 | ✅ DONE | [→](tasks/07.04.2026/TASK-040.md) |
+| 07.04.2026 | TASK-041 | license/admin | UI-панель администратора лицензий: генерация, отзыв, продление | ✅ DONE | [→](tasks/07.04.2026/TASK-041.md) |
 
 
 ---

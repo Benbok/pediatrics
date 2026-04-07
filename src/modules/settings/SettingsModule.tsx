@@ -6,6 +6,7 @@ import { vaccinationService } from '../../services/vaccination.service';
 import { PrettySelect, type SelectOption } from '../diseases/components/PrettySelect';
 import { diseaseService } from '../diseases/services/diseaseService';
 import { VaccineCatalogEntry, DiagnosticCatalogEntry } from '../../types';
+import { LicenseAdminPanel } from '../license/LicenseAdminPanel';
 
 const diagnosticTypeOptions: SelectOption<'lab' | 'instrumental'>[] = [
     { value: 'lab', label: 'Лабораторный' },
@@ -57,7 +58,7 @@ export const SettingsModule: React.FC = () => {
         availableBrands: []
     });
     const [brandDraft, setBrandDraft] = useState({ name: '', country: '', description: '' });
-    const [activeTab, setActiveTab] = useState<'api' | 'catalog' | 'cache' | 'security' | 'diseases'>('api');
+    const [activeTab, setActiveTab] = useState<'api' | 'catalog' | 'cache' | 'security' | 'diseases' | 'licenses'>('api');
 
     // Diagnostic catalog CRUD state
     const [catalogEntries, setCatalogEntries] = useState<DiagnosticCatalogEntry[]>([]);
@@ -587,7 +588,7 @@ export const SettingsModule: React.FC = () => {
             </div>
 
             <div className="mb-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
                     <button
                         onClick={() => setActiveTab('api')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -637,6 +638,16 @@ export const SettingsModule: React.FC = () => {
                         }`}
                     >
                         Безопасность и Данные
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('licenses')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === 'licenses'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        }`}
+                    >
+                        🔑 Лицензии
                     </button>
                 </div>
             </div>
@@ -1601,6 +1612,12 @@ export const SettingsModule: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            </div>
+            )}
+
+            {activeTab === 'licenses' && (
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <LicenseAdminPanel />
             </div>
             )}
         </div>

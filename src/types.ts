@@ -904,6 +904,13 @@ declare global {
       checkLicense: () => Promise<{ valid: boolean; reason?: string; devMode?: boolean; data?: { userName: string; expiresAt: string | null } }>;
       importLicense: () => Promise<{ success: boolean; reason?: string; data?: { userName: string; expiresAt: string | null } }>;
 
+      // LICENSE ADMIN API (developer-only, requires keys/private.pem)
+      licenseAdminList: () => Promise<{ success: boolean; records: LicenseRecord[]; error?: string }>;
+      licenseAdminGenerate: (args: { fingerprint: string; userName: string; expiresAt: string | null; notes: string }) => Promise<{ success: boolean; record: LicenseRecord; error?: string }>;
+      licenseAdminRevoke: (args: { id: string }) => Promise<{ success: boolean; record: LicenseRecord; error?: string }>;
+      licenseAdminExtend: (args: { id: string; expiresAt: string | null }) => Promise<{ success: boolean; record: LicenseRecord; error?: string }>;
+      licenseAdminExport: (args: { id: string }) => Promise<{ success: boolean; content: string; suggestedName: string; error?: string }>;
+
       // LOGGER API
       log: (level: string, message: string, metadata?: Record<string, any>) => Promise<void>;
 
@@ -1365,4 +1372,36 @@ export interface ChildFeedingPlan {
   createdAt: string;
   // Joined
   formula?: { id: number; name: string; brand: string | null; energyKcalPer100ml: number | null } | null;
+}
+
+// ============= LICENSE ADMIN MODULE TYPES =============
+
+/** Одна запись реестра выданных лицензий */
+export interface LicenseRecord {
+  id: string;
+  userName: string;
+  fingerprint: string;
+  issuedAt: string;          // ISO string
+  expiresAt: string | null;  // ISO string или null (бессрочная)
+  notes: string;
+  revokedAt: string | null;  // ISO string или null (не отозвана)
+  licensePayload: string;    // base64 payload для license.json
+  licenseSignature: string;  // base64 RSA-SHA256 подпись
+}
+
+/** Агрегированная статистика реестра */
+export interface LicenseStats {
+  total: number;
+  active: number;
+  expired: number;
+  revoked: number;
+  permanent: number;         // без срока действия
+}
+
+/** Входные данные для генерации новой лицензии */
+export interface LicenseGenerateInput {
+  fingerprint: string;
+  userName: string;
+  expiresAt: string | null;  // пустая строка или YYYY-MM-DD
+  notes: string;
 }

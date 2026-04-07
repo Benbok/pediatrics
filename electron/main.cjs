@@ -24,6 +24,7 @@ const { register: registerKnowledgeHandlers } = require('./modules/knowledge/han
 const { initializeDatabase, seedNutritionData } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const { setupLicenseHandlers } = require('./license/handlers.cjs');
+const { setupLicenseAdminHandlers } = require('./license/admin-handlers.cjs');
 const isDev = !app.isPackaged;
 
 function createWindow() {
@@ -67,6 +68,7 @@ app.whenReady().then(async () => {
 
     // Register license handlers FIRST (before window creation, no auth required)
     setupLicenseHandlers();
+    setupLicenseAdminHandlers();
     logger.info('[Main] License handlers registered');
 
     // Initialize database (create first admin if needed)
