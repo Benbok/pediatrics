@@ -904,12 +904,20 @@ declare global {
       checkLicense: () => Promise<{ valid: boolean; reason?: string; devMode?: boolean; data?: { userName: string; expiresAt: string | null } }>;
       importLicense: () => Promise<{ success: boolean; reason?: string; data?: { userName: string; expiresAt: string | null } }>;
 
-      // LICENSE ADMIN API (developer-only, requires keys/private.pem)
+      // LICENSE ADMIN API (developer-only, requires private.pem in userData)
       licenseAdminList: () => Promise<{ success: boolean; records: LicenseRecord[]; error?: string }>;
       licenseAdminGenerate: (args: { fingerprint: string; userName: string; expiresAt: string | null; notes: string }) => Promise<{ success: boolean; record: LicenseRecord; error?: string }>;
       licenseAdminRevoke: (args: { id: string }) => Promise<{ success: boolean; record: LicenseRecord; error?: string }>;
       licenseAdminExtend: (args: { id: string; expiresAt: string | null }) => Promise<{ success: boolean; record: LicenseRecord; error?: string }>;
       licenseAdminExport: (args: { id: string }) => Promise<{ success: boolean; content: string; suggestedName: string; error?: string }>;
+      licenseAdminCheckKey: () => Promise<{ exists: boolean; path: string | null }>;
+      licenseAdminImportKey: () => Promise<{ success: boolean; error?: string }>;
+      licenseAdminGenerateOwnLicense: () => Promise<{ success: boolean; error?: string }>;
+      licenseAdminCreateClientBundle: (args: { fingerprint: string; clientName: string; username: string; password: string; expiresAt: string | null; notes: string }) => Promise<{ success: boolean; licenseContent?: string; suggestedName?: string; username?: string; error?: string }>;
+
+      // AUTH BOOTSTRAP API (no auth required — first run)
+      isFirstRun: () => Promise<{ isFirstRun: boolean }>;
+      firstRunSetup: (data: { username: string; password: string }) => Promise<{ success: boolean; username?: string; error?: string }>;
 
       // LOGGER API
       log: (level: string, message: string, metadata?: Record<string, any>) => Promise<void>;
@@ -1404,4 +1412,11 @@ export interface LicenseGenerateInput {
   userName: string;
   expiresAt: string | null;  // пустая строка или YYYY-MM-DD
   notes: string;
+}
+
+/** Бандл для клиента: логин + license.json */
+export interface ClientBundle {
+  username: string;
+  licenseContent: string;    // JSON-строка license.json
+  suggestedName: string;     // Рекомендуемое имя файла
 }

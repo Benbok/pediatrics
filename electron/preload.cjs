@@ -7,11 +7,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     importLicense: () => ipcRenderer.invoke('license:import'),
 
     // LICENSE ADMIN API (developer-only, requires private key on disk)
-    licenseAdminList:     ()       => ipcRenderer.invoke('license-admin:list'),
-    licenseAdminGenerate: (args)   => ipcRenderer.invoke('license-admin:generate', args),
-    licenseAdminRevoke:   (args)   => ipcRenderer.invoke('license-admin:revoke', args),
-    licenseAdminExtend:   (args)   => ipcRenderer.invoke('license-admin:extend', args),
-    licenseAdminExport:   (args)   => ipcRenderer.invoke('license-admin:export', args),
+    licenseAdminList:           ()     => ipcRenderer.invoke('license-admin:list'),
+    licenseAdminGenerate:       (args) => ipcRenderer.invoke('license-admin:generate', args),
+    licenseAdminRevoke:         (args) => ipcRenderer.invoke('license-admin:revoke', args),
+    licenseAdminExtend:         (args) => ipcRenderer.invoke('license-admin:extend', args),
+    licenseAdminExport:         (args) => ipcRenderer.invoke('license-admin:export', args),
+    licenseAdminCheckKey:       ()     => ipcRenderer.invoke('license-admin:check-key'),
+    licenseAdminImportKey:      ()     => ipcRenderer.invoke('license-admin:import-key'),
+    licenseAdminGenerateOwnLicense: () => ipcRenderer.invoke('license-admin:generate-own-license'),
+    licenseAdminCreateClientBundle: (args) => ipcRenderer.invoke('license-admin:create-client-bundle', args),
+
+    // AUTH BOOTSTRAP API (no auth required — used before any users exist)
+    isFirstRun:      ()     => ipcRenderer.invoke('auth:is-first-run'),
+    firstRunSetup:   (data) => ipcRenderer.invoke('auth:first-run-setup', data),
 
     // PATIENTS MODULE API
     getChildren: () => ipcRenderer.invoke('db:get-children'),

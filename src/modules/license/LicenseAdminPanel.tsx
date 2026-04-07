@@ -3,7 +3,7 @@ import {
     Key, Plus, Download, Ban, RefreshCw, Shield, ShieldCheck, ShieldX,
     Clock, Infinity, AlertCircle, CheckCircle2, Copy, CheckCheck,
     ChevronDown, ChevronUp, Search, X, CalendarDays, User, FileText,
-    Loader2, Lock
+    Loader2, Lock, UserPlus, Upload
 } from 'lucide-react';
 import type { LicenseRecord, LicenseStats } from '../../types';
 
@@ -90,6 +90,168 @@ function StatsCard({ label, value, sub, color }: { label: string; value: number;
             <span className="text-sm font-medium">{label}</span>
             {sub && <span className="text-xs opacity-70">{sub}</span>}
         </div>
+    );
+}
+
+// ─── Create Client Bundle Form ───────────────────────────────────────────────────
+
+type BundleResult = { licenseContent: string; suggestedName: string; username: string };
+
+function CreateClientForm({ onCreated }: { onCreated: (r: LicenseRecord | null) => void }) {
+    const [form, setForm] = useState({ fingerprint: '', clientName: '', username: '', password: '', expiresAt: '', notes: '' });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [result, setResult] = useState<BundleResult | null>(null);
+
+    const setF = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setForm(f => ({ ...f, [k]: e.target.value }));
+        setError('');
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+            const res = await window.electronAPI!.licenseAdminCreateClientBundle!({
+                fingerprint: form.fingerprint.trim(),
+                clientName: form.clientName.trim(),
+                username: form.username.trim(),
+                password: form.password,
+                expiresAt: form.expiresAt.trim() || null,
+                notes: form.notes.trim(),
+            });
+            if (res.success) {
+                setResult({ licenseContent: res.licenseContent!, suggestedName: res.suggestedName!, username: res.username! });
+                onCreated(null); // signal parent to reload registry
+            } else {
+                setError(res.error ?? 'Ошибка');
+            }
+        } catch (err: any) {
+            setError(err?.message ?? 'Ошибка');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    function downloadLicense() {
+        if (!result) return;
+        const blob = new Blob([result.licenseContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = result.suggestedName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    if (result) {
+        return (
+            <div className="bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded-xl p-5 space-y-4">
+                <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Клиент зарегистрирован!
+                </h3>
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Логин:</span>
+                        <span className="font-mono font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                            {result.username}
+                            <CopyBtn text={result.username} title="Копировать логин" />
+                        </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Файл лицензии:</span>
+                        <span className="text-slate-600 dark:text-slate-400 text-xs">{result.suggestedName}</span>
+                    </div>
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-400">Скачайте license.json и передайте клиенту вместе с логином и паролем.</p>
+                <div className="flex gap-2">
+                    <button onClick={downloadLicense} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                        <Download className="w-4 h-4" />Скачать license.json
+                    </button>
+                    <button onClick={() => setResult(null)} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        Создать ещё
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900/60 rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-blue-500" />
+                Создать клиента (учётная запись + лицензия)
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Fingerprint */}
+                <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                        Machine ID (Fingerprint) <span className="text-rose-500">*</span>
+                    </label>
+                    <input type="text" value={form.fingerprint} onChange={setF('fingerprint')}
+                        placeholder="64 hex-символа (клиент берёт с экрана активации)"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                        required minLength={64} maxLength={64} pattern="[a-fA-F0-9]{64}" autoComplete="off" spellCheck={false} />
+                </div>
+                {/* Client name */}
+                <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                        Полное имя <span className="text-rose-500">*</span>
+                    </label>
+                    <input type="text" value={form.clientName} onChange={setF('clientName')}
+                        placeholder="Иванов Иван Иванович"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required />
+                </div>
+                {/* Login */}
+                <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                        Логин <span className="text-rose-500">*</span>
+                    </label>
+                    <input type="text" value={form.username} onChange={setF('username')}
+                        placeholder="ivanov_aa"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                        required minLength={3} autoComplete="off" />
+                </div>
+                {/* Password */}
+                <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                        Пароль <span className="text-rose-500">*</span>
+                    </label>
+                    <input type="password" value={form.password} onChange={setF('password')}
+                        placeholder="Минимум 6 символов"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required minLength={6} autoComplete="new-password" />
+                </div>
+                {/* Expires */}
+                <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                        Срок действия <span className="text-slate-400">(пусто — бессрочно)</span>
+                    </label>
+                    <input type="date" value={form.expiresAt} onChange={setF('expiresAt')}
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                {/* Notes */}
+                <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Примечания</label>
+                    <input type="text" value={form.notes} onChange={setF('notes')} placeholder="..."
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+            </div>
+
+            {error && <p className="text-xs text-rose-500 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{error}</p>}
+
+            <button type="submit" disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                {loading ? 'Создание...' : 'Создать клиента'}
+            </button>
+        </form>
     );
 }
 
@@ -462,7 +624,9 @@ export const LicenseAdminPanel: React.FC = () => {
     const [sortField, setSortField] = useState<'issuedAt' | 'expiresAt' | 'userName'>('issuedAt');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
     const [showForm, setShowForm] = useState(false);
+    const [showClientForm, setShowClientForm] = useState(false);
     const [extendTarget, setExtendTarget] = useState<LicenseRecord | null>(null);
+    const [keyExists, setKeyExists] = useState<boolean | null>(null);
 
     // ── Load registry ──────────────────────────────────────────────────────────
     const loadRecords = useCallback(async () => {
@@ -483,6 +647,20 @@ export const LicenseAdminPanel: React.FC = () => {
     }, []);
 
     useEffect(() => { loadRecords(); }, [loadRecords]);
+
+    useEffect(() => {
+        window.electronAPI?.licenseAdminCheckKey?.().then(res => setKeyExists(res.exists));
+    }, []);
+
+    async function handleImportKey() {
+        const res = await window.electronAPI?.licenseAdminImportKey?.();
+        if (res?.success) {
+            setKeyExists(true);
+            loadRecords();
+        } else if (res?.error) {
+            alert(res.error);
+        }
+    }
 
     // ── Stats ──────────────────────────────────────────────────────────────────
     const stats = useMemo(() => computeStats(records), [records]);
@@ -566,18 +744,44 @@ export const LicenseAdminPanel: React.FC = () => {
                     <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Доступ недоступен</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">{loadError}</p>
                     <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-                        Admin-панель работает только на машине разработчика (требуется <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">keys/private.pem</code>).
+                        Admin-панель работает только на машине разработчика (требуется файл <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">private.pem</code>).
                     </p>
                 </div>
-                <button onClick={loadRecords} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                    <RefreshCw className="w-3.5 h-3.5" />Повторить
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={handleImportKey} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                        <Upload className="w-3.5 h-3.5" />Импортировать private.pem
+                    </button>
+                    <button onClick={loadRecords} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        <RefreshCw className="w-3.5 h-3.5" />Повторить
+                    </button>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="space-y-5">
+            {/* Developer Key Status */}
+            {keyExists === false && (
+                <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm">
+                        <Key className="w-4 h-4" />
+                        <span className="font-medium">Приватный ключ не импортирован.</span>
+                        <span className="text-xs opacity-75">Генерация лицензий недоступна.</span>
+                    </div>
+                    <button onClick={handleImportKey}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-lg transition-colors">
+                        <Upload className="w-3.5 h-3.5" />Импортировать private.pem
+                    </button>
+                </div>
+            )}
+            {keyExists === true && (
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-xs px-1">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Ключ разработчика активен — генерация лицензий доступна</span>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2">
@@ -593,8 +797,15 @@ export const LicenseAdminPanel: React.FC = () => {
                         <RefreshCw className="w-4 h-4" />
                     </button>
                     <button
-                        onClick={() => setShowForm(v => !v)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${showForm ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                        onClick={() => { setShowClientForm(v => !v); setShowForm(false); }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${showClientForm ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                    >
+                        <UserPlus className="w-4 h-4" />
+                        {showClientForm ? 'Скрыть' : 'Создать клиента'}
+                    </button>
+                    <button
+                        onClick={() => { setShowForm(v => !v); setShowClientForm(false); }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${showForm ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' : 'border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                     >
                         {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                         {showForm ? 'Скрыть' : 'Новая лицензия'}
@@ -609,6 +820,9 @@ export const LicenseAdminPanel: React.FC = () => {
                 <StatsCard label="Истекших" value={stats.expired} color="border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-400" />
                 <StatsCard label="Отозванных" value={stats.revoked} color="border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400" />
             </div>
+
+            {/* Client bundle form */}
+            {showClientForm && <CreateClientForm onCreated={() => { loadRecords(); }} />}
 
             {/* Generate form */}
             {showForm && <GenerateForm onGenerated={handleGenerated} />}

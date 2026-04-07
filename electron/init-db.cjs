@@ -19,14 +19,15 @@ async function initializeDatabase() {
         const userCount = await prisma.user.count();
 
         if (userCount === 0) {
-            logger.info('[DB Init] No users found. Creating first admin user...');
+            logger.info('[DB Init] No users found. Checking for first-run setup conditions...');
 
             const adminLogin = process.env.ADMIN_LOGIN || 'admin';
             const adminPassword = process.env.ADMIN_PASSWORD;
 
             if (!adminPassword) {
-                logger.error('[DB Init] CRITICAL: ADMIN_PASSWORD not set in .env.local');
-                throw new Error('ADMIN_PASSWORD must be set in .env.local for first-time setup');
+                // In packaged app there is no .env.local — first-run setup wizard handles admin creation.
+                logger.warn('[DB Init] ADMIN_PASSWORD not set. Skipping auto admin creation. Use First Run Setup in the app.');
+                return { initialized: true, adminCreated: false, needsFirstRun: true };
             }
 
             // Hash password (handle both plain text and bcrypt hash)

@@ -519,6 +519,88 @@ function setupAuthHandlers() {
             return { success: false, error: 'Ошибка при сбросе пароля' };
         }
     })));
+
+    // ── auth:is-first-run ──────────────────────────────────────────────────────
+    // Возвращает { isFirstRun: boolean } — нет ли пользователей в БД.
+    // Не требует аутентификации.
+    ipcMain.handle('auth:is-first-run', async () => {
+        try {
+            const count = await prisma.user.count();
+            return { isFirstRun: count === 0 };
+        } catch (err) {
+            logger.error('[Auth] is-first-run error:', err.message);
+            return { isFirstRun: false };
+        }
+    });
+
+    // ── auth:first-run-setup ───────────────────────────────────────────────────
+    // Создаёт первого пользователя (admin) при первом запуске.
+    // Защищено двойной проверкой: userCount === 0 И приватный ключ уже импортирован.
+    // Не требует аутентификации.
+    ipcMain.handle('auth:first-run-setup', async (_, data) => {
+        try {
+            const { username, password } = data || {};
+
+            if (!username || username.trim().length < 3) {
+                return { success: false, error: 'Логин должен быть минимум 3 символа' };
+            }
+            if (!password || password.length < 6) {
+                return { success: false, error: 'Пароль должен быть минимум 6 символов' };
+            }
+
+            // Guard 1: no users yet
+            const count = await prisma.user.count();
+            if (count > 0) {
+                return { success: false, error: 'Первоначальная настройка уже была выполнена' };
+            }
+
+            // Guard 2: private key must exist in userData
+            const path = require('path');
+            const fs = require('fs');
+            const { app } = require('electron');
+            const keyInUserData = path.join(app.getPath('userData'), 'private.pem');
+            const keyDevFallback = path.join(__dirname, '..', 'keys', 'private.pem');
+            if (!fs.existsSync(keyInUserData) && !fs.existsSync(keyDevFallback)) {
+                return { success: false, error: 'Приватный ключ не найден. Сначала импортируйте private.pem.' };
+            }
+
+            const passwordHash = await bcrypt.hash(password.trim(), 10);
+
+            const newUser = await prisma.$transaction(async (tx) => {
+                const created = await tx.user.create({
+                    data: {
+                        username: username.trim(),
+                        passwordHash,
+                        lastName: 'Разработчик',
+                        firstName: '',
+                        middleName: '',
+                        isAdmin: true,
+                        isActive: true,
+                    },
+                });
+
+                const roleAdmin = await tx.role.upsert({
+                    where: { key: 'admin' },
+                    update: {},
+                    create: { key: 'admin' },
+                });
+
+                await tx.userRole.create({
+                    data: { userId: created.id, roleId: roleAdmin.id },
+                });
+
+                return created;
+            });
+
+            logger.info(`[Auth] First-run setup complete. Admin user "${newUser.username}" created.`);
+            logAudit('FIRST_RUN_SETUP', { userId: newUser.id, username: newUser.username });
+
+            return { success: true, username: newUser.username };
+        } catch (err) {
+            logger.error('[Auth] first-run-setup error:', err.message);
+            return { success: false, error: err.message };
+        }
+    });
 }
 
 /**

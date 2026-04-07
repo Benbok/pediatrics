@@ -23,6 +23,7 @@ import './modules/printing/templates/vaccination/register';
 import './modules/printing/templates/visit/register';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './modules/auth/LoginPage';
+import FirstRunSetupPage from './modules/license/FirstRunSetupPage';
 import { ActivationPage } from './modules/license/ActivationPage';
 import { ChildProvider } from './context/ChildContext';
 import { DataCacheProvider } from './context/DataCacheContext';
@@ -124,8 +125,16 @@ const router = createHashRouter([
 const AppContent: React.FC = () => {
     const { isAuthenticated, isLoading } = useAuth();
     const [licenseValid, setLicenseValid] = React.useState<boolean | null>(null);
+    const [isFirstRun, setIsFirstRun] = React.useState<boolean | null>(null);
 
     React.useEffect(() => {
+        // Check first-run before license (no users = first install)
+        window.electronAPI?.isFirstRun?.().then((res) => {
+            setIsFirstRun(res.isFirstRun);
+        }).catch(() => {
+            setIsFirstRun(false);
+        });
+
         window.electronAPI.checkLicense().then((result) => {
             setLicenseValid(result.valid);
         }).catch(() => {
@@ -133,7 +142,7 @@ const AppContent: React.FC = () => {
         });
     }, []);
 
-    if (licenseValid === null || isLoading) {
+    if (licenseValid === null || isLoading || isFirstRun === null) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
                 <div className="flex flex-col items-center gap-4">
@@ -141,6 +150,20 @@ const AppContent: React.FC = () => {
                     <span className="text-slate-500 font-medium">Загрузка системы...</span>
                 </div>
             </div>
+        );
+    }
+
+    if (isFirstRun) {
+        return (
+            <FirstRunSetupPage
+                onSetupComplete={() => {
+                    setIsFirstRun(false);
+                    // Re-check license after setup (own license was auto-generated)
+                    window.electronAPI.checkLicense().then((result) => {
+                        setLicenseValid(result.valid);
+                    }).catch(() => setLicenseValid(false));
+                }}
+            />
         );
     }
 
