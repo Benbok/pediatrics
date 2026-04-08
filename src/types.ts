@@ -443,8 +443,6 @@ export interface PediatricDosingRule {
   infusion?: any | null;
 }
 
-export interface AdultDosingRule extends PediatricDosingRule { }
-
 // Расширяем enum для путей введения
 export type RouteOfAdmin =
   | 'oral'           // Перорально
@@ -473,7 +471,6 @@ export interface Medication {
   manufacturer?: string | null;
   forms: MedicationForm[];
   pediatricDosing: PediatricDosingRule[];
-  adultDosing?: AdultDosingRule[] | null;
   contraindications: string;
   cautionConditions?: string | null;
   sideEffects?: string | null;

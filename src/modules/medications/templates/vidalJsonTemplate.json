@@ -118,28 +118,6 @@
       "instruction": "Внутрь, после еды. Детям 3-6 лет: 250-500 мг на прием, до 4 раз в сутки"
     }
   ],
-  "adultDosing": [
-    {
-      "minWeightKg": 60,
-      "formId": "tablet_500mg",
-      "unit": "mg",
-      "dosing": {
-        "type": "fixed",
-        "fixedDose": {
-          "min": 500,
-          "max": 500,
-          "unit": "mg"
-        }
-      },
-      "routeOfAdmin": "oral",
-      "timesPerDay": 4,
-      "maxSingleDose": 1000,
-      "maxSingleDosePerKg": null,
-      "maxDailyDose": 4000,
-      "maxDailyDosePerKg": null,
-      "instruction": "Внутрь, после еды. Взрослым и подросткам с массой тела более 60 кг: 500 мг до 4 раз/сут. Максимальная продолжительность лечения - 5-7 дней"
-    }
-  ],
   "indications": [
     "Лихорадка при инфекционно-воспалительных заболеваниях",
     "Болевой синдром слабой и умеренной интенсивности различного генеза",

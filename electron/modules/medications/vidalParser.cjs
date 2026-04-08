@@ -95,7 +95,7 @@ async function parseVidalWithAI(html) {
 
 ${relevantHtml}
 
-JSON: {nameRu, activeSubstance, atcCode, manufacturer, clinicalPharmGroup, pharmTherapyGroup, packageDescription, forms: [{id, type, concentration, description}], pediatricDosing: [{minAgeMonths, maxAgeMonths, formId, dosing: {type: "weight_based"/"fixed", mgPerKg или fixedDose: {min, max, unit}}, routeOfAdmin, timesPerDay, maxSingleDose, maxDailyDose, instruction}], adultDosing: [], indications, contraindications, sideEffects, pregnancy, lactation, cautionConditions, interactions, minInterval, maxDosesPerDay, maxDurationDays, routeOfAdmin, icd10Codes: []}
+JSON: {nameRu, activeSubstance, atcCode, manufacturer, clinicalPharmGroup, pharmTherapyGroup, packageDescription, forms: [{id, type, concentration, description}], pediatricDosing: [{minAgeMonths, maxAgeMonths, formId, dosing: {type: "weight_based"/"fixed", mgPerKg или fixedDose: {min, max, unit}}, routeOfAdmin, timesPerDay, maxSingleDose, maxDailyDose, instruction}], indications, contraindications, sideEffects, pregnancy, lactation, cautionConditions, interactions, minInterval, maxDosesPerDay, maxDurationDays, routeOfAdmin, icd10Codes: []}
 
 КРИТИЧНО:
 1. atcCode - найди код формата N02BE01 (буква-2цифры-буквы-2цифры). Ищи в тексте "АТХ", "ATX", "Код ATC"

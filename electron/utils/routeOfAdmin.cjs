@@ -84,11 +84,6 @@ function normalizeMedicationRoutes(medicationData) {
             if (rule.instruction) allInstructions.push(rule.instruction);
         });
     }
-    if (medicationData.adultDosing && Array.isArray(medicationData.adultDosing)) {
-        medicationData.adultDosing.forEach(rule => {
-            if (rule.instruction) allInstructions.push(rule.instruction);
-        });
-    }
     const combinedInstructions = allInstructions.join(' ');
 
     const normalizeRules = (rules) => {
@@ -127,8 +122,7 @@ function normalizeMedicationRoutes(medicationData) {
     if (!finalRouteOfAdmin) {
         // Ищем первый не-null routeOfAdmin в правилах
         const allRules = [
-            ...(medicationData.pediatricDosing || []),
-            ...(medicationData.adultDosing || [])
+            ...(medicationData.pediatricDosing || [])
         ];
         for (const rule of allRules) {
             if (rule && rule.routeOfAdmin && typeof rule.routeOfAdmin === 'string') {
@@ -145,8 +139,7 @@ function normalizeMedicationRoutes(medicationData) {
     return {
         ...medicationData,
         routeOfAdmin: finalRouteOfAdmin,
-        pediatricDosing: normalizeRules(medicationData.pediatricDosing),
-        adultDosing: normalizeRules(medicationData.adultDosing)
+        pediatricDosing: normalizeRules(medicationData.pediatricDosing)
     };
 }
 

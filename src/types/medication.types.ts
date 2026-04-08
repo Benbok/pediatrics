@@ -57,30 +57,6 @@ export interface PediatricDosingRule {
 }
 
 /**
- * Правило дозирования для взрослых
- */
-export interface AdultDosingRule {
-  minWeightKg?: number;
-  maxWeightKg?: number;
-  
-  dosing: {
-    type: 'fixed' | 'weight_based' | 'bsa_based';
-    fixedDose?: {
-      min: number;
-      max?: number;
-      unit: 'mg' | 'ml';
-    };
-    mgPerKg?: number;
-    mgPerM2?: number;
-  };
-  
-  timesPerDay: number;
-  maxSingleDose?: number;
-  maxDailyDose?: number;
-  instruction: string;
-}
-
-/**
  * Краткое описание правила для выбора в UI
  */
 export interface MatchingRuleSummary {

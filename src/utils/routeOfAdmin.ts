@@ -125,8 +125,7 @@ function normalizeRouteOfAdmin(
  */
 export function normalizeMedicationRoutes<T extends { 
     routeOfAdmin?: string | null; 
-    pediatricDosing?: any[]; 
-    adultDosing?: any[] 
+    pediatricDosing?: any[];
 }>(medicationData: T): T {
     if (!medicationData || typeof medicationData !== 'object') return medicationData;
 
@@ -134,11 +133,6 @@ export function normalizeMedicationRoutes<T extends {
     const allInstructions: string[] = [];
     if (medicationData.pediatricDosing && Array.isArray(medicationData.pediatricDosing)) {
         medicationData.pediatricDosing.forEach((rule: any) => {
-            if (rule.instruction) allInstructions.push(rule.instruction);
-        });
-    }
-    if (medicationData.adultDosing && Array.isArray(medicationData.adultDosing)) {
-        medicationData.adultDosing.forEach((rule: any) => {
             if (rule.instruction) allInstructions.push(rule.instruction);
         });
     }
@@ -180,8 +174,7 @@ export function normalizeMedicationRoutes<T extends {
     if (!finalRouteOfAdmin) {
         // Find first non-null routeOfAdmin in rules
         const allRules = [
-            ...(medicationData.pediatricDosing || []),
-            ...(medicationData.adultDosing || [])
+            ...(medicationData.pediatricDosing || [])
         ];
         for (const rule of allRules) {
             if (rule && rule.routeOfAdmin && typeof rule.routeOfAdmin === 'string') {
@@ -197,7 +190,6 @@ export function normalizeMedicationRoutes<T extends {
     return {
         ...medicationData,
         routeOfAdmin: finalRouteOfAdmin,
-        pediatricDosing: normalizeRules(medicationData.pediatricDosing || []),
-        adultDosing: normalizeRules(medicationData.adultDosing || [])
+        pediatricDosing: normalizeRules(medicationData.pediatricDosing || [])
     };
 }

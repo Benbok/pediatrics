@@ -40,7 +40,6 @@
       "pharmTherapyGroup",
       "packageDescription",
       "pediatricDosing",
-      "adultDosing",
       "indications",
       "contraindications",
       "sideEffects",
@@ -300,17 +299,6 @@
       "maxSingleDose",
       "maxDailyDose",
       "instruction"
-    ],
-    "adult": [
-      "minWeightKg",
-      "formId",
-      "unit",
-      "dosing",
-      "routeOfAdmin",
-      "timesPerDay",
-      "maxSingleDose",
-      "maxDailyDose",
-      "instruction"
     ]
   },
   "dosingTypes": {
@@ -554,26 +542,6 @@
         "maxSingleDose": 200,
         "maxDailyDose": 600,
         "instruction": "Внутрь, после еды. Детям 1-6 лет: 10-20 мг/кг на прием, но не более 200 мг, 3 раза в сутки"
-      }
-    ],
-    "adultDosing": [
-      {
-        "minWeightKg": 50,
-        "formId": "tablet_200mg",
-        "unit": "mg",
-        "dosing": {
-          "type": "fixed",
-          "fixedDose": {
-            "min": 200,
-            "max": 400,
-            "unit": "mg"
-          }
-        },
-        "routeOfAdmin": "oral",
-        "timesPerDay": 3,
-        "maxSingleDose": 600,
-        "maxDailyDose": 1800,
-        "instruction": "Внутрь, после еды. Взрослым: 200-400 мг 3 раза в сутки"
       }
     ],
     "indications": "Лихорадка, болевой синдром, воспалительные заболевания",

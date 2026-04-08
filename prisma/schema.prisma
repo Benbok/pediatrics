@@ -344,7 +344,6 @@ model Medication {
   manufacturer       String?
   forms              String // JSON with flavors, packaging, concentration
   pediatricDosing    String  @map("pediatric_dosing") // JSON: age-based rules (новая структура Vidal)
-  adultDosing        String? @map("adult_dosing") // JSON
   contraindications  String
   cautionConditions  String? @map("caution_conditions")
   sideEffects        String? @map("side_effects")

@@ -82,8 +82,6 @@ const PediatricDosingRuleSchema = z.object({
     infusion: z.any().nullable().optional(),
 });
 
-const AdultDosingRuleSchema = PediatricDosingRuleSchema;
-
 export const MedicationSchema = z.object({
     id: z.number().optional(),
     nameRu: z.string().min(1, 'Название препарата обязательно'),
@@ -95,7 +93,6 @@ export const MedicationSchema = z.object({
     manufacturer: z.string().nullable().optional(),
     forms: z.array(MedicationFormSchema).default([]),
     pediatricDosing: z.array(PediatricDosingRuleSchema).default([]),
-    adultDosing: z.array(AdultDosingRuleSchema).nullable().optional(),
     contraindications: z.string().min(1, 'Противопоказания обязательны'),
     cautionConditions: z.string().nullable().optional(),
     sideEffects: z.string().nullable().optional(),

@@ -274,7 +274,6 @@ async function initDatabase() {
             manufacturer TEXT,
             forms TEXT NOT NULL,
             pediatric_dosing TEXT NOT NULL,
-            adult_dosing TEXT,
             contraindications TEXT NOT NULL,
             caution_conditions TEXT,
             side_effects TEXT,
