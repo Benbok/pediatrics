@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -92,6 +92,24 @@ const SourceLink: React.FC<{ source: KnowledgeSource }> = ({ source }) => {
                 transition-colors duration-150 cursor-pointer"
         >
             <Icon size={11} />
+            {source.name}
+        </button>
+    );
+};
+
+const MedicationChip: React.FC<{ source: KnowledgeSource }> = ({ source }) => {
+    const navigate = useNavigate();
+    return (
+        <button
+            type="button"
+            onClick={() => navigate(`/medications/${source.id}`)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium
+                bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800
+                dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40 dark:hover:text-emerald-300
+                border border-emerald-200 dark:border-emerald-800
+                transition-colors duration-150 cursor-pointer"
+        >
+            <Pill size={11} />
             {source.name}
         </button>
     );
@@ -203,6 +221,25 @@ export const KnowledgeQueryWidget: React.FC = () => {
     const isLoading = state === 'loading';
     const canSubmit = query.trim().length >= 3 && !isLoading;
 
+    // Этап 1: разделяем sources на две группы (деривация через useMemo)
+    const diseaseSources = useMemo(
+        () => (result?.sources ?? []).filter(s => s.type === 'disease'),
+        [result?.sources]
+    );
+    // Показываем только препараты, которые ИИ фактически упомянул в тексте ответа
+    const medicationSources = useMemo(() => {
+        const allMeds = (result?.sources ?? []).filter(s => s.type === 'medication');
+        if (!result?.answer || allMeds.length === 0) return allMeds;
+        const answerLower = result.answer.toLowerCase();
+        const mentioned = allMeds.filter(s => {
+            // Берём первое значащее слово названия (≥ 5 символов) и ищем его в ответе
+            const firstWord = s.name.toLowerCase().split(/[\s+]+/)[0];
+            return firstWord.length >= 5 && answerLower.includes(firstWord);
+        });
+        // Если ИИ не упомянул ни один препарат — не показываем нерелевантные чипы
+        return mentioned;
+    }, [result?.sources, result?.answer]);
+
     return (
         <Card noPadding className="overflow-visible">
             <div className="p-6">
@@ -239,30 +276,30 @@ export const KnowledgeQueryWidget: React.FC = () => {
                             disabled:opacity-60 transition-all duration-200"
                     />
                     {isLoading ? (
-                        <button
+                        <Button
                             type="button"
+                            variant="danger"
+                            size="md"
                             onClick={handleCancel}
-                            className="shrink-0 flex items-center justify-center w-10 rounded-xl
-                                bg-rose-500 text-white hover:bg-rose-600 border border-rose-600
-                                transition-all duration-200"
+                            className="shrink-0 self-stretch w-10 px-0 rounded-xl"
                             title="Отменить"
                         >
                             <X size={16} />
-                        </button>
+                        </Button>
                     ) : (
-                        <button
+                        <Button
                             type="button"
+                            variant="primary"
+                            size="md"
                             onClick={handleSubmit}
-                            disabled={!canSubmit}
-                            className="shrink-0 flex items-center justify-center w-10 rounded-xl
-                                bg-primary-600 text-white hover:bg-primary-700 border border-primary-700
-                                disabled:bg-slate-200 disabled:border-slate-300 disabled:text-slate-400
-                                disabled:cursor-not-allowed
-                                transition-all duration-200"
+                            aria-disabled={!canSubmit}
+                            className={`shrink-0 self-stretch w-10 px-0 rounded-xl ${
+                                canSubmit ? '' : 'opacity-80 saturate-75'
+                            }`}
                             title="Найти (Enter)"
                         >
-                            <Search size={16} />
-                        </button>
+                            <Search size={18} strokeWidth={2.5} />
+                        </Button>
                     )}
                 </div>
 
@@ -323,15 +360,30 @@ export const KnowledgeQueryWidget: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Источники */}
-                        {result.sources.length > 0 && (
+                        {/* Этап 3: Блок «Упомянутые препараты» — кликабельные чипы */}
+                        {medicationSources.length > 0 && (
+                            <div>
+                                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-1">
+                                    <Pill size={12} />
+                                    Упомянутые препараты:
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {medicationSources.map((s, i) => (
+                                        <MedicationChip key={`med-${s.id}-${i}`} source={s} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Этап 2: Блок «Источники» — только болезни */}
+                        {diseaseSources.length > 0 && (
                             <div>
                                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
                                     Источники из базы знаний:
                                 </p>
                                 <div className="flex flex-wrap gap-1.5">
-                                    {result.sources.map((s, i) => (
-                                        <SourceLink key={`${s.type}-${s.id}-${i}`} source={s} />
+                                    {diseaseSources.map((s, i) => (
+                                        <SourceLink key={`dis-${s.id}-${i}`} source={s} />
                                     ))}
                                 </div>
                             </div>

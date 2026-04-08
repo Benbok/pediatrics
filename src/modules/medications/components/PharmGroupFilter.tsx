@@ -57,15 +57,6 @@ export const PharmGroupFilter: React.FC<{
         ];
     }, [groupOptions]);
 
-    const selectedLabel = useMemo(() => {
-        if (!selectedGroup) {
-            return null;
-        }
-
-        const selected = groupOptions.find((option) => option.value === selectedGroup);
-        return selected ? selected.label : sanitizeDisplayText(selectedGroup);
-    }, [groupOptions, selectedGroup]);
-
     const handleSelect = (group: string) => {
         const newGroup = group || null;
         setSelectedGroup(newGroup);
@@ -95,17 +86,13 @@ export const PharmGroupFilter: React.FC<{
             {selectedGroup && (
                 <button
                     type="button"
-                    onClick={() => handleSelect(selectedGroup)}
+                    onClick={() => handleSelect('')}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50"
                     title="Сбросить фильтр"
                 >
                     <X className="w-4 h-4" />
                 </button>
             )}
-
-            <div className="hidden xl:block text-[11px] text-slate-400 shrink-0">
-                {selectedLabel ? `Выбрано: ${selectedLabel}` : `${groupOptions.length} групп`}
-            </div>
         </div>
     );
 };

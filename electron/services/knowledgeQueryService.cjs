@@ -269,24 +269,33 @@ async function searchDiseasesByLike(query) {
 /**
  * Извлекает кандидатов названий препаратов из текстов чанков и ищет их в таблице medications.
  * Не использует жёсткозахардкоженных списков — работает для любой специальности и любого препарата.
- * Стратегия: слова с заглавной буквы (имена собственные = названия препаратов в русских гайдлайнах).
+ * Стратегия: все кириллические слова ≥ 5 символов (и с заглавной, и со строчной) просчитываются
+ * как потенциальные названия препаратов в обоих вариантах регистра.
  */
 async function searchMedicationsByChunkMentions(allChunkTexts) {
     if (!allChunkTexts || allChunkTexts.length === 0) return [];
     const combined = allChunkTexts.join('\n');
 
-    // Извлекаем проперные номена (= слова с заглавной буквы, ≥ 5 символов)
-    // В русских медицинских руководствах названия препаратов пишутся с заглавной буквы
-    const properNounRe = /[\u0410-\u042F\u0401][\u0430-\u044F\u0451]{4,}/g;
-    const candidates = new Set();
+    // Извлекаем все кириллические слова ≥ 5 символов (и с большой, и со строчной —
+    // гайдлайны пишут названия по-разному: Амброксол / амброксол)
+    const wordRe = /[\u0400-\u04FF]{5,}/g;
+    const rawWords = new Set();
     let m;
-    while ((m = properNounRe.exec(combined)) !== null) {
-        candidates.add(m[0]);
+    while ((m = wordRe.exec(combined)) !== null) {
+        rawWords.add(m[0]);
     }
-    if (candidates.size === 0) return [];
+    if (rawWords.size === 0) return [];
+
+    // Для каждого слова пробуем два варианта: как есть + с заглавной буквы
+    // (Prisma contains на SQLite чувствительн к регистру для кириллицы)
+    const variants = new Set();
+    for (const w of rawWords) {
+        variants.add(w);
+        variants.add(w.charAt(0).toUpperCase() + w.slice(1));
+    }
 
     try {
-        const orConds = [...candidates].map(name => ({ nameRu: { contains: name } }));
+        const orConds = [...variants].map(name => ({ nameRu: { contains: name } }));
         return await prisma.medication.findMany({
             where: { AND: [{ OR: orConds }, { childUsing: { not: 'Not' } }] },
             select: {
@@ -472,6 +481,10 @@ async function planQueryWithLLM(query) {
         plan.needsDosing = !!plan.needsDosing;
         plan.needsContraindications = !!plan.needsContraindications;
         plan.focus = String(plan.focus || '').trim().slice(0, 60);
+        // Если LLM вернул пустой focus — используем сырой запрос
+        if (!plan.focus) plan.focus = query.trim().slice(0, 60);
+        // Если LLM не дал термины — используем сырой запрос как единственный терм
+        if (plan.searchTerms.length === 0) plan.searchTerms = [query.trim().slice(0, 60)];
         // При лечебной / дозировочной интенции дозировки всегда нужны
         if (plan.intent === 'treatment' || plan.intent === 'dosing') {
             plan.needsMedications = true;

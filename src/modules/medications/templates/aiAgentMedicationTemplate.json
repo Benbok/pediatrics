@@ -1,0 +1,591 @@
+{
+  "metadata": {
+    "templateVersion": "1.0",
+    "purpose": "AI Agent template for medication form recognition and processing",
+    "avaliableFormTypes": [
+      "tablet",
+      "capsule",
+      "solution",
+      "suspension",
+      "powder",
+      "cream",
+      "ointment",
+      "drops",
+      "spray",
+      "inhalation",
+      "injection",
+      "gel",
+      "patch",
+      "suppository",
+      "granules",
+      "syrup",
+      "elixir",
+      "emulsion",
+      "other"
+    ],
+    "lastUpdated": "2026-04-08",
+    "totalMedicationsInDatabase": 398,
+    "totalUniqueForms": 378
+  },
+  "medicationStructure": {
+    "requiredFields": [
+      "nameRu",
+      "nameEn",
+      "activeSubstance",
+      "atcCode"
+    ],
+    "optionalFields": [
+      "manufacturer",
+      "clinicalPharmGroup",
+      "pharmTherapyGroup",
+      "packageDescription",
+      "pediatricDosing",
+      "adultDosing",
+      "indications",
+      "contraindications",
+      "sideEffects",
+      "pregnancy",
+      "lactation",
+      "interactions",
+      "overdose"
+    ]
+  },
+  "formStructure": {
+    "id": "string (unique identifier for form)",
+    "type": "string (one of availableFormTypes)",
+    "concentration": "string or null (e.g., '500 мг/5 мл', '250 мг', null)",
+    "unit": "string or null (mg, ml, mcg, %)",
+    "strengthMg": "number or null (strength in milligrams)",
+    "mgPerMl": "number or null (concentration per ml for solutions)",
+    "volumeMl": "number or null (volume in milliliters)",
+    "description": "string (Russian language description with packaging info)"
+  },
+  "availableFormExamples": {
+    "tablet": {
+      "id": "tablet_500mg",
+      "type": "tablet",
+      "concentration": null,
+      "unit": "mg",
+      "strengthMg": 500,
+      "description": "таб., покр. пленочной оболочкой, 500 мг: 10, 20 или 24 шт.",
+      "relevantTypes": [
+        "диспергируемые таблетки",
+        "таблетки с пленочной оболочкой",
+        "таблетки без оболочки",
+        "шипучие таблетки"
+      ]
+    },
+    "capsule": {
+      "id": "capsule_250mg",
+      "type": "capsule",
+      "concentration": null,
+      "unit": "mg",
+      "strengthMg": 250,
+      "description": "капс. 250 мг: 10 или 20 шт.",
+      "relevantTypes": [
+        "капсулы твердые",
+        "капсулы с пролонг. высвобождением",
+        "капсулы кишечнорастворимые"
+      ]
+    },
+    "solution": {
+      "id": "solution_250_1",
+      "type": "solution",
+      "concentration": "250 мг/1 мл",
+      "unit": "ml",
+      "mgPerMl": 250,
+      "volumeMl": 1,
+      "description": "р-р д/в/в и в/м введения 250 мг/1 мл: амп. 2 мл 5 или 10 шт.",
+      "relevantTypes": [
+        "раствор для инъекций",
+        "раствор для ингаляций",
+        "раствор для внутреннего применения"
+      ]
+    },
+    "suspension": {
+      "id": "suspension_100_5",
+      "type": "suspension",
+      "concentration": "100 мг/5 мл",
+      "unit": "ml",
+      "mgPerMl": 20,
+      "volumeMl": 5,
+      "description": "гранулы д/пригот. сусп. д/приема внутрь 100 мг/5 мл: фл. 30.3-35.0 г в компл. с дозир. шприцем",
+      "relevantTypes": [
+        "суспензия для приема внутрь",
+        "порошок для приготовления суспензии"
+      ]
+    },
+    "powder": {
+      "id": "powder_1000mg",
+      "type": "powder",
+      "concentration": null,
+      "unit": "mg",
+      "strengthMg": 1000,
+      "volumeMl": 10,
+      "description": "порошок д/пригот. р-ра д/в/в и в/м введения 1000 мг: фл. 1 или 10 шт.",
+      "relevantTypes": [
+        "порошок для приготовления раствора",
+        "порошок для приготовления суспензии",
+        "лиофилизат"
+      ]
+    },
+    "cream": {
+      "id": "cream_1mg",
+      "type": "cream",
+      "concentration": null,
+      "unit": "mg",
+      "strengthMg": 1,
+      "description": "крем д/наружн. прим. 1 мг+1 мг/1 г: тубы 15 г или 30 г",
+      "relevantTypes": [
+        "крем",
+        "крем с активными компонентами"
+      ]
+    },
+    "ointment": {
+      "id": "ointment_1mg",
+      "type": "ointment",
+      "concentration": null,
+      "unit": "mg",
+      "strengthMg": 1,
+      "description": "мазь д/наружн. прим. 1 мг+1 мг/1 г: тубы 15 г или 30 г",
+      "relevantTypes": [
+        "мазь",
+        "мазь с активными компонентами"
+      ]
+    },
+    "drops": {
+      "id": "drops_10mg_ml",
+      "type": "drops",
+      "concentration": "10 мг/мл",
+      "unit": "ml",
+      "mgPerMl": 10,
+      "description": "капли д/приема внутрь 10 мг/мл: фл. 10 мл",
+      "relevantTypes": [
+        "капли назальные",
+        "капли ушные",
+        "капли для приема внутрь"
+      ]
+    },
+    "spray": {
+      "id": "spray_nasal_50mcg",
+      "type": "spray",
+      "concentration": "50 мкг/доза",
+      "unit": "mg",
+      "strengthMg": 0.05,
+      "description": "спрей д/носа дозированный 50 мкг/доза: флакон 120 доз",
+      "relevantTypes": [
+        "спрей назальный",
+        "спрей для ротовой полости"
+      ]
+    },
+    "inhalation": {
+      "id": "inhalation_100mcg",
+      "type": "inhalation",
+      "concentration": "100 мкг/доза",
+      "unit": "mg",
+      "strengthMg": 0.1,
+      "description": "аэрозоль д/ингаляций дозированный 100 мкг/доза: баллон 200 доз",
+      "relevantTypes": [
+        "аэрозоль для ингаляций",
+        "порошок для ингаляций",
+        "раствор для ингаляций"
+      ]
+    },
+    "injection": {
+      "id": "injection_5mg_ml",
+      "type": "injection",
+      "concentration": "5 мг/мл",
+      "unit": "ml",
+      "mgPerMl": 5,
+      "volumeMl": 1,
+      "description": "р-р д/инъекций 5 мг/мл: амп. 1 мл 10 шт.",
+      "relevantTypes": [
+        "раствор для внутримышечного введения",
+        "раствор для внутривенного введения",
+        "раствор для подкожного введения"
+      ]
+    },
+    "gel": {
+      "id": "gel_2percent",
+      "type": "gel",
+      "concentration": "2%",
+      "unit": null,
+      "description": "гель д/наружн. прим. 2%: тубы 50 г",
+      "relevantTypes": [
+        "гель для наружного применения",
+        "гель зубной"
+      ]
+    },
+    "patch": {
+      "id": "patch_10mg",
+      "type": "patch",
+      "concentration": "10 мг/сут",
+      "unit": "mg",
+      "strengthMg": 10,
+      "description": "пластырь трансдермальный 10 мг/сут: 5 или 10 шт.",
+      "relevantTypes": [
+        "пластырь трансдермальный"
+      ]
+    },
+    "suppository": {
+      "id": "suppository_100mg",
+      "type": "suppository",
+      "concentration": null,
+      "unit": "mg",
+      "strengthMg": 100,
+      "description": "суппозитории ректальные 100 мг: 6 или 10 шт.",
+      "relevantTypes": [
+        "суппозитории ректальные",
+        "суппозитории вагинальные"
+      ]
+    },
+    "granules": {
+      "id": "granules_sachet",
+      "type": "granules",
+      "concentration": "50 мг/пак",
+      "unit": "mg",
+      "strengthMg": 50,
+      "description": "гранулы д/приема внутрь 50 мг: пак. 20 шт.",
+      "relevantTypes": [
+        "гранулы кишечнорастворимые",
+        "гранулы с пролонг. высвобождением"
+      ]
+    },
+    "syrup": {
+      "id": "syrup_10mg_5ml",
+      "type": "syrup",
+      "concentration": "10 мг/5 мл",
+      "unit": "ml",
+      "mgPerMl": 2,
+      "volumeMl": 5,
+      "description": "сироп 10 мг/5 мл: фл. 200 мл",
+      "relevantTypes": [
+        "сироп для детей",
+        "сироп от кашля"
+      ]
+    },
+    "elixir": {
+      "id": "elixir_5mg_5ml",
+      "type": "elixir",
+      "concentration": "5 мг/5 мл",
+      "unit": "ml",
+      "mgPerMl": 1,
+      "volumeMl": 5,
+      "description": "эликсир 5 мг/5 мл: фл. 250 мл",
+      "relevantTypes": [
+        "эликсир"
+      ]
+    },
+    "emulsion": {
+      "id": "emulsion_5percent",
+      "type": "emulsion",
+      "concentration": "5%",
+      "unit": null,
+      "description": "эмульсия д/наружн. прим. 5%: фл. 100 мл",
+      "relevantTypes": [
+        "эмульсия для наружного применения"
+      ]
+    }
+  },
+  "dosingRequiredFields": {
+    "pediatric": [
+      "minAgeMonths",
+      "maxAgeMonths",
+      "formId",
+      "unit",
+      "dosing",
+      "routeOfAdmin",
+      "timesPerDay",
+      "intervalHours",
+      "maxSingleDose",
+      "maxDailyDose",
+      "instruction"
+    ],
+    "adult": [
+      "minWeightKg",
+      "formId",
+      "unit",
+      "dosing",
+      "routeOfAdmin",
+      "timesPerDay",
+      "maxSingleDose",
+      "maxDailyDose",
+      "instruction"
+    ]
+  },
+  "dosingTypes": {
+    "weight_based": {
+      "type": "weight_based",
+      "fields": [
+        "mgPerKg",
+        "maxMgPerKg"
+      ],
+      "example": {
+        "type": "weight_based",
+        "mgPerKg": 10,
+        "maxMgPerKg": 15
+      }
+    },
+    "fixed": {
+      "type": "fixed",
+      "fields": [
+        "fixedDose"
+      ],
+      "example": {
+        "type": "fixed",
+        "fixedDose": {
+          "min": 120,
+          "max": 250,
+          "unit": "mg"
+        }
+      }
+    },
+    "age_based": {
+      "type": "age_based",
+      "fields": [
+        "doses"
+      ],
+      "example": {
+        "type": "age_based",
+        "doses": [
+          {
+            "minAge": 0,
+            "maxAge": 2,
+            "dose": 50
+          }
+        ]
+      }
+    }
+  },
+  "routesOfAdministration": [
+    "oral",
+    "sublingual",
+    "buccal",
+    "rectal",
+    "vaginal",
+    "transdermal",
+    "topical",
+    "inhalation",
+    "intranasal",
+    "ophthalmic",
+    "otic",
+    "intramuscular",
+    "intravenous",
+    "subcutaneous",
+    "intradermal",
+    "intrathecal",
+    "intraperitoneal",
+    "epidural"
+  ],
+  "commonConcentrationUnits": [
+    "mg",
+    "g",
+    "mcg",
+    "IU",
+    "%",
+    "mEq",
+    "mmol",
+    "ml",
+    "l"
+  ],
+  "packageTypes": [
+    "таб.",
+    "капс.",
+    "ампула",
+    "флакон",
+    "туба",
+    "пакет",
+    "баллон",
+    "блистер",
+    "бутылка"
+  ],
+  "qualityCheckRules": {
+    "form_validation": {
+      "description": "Validate form structure",
+      "checks": [
+        "form.id must be unique for medication",
+        "form.type must be one of availableFormTypes",
+        "form.description must not be empty",
+        "form.description must be in Russian",
+        "concentration and unit should be consistent"
+      ]
+    },
+    "dosing_validation": {
+      "description": "Validate dosing information",
+      "checks": [
+        "dosing.type must be one of: weight_based, fixed, age_based",
+        "maxSingleDose must be >= dose calculation",
+        "maxDailyDose must be >= maxSingleDose * timesPerDay",
+        "intervalHours must be reasonable (1-24)",
+        "timesPerDay must be reasonable (1-6)",
+        "instructions must be in Russian"
+      ]
+    },
+    "pediatric_dosing_validation": {
+      "description": "Additional checks for pediatric dosing",
+      "checks": [
+        "maxAgeMonths must be > minAgeMonths",
+        "age ranges should not overlap",
+        "formId must exist in medication.forms",
+        "weight-based dosing for infants should have weight limits",
+        "Should have instructions for parent/caregiver"
+      ]
+    }
+  },
+  "aiTaskTemplates": {
+    "recognizeFormFromDescription": {
+      "instruction": "Given Russian medication form description, identify form type, strength, and packaging",
+      "input": "string (Russian description)",
+      "output": {
+        "formType": "string",
+        "strength": "number",
+        "strengthUnit": "string",
+        "packaging": "string",
+        "volume": "number",
+        "volumeUnit": "string"
+      }
+    },
+    "generateDosingRecommendation": {
+      "instruction": "Generate pediatric dosing for given age and weight range",
+      "input": {
+        "medication": "object",
+        "ageMonths": "number",
+        "weightKg": "number"
+      },
+      "output": {
+        "dosage": "number",
+        "unit": "string",
+        "timesPerDay": "number",
+        "maxDailyDose": "number",
+        "formRecommendation": "string"
+      }
+    },
+    "validateMedicationData": {
+      "instruction": "Validate complete medication record against quality rules",
+      "input": "object (full medication record)",
+      "output": {
+        "isValid": "boolean",
+        "errors": ["string"],
+        "warnings": ["string"]
+      }
+    },
+    "enrichMedicationForm": {
+      "instruction": "Extract and structure form details from unstructured text",
+      "input": "string (unstructured Russian description)",
+      "output": "object (structured form)"
+    }
+  },
+  "exampleMedicationRecord": {
+    "nameRu": "Ибупрофен",
+    "nameEn": "Ibuprofen",
+    "activeSubstance": "Ибупрофен",
+    "atcCode": "M01AE01",
+    "manufacturer": "ООО Фармакопея",
+    "clinicalPharmGroup": "Противовоспалительное средство",
+    "pharmTherapyGroup": "Нестероидные противовоспалительные средства",
+    "packageDescription": "Таблетки, раствор, суспензия",
+    "forms": [
+      {
+        "id": "tablet_200mg",
+        "type": "tablet",
+        "concentration": null,
+        "unit": "mg",
+        "strengthMg": 200,
+        "description": "таб. 200 мг: 10 или 20 шт."
+      },
+      {
+        "id": "tablet_400mg",
+        "type": "tablet",
+        "concentration": null,
+        "unit": "mg",
+        "strengthMg": 400,
+        "description": "таб. 400 мг: 20 или 30 шт."
+      },
+      {
+        "id": "suspension_100_5ml",
+        "type": "suspension",
+        "concentration": "100 мг/5 мл",
+        "unit": "ml",
+        "mgPerMl": 20,
+        "volumeMl": 5,
+        "description": "суспензия д/приема внутрь 100 мг/5 мл: фл. 100 мл в компл. с дозир. шприцем"
+      },
+      {
+        "id": "solution_50_1ml",
+        "type": "solution",
+        "concentration": "50 мг/1 мл",
+        "unit": "ml",
+        "mgPerMl": 50,
+        "volumeMl": 1,
+        "description": "р-р д/в/м введения 50 мг/1 мл: амп. 2 мл 3 шт."
+      }
+    ],
+    "pediatricDosing": [
+      {
+        "minAgeMonths": 3,
+        "maxAgeMonths": 12,
+        "formId": "suspension_100_5ml",
+        "unit": "mg",
+        "dosing": {
+          "type": "weight_based",
+          "mgPerKg": 5,
+          "maxMgPerKg": 10
+        },
+        "routeOfAdmin": "oral",
+        "timesPerDay": 3,
+        "intervalHours": 6,
+        "maxSingleDose": 100,
+        "maxDailyDose": 300,
+        "instruction": "Внутрь, после еды. Детям 3-12 месяцев: 5-10 мг/кг, но не более 100 мг на прием, 3 раза в сутки"
+      },
+      {
+        "minAgeMonths": 12,
+        "maxAgeMonths": 72,
+        "formId": "suspension_100_5ml",
+        "unit": "mg",
+        "dosing": {
+          "type": "weight_based",
+          "mgPerKg": 10,
+          "maxMgPerKg": 20
+        },
+        "routeOfAdmin": "oral",
+        "timesPerDay": 3,
+        "intervalHours": 6,
+        "maxSingleDose": 200,
+        "maxDailyDose": 600,
+        "instruction": "Внутрь, после еды. Детям 1-6 лет: 10-20 мг/кг на прием, но не более 200 мг, 3 раза в сутки"
+      }
+    ],
+    "adultDosing": [
+      {
+        "minWeightKg": 50,
+        "formId": "tablet_200mg",
+        "unit": "mg",
+        "dosing": {
+          "type": "fixed",
+          "fixedDose": {
+            "min": 200,
+            "max": 400,
+            "unit": "mg"
+          }
+        },
+        "routeOfAdmin": "oral",
+        "timesPerDay": 3,
+        "maxSingleDose": 600,
+        "maxDailyDose": 1800,
+        "instruction": "Внутрь, после еды. Взрослым: 200-400 мг 3 раза в сутки"
+      }
+    ],
+    "indications": "Лихорадка, болевой синдром, воспалительные заболевания",
+    "contraindications": "Гиперчувствительность, тяжелые нарушения функции печени и почек",
+    "sideEffects": "Диспепсия, боль в животе, нарушения функции печени",
+    "isOtc": true,
+    "vidal_url": null
+  },
+  "notes": {
+    "formConversion": "Forms are interchangeable based on age and medical condition. AI should recommend the most appropriate form based on dosing requirements and patient age.",
+    "culturalContext": "Russian pharmaceutical naming conventions use transliterated Latin terms for dosage forms. Description strings always include packaging details in Russian.",
+    "dataQuality": "Some medications have incomplete data. AI should flag missing critical fields during validation.",
+    "updates": "Template should be updated when new form types are added to the database. Version number should be incremented accordingly."
+  }
+}
