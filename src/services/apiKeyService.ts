@@ -21,6 +21,25 @@ export interface PoolStatus {
   keys: ApiKeyStatus[];
 }
 
+export interface ApiKeyConnectivityResult {
+  index: number;
+  ok: boolean;
+  status: 'ok' | 'invalid_key' | 'permission' | 'network' | 'timeout' | 'rate_limited' | 'unknown';
+  message: string;
+  latencyMs: number | null;
+  checkedAt: string;
+}
+
+export interface ApiKeysConnectivityReport {
+  totalTested: number;
+  ok: number;
+  failed: number;
+  byStatus: Record<string, number>;
+  onlyActive: boolean;
+  timeoutMs: number;
+  results: ApiKeyConnectivityResult[];
+}
+
 export const apiKeyService = {
   /**
    * Получить статус пула ключей
@@ -48,5 +67,12 @@ export const apiKeyService = {
    */
   async reloadKeysFromEnv(): Promise<{ success: boolean; keysCount: number }> {
     return await window.electronAPI.reloadApiKeysFromEnv();
+  },
+
+  /**
+   * Проверить доступность Gemini API для ключей пула
+   */
+  async testConnectivity(options?: { onlyActive?: boolean; timeoutMs?: number }): Promise<ApiKeysConnectivityReport> {
+    return await window.electronAPI.testApiKeysConnectivity(options);
   }
 };

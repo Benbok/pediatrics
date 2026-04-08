@@ -28,6 +28,10 @@ const _s: StoreState = {
     startedAtMs: null,
 };
 
+// Monotonically increasing token: cancel() increments it so in-flight
+// requests can detect they've been superseded and discard their result.
+let _cancelToken = 0;
+
 const _listeners = new Set<() => void>();
 
 function notify() {
@@ -57,8 +61,12 @@ export const knowledgeQueryStore = {
         _s.startedAtMs = Date.now();
         notify();
 
+        const myToken = ++_cancelToken;
+
         try {
             const response = await knowledgeQueryService.query(query);
+            // If cancel() was called while IPC was in-flight — discard result
+            if (_cancelToken !== myToken) return;
             if (!response.success) {
                 _s.widgetState = 'error';
                 _s.error = response.error ?? 'Неизвестная ошибка';
@@ -67,15 +75,31 @@ export const knowledgeQueryStore = {
                 _s.result = response;
             }
         } catch (err: unknown) {
+            if (_cancelToken !== myToken) return;
             _s.widgetState = 'error';
             _s.error = err instanceof Error ? err.message : 'Ошибка при выполнении запроса';
         } finally {
-            _s.startedAtMs = null;
-            notify();
+            // Only clean up state if this request is still the active one
+            if (_cancelToken === myToken) {
+                _s.startedAtMs = null;
+                notify();
+            }
         }
     },
 
-    /** Reset to idle. No-op while loading (don't interrupt in-flight). */
+    /** Cancel the in-flight request. IPC continues on backend but result is discarded. */
+    cancel(): void {
+        if (_s.widgetState !== 'loading') return;
+        _cancelToken++;
+        _s.widgetState = 'idle';
+        _s.submittedQuery = '';
+        _s.result = null;
+        _s.error = null;
+        _s.startedAtMs = null;
+        notify();
+    },
+
+    /** Reset to idle. No-op while loading (use cancel() instead). */
     reset(): void {
         if (_s.widgetState === 'loading') return;
         _s.widgetState = 'idle';

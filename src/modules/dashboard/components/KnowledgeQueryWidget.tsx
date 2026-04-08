@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Search, Loader2, AlertCircle, BookOpen, Pill, Info } from 'lucide-react';
+import { Search, Loader2, AlertCircle, BookOpen, Pill, Info, X } from 'lucide-react';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { knowledgeQueryService } from '../../../services/knowledgeQuery.service';
@@ -192,6 +192,13 @@ export const KnowledgeQueryWidget: React.FC = () => {
         setTimeout(() => inputRef.current?.focus(), 50);
     };
 
+    const handleCancel = () => {
+        knowledgeQueryStore.cancel();
+        setQuery('');
+        setElapsedMs(0);
+        setTimeout(() => inputRef.current?.focus(), 50);
+    };
+
     const { widgetState: state, result, error } = storeSnap;
     const isLoading = state === 'loading';
     const canSubmit = query.trim().length >= 3 && !isLoading;
@@ -214,8 +221,8 @@ export const KnowledgeQueryWidget: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Поле ввода */}
-                <div className="relative">
+                {/* Поле ввода + кнопка */}
+                <div className="flex items-stretch gap-2">
                     <textarea
                         ref={inputRef}
                         value={query}
@@ -224,28 +231,39 @@ export const KnowledgeQueryWidget: React.FC = () => {
                         disabled={isLoading}
                         rows={2}
                         placeholder="Например: «Какие антибиотики при пневмонии у детей до 5 лет?» или «Признаки ларинготрахеита?»"
-                        className="w-full resize-none rounded-xl border border-slate-200 dark:border-slate-700
+                        className="flex-1 resize-none rounded-xl border border-slate-200 dark:border-slate-700
                             bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white
                             placeholder:text-slate-400 dark:placeholder:text-slate-500
-                            text-sm px-4 py-3 pr-14
+                            text-sm px-4 py-3
                             focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-400
                             disabled:opacity-60 transition-all duration-200"
                     />
-                    <button
-                        type="button"
-                        onClick={handleSubmit}
-                        disabled={!canSubmit}
-                        className="absolute right-3 bottom-3 p-1.5 rounded-lg
-                            bg-primary-600 text-white hover:bg-primary-700
-                            disabled:opacity-40 disabled:cursor-not-allowed
-                            transition-all duration-200"
-                        title="Найти (Enter)"
-                    >
-                        {isLoading
-                            ? <Loader2 size={16} className="animate-spin" />
-                            : <Search size={16} />
-                        }
-                    </button>
+                    {isLoading ? (
+                        <button
+                            type="button"
+                            onClick={handleCancel}
+                            className="shrink-0 flex items-center justify-center w-10 rounded-xl
+                                bg-rose-500 text-white hover:bg-rose-600 border border-rose-600
+                                transition-all duration-200"
+                            title="Отменить"
+                        >
+                            <X size={16} />
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={handleSubmit}
+                            disabled={!canSubmit}
+                            className="shrink-0 flex items-center justify-center w-10 rounded-xl
+                                bg-primary-600 text-white hover:bg-primary-700 border border-primary-700
+                                disabled:bg-slate-200 disabled:border-slate-300 disabled:text-slate-400
+                                disabled:cursor-not-allowed
+                                transition-all duration-200"
+                            title="Найти (Enter)"
+                        >
+                            <Search size={16} />
+                        </button>
+                    )}
                 </div>
 
                 {/* Состояние loading */}

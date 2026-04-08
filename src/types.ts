@@ -1194,6 +1194,22 @@ declare global {
       resetApiKey: (keyIndex: number) => Promise<boolean>;
       resetAllApiKeys: () => Promise<boolean>;
       reloadApiKeysFromEnv: () => Promise<{ success: boolean; keysCount: number }>;
+      testApiKeysConnectivity: (options?: { onlyActive?: boolean; timeoutMs?: number }) => Promise<{
+        totalTested: number;
+        ok: number;
+        failed: number;
+        byStatus: Record<string, number>;
+        onlyActive: boolean;
+        timeoutMs: number;
+        results: Array<{
+          index: number;
+          ok: boolean;
+          status: 'ok' | 'invalid_key' | 'permission' | 'network' | 'timeout' | 'rate_limited' | 'unknown';
+          message: string;
+          latencyMs: number | null;
+          checkedAt: string;
+        }>;
+      }>;
       onApiKeysLowWarning: (callback: (event: any, data: { remaining: number; total: number }) => void) => () => void;
 
       // NUTRITION MODULE API

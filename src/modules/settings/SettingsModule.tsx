@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag } from 'lucide-react';
 import { getCurrentApiKey, setApiKey, validateApiKey } from '../../services/geminiService';
-import { apiKeyService, PoolStatus } from '../../services/apiKeyService';
+import { apiKeyService, ApiKeysConnectivityReport, PoolStatus } from '../../services/apiKeyService';
 import { vaccinationService } from '../../services/vaccination.service';
 import { PrettySelect, type SelectOption } from '../diseases/components/PrettySelect';
 import { diseaseService } from '../diseases/services/diseaseService';
 import { VaccineCatalogEntry, DiagnosticCatalogEntry } from '../../types';
 import { LicenseAdminPanel } from '../license/LicenseAdminPanel';
+import { useAuth } from '../../context/AuthContext';
 
 const diagnosticTypeOptions: SelectOption<'lab' | 'instrumental'>[] = [
     { value: 'lab', label: 'Лабораторный' },
@@ -14,6 +15,9 @@ const diagnosticTypeOptions: SelectOption<'lab' | 'instrumental'>[] = [
 ];
 
 export const SettingsModule: React.FC = () => {
+    const { currentUser } = useAuth();
+    const isAdmin = Boolean(currentUser?.roles?.includes('admin'));
+
     const [apiKey, setLocalApiKey] = useState('');
     const [baseUrl, setBaseUrl] = useState('');
     const [isVerifying, setIsVerifying] = useState(false);
@@ -30,6 +34,10 @@ export const SettingsModule: React.FC = () => {
     const [isLoadingPool, setIsLoadingPool] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
     const [isReloading, setIsReloading] = useState(false);
+    const [isTestingPool, setIsTestingPool] = useState(false);
+    const [testOnlyActiveKeys, setTestOnlyActiveKeys] = useState(true);
+    const [poolConnectivityReport, setPoolConnectivityReport] = useState<ApiKeysConnectivityReport | null>(null);
+    const [poolConnectivityError, setPoolConnectivityError] = useState('');
 
     // Cache State
     const [cacheStats, setCacheStats] = useState<any>(null);
@@ -76,6 +84,12 @@ export const SettingsModule: React.FC = () => {
     const [savingEntryIds, setSavingEntryIds] = useState<Set<number>>(new Set());
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!isAdmin && activeTab === 'licenses') {
+            setActiveTab('api');
+        }
+    }, [isAdmin, activeTab]);
 
     useEffect(() => {
         // Load current API key and base URL on mount
@@ -386,6 +400,53 @@ export const SettingsModule: React.FC = () => {
         }
     };
 
+    const handleTestPoolConnectivity = async () => {
+        setIsTestingPool(true);
+        setPoolConnectivityError('');
+        setPoolConnectivityReport(null);
+
+        try {
+            const report = await apiKeyService.testConnectivity({
+                onlyActive: testOnlyActiveKeys,
+                timeoutMs: 12000,
+            });
+            setPoolConnectivityReport(report);
+            await loadPoolStatus();
+        } catch (error: any) {
+            setPoolConnectivityError(error?.message || 'Не удалось выполнить тест ключей');
+        } finally {
+            setIsTestingPool(false);
+        }
+    };
+
+    const getConnectivityBadgeClass = (status: string) => {
+        switch (status) {
+            case 'ok':
+                return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+            case 'invalid_key':
+            case 'permission':
+                return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+            case 'network':
+            case 'timeout':
+            case 'rate_limited':
+                return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+            default:
+                return 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
+        }
+    };
+
+    const getConnectivityStatusLabel = (status: string) => {
+        switch (status) {
+            case 'ok': return 'OK';
+            case 'invalid_key': return 'Неверный ключ';
+            case 'permission': return 'Нет доступа';
+            case 'network': return 'Сеть';
+            case 'timeout': return 'Таймаут';
+            case 'rate_limited': return 'Лимит';
+            default: return 'Ошибка';
+        }
+    };
+
     // ---- Diagnostic Catalog CRUD handlers ----
 
     const handleCatalogSearch = (v: string) => {
@@ -639,16 +700,18 @@ export const SettingsModule: React.FC = () => {
                     >
                         Безопасность и Данные
                     </button>
-                    <button
-                        onClick={() => setActiveTab('licenses')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            activeTab === 'licenses'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }`}
-                    >
-                        🔑 Лицензии
-                    </button>
+                    {isAdmin && (
+                        <button
+                            onClick={() => setActiveTab('licenses')}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                activeTab === 'licenses'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                            }`}
+                        >
+                            🔑 Лицензии
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -922,6 +985,92 @@ export const SettingsModule: React.FC = () => {
                                 <RefreshCw size={16} />
                                 Обновить
                             </button>
+                        </div>
+
+                        <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Тест доступности ключей</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Выполняет реальный тестовый запрос к Gemini API и показывает результат по каждому ключу.
+                                    </p>
+                                </div>
+                                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                    <input
+                                        type="checkbox"
+                                        checked={testOnlyActiveKeys}
+                                        onChange={(e) => setTestOnlyActiveKeys(e.target.checked)}
+                                        className="rounded border-slate-300 dark:border-slate-600"
+                                    />
+                                    Только активные ключи
+                                </label>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={handleTestPoolConnectivity}
+                                    disabled={isTestingPool}
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                >
+                                    {isTestingPool ? (
+                                        <>
+                                            <Loader className="animate-spin" size={16} />
+                                            Проверка ключей...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FlaskConical size={16} />
+                                            Проверить ключи
+                                        </>
+                                    )}
+                                </button>
+                                <span className="text-xs text-slate-500 dark:text-slate-400">Таймаут запроса: 12s</span>
+                            </div>
+
+                            {poolConnectivityError && (
+                                <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                                    {poolConnectivityError}
+                                </div>
+                            )}
+
+                            {poolConnectivityReport && (
+                                <div className="mt-4 space-y-3">
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700">
+                                            <p className="text-xs text-slate-500 dark:text-slate-400">Проверено</p>
+                                            <p className="text-lg font-semibold text-slate-900 dark:text-white">{poolConnectivityReport.totalTested}</p>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
+                                            <p className="text-xs text-green-700 dark:text-green-400">Успешно</p>
+                                            <p className="text-lg font-semibold text-green-700 dark:text-green-400">{poolConnectivityReport.ok}</p>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
+                                            <p className="text-xs text-red-700 dark:text-red-400">С ошибкой</p>
+                                            <p className="text-lg font-semibold text-red-700 dark:text-red-400">{poolConnectivityReport.failed}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                        {poolConnectivityReport.results.map((item) => (
+                                            <div
+                                                key={item.index}
+                                                className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Ключ [{item.index}]</span>
+                                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${getConnectivityBadgeClass(item.status)}`}>
+                                                        {getConnectivityStatusLabel(item.status)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                    {item.latencyMs != null ? `${item.latencyMs} ms` : '—'}
+                                                </div>
+                                                <div className="w-full text-xs text-slate-600 dark:text-slate-300">{item.message}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Info */}
@@ -1615,7 +1764,7 @@ export const SettingsModule: React.FC = () => {
             </div>
             )}
 
-            {activeTab === 'licenses' && (
+            {isAdmin && activeTab === 'licenses' && (
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                 <LicenseAdminPanel />
             </div>

@@ -208,6 +208,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resetApiKey: (keyIndex) => ipcRenderer.invoke('api-keys:reset-key', keyIndex),
     resetAllApiKeys: () => ipcRenderer.invoke('api-keys:reset-all'),
     reloadApiKeysFromEnv: () => ipcRenderer.invoke('api-keys:reload-from-env'),
+    testApiKeysConnectivity: (options) => ipcRenderer.invoke('api-keys:test-connectivity', options),
     onApiKeysLowWarning: (callback) => {
         ipcRenderer.on('api-keys:low-warning', callback);
         // Return cleanup function

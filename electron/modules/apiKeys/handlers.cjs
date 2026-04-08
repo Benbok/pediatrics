@@ -41,6 +41,20 @@ const setupApiKeyHandlers = () => {
         logAudit('API_KEYS_RELOADED', { count: result.keysCount });
         return result;
     }));
+
+    /**
+     * Test Connectivity for API Key Pool
+     */
+    ipcMain.handle('api-keys:test-connectivity', ensureAuthenticated(async (_, options) => {
+        const result = await apiKeyManager.testPoolConnectivity(options || {});
+        logAudit('API_KEYS_CONNECTIVITY_TEST', {
+            totalTested: result.totalTested,
+            ok: result.ok,
+            failed: result.failed,
+            onlyActive: result.onlyActive
+        });
+        return result;
+    }));
 };
 
 module.exports = { setupApiKeyHandlers };

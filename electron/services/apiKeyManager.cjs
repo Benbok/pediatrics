@@ -9,6 +9,8 @@ const { logger } = require('../logger.cjs');
 const fs = require('fs').promises;
 const path = require('path');
 const { app } = require('electron');
+const https = require('https');
+const http = require('http');
 
 // Путь к файлу статусов
 const STATUS_FILE_PATH = path.join(app.getPath('userData'), 'api-keys-status.json');
@@ -64,6 +66,128 @@ function loadKeysFromEnv() {
     
     logger.error('[ApiKeyManager] No valid API keys found in environment');
     return [];
+}
+
+function getValidationModel() {
+    return process.env.VITE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+}
+
+function getBaseUrl() {
+    return process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com';
+}
+
+function normalizeBaseUrl(baseUrl) {
+    return String(baseUrl)
+        .trim()
+        .replace(/\/v1(beta)?\/?$/, '')
+        .replace(/\/$/, '');
+}
+
+function classifyConnectivityError(error) {
+    const errorMessage = (error?.message || String(error) || '').toLowerCase();
+    const statusCode = Number(error?.statusCode || 0);
+
+    if (
+        statusCode === 401 ||
+        errorMessage.includes('api key not valid') ||
+        errorMessage.includes('invalid api key') ||
+        (errorMessage.includes('api key') && errorMessage.includes('invalid'))
+    ) {
+        return { status: 'invalid_key', message: error.message || 'Неверный API ключ' };
+    }
+
+    if (statusCode === 403 || errorMessage.includes('permission') || errorMessage.includes('forbidden')) {
+        return { status: 'permission', message: error.message || 'Нет доступа к Gemini API' };
+    }
+
+    if (statusCode === 429 || errorMessage.includes('quota') || errorMessage.includes('resource_exhausted') || errorMessage.includes('rate')) {
+        return { status: 'rate_limited', message: error.message || 'Превышен лимит запросов (quota/rate limit)' };
+    }
+
+    if (error?.code === 'ETIMEDOUT' || errorMessage.includes('timeout')) {
+        return { status: 'timeout', message: error.message || 'Превышено время ожидания ответа Gemini API' };
+    }
+
+    if (
+        error?.code === 'ENOTFOUND' ||
+        error?.code === 'ECONNREFUSED' ||
+        error?.code === 'ECONNRESET' ||
+        error?.code === 'EHOSTUNREACH' ||
+        error?.code === 'EAI_AGAIN' ||
+        errorMessage.includes('network')
+    ) {
+        return { status: 'network', message: error.message || 'Сетевая ошибка при подключении к Gemini API' };
+    }
+
+    return { status: 'unknown', message: error.message || 'Неизвестная ошибка проверки ключа' };
+}
+
+function requestGeminiPing(apiKey, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        try {
+            const model = getValidationModel();
+            const baseUrl = normalizeBaseUrl(getBaseUrl());
+            const url = new URL(`/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, baseUrl);
+            const isHttps = url.protocol === 'https:';
+            const transport = isHttps ? https : http;
+            const startedAt = Date.now();
+
+            const payload = JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+                generationConfig: { maxOutputTokens: 4, temperature: 0 }
+            });
+
+            const req = transport.request(
+                url,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(payload)
+                    },
+                    timeout: timeoutMs
+                },
+                (res) => {
+                    const chunks = [];
+                    res.on('data', (chunk) => chunks.push(chunk));
+                    res.on('end', () => {
+                        const latencyMs = Date.now() - startedAt;
+                        const raw = Buffer.concat(chunks).toString('utf8');
+
+                        try {
+                            const parsed = raw ? JSON.parse(raw) : {};
+                            if (res.statusCode >= 200 && res.statusCode < 300) {
+                                resolve({ latencyMs });
+                                return;
+                            }
+
+                            const apiMessage = parsed?.error?.message || `HTTP ${res.statusCode}`;
+                            const error = new Error(apiMessage);
+                            error.statusCode = res.statusCode;
+                            reject(error);
+                        } catch {
+                            const error = new Error(raw || `HTTP ${res.statusCode}`);
+                            error.statusCode = res.statusCode;
+                            reject(error);
+                        }
+                    });
+                }
+            );
+
+            req.on('timeout', () => {
+                req.destroy(new Error(`Request timeout after ${timeoutMs}ms`));
+            });
+
+            req.on('error', (error) => {
+                reject(error);
+            });
+
+            req.write(payload);
+            req.end();
+        } catch (error) {
+            reject(error);
+        }
+    });
 }
 
 /**
@@ -546,6 +670,94 @@ function getPoolStatus() {
     };
 }
 
+async function testKeyConnectivityByIndex(keyIndex, timeoutMs = 10000) {
+    const checkedAt = new Date().toISOString();
+
+    if (!isInitialized) {
+        return {
+            index: keyIndex,
+            ok: false,
+            status: 'unknown',
+            message: 'ApiKeyManager не инициализирован',
+            latencyMs: null,
+            checkedAt
+        };
+    }
+
+    if (keyIndex < 0 || keyIndex >= keys.length) {
+        return {
+            index: keyIndex,
+            ok: false,
+            status: 'unknown',
+            message: `Ключ с индексом ${keyIndex} не найден`,
+            latencyMs: null,
+            checkedAt
+        };
+    }
+
+    try {
+        const { latencyMs } = await requestGeminiPing(keys[keyIndex], timeoutMs);
+        return {
+            index: keyIndex,
+            ok: true,
+            status: 'ok',
+            message: 'Ключ активен, Gemini API доступен',
+            latencyMs,
+            checkedAt
+        };
+    } catch (error) {
+        const classified = classifyConnectivityError(error);
+        return {
+            index: keyIndex,
+            ok: false,
+            status: classified.status,
+            message: classified.message,
+            latencyMs: null,
+            checkedAt
+        };
+    }
+}
+
+async function testPoolConnectivity(options = {}) {
+    const onlyActive = options.onlyActive !== false;
+    const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 10000;
+
+    const indexes = [];
+    for (let i = 0; i < keys.length; i++) {
+        const meta = keyMetadata.get(i);
+        if (!onlyActive || !meta || meta.status === 'active') {
+            indexes.push(i);
+        }
+    }
+
+    const results = [];
+    for (const index of indexes) {
+        // Sequential checks avoid burst limit errors from concurrent probes.
+        const result = await testKeyConnectivityByIndex(index, timeoutMs);
+        results.push(result);
+    }
+
+    const summary = results.reduce((acc, item) => {
+        if (item.ok) {
+            acc.ok += 1;
+        } else {
+            acc.failed += 1;
+            acc.byStatus[item.status] = (acc.byStatus[item.status] || 0) + 1;
+        }
+        return acc;
+    }, { ok: 0, failed: 0, byStatus: {} });
+
+    return {
+        totalTested: results.length,
+        ok: summary.ok,
+        failed: summary.failed,
+        byStatus: summary.byStatus,
+        onlyActive,
+        timeoutMs,
+        results
+    };
+}
+
 // Создаем объект с методами для удобного использования
 const apiKeyManager = {
     initialize,
@@ -557,6 +769,8 @@ const apiKeyManager = {
     resetAllKeys,
     reloadFromEnv,
     getPoolStatus,
+    testKeyConnectivityByIndex,
+    testPoolConnectivity,
     getWorkingKeysCount,
     shouldNotifyUser,
     shouldRotateKey

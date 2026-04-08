@@ -14,7 +14,6 @@
 | 07.04.2026 | TASK-038 | knowledge/rag | RAG-сервис: TTL-кэш запросов + педиатрический хард-фильтр + rule-based planner | ✅ DONE | [→](tasks/07.04.2026/TASK-038.md) |
 | 07.04.2026 | TASK-039 | diseases/guidelines | GuidelineChunk metadata: evidence_level + valid_until | ✅ DONE | [→](tasks/07.04.2026/TASK-039.md) |
 | 07.04.2026 | TASK-040 | diseases/guidelines | Chunk size optimization: 700→1400, overlap 100→250 | ✅ DONE | [→](tasks/07.04.2026/TASK-040.md) |
-| 07.04.2026 | TASK-041 | license/admin | UI-панель администратора лицензий: генерация, отзыв, продление | ✅ DONE | [→](tasks/07.04.2026/TASK-041.md) |
 
 
 ---
@@ -23,9 +22,6 @@
 
 | Дата | ID | Модуль | Задача | Итог |
 |------|----|--------|--------|------|
-| 07.04.2026 | TASK-044 | license/security | Hardening: валидация private.pem по PUBLIC_KEY + admin IPC guard | ✅ DONE | [→](tasks/07.04.2026/TASK-044.md) |
-| 07.04.2026 | TASK-043 | license/onboarding | First-run UX: выбор сценария «Админ» или «Пользователь» | ✅ DONE | [→](tasks/07.04.2026/TASK-043.md) |
-| 07.04.2026 | TASK-042 | license/bootstrap | Developer bootstrap: First Run + client provisioning workflow | ✅ DONE | [→](tasks/07.04.2026/TASK-042.md) |
 | 07.04.2026 | TASK-036 | diseases/guidelines | Стабилизация визуального прогресса фоновой загрузки файлов в Базе знаний | ✅ DONE | [→](tasks/07.04.2026/TASK-036.md) |
 | 06.04.2026 | TASK-035 | diseases/form | UI-отображение ошибок валидации и переход к секции с ошибкой | ✅ DONE | [→](tasks/06.04.2026/TASK-035.md) |
 | 07.04.2026 | TASK-034 | diseases/form | BUG: текст симптома исчезает при сохранении (vocabulary normalization) | ✅ DONE | [→](tasks/07.04.2026/TASK-034.md) |
