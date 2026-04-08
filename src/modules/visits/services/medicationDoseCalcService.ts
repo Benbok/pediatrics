@@ -94,3 +94,41 @@ export function validateDilutionInput(input: Partial<DilutionInput>): DilutionCa
 
     return null;
 }
+
+// ---- Powder reconstitution ----
+
+export interface PowderDilutionInput {
+    /** Amount of dry substance in vial (mg) */
+    powderVialMg: number;
+    /** Volume of solvent added to reconstitute (ml) */
+    reconstitutionVolumeMl: number;
+    /** Required single dose for patient (mg) */
+    singleDoseMg: number;
+}
+
+/**
+ * Calculate concentration and volume to draw for powder reconstitution.
+ *
+ * Workflow:
+ * 1. concentrationMgPerMl = powderVialMg / reconstitutionVolumeMl
+ * 2. volumeToDrawMl = singleDoseMg / concentrationMgPerMl
+ */
+export function calculatePowderDilution(input: PowderDilutionInput): DilutionResult | DilutionCalculationError {
+    if (!input.powderVialMg || input.powderVialMg <= 0) {
+        return { message: 'Укажите количество мг в флаконе', field: 'powderVialMg' };
+    }
+    if (!input.reconstitutionVolumeMl || input.reconstitutionVolumeMl <= 0) {
+        return { message: 'Укажите объём растворителя для разведения', field: 'reconstitutionVolumeMl' };
+    }
+    if (!input.singleDoseMg || input.singleDoseMg <= 0) {
+        return { message: 'Укажите разовую дозу пациента', field: 'singleDoseMg' };
+    }
+
+    const concentrationMgPerMl = input.powderVialMg / input.reconstitutionVolumeMl;
+    const volumeToDrawMl = input.singleDoseMg / concentrationMgPerMl;
+
+    return {
+        concentrationMgPerMl: Math.round(concentrationMgPerMl * 100) / 100,
+        volumeToDrawMl: Math.round(volumeToDrawMl * 100) / 100,
+    };
+}

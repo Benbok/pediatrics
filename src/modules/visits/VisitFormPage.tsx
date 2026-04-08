@@ -1208,8 +1208,10 @@ export const VisitFormPage: React.FC = () => {
             singleDoseMg: doseData.singleDoseMg,
             timesPerDay: doseData.timesPerDay,
             formId: doseData.formId || null,
+            formType: doseData.formType || null,
             routeOfAdmin: doseData.routeOfAdmin || selectedMedicationForDose.routeOfAdmin || null,
             packagingDescription: doseData.packagingDescription || null,
+            daySchedule: doseData.daySchedule?.length ? doseData.daySchedule : null,
             dilution: doseData.dilution || null
         };
 
@@ -1992,7 +1994,19 @@ export const VisitFormPage: React.FC = () => {
                                             </div>
                                         )}
                                         <div className="text-xs text-slate-500">{p.dosing} | {p.duration}</div>
-                                        {(p.singleDoseMg || p.timesPerDay) && (
+                                        {p.daySchedule?.length > 1 ? (
+                                            <div className="text-xs text-slate-500 mt-1 space-y-0.5">
+                                                {p.daySchedule.map((d: any, di: number) => (
+                                                    <div key={di} className="flex gap-1.5">
+                                                        <span className="font-medium text-slate-600 dark:text-slate-400">{d.dayLabel}:</span>
+                                                        <span>
+                                                            {d.singleDoseMg ? `${d.singleDoseMg} мг` : ''}
+                                                            {d.timesPerDay ? ` × ${d.timesPerDay} р/сут` : ''}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (p.singleDoseMg || p.timesPerDay) && (
                                             <div className="text-xs text-slate-500 mt-1">
                                                 Разовая доза: {p.singleDoseMg ?? '—'} мг
                                                 {p.timesPerDay ? ` × ${p.timesPerDay} раз в день` : ''}
@@ -2004,17 +2018,27 @@ export const VisitFormPage: React.FC = () => {
                                                     <Beaker className="w-3 h-3" />
                                                     Разведение:
                                                 </div>
-                                                {p.dilution.drugAmountMg && (
+                                                {p.dilution.powderVialMg && (
                                                     <div>
-                                                        Количество в ампуле: {p.dilution.drugAmountMg} мг
+                                                        Порошок: {p.dilution.powderVialMg} мг / {p.dilution.reconstitutionVolumeMl ?? '?'} мл
                                                     </div>
                                                 )}
-                                                <div>
-                                                    {getDiluentLabel(p.dilution.diluentType || null)} - {p.dilution.diluentVolumeMl || '—'} мл
-                                                </div>
+                                                {p.dilution.drugAmountMg && (
+                                                    <div>
+                                                        В ампуле: {p.dilution.drugAmountMg} мг
+                                                    </div>
+                                                )}
+                                                {p.dilution.diluentType && (
+                                                    <div>
+                                                        {getDiluentLabel(p.dilution.diluentType || null)}{p.dilution.diluentVolumeMl ? ` — ${p.dilution.diluentVolumeMl} мл` : ''}
+                                                    </div>
+                                                )}
+                                                {p.dilution.concentrationMgPerMl && (
+                                                    <div>Концентрация: {p.dilution.concentrationMgPerMl} мг/мл</div>
+                                                )}
                                                 {p.dilution.volumeToDrawMl && (
                                                     <div className="mt-1 font-semibold text-primary-600 dark:text-primary-400">
-                                                        Объем для набора: {p.dilution.volumeToDrawMl} мл
+                                                        Набрать в шприц: {p.dilution.volumeToDrawMl} мл
                                                     </div>
                                                 )}
                                             </div>
@@ -2037,8 +2061,10 @@ export const VisitFormPage: React.FC = () => {
                                                         singleDoseMg: p.singleDoseMg || null,
                                                         timesPerDay: p.timesPerDay || null,
                                                         formId: p.formId || null,
+                                                        formType: p.formType || null,
                                                         routeOfAdmin: p.routeOfAdmin || med?.routeOfAdmin || null,
                                                         packagingDescription: p.packagingDescription || med?.packageDescription || null,
+                                                        daySchedule: p.daySchedule || null,
                                                         dilution: p.dilution || null
                                                     });
                                                     setPendingMedicationId(p.medicationId);
