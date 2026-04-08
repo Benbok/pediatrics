@@ -190,21 +190,34 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
                             placeholder="Поиск по названию, действующему веществу или коду МКБ-10..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-12 rounded-xl"
+                            className="w-full pl-12 pr-10 rounded-xl"
                         />
+                        {searchTerm.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                className="absolute inset-y-0 right-3 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                aria-label="Очистить поиск"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                     {/* Фильтр по клинико-фармакологической группе */}
-                    <div className="flex items-center gap-2">
-                        <PrettySelect
-                            value={selectedGroup}
-                            onChange={(val) => setSelectedGroup(val)}
-                            options={groupSelectOptions}
-                            searchable
-                            searchPlaceholder="Поиск группы..."
-                            emptyText="Группы не найдены"
-                            buttonClassName="h-9 rounded-xl text-sm min-w-[360px]"
-                            panelClassName="max-h-64"
-                        />
+                    <div className="flex items-center gap-2 w-full">
+                        <div className="flex-1 w-full">
+                            <PrettySelect
+                                value={selectedGroup}
+                                onChange={(val) => setSelectedGroup(val)}
+                                options={groupSelectOptions}
+                                searchable
+                                searchPlaceholder="Поиск группы..."
+                                emptyText="Группы не найдены"
+                                buttonClassName="w-full h-9 rounded-xl text-sm"
+                                panelClassName="w-full max-h-64"
+                                searchInputClassName="w-full"
+                            />
+                        </div>
                         {selectedGroup && (
                             <button
                                 type="button"

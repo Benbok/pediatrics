@@ -76,7 +76,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                         rows={4}
                         className={`
                             w-full p-4 rounded-2xl border bg-white dark:bg-slate-900 outline-none
-                            transition-all font-medium text-slate-800 dark:text-white
+                            transition-all text-sm text-slate-800 dark:text-white
                             focus:ring-4 focus:ring-offset-0
                             ${errors.complaints
                                 ? 'border-red-300 text-red-900 focus:ring-red-500/10 focus:border-red-500'
