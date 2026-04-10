@@ -11,9 +11,12 @@ This skill provides a safety-first workflow for DB schema changes and migrations
 
 Before any migration action:
 1. Read `tasks/TASKS.md` and active task file.
-2. Read `MIGRATION_INSTRUCTIONS.md` completely.
-3. Read `AI_CODING_GUIDELINES.md` and `DEVELOPMENT_RULES.md`.
-4. Confirm the critical rule: never delete, overwrite, or allow git history operations to modify `prisma/dev.db`.
+2. Read `tasks/AGENT.md` and follow its orchestration order strictly.
+3. Read `MIGRATION_INSTRUCTIONS.md` completely.
+4. Read `AI_CODING_GUIDELINES.md` and `DEVELOPMENT_RULES.md`.
+5. Confirm the critical rule: never delete, overwrite, or allow git history operations to modify `prisma/dev.db`.
+
+Treat `tasks/TASKS.md` + `tasks/AGENT.md` as mandatory orchestrator inputs. Do not execute migration actions if this pair is not synchronized.
 
 ## Core Rule
 

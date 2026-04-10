@@ -17,12 +17,15 @@ Primary output is a findings report, not a rewrite.
 
 Before audit starts:
 1. Read `tasks/TASKS.md` and identify current relevant task.
-2. Read task file `tasks/DD.MM.YYYY/TASK-NNN.md` for scope and expected behavior.
-3. Read rules:
+2. Read `tasks/AGENT.md` and follow its orchestration order strictly.
+3. Read task file `tasks/DD.MM.YYYY/TASK-NNN.md` for scope and expected behavior.
+4. Read rules:
    - `AI_CODING_GUIDELINES.md`
    - `DEVELOPMENT_RULES.md` (if present)
    - `tasks/AGENT.md`
-4. Identify changed files for the feature (from task file or git diff).
+5. Identify changed files for the feature (from task file or git diff).
+
+Treat `tasks/TASKS.md` + `tasks/AGENT.md` as mandatory orchestrator inputs. Do not start audit checks until both are synchronized.
 
 If task scope is unclear, ask user to confirm exact module/files before auditing.
 

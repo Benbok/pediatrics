@@ -84,6 +84,11 @@ import { getRouteLabel } from '../../utils/routeOfAdmin';
 import { getDiluentLabel } from '../../utils/diluentTypes';
 import { getRandomVitalsInNormForAge } from './constants';
 
+type PendingFieldRefinement = {
+    original: string;
+    refined: string;
+};
+
 export const VisitFormPage: React.FC = () => {
     const { childId, id } = useParams<{ childId: string; id?: string }>();
     const navigate = useNavigate();
@@ -147,6 +152,12 @@ export const VisitFormPage: React.FC = () => {
     // Рекомендации из базы знаний заболеваний
     const [diseaseRecommendations, setDiseaseRecommendations] = useState<import('../../types').DiseaseRecommendationSuggestion[]>([]);
     const [isLoadingDiseaseRecs, setIsLoadingDiseaseRecs] = useState(false);
+
+    // LLM field refinement
+    const [refiningFields, setRefiningFields] = useState<Set<string>>(new Set());
+    const [streamPreview, setStreamPreview] = useState<Record<string, string>>({});
+    const [llmAvailable, setLlmAvailable] = useState<boolean | null>(null);
+    const [pendingRefinements, setPendingRefinements] = useState<Record<string, PendingFieldRefinement>>({});
 
     // Рекомендации
     const [recommendations, setRecommendations] = useState<string[]>([]);
@@ -397,21 +408,21 @@ export const VisitFormPage: React.FC = () => {
                     try {
                         parsedData.primaryDiagnosis = JSON.parse(parsedData.primaryDiagnosis);
                     } catch (e) {
-                        logger.warn('[VisitFormPage] Failed to parse primaryDiagnosis:', e);
+                        logger.warn('[VisitFormPage] Failed to parse primaryDiagnosis:', { error: String(e) });
                     }
                 }
                 if (typeof parsedData.complications === 'string' && parsedData.complications) {
                     try {
                         parsedData.complications = JSON.parse(parsedData.complications);
                     } catch (e) {
-                        logger.warn('[VisitFormPage] Failed to parse complications:', e);
+                        logger.warn('[VisitFormPage] Failed to parse complications:', { error: String(e) });
                     }
                 }
                 if (typeof parsedData.comorbidities === 'string' && parsedData.comorbidities) {
                     try {
                         parsedData.comorbidities = JSON.parse(parsedData.comorbidities);
                     } catch (e) {
-                        logger.warn('[VisitFormPage] Failed to parse comorbidities:', e);
+                        logger.warn('[VisitFormPage] Failed to parse comorbidities:', { error: String(e) });
                     }
                 }
 
@@ -427,7 +438,7 @@ export const VisitFormPage: React.FC = () => {
                             setRecommendations(parsedRecommendations);
                         }
                     } catch (e) {
-                        logger.warn('[VisitFormPage] Failed to parse recommendations:', e);
+                        logger.warn('[VisitFormPage] Failed to parse recommendations:', { error: String(e) });
                     }
                 }
 
@@ -466,7 +477,7 @@ export const VisitFormPage: React.FC = () => {
 
             return daysSinceLastVisit > 30 ? 'primary' : 'followup';
         } catch (err) {
-            logger.error('[VisitFormPage] Failed to determine visit type:', err);
+            logger.error('[VisitFormPage] Failed to determine visit type:', { error: String(err) });
             return 'primary';
         }
     };
@@ -474,6 +485,12 @@ export const VisitFormPage: React.FC = () => {
     // Обработчик изменения полей формы
     const handleFieldChange = useCallback((field: keyof Visit, value: any) => {
         updateFormData(prev => ({ ...prev, [field]: value }));
+        setPendingRefinements((prev) => {
+            if (!prev[field as string]) return prev;
+            const next = { ...prev };
+            delete next[field as string];
+            return next;
+        });
     }, [updateFormData]);
 
     const handleClearVitals = useCallback(() => {
@@ -563,6 +580,136 @@ export const VisitFormPage: React.FC = () => {
         }
     }, [child, formData, currentUser, recommendations]);
 
+    const checkLlmAvailability = useCallback(async () => {
+        if (!window.electronAPI?.llm?.healthCheck) {
+            setLlmAvailable(false);
+            return false;
+        }
+
+        try {
+            const health = await window.electronAPI.llm.healthCheck();
+            setLlmAvailable(Boolean(health.available));
+            return Boolean(health.available);
+        } catch {
+            setLlmAvailable(false);
+            return false;
+        }
+    }, []);
+
+    useEffect(() => {
+        checkLlmAvailability();
+    }, [checkLlmAvailability]);
+
+    const handleAcceptRefine = useCallback((field: string) => {
+        const proposal = pendingRefinements[field];
+        if (!proposal) return;
+
+        updateFormData((fd) => ({ ...fd, [field]: proposal.refined }));
+        setPendingRefinements((prev) => {
+            const next = { ...prev };
+            delete next[field];
+            return next;
+        });
+        setStreamPreview((prev) => ({ ...prev, [field]: '' }));
+    }, [pendingRefinements, updateFormData]);
+
+    const handleRejectRefine = useCallback((field: string) => {
+        const proposal = pendingRefinements[field];
+        if (!proposal) return;
+
+        updateFormData((fd) => ({ ...fd, [field]: proposal.original }));
+        setPendingRefinements((prev) => {
+            const next = { ...prev };
+            delete next[field];
+            return next;
+        });
+        setStreamPreview((prev) => ({ ...prev, [field]: '' }));
+    }, [pendingRefinements, updateFormData]);
+
+    // LLM field refinement handler
+    const handleRefineField = async (field: string, text: string) => {
+        if (!text.trim()) return;
+        if (!window.electronAPI?.llm?.refineField) {
+            logger.error('[VisitFormPage] LLM API not available');
+            return;
+        }
+
+        // Check LM Studio availability before starting
+        const isAvailable = await checkLlmAvailability();
+        if (!isAvailable) {
+            setError('LM Studio не запущен или не доступен. Запустите LM Studio и загрузите модель.');
+            return;
+        }
+
+        setPendingRefinements((prev) => {
+            if (!prev[field]) return prev;
+            const next = { ...prev };
+            delete next[field];
+            return next;
+        });
+
+        setRefiningFields(prev => new Set(prev).add(field));
+        setStreamPreview(prev => ({ ...prev, [field]: '' }));
+
+        try {
+            const result = await window.electronAPI.llm.refineField(field, text);
+
+            if (result.status === 'completed') {
+                const refinedText = result.text?.trim() || text;
+                setPendingRefinements((prev) => ({
+                    ...prev,
+                    [field]: {
+                        original: text,
+                        refined: refinedText,
+                    },
+                }));
+                setStreamPreview(prev => ({ ...prev, [field]: '' }));
+            } else if (result.status === 'error') {
+                logger.error('[VisitFormPage] Field refinement error:', { error: String(result.error) });
+                setError(`Ошибка рефайна: ${result.error || 'неизвестная ошибка'}`);
+                setStreamPreview(prev => ({ ...prev, [field]: '' }));
+            }
+        } catch (err: any) {
+            logger.error('[VisitFormPage] Field refinement failed:', { error: String(err) });
+            setError('Не удалось выполнить рефайн поля');
+            setStreamPreview(prev => ({ ...prev, [field]: '' }));
+        } finally {
+            setRefiningFields(prev => {
+                const next = new Set(prev);
+                next.delete(field);
+                return next;
+            });
+        }
+    };
+
+    // Setup LLM token listeners for field refinement
+    useEffect(() => {
+        if (!window.electronAPI?.llm) return;
+
+        const unsubscribeToken = window.electronAPI.llm.onFieldRefineToken((_event, data: any) => {
+            setStreamPreview(prev => ({
+                ...prev,
+                [data.field]: (prev[data.field] || '') + data.token,
+            }));
+        });
+
+        const unsubscribeError = window.electronAPI.llm.onFieldRefineError((_event, data: any) => {
+            logger.error('[VisitFormPage] LLM refinement error:', { error: String(data.error) });
+            setError(`Ошибка LLM: ${data.error || 'неизвестная ошибка'}`);
+            setStreamPreview(prev => ({ ...prev, [data.field]: '' }));
+            setRefiningFields(prev => {
+                const next = new Set(prev);
+                next.delete(data.field);
+                return next;
+            });
+        });
+
+        return () => {
+            if (unsubscribeToken) unsubscribeToken();
+            if (unsubscribeError) unsubscribeError();
+        };
+    }, []);
+
     const handleSave = async (status: 'draft' | 'completed' = 'draft') => {
         setIsSaving(true);
         setError(null);
@@ -628,7 +775,7 @@ export const VisitFormPage: React.FC = () => {
                 // Разбиваем по запятой, учитывая что некоторые ошибки могут содержать запятые в скобках
                 // Простое разбиение по запятым должно работать для большинства случаев
                 if (cleanMessage.includes(',')) {
-                    errorsList = cleanMessage.split(',').map(e => e.trim()).filter(Boolean);
+                    errorsList = cleanMessage.split(',').map((e: string) => e.trim()).filter(Boolean);
                 } else {
                     errorsList = [cleanMessage];
                 }
@@ -1864,6 +2011,13 @@ export const VisitFormPage: React.FC = () => {
                             onAnalyze={() => runAnalysis()}
                             isAnalyzing={visitAnalysis.isAnalyzing}
                             canAnalyze={visitAnalysis.canAnalyze}
+                            onRefine={handleRefineField}
+                            refiningFields={refiningFields}
+                            streamPreview={streamPreview}
+                            llmAvailable={llmAvailable}
+                            pendingRefinements={pendingRefinements}
+                            onAcceptRefine={handleAcceptRefine}
+                            onRejectRefine={handleRejectRefine}
                         />
                     </div>
 
@@ -2463,8 +2617,8 @@ export const VisitFormPage: React.FC = () => {
                 currentIcd10Codes={[
                     // Собираем коды всех диагнозов (основной + осложнения + сопутствующие)
                     ...(primaryDiagnosis?.code ? [primaryDiagnosis.code] : []),
-                    ...complications.map(c => c.code).filter(Boolean),
-                    ...comorbidities.map(c => c.code).filter(Boolean)
+                    ...complications.map((c: any) => c.code).filter(Boolean),
+                    ...comorbidities.map((c: any) => c.code).filter(Boolean)
                 ]}
             />
 

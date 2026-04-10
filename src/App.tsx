@@ -24,7 +24,6 @@ import './modules/printing/templates/visit/register';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './modules/auth/LoginPage';
 import FirstRunSetupPage from './modules/license/FirstRunSetupPage';
-import FirstRunScenarioPage from './modules/license/FirstRunScenarioPage';
 import FirstRunUserWaitPage from './modules/license/FirstRunUserWaitPage';
 import { ActivationPage } from './modules/license/ActivationPage';
 import { ChildProvider } from './context/ChildContext';
@@ -34,6 +33,7 @@ import { ApiKeyWarningToast } from './components/ApiKeyWarningToast';
 import { ToastProvider } from './context/ToastContext';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { UploadProgressProvider } from './context/UploadProgressContext';
+import FirstRunScenarioPage from './modules/license/FirstRunScenarioPage';
 
 const router = createHashRouter([
     {
@@ -155,14 +155,14 @@ const AppContent: React.FC = () => {
         });
     }, [isDevMode]);
 
+    // Show loading indicator during initial app initialization
+    const showInitialLoading = isLoading || licenseValid === null || isFirstRun === null;
+
     if (isDevMode) {
-        if (isLoading) {
+        if (showInitialLoading) {
             return (
                 <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-                    <div className="flex flex-col items-center gap-4">
-                        <div className="w-12 h-12 border-4 border-blue-600/30 border-t-blue-600 rounded-full animate-spin"></div>
-                        <span className="text-slate-500 font-medium">Загрузка системы...</span>
-                    </div>
+                    <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
                 </div>
             );
         }
@@ -187,13 +187,10 @@ const AppContent: React.FC = () => {
         );
     }
 
-    if (licenseValid === null || isLoading || isFirstRun === null) {
+    if (showInitialLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 border-4 border-blue-600/30 border-t-blue-600 rounded-full animate-spin"></div>
-                    <span className="text-slate-500 font-medium">Загрузка системы...</span>
-                </div>
+                <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }

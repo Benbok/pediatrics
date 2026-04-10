@@ -25,6 +25,7 @@ const { initializeDatabase, seedNutritionData } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const { setupLicenseHandlers } = require('./license/handlers.cjs');
 const { setupLicenseAdminHandlers } = require('./license/admin-handlers.cjs');
+const { setupLlmHandlers } = require('./modules/llm/handlers.cjs');
 const isDev = !app.isPackaged;
 
 function createWindow() {
@@ -66,35 +67,59 @@ function createWindow() {
 app.whenReady().then(async () => {
     logger.info('[Main] ========== APP READY ==========');
 
-    // Register license handlers FIRST (before window creation, no auth required)
+    // Register license handlers FIRST (no auth required, needed before window for checkLicense IPC)
     setupLicenseHandlers();
     setupLicenseAdminHandlers();
     logger.info('[Main] License handlers registered');
 
-    // Initialize database (create first admin if needed)
+    // Logger IPC: renderer uses this immediately on load — register before window
+    ipcMain.handle('logger:log', async (_, level, message, metadata) => {
+        try {
+            const logMetadata = metadata || {};
+            switch (level) {
+                case 'error': logger.error(`[Renderer] ${message}`, logMetadata); break;
+                case 'warn':  logger.warn(`[Renderer] ${message}`, logMetadata);  break;
+                case 'info':  logger.info(`[Renderer] ${message}`, logMetadata);  break;
+                case 'debug': logger.debug(`[Renderer] ${message}`, logMetadata); break;
+                default:      logger.info(`[Renderer] ${message}`, logMetadata);
+            }
+            return { success: true };
+        } catch (error) {
+            logger.error('[Main] Logger IPC handler error:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // Create window IMMEDIATELY — native HTML splash shows right away, no white screen
+    logger.info('[Main] Creating window...');
+    createWindow();
+
+    // ── Critical minimum: DB + auth handlers (must complete before login page) ──
     logger.info('[Main] Initializing database...');
     await initializeDatabase();
     await seedNutritionData();
     logger.info('[Main] Database initialization completed');
 
-    // Initialize CDSS indexes (FTS rebuild + in-memory embeddings)
-    try {
-        const { ChunkIndexService } = require('./services/chunkIndexService.cjs');
-        await ChunkIndexService.rebuildFts();
-        await ChunkIndexService.loadOnStartup();
-    } catch (error) {
-        logger.warn('[Main] ChunkIndexService initialization failed:', error.message);
-    }
-
-    logger.info('[Main] Calling setupDatabaseHandlers...');
-    await setupDatabaseHandlers();
-    logger.info('[Main] setupDatabaseHandlers completed');
-    logger.info('[Main] Calling setupAuthHandlers...');
     setupAuthHandlers();
     logger.info('[Main] setupAuthHandlers completed');
 
-    logger.info('[Main] Setting up CDSS handlers...');
-    setupDiseaseHandlers();
+    // ── Background init — CDSS indexes, all feature handlers, API keys ──────────
+    (async () => {
+        // CDSS in-memory indexes (heaviest: loads all embeddings into memory)
+        try {
+            const { ChunkIndexService } = require('./services/chunkIndexService.cjs');
+            await ChunkIndexService.rebuildFts();
+            await ChunkIndexService.loadOnStartup();
+        } catch (error) {
+            logger.warn('[Main] ChunkIndexService initialization failed:', error.message);
+        }
+
+        logger.info('[Main] Calling setupDatabaseHandlers...');
+        await setupDatabaseHandlers();
+        logger.info('[Main] setupDatabaseHandlers completed');
+
+        logger.info('[Main] Setting up CDSS handlers...');
+        setupDiseaseHandlers();
     setupPdfNoteHandlers();
     setupMedicationHandlers();
     setupVisitHandlers();
@@ -108,39 +133,13 @@ app.whenReady().then(async () => {
     setupDashboardHandlers();
     setupNutritionHandlers();
     registerKnowledgeHandlers();
+    setupLlmHandlers();
 
     // Cache Service handlers
     const { CacheService } = require('./services/cacheService.cjs');
     ipcMain.handle('cache:get-stats', ensureAuthenticated(async () => {
         return CacheService.getStats();
     }));
-
-    // Logger IPC handler (for renderer process logging)
-    ipcMain.handle('logger:log', async (_, level, message, metadata) => {
-        try {
-            const logMetadata = metadata || {};
-            switch (level) {
-                case 'error':
-                    logger.error(`[Renderer] ${message}`, logMetadata);
-                    break;
-                case 'warn':
-                    logger.warn(`[Renderer] ${message}`, logMetadata);
-                    break;
-                case 'info':
-                    logger.info(`[Renderer] ${message}`, logMetadata);
-                    break;
-                case 'debug':
-                    logger.debug(`[Renderer] ${message}`, logMetadata);
-                    break;
-                default:
-                    logger.info(`[Renderer] ${message}`, logMetadata);
-            }
-            return { success: true };
-        } catch (error) {
-            logger.error('[Main] Logger IPC handler error:', error);
-            return { success: false, error: error.message };
-        }
-    });
 
     ipcMain.handle('cache:clear-all', ensureAuthenticated(async () => {
         CacheService.invalidateAll();
@@ -163,10 +162,10 @@ app.whenReady().then(async () => {
     // Setup API Key handlers
     const { setupApiKeyHandlers } = require('./modules/apiKeys/handlers.cjs');
     setupApiKeyHandlers();
-    logger.info('[Main] API Key handlers registered');
+        logger.info('[Main] API Key handlers registered');
 
-    logger.info('[Main] Creating window...');
-    createWindow();
+        logger.info('[Main] Background setup complete');
+    })().catch(err => logger.error('[Main] Background setup failed:', err));
 
     ipcMain.on('print-window', (event) => {
         logger.info('[Main] Received print-window request');

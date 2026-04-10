@@ -203,6 +203,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // LOGGING API
     log: (level, message, metadata) => ipcRenderer.invoke('logger:log', level, message, metadata),
 
+    // LOCAL LLM API (HTTP client to LM Studio)
+    llm: {
+        healthCheck: () => ipcRenderer.invoke('llm:health-check'),
+        generate: (messages, options) => ipcRenderer.invoke('llm:generate', { messages, options }),
+        abort: () => ipcRenderer.invoke('llm:abort'),
+        getStatus: () => ipcRenderer.invoke('llm:get-status'),
+        onToken: (callback) => {
+            ipcRenderer.on('llm:token', callback);
+            return () => ipcRenderer.removeListener('llm:token', callback);
+        },
+        onError: (callback) => {
+            ipcRenderer.on('llm:error', callback);
+            return () => ipcRenderer.removeListener('llm:error', callback);
+        },
+        removeTokenListeners: () => ipcRenderer.removeAllListeners('llm:token'),
+        removeErrorListeners: () => ipcRenderer.removeAllListeners('llm:error'),
+        // Field refinement
+        refineField: (field, text, options) => ipcRenderer.invoke('llm:refine-field', { field, text, options }),
+        onFieldRefineToken: (callback) => {
+            ipcRenderer.on('llm:field-refine-token', callback);
+            return () => ipcRenderer.removeListener('llm:field-refine-token', callback);
+        },
+        onFieldRefineError: (callback) => {
+            ipcRenderer.on('llm:field-refine-error', callback);
+            return () => ipcRenderer.removeListener('llm:field-refine-error', callback);
+        },
+        removeFieldRefineListeners: () => {
+            ipcRenderer.removeAllListeners('llm:field-refine-token');
+            ipcRenderer.removeAllListeners('llm:field-refine-error');
+        },
+    },
+
     // API KEYS POOL MANAGEMENT API
     getApiKeysPoolStatus: () => ipcRenderer.invoke('api-keys:get-pool-status'),
     resetApiKey: (keyIndex) => ipcRenderer.invoke('api-keys:reset-key', keyIndex),

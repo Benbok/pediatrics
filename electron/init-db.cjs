@@ -120,6 +120,14 @@ async function initializeDatabase() {
  */
 async function seedNutritionData() {
     try {
+        // Fast path: if all 6 age-norm rows already exist, skip the entire seed
+        const existingNormCount = await prisma.nutritionAgeNorm.count();
+        const EXPECTED_NORM_COUNT = 6;
+        if (existingNormCount >= EXPECTED_NORM_COUNT) {
+            logger.info(`[DB Init] Nutrition data already seeded (${existingNormCount} norms), skipping`);
+            return;
+        }
+
         logger.info('[DB Init] Seeding nutrition reference data...');
 
         // ——— Age Norms ———
@@ -204,22 +212,15 @@ async function seedNutritionData() {
             },
         ];
 
-        for (const norm of ageNorms) {
-            const existing = await prisma.nutritionAgeNorm.findFirst({
+        // ——— Age Norms (single transaction) ———
+        await prisma.$transaction(
+            ageNorms.map(norm => prisma.nutritionAgeNorm.upsert({
                 where: { feedingStage: norm.feedingStage },
-                select: { id: true },
-            });
-
-            if (existing) {
-                await prisma.nutritionAgeNorm.update({
-                    where: { id: existing.id },
-                    data: norm,
-                });
-            } else {
-                await prisma.nutritionAgeNorm.create({ data: norm });
-                logger.info(`[DB Init] Created nutrition age norm: ${norm.feedingStage}`);
-            }
-        }
+                update: norm,
+                create: norm,
+            }))
+        );
+        logger.info(`[DB Init] Upserted ${ageNorms.length} age norms`);
 
         // ——— Product Categories ———
         const categories = [
@@ -237,13 +238,14 @@ async function seedNutritionData() {
             { code: 'BREAD_PASTA',     name: 'Хлеб / крупы',        minAgeDays: 365, maxAgeDays: 1095 },
         ];
 
-        for (const cat of categories) {
-            await prisma.nutritionProductCategory.upsert({
+        await prisma.$transaction(
+            categories.map(cat => prisma.nutritionProductCategory.upsert({
                 where: { code: cat.code },
                 update: { name: cat.name, minAgeDays: cat.minAgeDays, maxAgeDays: cat.maxAgeDays },
                 create: cat,
-            });
-        }
+            }))
+        );
+        logger.info(`[DB Init] Upserted ${categories.length} product categories`);
 
         // ——— Feeding Templates by National Programme 2019 ———
         const categoryMap = {};
@@ -388,25 +390,21 @@ async function seedNutritionData() {
                     },
                 });
 
-            await prisma.nutritionFeedingTemplateItem.deleteMany({
-                where: { templateId: templateRecord.id },
-            });
+            const itemsToCreate = tmpl.items
+                .filter(item => !!categoryMap[item.code])
+                .map(item => ({
+                    templateId: templateRecord.id,
+                    mealOrder: item.mealOrder,
+                    productCategoryId: categoryMap[item.code],
+                    portionSizeG: item.portionSizeG,
+                    isExample: true,
+                    note: item.note || null,
+                }));
 
-            for (const item of tmpl.items) {
-                const catId = categoryMap[item.code];
-                if (catId) {
-                    await prisma.nutritionFeedingTemplateItem.create({
-                        data: {
-                            templateId: templateRecord.id,
-                            mealOrder: item.mealOrder,
-                            productCategoryId: catId,
-                            portionSizeG: item.portionSizeG,
-                            isExample: true,
-                            note: item.note || null,
-                        },
-                    });
-                }
-            }
+            await prisma.$transaction([
+                prisma.nutritionFeedingTemplateItem.deleteMany({ where: { templateId: templateRecord.id } }),
+                prisma.nutritionFeedingTemplateItem.createMany({ data: itemsToCreate }),
+            ]);
 
             if (!existing) {
                 logger.info(`[DB Init] Created nutrition feeding template: ${tmpl.title}`);

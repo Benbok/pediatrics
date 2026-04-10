@@ -22,13 +22,16 @@ Do not use this skill for one-line code edits unrelated to task lifecycle.
 
 Before any code edit:
 1. Read `tasks/TASKS.md`.
-2. Identify active task (`IN_PROGRESS` or `PLANNED`).
-3. If no active task exists and user asks to start a new task: create one.
-4. Read task details file `tasks/DD.MM.YYYY/TASK-NNN.md`.
-5. Read rule files:
+2. Read `tasks/AGENT.md` and follow its orchestration order strictly.
+3. Identify active task (`IN_PROGRESS` or `PLANNED`).
+4. If no active task exists and user asks to start a new task: create one.
+5. Read task details file `tasks/DD.MM.YYYY/TASK-NNN.md`.
+6. Read rule files:
    - `AI_CODING_GUIDELINES.md`
    - `DEVELOPMENT_RULES.md` (if present)
    - `tasks/AGENT.md`
+
+`tasks/TASKS.md` + `tasks/AGENT.md` form a mandatory orchestrator pair. Any implementation without this pair is non-compliant.
 
 ## Skill Handoff Rules
 

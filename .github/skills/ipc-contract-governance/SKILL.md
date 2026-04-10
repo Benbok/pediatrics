@@ -14,13 +14,16 @@ Prevent contract drift and security regressions when IPC methods are introduced 
 ## Mandatory Inputs
 
 1. Read active task scope in `tasks/TASKS.md` and task file.
-2. Read `AI_CODING_GUIDELINES.md` and `DEVELOPMENT_RULES.md`.
-3. Locate affected files across:
+2. Read `tasks/AGENT.md` and follow its orchestration order strictly.
+3. Read `AI_CODING_GUIDELINES.md` and `DEVELOPMENT_RULES.md`.
+4. Locate affected files across:
 - `electron/database.cjs` (or module handlers)
 - `electron/preload.cjs`
 - `src/types.ts`
 - `src/services/*.service.ts`
 - UI caller modules in `src/modules/`
+
+Treat `tasks/TASKS.md` + `tasks/AGENT.md` as mandatory orchestrator inputs. Do not change IPC contracts until both are synchronized.
 
 ## Contract-First Rules
 

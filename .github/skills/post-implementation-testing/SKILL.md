@@ -15,10 +15,13 @@ Run unit and basic frontend tests when required, provide a clear pass/fail repor
 
 Before running tests:
 1. Read `tasks/TASKS.md` and identify active task.
-2. Read `tasks/DD.MM.YYYY/TASK-NNN.md` and extract changed scope.
-3. Read `AI_CODING_GUIDELINES.md` testing rules.
-4. Classify change type: new functionality or non-feature change.
-5. Build test target list from changed files and impacted behavior.
+2. Read `tasks/AGENT.md` and follow its orchestration order strictly.
+3. Read `tasks/DD.MM.YYYY/TASK-NNN.md` and extract changed scope.
+4. Read `AI_CODING_GUIDELINES.md` testing rules.
+5. Classify change type: new functionality or non-feature change.
+6. Build test target list from changed files and impacted behavior.
+
+Treat `tasks/TASKS.md` + `tasks/AGENT.md` as mandatory orchestrator inputs. Do not run closure-testing flow until both are synchronized.
 
 If scope is unclear, ask user to confirm exact files/feature boundaries first.
 

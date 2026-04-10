@@ -27,13 +27,25 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialLogin = 'admin', in
             const result = await login(loginInput, password);
             if (!result.success) {
                 setError(result.error || 'Неверные учетные данные');
+                setIsSubmitting(false);
             }
         } catch (err) {
             setError('Произошла непредвиденная ошибка');
-        } finally {
             setIsSubmitting(false);
         }
     };
+
+    // Show loading indicator during login process
+    if (isSubmitting) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-blue-600/30 border-t-blue-600 rounded-full animate-spin"></div>
+                    <span className="text-slate-500 font-medium">Вход в систему...</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 transition-colors">

@@ -918,6 +918,20 @@ declare global {
 
       // LOGGER API
       log: (level: string, message: string, metadata?: Record<string, any>) => Promise<void>;
+      llm: {
+        healthCheck: () => Promise<{ available: boolean; models?: string[]; endpoint?: string }>;
+        generate: (messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>, options?: { maxTokens?: number; temperature?: number; topP?: number; stop?: string[]; model?: string }) => Promise<{ status: 'completed' | 'aborted' | 'error'; error?: string }>;
+        abort: () => Promise<{ success: boolean }>;
+        getStatus: () => Promise<{ activeGenerations: number; isGenerating: boolean; endpoint: string }>;
+        onToken: (callback: (event: any, token: string) => void) => () => void;
+        onError: (callback: (event: any, error: string) => void) => () => void;
+        removeTokenListeners: () => void;
+        removeErrorListeners: () => void;
+        refineField: (field: string, text: string, options?: { maxTokens?: number }) => Promise<{ status: 'completed' | 'aborted' | 'error'; error?: string; text?: string; usedFallback?: boolean }>;
+        onFieldRefineToken: (callback: (event: any, data: { field: string; token: string }) => void) => () => void;
+        onFieldRefineError: (callback: (event: any, data: { field: string; error: string }) => void) => () => void;
+        removeFieldRefineListeners: () => void;
+      };
 
       // DASHBOARD MODULE API
       getDashboardSummary: (date?: string) => Promise<DashboardSummary>;

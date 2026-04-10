@@ -34,6 +34,19 @@ const ChunkIndexService = {
     async rebuildFts() {
         const start = Date.now();
         try {
+            // Check if FTS is up-to-date by comparing rowcount with source table
+            const [ftsRows, srcRows] = await Promise.all([
+                prisma.$queryRawUnsafe('SELECT COUNT(*) as cnt FROM guideline_chunks_fts').catch(() => [{ cnt: -1 }]),
+                prisma.$queryRawUnsafe('SELECT COUNT(*) as cnt FROM guideline_chunks'),
+            ]);
+            const ftsCnt = Number(ftsRows[0]?.cnt ?? -1);
+            const srcCnt = Number(srcRows[0]?.cnt ?? 0);
+
+            if (ftsCnt === srcCnt && srcCnt > 0) {
+                logger.info(`[ChunkIndexService] FTS up-to-date (${srcCnt} rows), skipping rebuild`);
+                return;
+            }
+
             // Drop triggers first
             await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS guideline_chunks_ai');
             await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS guideline_chunks_ad');

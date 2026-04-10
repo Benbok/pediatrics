@@ -13,14 +13,18 @@ Produce a strict GO/NO-GO release decision with concrete blockers and required a
 
 ## Required Inputs
 
-1. Active or target task file and expected outcomes.
-2. Outputs from related skills when available:
+1. Read `tasks/TASKS.md` and identify active or target task.
+2. Read `tasks/AGENT.md` and follow its orchestration order strictly.
+3. Active or target task file and expected outcomes.
+4. Outputs from related skills when available:
 - `feature-compliance-audit`
 - `post-implementation-testing`
 - `database-migration-safety` (if DB touched)
 - `ipc-contract-governance` (if IPC touched)
-3. Relevant changed files and test results.
-4. Updated docs and module README changelog.
+5. Relevant changed files and test results.
+6. Updated docs and module README changelog.
+
+Treat `tasks/TASKS.md` + `tasks/AGENT.md` as mandatory orchestrator inputs. Do not issue final GO/NO-GO without this synchronization.
 
 If required evidence is missing for touched areas, run missing prerequisite skills before decision:
 - migration touched -> `database-migration-safety`

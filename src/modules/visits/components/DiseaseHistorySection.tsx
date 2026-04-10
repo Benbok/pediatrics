@@ -1,8 +1,51 @@
 import React from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
-import { Activity, Sparkles, FileText, Clock, TrendingUp, Pill } from 'lucide-react';
+import { Activity, Sparkles, Clock, TrendingUp, Pill, Check, X, WifiOff } from 'lucide-react';
 import { Visit } from '../../../types';
+
+type PendingRefinement = {
+    original: string;
+    refined: string;
+};
+
+const RefineProposal: React.FC<{
+    proposal: PendingRefinement;
+    onAccept: () => void;
+    onReject: () => void;
+}> = ({ proposal, onAccept, onReject }) => {
+    return (
+        <Card className="mt-2 p-3 border-emerald-200 bg-emerald-50/70 dark:bg-emerald-950/30 dark:border-emerald-900/60">
+            <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-2">
+                Предложение рефайна
+            </div>
+            <div className="space-y-2 text-xs">
+                <div>
+                    <div className="text-slate-500 dark:text-slate-400 mb-1">Исходный текст</div>
+                    <div className="rounded-lg bg-white/80 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 p-2 text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+                        {proposal.original}
+                    </div>
+                </div>
+                <div>
+                    <div className="text-slate-500 dark:text-slate-400 mb-1">Текст после рефайна</div>
+                    <div className="rounded-lg bg-white/80 dark:bg-slate-900/70 border border-emerald-200 dark:border-emerald-900 p-2 text-slate-800 dark:text-slate-100 whitespace-pre-wrap">
+                        {proposal.refined}
+                    </div>
+                </div>
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+                <Button size="sm" className="flex items-center gap-1.5" onClick={onAccept}>
+                    <Check className="w-3.5 h-3.5" />
+                    Применить
+                </Button>
+                <Button variant="ghost" size="sm" className="flex items-center gap-1.5" onClick={onReject}>
+                    <X className="w-3.5 h-3.5" />
+                    Оставить как есть
+                </Button>
+            </div>
+        </Card>
+    );
+};
 
 interface DiseaseHistorySectionProps {
     formData: Partial<Visit>;
@@ -11,6 +54,13 @@ interface DiseaseHistorySectionProps {
     isAnalyzing?: boolean;
     canAnalyze?: boolean;
     errors?: Record<string, string>;
+    onRefine?: (field: string, text: string) => void;
+    refiningFields?: Set<string>;
+    streamPreview?: Record<string, string>;
+    llmAvailable?: boolean | null;
+    pendingRefinements?: Record<string, PendingRefinement>;
+    onAcceptRefine?: (field: string) => void;
+    onRejectRefine?: (field: string) => void;
 }
 
 export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
@@ -20,6 +70,13 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
     isAnalyzing = false,
     canAnalyze = true,
     errors = {},
+    onRefine,
+    refiningFields = new Set(),
+    streamPreview = {},
+    llmAvailable = null,
+    pendingRefinements = {},
+    onAcceptRefine,
+    onRejectRefine,
 }) => {
     const hasDiseaseHistoryData = Boolean(
         formData.complaints?.trim() ||
@@ -65,12 +122,45 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
             <div className="space-y-6">
                 {/* Жалобы на момент поступления */}
                 <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                        <Activity className="w-4 h-4 text-red-500" />
-                        Жалобы на момент поступления
-                    </label>
+                    <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                            <Activity className="w-4 h-4 text-red-500" />
+                            Жалобы на момент поступления
+                        </label>
+                        {onRefine && formData.complaints && (
+                            <span
+                                title={llmAvailable === false ? 'LM Studio не запущен. Запустите LM Studio и загрузите модель.' : undefined}
+                                className={llmAvailable === false ? 'cursor-not-allowed' : undefined}
+                            >
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onRefine('complaints', formData.complaints || '')}
+                                    disabled={refiningFields.has('complaints') || llmAvailable === false}
+                                    className="flex items-center gap-1.5 text-xs"
+                                >
+                                    {refiningFields.has('complaints') ? (
+                                        <>
+                                            <Sparkles className="w-3 h-3 animate-pulse" />
+                                            Рефайнинг...
+                                        </>
+                                    ) : llmAvailable === false ? (
+                                        <>
+                                            <WifiOff className="w-3 h-3" />
+                                            Рефайн
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="w-3 h-3" />
+                                            Рефайн
+                                        </>
+                                    )}
+                                </Button>
+                            </span>
+                        )}
+                    </div>
                     <textarea
-                        value={formData.complaints || ''}
+                        value={streamPreview.complaints || formData.complaints || ''}
                         onChange={(e) => onChange('complaints', e.target.value)}
                         placeholder="Например: температура 38.5, сухой кашель, одышка..."
                         rows={4}
@@ -84,6 +174,18 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                             }
                         `}
                     />
+                    {streamPreview.complaints && (
+                        <div className="mt-1.5 text-xs text-blue-600 dark:text-blue-400 italic">
+                            Генерация: {streamPreview.complaints}
+                        </div>
+                    )}
+                    {pendingRefinements.complaints && (
+                        <RefineProposal
+                            proposal={pendingRefinements.complaints}
+                            onAccept={() => onAcceptRefine?.('complaints')}
+                            onReject={() => onRejectRefine?.('complaints')}
+                        />
+                    )}
                     {errors.complaints && (
                         <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
                             {errors.complaints}
@@ -93,12 +195,45 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
 
                 {/* Когда началось заболевание и первые симптомы */}
                 <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                        <Clock className="w-4 h-4" />
-                        Когда началось заболевание и первые симптомы
-                    </label>
+                    <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                            <Clock className="w-4 h-4" />
+                            Когда началось заболевание и первые симптомы
+                        </label>
+                        {onRefine && formData.diseaseOnset && (
+                            <span
+                                title={llmAvailable === false ? 'LM Studio не запущен. Запустите LM Studio и загрузите модель.' : undefined}
+                                className={llmAvailable === false ? 'cursor-not-allowed' : undefined}
+                            >
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onRefine('diseaseOnset', formData.diseaseOnset || '')}
+                                    disabled={refiningFields.has('diseaseOnset') || llmAvailable === false}
+                                    className="flex items-center gap-1.5 text-xs"
+                                >
+                                    {refiningFields.has('diseaseOnset') ? (
+                                        <>
+                                            <Sparkles className="w-3 h-3 animate-pulse" />
+                                            Рефайнинг...
+                                        </>
+                                    ) : llmAvailable === false ? (
+                                        <>
+                                            <WifiOff className="w-3 h-3" />
+                                            Рефайн
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="w-3 h-3" />
+                                            Рефайн
+                                        </>
+                                    )}
+                                </Button>
+                            </span>
+                        )}
+                    </div>
                     <textarea
-                        value={formData.diseaseOnset || ''}
+                        value={streamPreview.diseaseOnset || formData.diseaseOnset || ''}
                         onChange={(e) => onChange('diseaseOnset', e.target.value)}
                         placeholder="Опишите когда началось заболевание, первые симптомы, как они появились..."
                         rows={3}
@@ -112,6 +247,18 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                             }
                         `}
                     />
+                    {streamPreview.diseaseOnset && (
+                        <div className="mt-1.5 text-xs text-blue-600 dark:text-blue-400 italic">
+                            Генерация: {streamPreview.diseaseOnset}
+                        </div>
+                    )}
+                    {pendingRefinements.diseaseOnset && (
+                        <RefineProposal
+                            proposal={pendingRefinements.diseaseOnset}
+                            onAccept={() => onAcceptRefine?.('diseaseOnset')}
+                            onReject={() => onRejectRefine?.('diseaseOnset')}
+                        />
+                    )}
                     {errors.diseaseOnset && (
                         <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
                             {errors.diseaseOnset}
@@ -121,12 +268,45 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
 
                 {/* Течение болезни */}
                 <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                        <TrendingUp className="w-4 h-4" />
-                        Течение болезни
-                    </label>
+                    <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                            <TrendingUp className="w-4 h-4" />
+                            Течение болезни
+                        </label>
+                        {onRefine && formData.diseaseCourse && (
+                            <span
+                                title={llmAvailable === false ? 'LM Studio не запущен. Запустите LM Studio и загрузите модель.' : undefined}
+                                className={llmAvailable === false ? 'cursor-not-allowed' : undefined}
+                            >
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onRefine('diseaseCourse', formData.diseaseCourse || '')}
+                                    disabled={refiningFields.has('diseaseCourse') || llmAvailable === false}
+                                    className="flex items-center gap-1.5 text-xs"
+                                >
+                                    {refiningFields.has('diseaseCourse') ? (
+                                        <>
+                                            <Sparkles className="w-3 h-3 animate-pulse" />
+                                            Рефайнинг...
+                                        </>
+                                    ) : llmAvailable === false ? (
+                                        <>
+                                            <WifiOff className="w-3 h-3" />
+                                            Рефайн
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="w-3 h-3" />
+                                            Рефайн
+                                        </>
+                                    )}
+                                </Button>
+                            </span>
+                        )}
+                    </div>
                     <textarea
-                        value={formData.diseaseCourse || ''}
+                        value={streamPreview.diseaseCourse || formData.diseaseCourse || ''}
                         onChange={(e) => onChange('diseaseCourse', e.target.value)}
                         placeholder="Опишите динамику развития заболевания, изменение симптомов, периоды улучшения/ухудшения..."
                         rows={3}
@@ -140,6 +320,18 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                             }
                         `}
                     />
+                    {streamPreview.diseaseCourse && (
+                        <div className="mt-1.5 text-xs text-blue-600 dark:text-blue-400 italic">
+                            Генерация: {streamPreview.diseaseCourse}
+                        </div>
+                    )}
+                    {pendingRefinements.diseaseCourse && (
+                        <RefineProposal
+                            proposal={pendingRefinements.diseaseCourse}
+                            onAccept={() => onAcceptRefine?.('diseaseCourse')}
+                            onReject={() => onRejectRefine?.('diseaseCourse')}
+                        />
+                    )}
                     {errors.diseaseCourse && (
                         <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
                             {errors.diseaseCourse}
@@ -149,12 +341,45 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
 
                 {/* Лечение, проводимое до обращения */}
                 <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                        <Pill className="w-4 h-4" />
-                        Лечение, проводимое до обращения
-                    </label>
+                    <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                            <Pill className="w-4 h-4" />
+                            Лечение, проводимое до обращения
+                        </label>
+                        {onRefine && formData.treatmentBeforeVisit && (
+                            <span
+                                title={llmAvailable === false ? 'LM Studio не запущен. Запустите LM Studio и загрузите модель.' : undefined}
+                                className={llmAvailable === false ? 'cursor-not-allowed' : undefined}
+                            >
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onRefine('treatmentBeforeVisit', formData.treatmentBeforeVisit || '')}
+                                    disabled={refiningFields.has('treatmentBeforeVisit') || llmAvailable === false}
+                                    className="flex items-center gap-1.5 text-xs"
+                                >
+                                    {refiningFields.has('treatmentBeforeVisit') ? (
+                                        <>
+                                            <Sparkles className="w-3 h-3 animate-pulse" />
+                                            Рефайнинг...
+                                        </>
+                                    ) : llmAvailable === false ? (
+                                        <>
+                                            <WifiOff className="w-3 h-3" />
+                                            Рефайн
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="w-3 h-3" />
+                                            Рефайн
+                                        </>
+                                    )}
+                                </Button>
+                            </span>
+                        )}
+                    </div>
                     <textarea
-                        value={formData.treatmentBeforeVisit || ''}
+                        value={streamPreview.treatmentBeforeVisit || formData.treatmentBeforeVisit || ''}
                         onChange={(e) => onChange('treatmentBeforeVisit', e.target.value)}
                         placeholder="Укажите какие препараты принимались, дозировки, длительность приема, эффект от лечения..."
                         rows={3}
@@ -168,6 +393,18 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                             }
                         `}
                     />
+                    {streamPreview.treatmentBeforeVisit && (
+                        <div className="mt-1.5 text-xs text-blue-600 dark:text-blue-400 italic">
+                            Генерация: {streamPreview.treatmentBeforeVisit}
+                        </div>
+                    )}
+                    {pendingRefinements.treatmentBeforeVisit && (
+                        <RefineProposal
+                            proposal={pendingRefinements.treatmentBeforeVisit}
+                            onAccept={() => onAcceptRefine?.('treatmentBeforeVisit')}
+                            onReject={() => onRejectRefine?.('treatmentBeforeVisit')}
+                        />
+                    )}
                     {errors.treatmentBeforeVisit && (
                         <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
                             {errors.treatmentBeforeVisit}
