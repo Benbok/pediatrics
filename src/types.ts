@@ -1257,6 +1257,18 @@ declare global {
       // KNOWLEDGE QUERY MODULE API
       queryKnowledge: (params: { query: string }) => Promise<KnowledgeQueryResponse>;
       getLastKnowledgeQuery: () => Promise<KnowledgeCachedEntry | null>;
+
+      // RAG AI ASSISTANT API
+      rag: {
+        query: (params: { query: string; diseaseId: number }) => Promise<RagQueryResult>;
+        stream: (params: { query: string; diseaseId: number }) => void;
+        reindex: (params: { diseaseId: number }) => Promise<RagReindexResult>;
+        onToken: (callback: (event: any, token: string) => void) => () => void;
+        onDone: (callback: (event: any, data: { sources: RagSource[]; context: string }) => void) => () => void;
+        onError: (callback: (event: any, error: string) => void) => () => void;
+        onReindexProgress: (callback: (event: any, data: { done: number; total: number }) => void) => () => void;
+        removeListeners: () => void;
+      };
     }
   }
 }
@@ -1294,6 +1306,33 @@ export interface KnowledgeCachedEntry {
   query: string;
   response: KnowledgeQueryResponse;
   cachedAt: string;
+}
+
+// ============= RAG AI ASSISTANT TYPES =============
+
+export interface RagSource {
+  id: number;
+  guidelineId: number | null;
+  sectionTitle: string | null;
+  evidenceLevel: string | null;
+  pageStart: number | null;
+  pageEnd: number | null;
+  score: number;
+  preview: string;
+}
+
+export interface RagQueryResult {
+  ok: boolean;
+  answer?: string;
+  sources?: RagSource[];
+  context?: string;
+  error?: string;
+}
+
+export interface RagReindexResult {
+  ok: boolean;
+  indexed?: number;
+  error?: string;
 }
 
 // ============= NUTRITION MODULE TYPES =============

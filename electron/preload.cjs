@@ -278,4 +278,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // KNOWLEDGE QUERY MODULE API
     queryKnowledge: (params) => ipcRenderer.invoke('knowledge:query', params),
     getLastKnowledgeQuery: () => ipcRenderer.invoke('knowledge:get-last-query'),
+
+    // RAG AI ASSISTANT API
+    rag: {
+        query: (params) => ipcRenderer.invoke('rag:query', params),
+        stream: (params) => ipcRenderer.send('rag:stream', params),
+        reindex: (params) => ipcRenderer.invoke('rag:reindex', params),
+        onToken: (callback) => {
+            ipcRenderer.on('rag:token', callback);
+            return () => ipcRenderer.removeListener('rag:token', callback);
+        },
+        onDone: (callback) => {
+            ipcRenderer.on('rag:done', callback);
+            return () => ipcRenderer.removeListener('rag:done', callback);
+        },
+        onError: (callback) => {
+            ipcRenderer.on('rag:error', callback);
+            return () => ipcRenderer.removeListener('rag:error', callback);
+        },
+        onReindexProgress: (callback) => {
+            ipcRenderer.on('rag:reindex:progress', callback);
+            return () => ipcRenderer.removeListener('rag:reindex:progress', callback);
+        },
+        removeListeners: () => {
+            ['rag:token', 'rag:done', 'rag:error', 'rag:reindex:progress'].forEach(ch => ipcRenderer.removeAllListeners(ch));
+        },
+    },
 });

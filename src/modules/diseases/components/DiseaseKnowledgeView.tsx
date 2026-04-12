@@ -21,11 +21,13 @@ import {
     MessageSquare,
     ChevronDown,
     Check,
+    Bot,
 } from 'lucide-react';
 import { DiseaseNotesList } from './DiseaseNotesList';
 import { DiseaseMedicationsTab } from './DiseaseMedicationsTab';
 import { GuidelinesList } from './GuidelinesList';
 import { SymptomsList } from './SymptomsList';
+import { DiseaseAiAssistant } from './DiseaseAiAssistant';
 import { clsx } from 'clsx';
 
 interface DiseaseKnowledgeViewProps {
@@ -99,6 +101,9 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
     const sections = [
         {
             id: 'files', label: 'Файлы', icon: FileText, isFiles: true
+        },
+        {
+            id: 'ai-assistant', label: 'ИИ помощник', icon: Bot
         },
         {
             id: 'search', label: 'Поиск в PDF', icon: Search, isSearch: true
@@ -187,6 +192,10 @@ export const DiseaseKnowledgeView: React.FC<DiseaseKnowledgeViewProps> = ({ dise
                                     onGuidelineAdded={handleGuidelineAdded}
                                 />
                             </div>
+                        </TabsContent>
+
+                        <TabsContent value="ai-assistant" className="mt-0 focus-visible:outline-none">
+                            <DiseaseAiAssistant diseaseId={disease.id!} />
                         </TabsContent>
 
                         <TabsContent value="search" className="mt-0 focus-visible:outline-none">

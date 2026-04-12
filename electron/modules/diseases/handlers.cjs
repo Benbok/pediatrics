@@ -273,6 +273,45 @@ const setupDiseaseHandlers = () => {
         return true;
     }));
 
+    // ============= RAG AI ASSISTANT HANDLERS =============
+    const { ragQuery, ragQueryStream, reindexGuidelineEmbeddings } = require('../../services/ragPipelineService.cjs');
+
+    ipcMain.handle('rag:query', ensureAuthenticated(async (_, { query, diseaseId }) => {
+        try {
+            const result = await ragQuery({ query, diseaseId: Number(diseaseId) });
+            return { ok: true, ...result };
+        } catch (err) {
+            logger.error('[RAG] ragQuery error:', err);
+            return { ok: false, error: err.message };
+        }
+    }));
+
+    ipcMain.on('rag:stream', async (event, { query, diseaseId }) => {
+        try {
+            const { sources, context } = await ragQueryStream({
+                query,
+                diseaseId: Number(diseaseId),
+                onToken: (token) => {
+                    if (!event.sender.isDestroyed()) event.sender.send('rag:token', token);
+                },
+            });
+            if (!event.sender.isDestroyed()) event.sender.send('rag:done', { sources, context });
+        } catch (err) {
+            if (!event.sender.isDestroyed()) event.sender.send('rag:error', err.message);
+        }
+    });
+
+    ipcMain.handle('rag:reindex', ensureAuthenticated(async (event, { diseaseId }) => {
+        try {
+            const result = await reindexGuidelineEmbeddings(Number(diseaseId), (done, total) => {
+                if (!event.sender.isDestroyed()) event.sender.send('rag:reindex:progress', { done, total });
+            });
+            return { ok: true, ...result };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    }));
+
     // Импорт из JSON
     ipcMain.handle('diseases:importFromJson', ensureAuthenticated(async (event, jsonString) => {
         try {
