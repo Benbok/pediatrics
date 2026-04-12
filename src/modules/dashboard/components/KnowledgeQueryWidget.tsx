@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Search, Loader2, AlertCircle, BookOpen, Pill, Info, X } from 'lucide-react';
+import { Search, Loader2, AlertCircle, BookOpen, Pill, Info, X, Sparkles, Cpu } from 'lucide-react';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { knowledgeQueryService } from '../../../services/knowledgeQuery.service';
@@ -240,6 +240,53 @@ export const KnowledgeQueryWidget: React.FC = () => {
         return mentioned;
     }, [result?.sources, result?.answer]);
 
+    const geminiTrace = useMemo(
+        () => (result?.trace ?? []).filter(line => line.toLowerCase().includes('gemini')),
+        [result?.trace]
+    );
+    const localTrace = useMemo(
+        () => (result?.trace ?? []).filter(line => line.toLowerCase().includes('local')),
+        [result?.trace]
+    );
+
+    const comparisonSummary = useMemo(() => {
+        if (!result) return null;
+
+        const geminiText = (result.geminiAnswer ?? '').trim();
+        const localText = (result.localAnswer ?? '').trim();
+        const geminiMs = result.geminiDurationMs ?? null;
+        const localMs = result.localDurationMs ?? null;
+
+        let speedLine = 'Скорость: недостаточно данных для сравнения.';
+        if (geminiMs != null && localMs != null) {
+            const diffMs = Math.abs(geminiMs - localMs);
+            if (diffMs < 250) {
+                speedLine = 'Скорость: практически одинаковая.';
+            } else if (geminiMs < localMs) {
+                speedLine = `Скорость: Gemini быстрее на ${(diffMs / 1000).toFixed(2)}s.`;
+            } else {
+                speedLine = `Скорость: Локальная LLM быстрее на ${(diffMs / 1000).toFixed(2)}s.`;
+            }
+        }
+
+        let qualityLine = 'Полнота: недостаточно данных для сравнения.';
+        if (geminiText && localText) {
+            const geminiLen = geminiText.length;
+            const localLen = localText.length;
+            const ratio = Math.max(geminiLen, localLen) / Math.max(1, Math.min(geminiLen, localLen));
+
+            if (ratio < 1.15) {
+                qualityLine = 'Полнота: объём ответов сопоставим.';
+            } else if (geminiLen > localLen) {
+                qualityLine = 'Полнота: Gemini дал более развёрнутый ответ.';
+            } else {
+                qualityLine = 'Полнота: Локальная LLM дала более развёрнутый ответ.';
+            }
+        }
+
+        return { speedLine, qualityLine };
+    }, [result]);
+
     return (
         <Card noPadding className="overflow-visible">
             <div className="p-6">
@@ -352,11 +399,74 @@ export const KnowledgeQueryWidget: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Текст ответа */}
-                        {result.answer && (
-                            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60
-                                border border-slate-200 dark:border-slate-700">
-                                <MarkdownAnswer text={result.answer} />
+                        {/* Сравнение ответов Gemini vs Local LLM */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                        <Sparkles size={13} className="text-amber-500" />
+                                        Gemini
+                                    </p>
+                                    <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                                        {result.geminiDurationMs != null ? `${(result.geminiDurationMs / 1000).toFixed(2)}s` : '—'}
+                                    </span>
+                                </div>
+                                {result.geminiAnswer ? (
+                                    <MarkdownAnswer text={result.geminiAnswer} />
+                                ) : (
+                                    <p className="text-sm text-amber-700 dark:text-amber-400">
+                                        {result.geminiErrorMessage ?? 'Ответ от Gemini недоступен для этого запроса.'}
+                                    </p>
+                                )}
+                                {geminiTrace.length > 0 && (
+                                    <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1 max-h-28 overflow-auto">
+                                        {geminiTrace.map((line, index) => (
+                                            <p key={`gemini-trace-${index}`} className="text-[11px] text-slate-500 dark:text-slate-400 font-mono whitespace-pre-wrap">
+                                                {line}
+                                            </p>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                        <Cpu size={13} className="text-primary-500" />
+                                        Локальная LLM
+                                    </p>
+                                    <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                                        {result.localDurationMs != null ? `${(result.localDurationMs / 1000).toFixed(2)}s` : '—'}
+                                    </span>
+                                </div>
+                                {result.localAnswer ? (
+                                    <MarkdownAnswer text={result.localAnswer} />
+                                ) : (
+                                    <p className="text-sm text-amber-700 dark:text-amber-400">
+                                        {result.localErrorMessage ?? 'Ответ от локальной LLM недоступен для этого запроса.'}
+                                    </p>
+                                )}
+                                {localTrace.length > 0 && (
+                                    <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1 max-h-28 overflow-auto">
+                                        {localTrace.map((line, index) => (
+                                            <p key={`local-trace-${index}`} className="text-[11px] text-slate-500 dark:text-slate-400 font-mono whitespace-pre-wrap">
+                                                {line}
+                                            </p>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {comparisonSummary && (
+                            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/40">
+                                <p className="text-[11px] uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+                                    Сравнение моделей (эвристика)
+                                </p>
+                                <div className="space-y-1">
+                                    <p className="text-xs text-slate-700 dark:text-slate-300">{comparisonSummary.speedLine}</p>
+                                    <p className="text-xs text-slate-700 dark:text-slate-300">{comparisonSummary.qualityLine}</p>
+                                </div>
                             </div>
                         )}
 

@@ -9,27 +9,108 @@ type PendingRefinement = {
     refined: string;
 };
 
+function extractNumericValues(text: string) {
+    return (text.match(/\d+(?:[.,]\d+)?/g) ?? []).map((token) => token.replace(',', '.'));
+}
+
+function getDiffSegments(original: string, refined: string) {
+    let prefixLength = 0;
+    const maxPrefixLength = Math.min(original.length, refined.length);
+
+    while (prefixLength < maxPrefixLength && original[prefixLength] === refined[prefixLength]) {
+        prefixLength += 1;
+    }
+
+    let suffixLength = 0;
+    const originalRemainder = original.length - prefixLength;
+    const refinedRemainder = refined.length - prefixLength;
+    while (
+        suffixLength < originalRemainder &&
+        suffixLength < refinedRemainder &&
+        original[original.length - 1 - suffixLength] === refined[refined.length - 1 - suffixLength]
+    ) {
+        suffixLength += 1;
+    }
+
+    return {
+        original: {
+            prefix: original.slice(0, prefixLength),
+            changed: original.slice(prefixLength, original.length - suffixLength),
+            suffix: suffixLength > 0 ? original.slice(original.length - suffixLength) : '',
+        },
+        refined: {
+            prefix: refined.slice(0, prefixLength),
+            changed: refined.slice(prefixLength, refined.length - suffixLength),
+            suffix: suffixLength > 0 ? refined.slice(refined.length - suffixLength) : '',
+        },
+    };
+}
+
+function getRefineHints(original: string, refined: string) {
+    const hints: string[] = [];
+    if (extractNumericValues(original).join('|') === extractNumericValues(refined).join('|') && extractNumericValues(original).length > 0) {
+        hints.push('Числа сохранены');
+    }
+    if (original.toLowerCase() === refined.toLowerCase() && original !== refined) {
+        hints.push('Нормализован регистр');
+    }
+    if (/[.\-/\s]\d{1,2}[.\-/\s]\d{2,4}|\d{1,2}\s+\d{1,2}\s+\d{2,4}/.test(original) && original !== refined) {
+        hints.push('Нормализована дата');
+    }
+    if (original.replace(/[\p{L}\p{N}\s]/gu, '') !== refined.replace(/[\p{L}\p{N}\s]/gu, '')) {
+        hints.push('Исправлена пунктуация');
+    }
+    return hints;
+}
+
 const RefineProposal: React.FC<{
     proposal: PendingRefinement;
     onAccept: () => void;
     onReject: () => void;
 }> = ({ proposal, onAccept, onReject }) => {
+    const diff = getDiffSegments(proposal.original, proposal.refined);
+    const hints = getRefineHints(proposal.original, proposal.refined);
+
     return (
         <Card className="mt-2 p-3 border-emerald-200 bg-emerald-50/70 dark:bg-emerald-950/30 dark:border-emerald-900/60">
             <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-2">
                 Предложение рефайна
             </div>
+            {hints.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                    {hints.map((hint) => (
+                        <span
+                            key={hint}
+                            className="inline-flex items-center rounded-full border border-emerald-200 bg-white/80 px-2 py-1 text-[11px] font-medium text-emerald-700 dark:border-emerald-900 dark:bg-slate-900/70 dark:text-emerald-300"
+                        >
+                            {hint}
+                        </span>
+                    ))}
+                </div>
+            )}
             <div className="space-y-2 text-xs">
                 <div>
                     <div className="text-slate-500 dark:text-slate-400 mb-1">Исходный текст</div>
                     <div className="rounded-lg bg-white/80 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 p-2 text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
-                        {proposal.original}
+                        {diff.original.prefix}
+                        {diff.original.changed && (
+                            <span className="rounded bg-rose-100 px-0.5 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
+                                {diff.original.changed}
+                            </span>
+                        )}
+                        {diff.original.suffix}
                     </div>
                 </div>
                 <div>
                     <div className="text-slate-500 dark:text-slate-400 mb-1">Текст после рефайна</div>
                     <div className="rounded-lg bg-white/80 dark:bg-slate-900/70 border border-emerald-200 dark:border-emerald-900 p-2 text-slate-800 dark:text-slate-100 whitespace-pre-wrap">
-                        {proposal.refined}
+                        {diff.refined.prefix}
+                        {diff.refined.changed && (
+                            <span className="rounded bg-emerald-100 px-0.5 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-200">
+                                {diff.refined.changed}
+                            </span>
+                        )}
+                        {diff.refined.suffix}
                     </div>
                 </div>
             </div>

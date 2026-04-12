@@ -1,5 +1,6 @@
 'use strict';
 
+const { performance } = require('node:perf_hooks');
 const { ipcMain } = require('electron');
 const { z } = require('zod');
 const { ensureAuthenticated } = require('../../auth.cjs');
@@ -7,10 +8,15 @@ const { logger } = require('../../logger.cjs');
 const localLlmService = require('../../services/localLlmService.cjs');
 const {
     ALLOWED_REFINE_FIELDS,
-    DEFAULT_REFINE_MAX_TOKENS,
     buildRefineMessages,
     buildRefineGenerationOptions,
 } = require('./refine.constants.cjs');
+
+const REFINE_TOKEN_RETENTION_THRESHOLD = 0.6;
+const REFINE_CHAR_SIMILARITY_THRESHOLD = 0.55;
+const REFINE_TOKEN_COUNT_DRIFT_RATIO = 0.35;
+const PROTECTED_TOKEN_PATTERN = /\d+(?:[.,]\d+)?\s*(?:°C|мм\s*рт\.?\s*ст\.?|%|мл|мг|кг|см|ммоль\/л|уд\/?мин|SpO2|pH|ICD-\d{1,2}(?:\.\d+)?|[A-ZА-ЯЁ]{2,}\s*\d+)|[A-Za-zА-Яа-яЁё]*\d+[A-Za-zА-Яа-яЁё\^%/+-]*|[A-ZА-ЯЁ]{2,}[A-ZА-ЯЁ0-9\^%/+-]*|\d+[\^%/+-]*|[A-Za-z]{2,}[A-Z0-9][A-Za-z0-9\^%/+-]*/gu;
+const UNIT_TOKEN_PATTERN = /°C|мм\s*рт\.?\s*ст\.?|ммоль\/л|мг\/кг|мкг\/кг|мг|мкг|г|мл|л|кг|г\/л|см|мм|%|уд\/?мин|SpO2|pH|дн(?:я|ей)?|сут(?:ки|ок)?|ч(?:ас(?:а|ов)?)?/giu;
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
@@ -41,6 +47,73 @@ const LlmRefineFieldSchema = z.object({
     }).optional(),
 });
 
+function normalizeDateLikeSequences(text) {
+    return String(text ?? '').replace(/\b(\d{1,2})([.\-/\s]+)(\d{1,2})([.\-/\s]+)(\d{2,4})\b/g, (match, day, _sep1, month, _sep2, year) => {
+        const dayNum = Number(day);
+        const monthNum = Number(month);
+        if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12) {
+            return match;
+        }
+
+        return `${String(dayNum).padStart(2, '0')}.${String(monthNum).padStart(2, '0')}.${year}`;
+    });
+}
+
+function collapseWhitespace(text) {
+    return String(text ?? '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
+function capitalizeSentenceStart(text) {
+    return String(text ?? '').replace(/^(\s*)([a-zа-яё])/u, (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
+}
+
+function ensureSentenceEnding(text) {
+    const normalized = String(text ?? '').trim();
+    if (!normalized) return '';
+    return /[.!?…]$/.test(normalized) ? normalized : `${normalized}.`;
+}
+
+function isJoinerFragment(text) {
+    return /^(с|без|при|после|до|от|из|в|во|на|к|ко|по|под|над|об|обо|для)\b/u.test(String(text ?? '').trim());
+}
+
+function mergeMultilineFragments(text) {
+    const fragments = String(text ?? '')
+        .split(/\r?\n+/)
+        .map((fragment) => collapseWhitespace(fragment))
+        .filter(Boolean);
+
+    if (fragments.length <= 1) {
+        return collapseWhitespace(fragments[0] || text);
+    }
+
+    const sentences = [];
+
+    for (const rawFragment of fragments) {
+        if (isJoinerFragment(rawFragment) && sentences.length > 0) {
+            const previous = sentences.pop().replace(/[.!?…]$/, '');
+            sentences.push(`${previous}, ${rawFragment}.`);
+            continue;
+        }
+
+        sentences.push(ensureSentenceEnding(capitalizeSentenceStart(rawFragment)));
+    }
+
+    return sentences.join(' ');
+}
+
+function postProcessRefinementOutput(text) {
+    const singleLine = mergeMultilineFragments(normalizeDateLikeSequences(text));
+
+    return normalizeDateLikeSequences(collapseWhitespace(singleLine));
+}
+
+function buildSafeFallbackText(text) {
+    return postProcessRefinementOutput(text);
+}
+
 function normalizeForComparison(text) {
     return String(text ?? '')
         .toLowerCase()
@@ -54,9 +127,24 @@ function tokenizeForComparison(text) {
 
 function extractProtectedTokens(text) {
     return Array.from(new Set(
-        (String(text ?? '').match(/[A-Za-zА-Яа-яЁё]*\d+[A-Za-zА-Яа-яЁё\^%/+-]*|[A-ZА-ЯЁ]{2,}[A-ZА-ЯЁ0-9\^%/+-]*|\d+[\^%/+-]*|[A-Za-z]{2,}[A-Z0-9][A-Za-z0-9\^%/+-]*/gu) ?? [])
-            .map((token) => token.toLowerCase())
+        (String(text ?? '').match(PROTECTED_TOKEN_PATTERN) ?? [])
+            .map((token) => token.toLowerCase().replace(/\s+/g, ' ').trim())
     ));
+}
+
+function extractNumericValues(text) {
+    return (normalizeDateLikeSequences(String(text ?? '')).match(/\d+(?:[.,]\d+)?/g) ?? [])
+        .map((token) => token.replace(',', '.'));
+}
+
+function extractUnitTokens(text) {
+    return (String(text ?? '').match(UNIT_TOKEN_PATTERN) ?? [])
+        .map((token) => token.toLowerCase().replace(/\s+/g, ' ').replace(/\.$/, '').trim());
+}
+
+function arraysEqual(left, right) {
+    if (left.length !== right.length) return false;
+    return left.every((value, index) => value === right[index]);
 }
 
 function levenshteinDistance(left, right) {
@@ -97,24 +185,49 @@ function estimateRefineMaxTokens(sourceText, requestedMaxTokens) {
 }
 
 function validateRefinementOutput(sourceText, candidateText) {
+    const validationStartedAt = performance.now();
     const source = String(sourceText ?? '').trim();
     const candidate = String(candidateText ?? '').trim();
 
+    const finalizeValidation = (result) => {
+        logger.info('[LlmHandlers] Refinement validation completed', {
+            reason: result.reason,
+            isSafe: result.isSafe,
+            durationMs: Number((performance.now() - validationStartedAt).toFixed(2)),
+            sourceLength: source.length,
+            candidateLength: candidate.length,
+        });
+        return result;
+    };
+
     if (!candidate) {
-        return { isSafe: false, reason: 'empty-output' };
+        logger.warn('[LlmHandlers] Empty refine output received', { sourceLength: source.length });
+        return finalizeValidation({ isSafe: false, reason: 'empty-output' });
     }
 
     const sourceNormalized = normalizeForComparison(source);
     const candidateNormalized = normalizeForComparison(candidate);
 
     if (sourceNormalized === candidateNormalized) {
-        return { isSafe: true, reason: 'unchanged' };
+        return finalizeValidation({ isSafe: true, reason: 'unchanged' });
     }
 
     const protectedTokens = extractProtectedTokens(source);
     const missingProtectedToken = protectedTokens.find((token) => !candidateNormalized.includes(token));
     if (missingProtectedToken) {
-        return { isSafe: false, reason: `missing-protected-token:${missingProtectedToken}` };
+        return finalizeValidation({ isSafe: false, reason: `missing-protected-token:${missingProtectedToken}` });
+    }
+
+    const sourceNumericValues = extractNumericValues(source);
+    const candidateNumericValues = extractNumericValues(candidate);
+    if (!arraysEqual(sourceNumericValues, candidateNumericValues)) {
+        return finalizeValidation({ isSafe: false, reason: 'numeric-values-changed' });
+    }
+
+    const sourceUnitTokens = extractUnitTokens(source);
+    const candidateUnitTokens = extractUnitTokens(candidate);
+    if (!arraysEqual(sourceUnitTokens, candidateUnitTokens)) {
+        return finalizeValidation({ isSafe: false, reason: 'measurement-units-changed' });
     }
 
     const sourceTokens = tokenizeForComparison(source);
@@ -125,22 +238,22 @@ function validateRefinementOutput(sourceText, candidateText) {
         ? retainedTokenCount / significantSourceTokens.length
         : 1;
 
-    if (retainedRatio < 0.6) {
-        return { isSafe: false, reason: `low-token-retention:${retainedRatio.toFixed(2)}` };
+    if (retainedRatio < REFINE_TOKEN_RETENTION_THRESHOLD) {
+        return finalizeValidation({ isSafe: false, reason: `low-token-retention:${retainedRatio.toFixed(2)}` });
     }
 
     const tokenCountDelta = Math.abs(candidateTokens.length - sourceTokens.length);
-    if (sourceTokens.length > 0 && tokenCountDelta > Math.max(3, Math.ceil(sourceTokens.length * 0.35))) {
-        return { isSafe: false, reason: 'token-count-drift' };
+    if (sourceTokens.length > 0 && tokenCountDelta > Math.max(3, Math.ceil(sourceTokens.length * REFINE_TOKEN_COUNT_DRIFT_RATIO))) {
+        return finalizeValidation({ isSafe: false, reason: 'token-count-drift' });
     }
 
     const charDistance = levenshteinDistance(sourceNormalized, candidateNormalized);
     const charSimilarity = 1 - (charDistance / Math.max(sourceNormalized.length, candidateNormalized.length, 1));
-    if (charSimilarity < 0.55) {
-        return { isSafe: false, reason: `low-char-similarity:${charSimilarity.toFixed(2)}` };
+    if (charSimilarity < REFINE_CHAR_SIMILARITY_THRESHOLD) {
+        return finalizeValidation({ isSafe: false, reason: `low-char-similarity:${charSimilarity.toFixed(2)}` });
     }
 
-    return { isSafe: true, reason: 'validated' };
+    return finalizeValidation({ isSafe: true, reason: 'validated' });
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -202,6 +315,7 @@ function setupLlmHandlers() {
         }
 
         const { field, text, options = {} } = validated;
+        const normalizedSourceText = buildSafeFallbackText(text);
 
         // messages array — LM Studio applies chat template automatically
         const messages = buildRefineMessages(field, text);
@@ -214,7 +328,7 @@ function setupLlmHandlers() {
 
             const result = await localLlmService.generate(
                 messages,
-                buildRefineGenerationOptions(field, maxTokens),
+                buildRefineGenerationOptions(field, text, maxTokens),
                 (token) => {
                     refinedText += token;
                     if (event.sender && !event.sender.isDestroyed()) {
@@ -224,25 +338,26 @@ function setupLlmHandlers() {
             );
 
             if (result.status === 'completed') {
-                const validation = validateRefinementOutput(text, refinedText);
+                const normalizedRefinedText = postProcessRefinementOutput(refinedText);
+                const validation = validateRefinementOutput(text, normalizedRefinedText);
                 if (!validation.isSafe) {
                     logger.warn('[LlmHandlers] Unsafe refinement output rejected, falling back to source text', {
                         field,
                         reason: validation.reason,
                         sourceText: text,
-                        refinedText,
+                        refinedText: normalizedRefinedText,
                     });
 
                     return {
                         status: 'completed',
-                        text,
+                        text: normalizedSourceText,
                         usedFallback: true,
                     };
                 }
 
                 return {
                     status: 'completed',
-                    text: refinedText.trim(),
+                    text: normalizedRefinedText,
                     usedFallback: false,
                 };
             }

@@ -1272,11 +1272,17 @@ export interface KnowledgeSource {
 export interface KnowledgeQueryResponse {
   success: boolean;
   answer: string | null;
+  geminiAnswer?: string | null;
+  localAnswer?: string | null;
   sources: KnowledgeSource[];
   disclaimer: string;
   searchedAt: string;
   noAiKey: boolean;
   aiErrorMessage?: string | null;
+  geminiErrorMessage?: string | null;
+  localErrorMessage?: string | null;
+  geminiDurationMs?: number | null;
+  localDurationMs?: number | null;
   startedAt?: string;
   finishedAt?: string;
   durationMs?: number;

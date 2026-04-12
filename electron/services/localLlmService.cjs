@@ -16,10 +16,29 @@
 const { logger } = require('../logger.cjs');
 
 const DEFAULT_BASE_URL = 'http://localhost:1234';
-const REQUEST_TIMEOUT_MS = 45_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 300_000;
 
 function getBaseUrl() {
     return (process.env.PEDIASSIST_LM_STUDIO_URL || DEFAULT_BASE_URL).replace(/\/+$/, '');
+}
+
+function getRequestTimeoutMs(messages, options = {}) {
+    if (Number.isFinite(options.timeoutMs) && options.timeoutMs >= 10_000) {
+        return Math.floor(options.timeoutMs);
+    }
+
+    const envTimeout = Number(process.env.LOCAL_LLM_REQUEST_TIMEOUT_MS);
+    if (Number.isFinite(envTimeout) && envTimeout >= 10_000) {
+        return Math.floor(envTimeout);
+    }
+
+    const promptChars = (Array.isArray(messages)
+        ? messages.reduce((sum, m) => sum + String(m?.content || '').length, 0)
+        : 0);
+
+    if (promptChars >= 20_000) return 360_000;
+    if (promptChars >= 10_000) return 320_000;
+    return DEFAULT_REQUEST_TIMEOUT_MS;
 }
 
 // ── Active generations ───────────────────────────────────────────────────────
@@ -112,6 +131,34 @@ async function parseSSEStream(body, onToken, signal) {
     }
 }
 
+function buildCompletionBody(messages, options, resolvedModel, stream) {
+    const body = {
+        messages,
+        temperature: options.temperature ?? 0.15,
+        max_tokens: options.maxTokens ?? 256,
+        top_p: options.topP ?? 0.9,
+        stream,
+    };
+
+    if (options.stop) body.stop = options.stop;
+    if (resolvedModel) body.model = resolvedModel;
+    if (options.topK != null || options.repeatPenalty != null) {
+        body.extra_body = {};
+        if (options.topK != null) {
+            body.extra_body.top_k = options.topK;
+        }
+        if (options.repeatPenalty != null) {
+            body.extra_body.repeat_penalty = options.repeatPenalty;
+        }
+    }
+
+    return body;
+}
+
+function extractAssistantText(payload) {
+    return payload?.choices?.[0]?.message?.content || payload?.choices?.[0]?.text || '';
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -154,8 +201,12 @@ async function healthCheck() {
  * @param {number} [options.maxTokens=256]
  * @param {number} [options.temperature=0.15]
  * @param {number} [options.topP=0.9]
+ * @param {number} [options.topK]
+ * @param {number} [options.repeatPenalty]
  * @param {string[]} [options.stop]
  * @param {string} [options.model]
+ * @param {number} [options.timeoutMs]
+ * @param {boolean} [options.forceNonStream]
  * @param {(token: string) => void} onToken - Колбэк для каждого токена
  * @returns {Promise<{status: 'completed'|'aborted'|'error', error?: string}>}
  */
@@ -171,46 +222,83 @@ async function generate(messages, options = {}, onToken) {
     const startTime = Date.now();
     let tokenCount = 0;
     const baseUrl = getBaseUrl();
+    const requestTimeoutMs = getRequestTimeoutMs(messages, options);
+    let timedOut = false;
 
     // Timeout
     const timeoutId = setTimeout(() => {
+        timedOut = true;
         abortController.abort();
-        logger.warn(`[LocalLLM] Request timed out after ${REQUEST_TIMEOUT_MS}ms | genId=${genId}`);
-    }, REQUEST_TIMEOUT_MS);
+        logger.warn(`[LocalLLM] Request timed out after ${requestTimeoutMs}ms | genId=${genId}`);
+    }, requestTimeoutMs);
 
     try {
         const resolvedModel = options.model || (await getCurrentModel());
-
-        const body = {
-            messages,
-            temperature: options.temperature ?? 0.15,
-            max_tokens: options.maxTokens ?? 256,
-            top_p: options.topP ?? 0.9,
-            stream: true,
-        };
-
-        if (options.stop) body.stop = options.stop;
-        if (resolvedModel) body.model = resolvedModel;
+        const useStream = options.forceNonStream ? false : true;
+        const streamBody = buildCompletionBody(messages, options, resolvedModel, useStream);
 
         const res = await fetch(`${baseUrl}/v1/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify(streamBody),
             signal: abortController.signal,
         });
 
         if (!res.ok) {
             const errText = await res.text().catch(() => '');
             logger.error(`[LocalLLM] LM Studio returned HTTP ${res.status}: ${errText}`);
-            return { status: 'error', error: `LM Studio HTTP ${res.status}` };
+            const compactErr = String(errText || '').replace(/\s+/g, ' ').trim();
+            const details = compactErr ? `: ${compactErr.slice(0, 300)}` : '';
+            return { status: 'error', error: `LM Studio HTTP ${res.status}${details}` };
         }
 
-        await parseSSEStream(res.body, (token) => {
-            tokenCount++;
-            if (typeof onToken === 'function') {
-                onToken(token);
+        if (useStream) {
+            await parseSSEStream(res.body, (token) => {
+                tokenCount++;
+                if (typeof onToken === 'function') {
+                    onToken(token);
+                }
+            }, abortController.signal);
+        } else {
+            const payload = await res.json();
+            const content = String(extractAssistantText(payload) || '').trim();
+            if (content) {
+                tokenCount = 1;
+                if (typeof onToken === 'function') {
+                    onToken(content);
+                }
             }
-        }, abortController.signal);
+        }
+
+        // Некоторые сборки LM Studio могут вернуть пустой stream; делаем fallback на non-stream ответ.
+        if (tokenCount === 0 && !abortController.signal.aborted) {
+            logger.warn(`[LocalLLM] Empty stream response, retrying non-stream mode | genId=${genId}`);
+
+            const nonStreamBody = buildCompletionBody(messages, options, resolvedModel, false);
+            const fallbackRes = await fetch(`${baseUrl}/v1/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nonStreamBody),
+                signal: abortController.signal,
+            });
+
+            if (!fallbackRes.ok) {
+                const fallbackErrText = await fallbackRes.text().catch(() => '');
+                logger.error(`[LocalLLM] Non-stream fallback failed HTTP ${fallbackRes.status}: ${fallbackErrText}`);
+                const compactErr = String(fallbackErrText || '').replace(/\s+/g, ' ').trim();
+                const details = compactErr ? `: ${compactErr.slice(0, 300)}` : '';
+                return { status: 'error', error: `LM Studio HTTP ${fallbackRes.status}${details}` };
+            }
+
+            const payload = await fallbackRes.json();
+            const content = String(extractAssistantText(payload) || '').trim();
+            if (content) {
+                tokenCount = 1;
+                if (typeof onToken === 'function') {
+                    onToken(content);
+                }
+            }
+        }
 
         const durationMs = Date.now() - startTime;
         logger.info(
@@ -221,6 +309,12 @@ async function generate(messages, options = {}, onToken) {
     } catch (err) {
         if (err.name === 'AbortError' || abortController.signal.aborted) {
             const durationMs = Date.now() - startTime;
+            if (timedOut) {
+                logger.warn(
+                    `[LocalLLM] Generation timed out | genId=${genId} | tokens=${tokenCount} | duration=${durationMs}ms`
+                );
+                return { status: 'error', error: `LM Studio timeout after ${requestTimeoutMs}ms` };
+            }
             logger.info(
                 `[LocalLLM] Generation aborted | genId=${genId} | tokens=${tokenCount} | duration=${durationMs}ms`
             );

@@ -9,6 +9,7 @@
 
 const { prisma } = require('../prisma-client.cjs');
 const { logger } = require('../logger.cjs');
+const localLlmService = require('./localLlmService.cjs');
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
@@ -43,6 +44,79 @@ function safePreview(value, maxLen = 1200) {
     const text = String(value || '');
     if (text.length <= maxLen) return text;
     return `${text.slice(0, maxLen)} ...[truncated ${text.length - maxLen} chars]`;
+}
+
+function getLocalContextCapChars(plan = null) {
+    const raw = Number(process.env.LOCAL_LLM_CONTEXT_CAP_CHARS);
+    if (Number.isFinite(raw) && raw >= 2000) return Math.floor(raw);
+
+    // Для диагностических запросов достаточно более компактного контекста: быстрее и стабильнее.
+    const intent = String(plan?.intent || '').toLowerCase();
+    if (intent === 'diagnosis') return 14_000;
+
+    return 24_000;
+}
+
+function truncateContextForLocalLlm(context, capOverride = null) {
+    const text = String(context || '');
+    const cap = Number.isFinite(capOverride) && capOverride > 0
+        ? Math.floor(capOverride)
+        : getLocalContextCapChars();
+    if (text.length <= cap) return text;
+
+    const truncated = `${text.slice(0, cap)}\n...[контекст сокращен для локальной модели до ${cap} символов]`;
+    logger.info('[KnowledgeQueryService] LOCAL_CONTEXT_TRUNCATED:', {
+        originalLength: text.length,
+        truncatedLength: truncated.length,
+        cap,
+    });
+    return truncated;
+}
+
+function isLocalContextLengthError(message) {
+    const msg = String(message || '').toLowerCase();
+    return msg.includes('n_keep') || msg.includes('context length');
+}
+
+function isGarbledLocalAnswer(text) {
+    const s = String(text || '').trim();
+    if (!s || s.length < 80) return false;
+
+    const qCount = (s.match(/\?/g) || []).length;
+    const qRatio = qCount / s.length;
+    const letterCount = (s.match(/[A-Za-z\u0400-\u04FF]/g) || []).length;
+    const letterRatio = letterCount / s.length;
+
+    return qRatio > 0.3 || letterRatio < 0.2;
+}
+
+function getLocalMaxTokens(plan) {
+    const fromEnv = Number(process.env.LOCAL_LLM_MAX_TOKENS);
+    if (Number.isFinite(fromEnv) && fromEnv >= 128) {
+        return Math.floor(fromEnv);
+    }
+
+    const intent = String(plan?.intent || '').toLowerCase();
+    if (intent === 'treatment' || intent === 'dosing' || plan?.needsDosing) {
+        return 560;
+    }
+    if (intent === 'diagnosis') {
+        return 260;
+    }
+    return 420;
+}
+
+function sanitizeLocalAnswerByIntent(answer, plan) {
+    const text = String(answer || '').trim();
+    if (!text) return text;
+
+    const intent = String(plan?.intent || '').toLowerCase();
+    if (intent !== 'diagnosis') return text;
+
+    // Для диагностических вопросов убираем лечебный блок, если модель его добавила.
+    let sanitized = text.replace(/\n\s*\*\*Препараты:\*\*[\s\S]*?(?=\n\s*\*\*Доп\. рекомендации:\*\*|$)/i, '\n');
+    sanitized = sanitized.replace(/\n{3,}/g, '\n\n').trim();
+    return sanitized;
 }
 
 // ─── In-memory TTL-кэш ───────────────────────────────────────────────────────
@@ -279,37 +353,66 @@ async function searchMedicationsByChunkMentions(allChunkTexts) {
     // Извлекаем все кириллические слова ≥ 5 символов (и с большой, и со строчной —
     // гайдлайны пишут названия по-разному: Амброксол / амброксол)
     const wordRe = /[\u0400-\u04FF]{5,}/g;
-    const rawWords = new Set();
+    const wordFreq = new Map();
     let m;
     while ((m = wordRe.exec(combined)) !== null) {
-        rawWords.add(m[0]);
+        const word = m[0];
+        wordFreq.set(word, (wordFreq.get(word) || 0) + 1);
     }
-    if (rawWords.size === 0) return [];
+    if (wordFreq.size === 0) return [];
+
+    // Чтобы не превысить лимит параметров SQLite/Prisma, берём только самые частые термы.
+    const MAX_BASE_TERMS = 120;
+    const rankedWords = [...wordFreq.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, MAX_BASE_TERMS)
+        .map(([word]) => word);
 
     // Для каждого слова пробуем два варианта: как есть + с заглавной буквы
     // (Prisma contains на SQLite чувствительн к регистру для кириллицы)
     const variants = new Set();
-    for (const w of rawWords) {
+    for (const w of rankedWords) {
         variants.add(w);
         variants.add(w.charAt(0).toUpperCase() + w.slice(1));
     }
 
     try {
-        const orConds = [...variants].map(name => ({ nameRu: { contains: name } }));
-        return await prisma.medication.findMany({
-            where: { AND: [{ OR: orConds }, { childUsing: { not: 'Not' } }] },
-            select: {
-                id: true,
-                nameRu: true,
-                clinicalPharmGroup: true,
-                indications: true,
-                childDosing: true,
-                childUsing: true,
-                contraindications: true,
-                sideEffects: true,
-            },
-            take: 12,
-        });
+        const allVariants = [...variants];
+        const BATCH_SIZE = 60;
+        const MAX_RESULTS = 12;
+        const medications = [];
+        const seenIds = new Set();
+
+        for (let i = 0; i < allVariants.length; i += BATCH_SIZE) {
+            const batch = allVariants.slice(i, i + BATCH_SIZE);
+            const orConds = batch.map(name => ({ nameRu: { contains: name } }));
+
+            const rows = await prisma.medication.findMany({
+                where: { AND: [{ OR: orConds }, { childUsing: { not: 'Not' } }] },
+                select: {
+                    id: true,
+                    nameRu: true,
+                    clinicalPharmGroup: true,
+                    indications: true,
+                    childDosing: true,
+                    childUsing: true,
+                    contraindications: true,
+                    sideEffects: true,
+                },
+                take: MAX_RESULTS,
+            });
+
+            for (const med of rows) {
+                if (seenIds.has(med.id)) continue;
+                seenIds.add(med.id);
+                medications.push(med);
+                if (medications.length >= MAX_RESULTS) {
+                    return medications;
+                }
+            }
+        }
+
+        return medications;
     } catch (err) {
         logger.warn('[KnowledgeQueryService] Chunk-mention medication search failed:', err.message);
         return [];
@@ -377,7 +480,7 @@ const INTENT_RULES = [
     },
     {
         intent: 'diagnosis',
-        pattern: /симптом|диагност|признак|как\s+отличить|дифференциальн|критери[йи]\s+диагноз|клиническ(ая|ие)\s+картин/i,
+        pattern: /симптом|диагност|признак|как\s+отличить|дифференциальн|критери[йи]\s+диагноз|клиническ(ая|ие)\s+картин|клиник[аи]|клиническ(ие|ая)?\s+проявлен|проявлени|жалоб/i,
         needsMedications: false,
         needsDosing: false,
         needsContraindications: false,
@@ -782,6 +885,112 @@ async function generateAnswer(query, context, plan = null) {
     return await callGeminiWithKey(apiKey, prompt);
 }
 
+async function generateLocalAnswer(query, context, plan = null) {
+    const intentHint = plan ? `\nКОНТЕКСТ ЗАПРОСА: intent=${plan.intent}, focus="${plan.focus}"${plan.needsDosing ? ', ТРЕБУЮТСЯ ДОЗИРОВКИ' : ''}${plan.needsContraindications ? ', ТРЕБУЮТСЯ ПРОТИВОПОКАЗАНИЯ' : ''}` : '';
+    const baseCap = getLocalContextCapChars(plan);
+    const retryCaps = [
+        baseCap,
+        Math.max(3000, Math.floor(baseCap * 0.65)),
+        Math.max(1800, Math.floor(baseCap * 0.45)),
+    ];
+    const uniqueCaps = [...new Set(retryCaps)];
+    const localMaxTokens = getLocalMaxTokens(plan);
+
+    let lastError = null;
+
+    for (let i = 0; i < uniqueCaps.length; i += 1) {
+        const cap = uniqueCaps[i];
+        const localContext = truncateContextForLocalLlm(context, cap);
+        const prompt = `ДАННЫЕ ИЗ БАЗЫ ЗНАНИЙ:\n${localContext}\n\nВОПРОС ВРАЧА:\n${query}${intentHint}`;
+
+        const messages = [
+            { role: 'system', content: SYSTEM_INSTRUCTION },
+            { role: 'user', content: prompt },
+        ];
+
+        let answer = '';
+        const isDiagnosisIntent = String(plan?.intent || '').toLowerCase() === 'diagnosis';
+        const result = await localLlmService.generate(messages, {
+            maxTokens: localMaxTokens,
+            temperature: isDiagnosisIntent ? 0 : 0.1,
+            topP: isDiagnosisIntent ? 1 : 0.9,
+            topK: isDiagnosisIntent ? 40 : undefined,
+            repeatPenalty: isDiagnosisIntent ? 1.12 : 1.05,
+        }, (token) => {
+            answer += token;
+        });
+
+        if (result.status === 'aborted') {
+            throw new Error('Local LLM generation aborted');
+        }
+
+        if (result.status === 'error') {
+            const err = new Error(result.error || 'Local LLM error');
+            lastError = err;
+
+            const canRetrySmaller = isLocalContextLengthError(err.message) && i < uniqueCaps.length - 1;
+            if (canRetrySmaller) {
+                logger.warn('[KnowledgeQueryService] Local LLM context overflow, retrying with smaller context cap', {
+                    currentCap: cap,
+                    nextCap: uniqueCaps[i + 1],
+                });
+                continue;
+            }
+
+            throw err;
+        }
+
+        let trimmed = sanitizeLocalAnswerByIntent(answer, plan);
+        if (!trimmed) {
+            lastError = new Error('Local LLM returned empty answer');
+            continue;
+        }
+
+        if (isGarbledLocalAnswer(trimmed)) {
+            const hasSmallerCap = i < uniqueCaps.length - 1;
+            if (hasSmallerCap) {
+                logger.warn('[KnowledgeQueryService] Local LLM returned garbled output, retrying with smaller context cap', {
+                    currentCap: cap,
+                    nextCap: uniqueCaps[i + 1],
+                });
+                lastError = new Error('Local LLM returned garbled output');
+                continue;
+            }
+
+            logger.warn('[KnowledgeQueryService] Local LLM returned garbled output on minimal context, retrying in non-stream deterministic mode');
+
+            let fallbackText = '';
+            const fallbackResult = await localLlmService.generate(messages, {
+                maxTokens: Math.max(160, Math.min(localMaxTokens, 220)),
+                temperature: 0,
+                topP: 1,
+                topK: 40,
+                repeatPenalty: 1.12,
+                forceNonStream: true,
+            }, (token) => {
+                fallbackText += token;
+            });
+
+            if (fallbackResult.status === 'error') {
+                lastError = new Error(fallbackResult.error || 'Local LLM garbled output retry failed');
+                continue;
+            }
+
+            const fallbackTrimmed = sanitizeLocalAnswerByIntent(fallbackText, plan);
+            if (!fallbackTrimmed || isGarbledLocalAnswer(fallbackTrimmed)) {
+                lastError = new Error('Local LLM returned garbled output');
+                continue;
+            }
+
+            trimmed = fallbackTrimmed;
+        }
+
+        return trimmed;
+    }
+
+    throw lastError || new Error('Local LLM error');
+}
+
 /**
  * Определяет, содержит ли запрос лечебную интенцию (назначить препарат / схему лечения).
  * Используется для дополнительного DQL-поиска чанков с дозировками/препаратами.
@@ -1104,31 +1313,84 @@ async function queryKnowledge(query) {
     trace.push(`[${nowIso()}] CONTEXT built: length=${context.length}`);
     logger.info('[KnowledgeQueryService] CONTEXT_PREVIEW:', safePreview(context));
 
-    // 6. Генерируем ответ через Gemini
+    // 6. Генерируем ответы параллельно: Gemini + локальная модель LM Studio
     let answer = null;
+    let geminiAnswer = null;
+    let localAnswer = null;
     let noAiKey = false;
     let aiErrorMessage = null;
+    let geminiErrorMessage = null;
+    let localErrorMessage = null;
+    let geminiDurationMs = null;
+    let localDurationMs = null;
 
-    try {
-        trace.push(`[${nowIso()}] LLM_CALL start`);
-        answer = await generateAnswer(query, context, plan);
-        trace.push(`[${nowIso()}] LLM_CALL success: answerLength=${answer.length}`);
-        logger.info('[KnowledgeQueryService] Answer generated, length:', answer.length);
-        logger.info('[KnowledgeQueryService] ANSWER_TEXT:', answer);
-    } catch (err) {
-        logger.warn('[KnowledgeQueryService] Gemini unavailable:', err.message);
-        trace.push(`[${nowIso()}] LLM_CALL failed: ${err.message}`);
-        const errMsg = err.message || '';
+    trace.push(`[${nowIso()}] LLM_CALL start providers=gemini,local`);
+    const [geminiResult, localResult] = await Promise.allSettled([
+        (async () => {
+            const started = Date.now();
+            const text = await generateAnswer(query, context, plan);
+            return { text, durationMs: Date.now() - started };
+        })(),
+        (async () => {
+            const started = Date.now();
+            const text = await generateLocalAnswer(query, context, plan);
+            return { text, durationMs: Date.now() - started };
+        })(),
+    ]);
+
+    if (geminiResult.status === 'fulfilled') {
+        geminiAnswer = geminiResult.value.text;
+        geminiDurationMs = geminiResult.value.durationMs;
+        trace.push(`[${nowIso()}] LLM_CALL gemini success: answerLength=${geminiAnswer.length}, durationMs=${geminiDurationMs}`);
+        logger.info('[KnowledgeQueryService] GEMINI_ANSWER_TEXT:', geminiAnswer);
+    } else {
+        const err = geminiResult.reason;
+        const errMsg = err?.message || String(err || 'unknown Gemini error');
+        logger.warn('[KnowledgeQueryService] Gemini unavailable:', errMsg);
+        trace.push(`[${nowIso()}] LLM_CALL gemini failed: ${errMsg}`);
+
         if (errMsg.includes('key not found') || errMsg.includes('No API key') || errMsg.toLowerCase().includes('api key')) {
             noAiKey = true;
             aiErrorMessage = 'API ключ не настроен';
+            geminiErrorMessage = 'API ключ не настроен';
+        } else if (errMsg.toLowerCase().includes('high demand')) {
+            aiErrorMessage = 'Gemini перегружен, попробуйте повторить запрос';
+            geminiErrorMessage = 'Gemini перегружен, попробуйте повторить запрос';
         } else if (errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED') || errMsg.includes('ETIMEDOUT') || errMsg.includes('socket hang up')) {
             aiErrorMessage = 'Нет соединения с сервисом ИИ';
+            geminiErrorMessage = 'Нет соединения с сервисом ИИ';
         } else {
             aiErrorMessage = 'Ошибка сервиса ИИ';
+            geminiErrorMessage = 'Ошибка сервиса ИИ';
         }
-        answer = null;
     }
+
+    if (localResult.status === 'fulfilled') {
+        localAnswer = localResult.value.text;
+        localDurationMs = localResult.value.durationMs;
+        trace.push(`[${nowIso()}] LLM_CALL local success: answerLength=${localAnswer.length}, durationMs=${localDurationMs}`);
+        logger.info('[KnowledgeQueryService] LOCAL_LLM_ANSWER_TEXT:', localAnswer);
+    } else {
+        const err = localResult.reason;
+        const errMsg = err?.message || String(err || 'unknown Local LLM error');
+        logger.warn('[KnowledgeQueryService] Local LLM unavailable:', errMsg);
+        trace.push(`[${nowIso()}] LLM_CALL local failed: ${errMsg}`);
+
+        if (errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch failed') || errMsg.includes('HTTP 404')) {
+            localErrorMessage = 'Нет соединения с локальной LLM (LM Studio)';
+        } else if (errMsg.toLowerCase().includes('context length') || errMsg.toLowerCase().includes('n_keep')) {
+            localErrorMessage = 'Локальная LLM: контекст слишком длинный для текущей модели';
+        } else if (errMsg.toLowerCase().includes('garbled output')) {
+            localErrorMessage = 'Локальная LLM вернула поврежденный текст';
+        } else if (errMsg.toLowerCase().includes('empty answer')) {
+            localErrorMessage = 'Локальная LLM вернула пустой ответ';
+        } else {
+            localErrorMessage = 'Ошибка локальной LLM';
+        }
+    }
+
+    // Обратная совместимость: основным полем оставляем Gemini, fallback на local.
+    answer = geminiAnswer || localAnswer || null;
 
     const durationMs = Date.now() - startedAtMs;
     trace.push(`[${nowIso()}] DONE durationMs=${durationMs}`);
@@ -1143,16 +1405,34 @@ async function queryKnowledge(query) {
 
     // Cache set: сохраняем только успешные ответы
     if (answer) {
-        queryCache.set(query, { answer, sources, disclaimer, noAiKey: false, aiErrorMessage: null });
+        queryCache.set(query, {
+            answer,
+            geminiAnswer,
+            localAnswer,
+            sources,
+            disclaimer,
+            noAiKey,
+            aiErrorMessage,
+            geminiErrorMessage,
+            localErrorMessage,
+            geminiDurationMs,
+            localDurationMs,
+        });
     }
 
     return {
         answer,
+        geminiAnswer,
+        localAnswer,
         sources,
         disclaimer,
         searchedAt,
         noAiKey,
         aiErrorMessage,
+        geminiErrorMessage,
+        localErrorMessage,
+        geminiDurationMs,
+        localDurationMs,
         startedAt,
         finishedAt: nowIso(),
         durationMs,
