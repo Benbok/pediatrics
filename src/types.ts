@@ -978,6 +978,7 @@ declare global {
       closeApp: () => void;
       openFile: (options?: any) => Promise<{ canceled: boolean; filePaths: string[] }>;
       readTextFile: (filePath: string) => Promise<string>;
+      getFileSize: (filePath: string) => Promise<number>;
       createBackup: () => Promise<{ success: boolean; path?: string; error?: string }>;
 
       // CACHE MANAGEMENT API
@@ -1260,9 +1261,10 @@ declare global {
 
       // RAG AI ASSISTANT API
       rag: {
-        query: (params: { query: string; diseaseId: number }) => Promise<RagQueryResult>;
-        stream: (params: { query: string; diseaseId: number }) => void;
+        query: (params: { query: string; diseaseId: number; history?: { q: string; a: string }[] }) => Promise<RagQueryResult>;
+        stream: (params: { query: string; diseaseId: number; history?: { q: string; a: string }[] }) => void;
         reindex: (params: { diseaseId: number }) => Promise<RagReindexResult>;
+        getLast: (params: { diseaseId: number }) => Promise<RagCachedEntry | null>;
         onToken: (callback: (event: any, token: string) => void) => () => void;
         onDone: (callback: (event: any, data: { sources: RagSource[]; context: string }) => void) => () => void;
         onError: (callback: (event: any, error: string) => void) => () => void;
@@ -1327,6 +1329,14 @@ export interface RagQueryResult {
   sources?: RagSource[];
   context?: string;
   error?: string;
+}
+
+export interface RagCachedEntry {
+  query: string;
+  answer: string;
+  sources: RagSource[];
+  context: string;
+  cachedAt: string;
 }
 
 export interface RagReindexResult {

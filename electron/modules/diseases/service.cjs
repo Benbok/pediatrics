@@ -15,6 +15,7 @@ const { logDegradation } = require('../../logger.cjs');
 const { normalizeDiseaseData, resolveTestNameFromCatalog, normalizeTestName } = require('../../utils/diseaseNormalization.cjs');
 const { CacheService } = require('../../services/cacheService.cjs');
 const { ChunkIndexService } = require('../../services/chunkIndexService.cjs');
+const chunkEnhancer = require('../../services/chunkEnhancerService.cjs');
 const {
     SYMPTOM_WEIGHT_PATHOGNOMONIC,
     SYMPTOM_WEIGHT_HIGH,
@@ -1166,6 +1167,18 @@ const DiseaseService = {
     async uploadGuidelineSingle(diseaseId, pdfPath, jobId = null) {
         logger.info(`[DiseaseService] Processing PDF: ${pdfPath} for disease ${diseaseId}`);
 
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+        try {
+            const stat = fs.statSync(pdfPath);
+            if (stat.size > MAX_FILE_SIZE) {
+                const sizeMb = (stat.size / 1024 / 1024).toFixed(1);
+                throw new Error(`Файл слишком большой: ${sizeMb} МБ (максимум 10 МБ): ${path.basename(pdfPath)}`);
+            }
+        } catch (err) {
+            if (err.message.startsWith('Файл слишком большой')) throw err;
+            throw new Error(`Не удалось проверить файл: ${err.message}`);
+        }
+
         try {
             // 1. Get Metadata (title, codes, symptoms) - Fast
             if (jobId) sendProgressEvent(jobId, { progress: 10, step: 'Extracting metadata' });
@@ -1185,10 +1198,21 @@ const DiseaseService = {
             const { stdout: legacyChunksStdout } = await execPromise(`python "${legacyChunksScript}" "${pdfPath}"`);
             const legacyChunks = JSON.parse(legacyChunksStdout);
 
-            // Clinical chunks with type + overlap (for CDSS search)
+            // Clinical chunks: extract sections (cross-page merge), then char-split WITHOUT LLM.
+            // LLM enrichment (summary/keywords) runs in background after DB save to avoid blocking upload.
             const clinicalChunksScript = path.join(process.cwd(), 'scripts', 'create_clinical_chunks.py');
-            const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${pdfPath}" 1400 250`);
-            const clinicalChunks = JSON.parse(clinicalChunksStdout);
+            let clinicalChunks;
+            let rawSectionsForEnrichment = null;
+            try {
+                const { stdout: sectionsStdout } = await execPromise(`python "${clinicalChunksScript}" "${pdfPath}" --sections-only`);
+                rawSectionsForEnrichment = JSON.parse(sectionsStdout);
+                // No LLM here — keeps upload fast and non-blocking
+                clinicalChunks = await chunkEnhancer.processSections(rawSectionsForEnrichment, { enableLlm: false });
+            } catch (enhanceErr) {
+                logger.warn('[DiseaseService] Section-based chunking failed, falling back:', enhanceErr.message);
+                const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${pdfPath}" 1400 250`);
+                clinicalChunks = JSON.parse(clinicalChunksStdout);
+            }
 
             // 3. Copy file to permanent storage
             if (jobId) sendProgressEvent(jobId, { progress: 70, step: 'Saving file' });
@@ -1241,7 +1265,8 @@ const DiseaseService = {
                     const text = (chunk && chunk.text) ? String(chunk.text).trim() : '';
                     if (!text) continue;
 
-                    const page = Number(chunk.page) || null;
+                    const pageStart = Number(chunk.pageStart || chunk.page) || null;
+                    const pageEnd = Number(chunk.pageEnd || chunk.page) || null;
                     const sectionTitle = (chunk && chunk.sectionTitle) ? String(chunk.sectionTitle).trim() : null;
                     const type = (chunk && chunk.type) ? String(chunk.type).trim() : 'other';
 
@@ -1273,8 +1298,8 @@ const DiseaseService = {
                         guidelineId: guideline.id,
                         diseaseId: Number(diseaseId),
                         type,
-                        pageStart: page,
-                        pageEnd: page,
+                        pageStart,
+                        pageEnd,
                         sectionTitle,
                         text,
                         embeddingJson,
@@ -1326,6 +1351,11 @@ const DiseaseService = {
             // Update disease metadata ONLY if fields are empty (prevent overwriting existing data)
             await this._updateDiseaseMetadataIfEmpty(diseaseId, metadata);
 
+            // 6. Background LLM enrichment — adds @@SUMMARY/@@KEYWORDS to chunks after upload completes
+            if (rawSectionsForEnrichment) {
+                _scheduleEnrichment(guideline.id);
+            }
+
             return guideline;
         } catch (error) {
             logger.error('[DiseaseService] Failed to process/upload guideline:', error);
@@ -1354,8 +1384,19 @@ const DiseaseService = {
 
             try {
                 const clinicalChunksScript = path.join(process.cwd(), 'scripts', 'create_clinical_chunks.py');
-                const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${g.pdfPath}" 1400 250`);
-                const clinicalChunks = JSON.parse(clinicalChunksStdout);
+
+                // Section-based char split (no LLM) — fast rebuild.
+                // LLM enrichment triggered in background after each guideline is saved.
+                let clinicalChunks;
+                try {
+                    const { stdout: sectionsStdout } = await execPromise(`python "${clinicalChunksScript}" "${g.pdfPath}" --sections-only`);
+                    const rawSections = JSON.parse(sectionsStdout);
+                    clinicalChunks = await chunkEnhancer.processSections(rawSections, { enableLlm: false });
+                } catch (enhanceErr) {
+                    logger.warn(`[DiseaseService] Section chunking failed for guideline ${g.id}, falling back:`, enhanceErr.message);
+                    const { stdout: clinicalChunksStdout } = await execPromise(`python "${clinicalChunksScript}" "${g.pdfPath}" 1400 250`);
+                    clinicalChunks = JSON.parse(clinicalChunksStdout);
+                }
 
                 await prisma.guidelineChunk.deleteMany({
                     where: { guidelineId: g.id }
@@ -1370,7 +1411,8 @@ const DiseaseService = {
                     const text = (chunk && chunk.text) ? String(chunk.text).trim() : '';
                     if (!text) continue;
 
-                    const page = Number(chunk.page) || null;
+                    const pageStart = Number(chunk.pageStart || chunk.page) || null;
+                    const pageEnd = Number(chunk.pageEnd || chunk.page) || null;
                     const sectionTitle = (chunk && chunk.sectionTitle) ? String(chunk.sectionTitle).trim() : null;
                     const type = (chunk && chunk.type) ? String(chunk.type).trim() : 'other';
 
@@ -1390,8 +1432,8 @@ const DiseaseService = {
                         guidelineId: g.id,
                         diseaseId: Number(g.diseaseId),
                         type,
-                        pageStart: page,
-                        pageEnd: page,
+                        pageStart,
+                        pageEnd,
                         sectionTitle,
                         text,
                         embeddingJson,
@@ -1401,6 +1443,8 @@ const DiseaseService = {
 
                 if (rows.length > 0) {
                     await prisma.guidelineChunk.createMany({ data: rows });
+                    // Trigger background LLM enrichment (non-blocking, serialised)
+                    _scheduleEnrichment(g.id);
                 }
             } catch (error) {
                 logger.warn(`[DiseaseService] Failed to reindex guideline ${g.id}:`, error.message);
@@ -1820,5 +1864,78 @@ const DiseaseService = {
         });
     }
 };
+
+/**
+ * Background LLM enrichment: adds @@SUMMARY/@@KEYWORDS to existing chunks for a guideline.
+ * Runs AFTER the guideline is already saved, so it never blocks the upload or PDF search.
+ * Skips chunks that are already enriched (start with @@SUMMARY).
+ */
+async function _enrichChunksBackground(guidelineId) {
+    logger.info(`[DiseaseService] Background LLM enrichment started for guideline ${guidelineId}`);
+
+    const chunks = await prisma.guidelineChunk.findMany({
+        where: { guidelineId },
+        select: { id: true, text: true },
+    });
+
+    let enriched = 0;
+    for (const chunk of chunks) {
+        if (!chunk.text || chunk.text.startsWith('@@SUMMARY')) continue;
+
+        try {
+            const meta = await chunkEnhancer.enrichSingleChunk(chunk.text);
+            if (meta.summary || meta.keywords) {
+                const enrichedText = chunkEnhancer.formatChunkWithMeta(chunk.text, meta.summary, meta.keywords);
+                await prisma.guidelineChunk.update({
+                    where: { id: chunk.id },
+                    data: { text: enrichedText },
+                });
+                enriched++;
+            }
+        } catch (err) {
+            logger.warn(`[DiseaseService] Enrichment failed for chunk ${chunk.id}: ${err.message}`);
+            // Non-fatal: chunk stays without enrichment
+        }
+    }
+
+    if (enriched > 0) {
+        await ChunkIndexService.rebuildFts().catch(() => {});
+    }
+
+    logger.info(`[DiseaseService] Background LLM enrichment done: ${enriched}/${chunks.length} chunks for guideline ${guidelineId}`);
+}
+
+// --- Serial enrichment queue -----------------------------------------------
+// LM Studio is single-threaded; concurrent _enrichChunksBackground calls from
+// multiple disease uploads would all fail or starve. Queue ensures they run one
+// at a time in FIFO order.
+const _enrichQueue = [];
+let _enrichWorkerRunning = false;
+
+function _scheduleEnrichment(guidelineId) {
+    _enrichQueue.push(guidelineId);
+    if (!_enrichWorkerRunning) {
+        _enrichWorkerRunning = true;
+        setImmediate(_runEnrichWorker);
+    }
+}
+
+async function _runEnrichWorker() {
+    while (_enrichQueue.length > 0) {
+        const guidelineId = _enrichQueue.shift();
+        try {
+            await _enrichChunksBackground(guidelineId);
+        } catch (err) {
+            logger.warn(`[DiseaseService] Enrichment worker error for guideline ${guidelineId}:`, err.message);
+        }
+    }
+    _enrichWorkerRunning = false;
+    // Guard against race: a push can arrive between the while-exit and the flag reset
+    if (_enrichQueue.length > 0) {
+        _enrichWorkerRunning = true;
+        setImmediate(_runEnrichWorker);
+    }
+}
+// ---------------------------------------------------------------------------
 
 module.exports = { DiseaseService, DiseaseSchema };

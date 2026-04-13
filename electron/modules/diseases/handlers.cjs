@@ -7,6 +7,12 @@ const { CacheService } = require('../../services/cacheService.cjs');
 const { DiseaseValidator } = require('./validator.cjs');
 const { z } = require('zod');
 
+const RAG_LAST_CACHE_PREFIX = 'rag_last_answer_';
+
+function getRagLastCacheKey(diseaseId) {
+    return `${RAG_LAST_CACHE_PREFIX}${Number(diseaseId)}`;
+}
+
 function safeJsonParse(value, defaultValue = []) {
     if (!value || value === null) return defaultValue;
     if (typeof value !== 'string') return defaultValue;
@@ -76,6 +82,7 @@ const setupDiseaseHandlers = () => {
             CacheService.invalidate('diseases', 'diagnostic_test_catalog');
             if (result.id) {
                 CacheService.invalidate('diseases', `id_${result.id}`); // Конкретное заболевание
+                CacheService.invalidate('diseases', getRagLastCacheKey(result.id));
             }
 
             return result;
@@ -96,6 +103,7 @@ const setupDiseaseHandlers = () => {
         CacheService.invalidate('visits', 'all_diagnostic_tests');
         CacheService.invalidate('diseases', 'diagnostic_test_catalog');
         CacheService.invalidate('diseases', `id_${id}`);
+        CacheService.invalidate('diseases', getRagLastCacheKey(id));
 
         return true;
     }));
@@ -106,6 +114,7 @@ const setupDiseaseHandlers = () => {
 
         // Инвалидируем кеш заболевания (guidelines изменились)
         CacheService.invalidate('diseases', `id_${diseaseId}`);
+        CacheService.invalidate('diseases', getRagLastCacheKey(diseaseId));
 
         return guideline;
     }));
@@ -116,6 +125,7 @@ const setupDiseaseHandlers = () => {
 
         // Инвалидируем кеш заболевания
         CacheService.invalidate('diseases', `id_${diseaseId}`);
+        CacheService.invalidate('diseases', getRagLastCacheKey(diseaseId));
 
         return result;
     }));
@@ -149,6 +159,7 @@ const setupDiseaseHandlers = () => {
         // Инвалидируем кеш заболевания
         if (guideline && guideline.diseaseId) {
             CacheService.invalidate('diseases', `id_${guideline.diseaseId}`);
+            CacheService.invalidate('diseases', getRagLastCacheKey(guideline.diseaseId));
         }
 
         return guideline;
@@ -163,6 +174,7 @@ const setupDiseaseHandlers = () => {
         // Для простоты инвалидируем все - можно оптимизировать позже
         if (guideline && guideline.diseaseId) {
             CacheService.invalidate('diseases', `id_${guideline.diseaseId}`);
+            CacheService.invalidate('diseases', getRagLastCacheKey(guideline.diseaseId));
         }
 
         return true;
@@ -276,9 +288,30 @@ const setupDiseaseHandlers = () => {
     // ============= RAG AI ASSISTANT HANDLERS =============
     const { ragQuery, ragQueryStream, reindexGuidelineEmbeddings } = require('../../services/ragPipelineService.cjs');
 
-    ipcMain.handle('rag:query', ensureAuthenticated(async (_, { query, diseaseId }) => {
+    ipcMain.handle('rag:get-last', ensureAuthenticated(async (_, { diseaseId }) => {
+        const normalizedDiseaseId = Number(diseaseId);
+        if (!Number.isFinite(normalizedDiseaseId) || normalizedDiseaseId <= 0) {
+            return null;
+        }
+        return CacheService.get('diseases', getRagLastCacheKey(normalizedDiseaseId));
+    }));
+
+    ipcMain.handle('rag:query', ensureAuthenticated(async (_, { query, diseaseId, history }) => {
         try {
-            const result = await ragQuery({ query, diseaseId: Number(diseaseId) });
+            const normalizedDiseaseId = Number(diseaseId);
+            const cacheKey = getRagLastCacheKey(normalizedDiseaseId);
+
+            // Храним только последний ответ: новый запрос сбрасывает предыдущий кеш.
+            CacheService.invalidate('diseases', cacheKey);
+
+            const result = await ragQuery({ query, diseaseId: normalizedDiseaseId, history: Array.isArray(history) ? history : [] });
+            CacheService.set('diseases', cacheKey, {
+                query: String(query || ''),
+                answer: result.answer || '',
+                sources: Array.isArray(result.sources) ? result.sources : [],
+                context: result.context || '',
+                cachedAt: new Date().toISOString(),
+            });
             return { ok: true, ...result };
         } catch (err) {
             logger.error('[RAG] ragQuery error:', err);
@@ -286,15 +319,33 @@ const setupDiseaseHandlers = () => {
         }
     }));
 
-    ipcMain.on('rag:stream', async (event, { query, diseaseId }) => {
+    ipcMain.on('rag:stream', async (event, { query, diseaseId, history }) => {
         try {
+            const normalizedDiseaseId = Number(diseaseId);
+            const cacheKey = getRagLastCacheKey(normalizedDiseaseId);
+            let streamedAnswer = '';
+
+            // Храним только последний ответ: новый запрос сбрасывает предыдущий кеш.
+            CacheService.invalidate('diseases', cacheKey);
+
             const { sources, context } = await ragQueryStream({
                 query,
-                diseaseId: Number(diseaseId),
+                diseaseId: normalizedDiseaseId,
+                history: Array.isArray(history) ? history : [],
                 onToken: (token) => {
+                    streamedAnswer += String(token || '');
                     if (!event.sender.isDestroyed()) event.sender.send('rag:token', token);
                 },
             });
+
+            CacheService.set('diseases', cacheKey, {
+                query: String(query || ''),
+                answer: streamedAnswer.trim(),
+                sources: Array.isArray(sources) ? sources : [],
+                context: context || '',
+                cachedAt: new Date().toISOString(),
+            });
+
             if (!event.sender.isDestroyed()) event.sender.send('rag:done', { sources, context });
         } catch (err) {
             if (!event.sender.isDestroyed()) event.sender.send('rag:error', err.message);
@@ -303,9 +354,11 @@ const setupDiseaseHandlers = () => {
 
     ipcMain.handle('rag:reindex', ensureAuthenticated(async (event, { diseaseId }) => {
         try {
-            const result = await reindexGuidelineEmbeddings(Number(diseaseId), (done, total) => {
+            const normalizedDiseaseId = Number(diseaseId);
+            const result = await reindexGuidelineEmbeddings(normalizedDiseaseId, (done, total) => {
                 if (!event.sender.isDestroyed()) event.sender.send('rag:reindex:progress', { done, total });
             });
+            CacheService.invalidate('diseases', getRagLastCacheKey(normalizedDiseaseId));
             return { ok: true, ...result };
         } catch (err) {
             return { ok: false, error: err.message };

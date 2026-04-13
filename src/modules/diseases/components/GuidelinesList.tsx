@@ -177,12 +177,16 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                 return;
             }
 
-            const { validFilePaths, rejectedFiles: localRejected } = diseaseService.filterGuidelineUploadCandidates(selectedFilePaths, guidelines);
+            const { validFilePaths: sizedPaths, rejectedFiles: sizeRejected } =
+                await diseaseService.filterByFileSizeAsync(selectedFilePaths);
+            const { validFilePaths, rejectedFiles: localRejected } =
+                diseaseService.filterGuidelineUploadCandidates(sizedPaths, guidelines);
+            const allRejected = [...sizeRejected, ...localRejected];
 
-            setRejectedFiles(localRejected);
+            setRejectedFiles(allRejected);
 
-            if (localRejected.length > 0) {
-                showToast(`Отклонено файлов: ${localRejected.length}`, 'warning');
+            if (allRejected.length > 0) {
+                showToast(`Отклонено файлов: ${allRejected.length}`, 'warning');
             }
 
             if (validFilePaths.length === 0) {

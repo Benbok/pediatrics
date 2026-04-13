@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     closeApp: () => ipcRenderer.send('app-close'),
     openFile: (options) => ipcRenderer.invoke('dialog:open-file', options),
     readTextFile: (filePath) => ipcRenderer.invoke('file:read-text', filePath),
+    getFileSize: (filePath) => ipcRenderer.invoke('file:get-size', filePath),
 
     // AUTH API
     login: (credentials) => ipcRenderer.invoke('auth:login', credentials),
@@ -284,6 +285,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         query: (params) => ipcRenderer.invoke('rag:query', params),
         stream: (params) => ipcRenderer.send('rag:stream', params),
         reindex: (params) => ipcRenderer.invoke('rag:reindex', params),
+        getLast: (params) => ipcRenderer.invoke('rag:get-last', params),
         onToken: (callback) => {
             ipcRenderer.on('rag:token', callback);
             return () => ipcRenderer.removeListener('rag:token', callback);

@@ -1,5 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
-import { RagSource, RagQueryResult } from '../../../types';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { RagSource, RagQueryResult, RagCachedEntry } from '../../../types';
+
+interface HistoryTurn {
+    q: string;
+    a: string;
+}
 
 interface RagState {
     answer: string;
@@ -24,6 +29,43 @@ const INITIAL_STATE: RagState = {
 export function useRagQuery(diseaseId: number) {
     const [state, setState] = useState<RagState>(INITIAL_STATE);
     const cleanupRef = useRef<Array<() => void>>([]);
+    /** Накопленная история диалога. Сбрасывается при смене diseaseId или вызове clearHistory() */
+    const historyRef = useRef<HistoryTurn[]>([]);
+    /** Буфер потокового ответа — нужен для записи в историю после завершения */
+    const streamBufferRef = useRef('');
+    /** Вопрос текущего стримингового запроса — нужен для записи в историю */
+    const pendingQueryRef = useRef('');
+
+    // Сброс истории при смене заболевания
+    useEffect(() => {
+        historyRef.current = [];
+    }, [diseaseId]);
+
+    // Подтягиваем последний кешированный ответ для diseaseId.
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadCachedAnswer = async () => {
+            try {
+                const cached: RagCachedEntry | null = await window.electronAPI?.rag?.getLast?.({ diseaseId });
+                if (cancelled || !cached || !cached.answer) return;
+
+                setState({
+                    ...INITIAL_STATE,
+                    answer: cached.answer,
+                    sources: Array.isArray(cached.sources) ? cached.sources : [],
+                });
+            } catch {
+                // ignore cache restore errors
+            }
+        };
+
+        loadCachedAnswer();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [diseaseId]);
 
     const cleanup = useCallback(() => {
         cleanupRef.current.forEach(fn => fn());
@@ -31,14 +73,25 @@ export function useRagQuery(diseaseId: number) {
         window.electronAPI?.rag?.removeListeners();
     }, []);
 
+    const clearHistory = useCallback(() => {
+        historyRef.current = [];
+    }, []);
+
     const sendQuery = useCallback(async (query: string) => {
         if (!query.trim()) return;
         cleanup();
         setState({ ...INITIAL_STATE, loading: true });
         try {
-            const result: RagQueryResult = await window.electronAPI!.rag!.query({ query, diseaseId });
+            const result: RagQueryResult = await window.electronAPI!.rag!.query({
+                query,
+                diseaseId,
+                history: historyRef.current,
+            });
             if (result.ok) {
-                setState({ ...INITIAL_STATE, answer: result.answer ?? '', sources: result.sources ?? [] });
+                const answer = result.answer ?? '';
+                setState({ ...INITIAL_STATE, answer, sources: result.sources ?? [] });
+                // Записываем в историю
+                historyRef.current = [...historyRef.current, { q: query, a: answer }];
             } else {
                 setState({ ...INITIAL_STATE, error: result.error ?? 'Неизвестная ошибка' });
             }
@@ -52,15 +105,21 @@ export function useRagQuery(diseaseId: number) {
         cleanup();
         setState({ ...INITIAL_STATE, streaming: true });
 
-        let buffer = '';
+        streamBufferRef.current = '';
+        pendingQueryRef.current = query;
 
         const offToken = window.electronAPI!.rag!.onToken((_: any, token: string) => {
-            buffer += token;
-            setState(prev => ({ ...prev, answer: buffer }));
+            streamBufferRef.current += token;
+            setState(prev => ({ ...prev, answer: streamBufferRef.current }));
         });
 
         const offDone = window.electronAPI!.rag!.onDone((_: any, data: { sources: RagSource[]; context: string }) => {
             setState(prev => ({ ...prev, streaming: false, sources: data.sources }));
+            // Записываем в историю по завершении стрима
+            const completedAnswer = streamBufferRef.current;
+            if (completedAnswer && pendingQueryRef.current) {
+                historyRef.current = [...historyRef.current, { q: pendingQueryRef.current, a: completedAnswer }];
+            }
             cleanup();
         });
 
@@ -71,7 +130,7 @@ export function useRagQuery(diseaseId: number) {
 
         cleanupRef.current = [offToken, offDone, offError];
 
-        window.electronAPI!.rag!.stream({ query, diseaseId });
+        window.electronAPI!.rag!.stream({ query, diseaseId, history: historyRef.current });
     }, [diseaseId, cleanup]);
 
     const abortStream = useCallback(() => {
@@ -117,5 +176,7 @@ export function useRagQuery(diseaseId: number) {
         abortStream,
         reindex,
         reset,
+        clearHistory,
+        historyLength: historyRef.current.length,
     };
 }

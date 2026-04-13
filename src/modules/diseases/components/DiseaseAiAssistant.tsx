@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Send, Square, RefreshCcw, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Bot, Send, Square, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '../../../components/ui/Button';
 import { useRagQuery } from '../hooks/useRagQuery';
 import { RagSource } from '../../../types';
@@ -8,6 +10,68 @@ import { clsx } from 'clsx';
 interface Props {
     diseaseId: number;
 }
+
+const MarkdownAnswer: React.FC<{ text: string }> = ({ text }) => (
+    <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+            h1: ({ children }) => (
+                <h1 className="text-base font-bold text-gray-900 dark:text-gray-100 mt-4 mb-1 first:mt-0">{children}</h1>
+            ),
+            h2: ({ children }) => (
+                <h2 className="text-sm font-bold text-gray-800 dark:text-gray-100 mt-3 mb-1 first:mt-0">{children}</h2>
+            ),
+            h3: ({ children }) => (
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mt-2 mb-0.5 first:mt-0">{children}</h3>
+            ),
+            p: ({ children }) => (
+                <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed mb-2 last:mb-0">{children}</p>
+            ),
+            ul: ({ children }) => (
+                <ul className="list-disc list-outside pl-4 mb-2 space-y-0.5">{children}</ul>
+            ),
+            ol: ({ children }) => (
+                <ol className="list-decimal list-outside pl-4 mb-2 space-y-0.5">{children}</ol>
+            ),
+            li: ({ children }) => (
+                <li className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed pl-0.5">{children}</li>
+            ),
+            strong: ({ children }) => (
+                <strong className="font-semibold text-gray-900 dark:text-gray-100">{children}</strong>
+            ),
+            em: ({ children }) => (
+                <em className="italic text-gray-600 dark:text-gray-400">{children}</em>
+            ),
+            blockquote: ({ children }) => (
+                <blockquote className="border-l-2 border-indigo-300 dark:border-indigo-700 pl-3 my-2 text-gray-600 dark:text-gray-400 italic">
+                    {children}
+                </blockquote>
+            ),
+            code: ({ children, className }) => {
+                const isBlock = className?.includes('language-');
+                return isBlock
+                    ? <code className="block bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2 text-xs font-mono text-gray-700 dark:text-gray-300 overflow-auto my-2">{children}</code>
+                    : <code className="bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 text-xs font-mono text-indigo-700 dark:text-indigo-300">{children}</code>;
+            },
+            hr: () => (
+                <hr className="my-3 border-gray-200 dark:border-gray-700" />
+            ),
+            table: ({ children }) => (
+                <div className="overflow-x-auto my-2">
+                    <table className="min-w-full text-xs border-collapse">{children}</table>
+                </div>
+            ),
+            th: ({ children }) => (
+                <th className="border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-2 py-1 text-left font-semibold text-gray-700 dark:text-gray-300">{children}</th>
+            ),
+            td: ({ children }) => (
+                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1 text-gray-700 dark:text-gray-300">{children}</td>
+            ),
+        }}
+    >
+        {text}
+    </ReactMarkdown>
+);
 
 function SourceItem({ source }: { source: RagSource }) {
     const title = source.sectionTitle ?? 'Раздел документа';
@@ -52,12 +116,11 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
         loading,
         streaming,
         error,
-        reindexing,
-        reindexProgress,
         sendQueryStream,
         abortStream,
-        reindex,
         reset,
+        clearHistory,
+        historyLength,
     } = useRagQuery(diseaseId);
 
     // Auto-scroll answer while streaming
@@ -93,20 +156,6 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">ИИ помощник</span>
                     <span className="text-xs text-gray-400 dark:text-gray-500">— отвечает только на основе прикреплённых документов</span>
                 </div>
-                <button
-                    onClick={() => reindex()}
-                    disabled={reindexing || isBusy}
-                    title="Переиндексировать чанки через LM Studio embeddings (опционально)"
-                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-40 transition-colors"
-                >
-                    <RefreshCcw className={clsx('h-3 w-3', reindexing && 'animate-spin')} />
-                    {reindexing
-                        ? reindexProgress
-                            ? `${reindexProgress.done}/${reindexProgress.total}`
-                            : 'Индексация...'
-                        : 'Переиндекс.'
-                    }
-                </button>
             </div>
 
             {/* Answer area */}
@@ -134,8 +183,8 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                 )}
 
                 {answer && (
-                    <div className="whitespace-pre-wrap">
-                        {answer}
+                    <div>
+                        <MarkdownAnswer text={answer} />
                         {streaming && (
                             <span className="inline-block w-1.5 h-4 ml-0.5 bg-indigo-500 animate-pulse rounded-sm align-middle" />
                         )}
@@ -216,12 +265,23 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
             </div>
 
             {answer && !streaming && (
-                <button
-                    onClick={() => { reset(); setInputValue(''); setSourcesOpen(false); }}
-                    className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 self-start transition-colors"
-                >
-                    Очистить
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => { reset(); setInputValue(''); setSourcesOpen(false); }}
+                        className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    >
+                        Очистить ответ
+                    </button>
+                    {historyLength > 0 && (
+                        <button
+                            onClick={() => { clearHistory(); reset(); setInputValue(''); setSourcesOpen(false); }}
+                            className="text-xs text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                            title="Сбросить историю диалога"
+                        >
+                            Очистить историю ({historyLength})
+                        </button>
+                    )}
+                </div>
             )}
         </div>
     );

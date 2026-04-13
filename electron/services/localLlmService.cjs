@@ -23,7 +23,7 @@ function getBaseUrl() {
 }
 
 function getRequestTimeoutMs(messages, options = {}) {
-    if (Number.isFinite(options.timeoutMs) && options.timeoutMs >= 10_000) {
+    if (Number.isFinite(options.timeoutMs) && options.timeoutMs >= 3_000) {
         return Math.floor(options.timeoutMs);
     }
 
@@ -159,6 +159,20 @@ function extractAssistantText(payload) {
     return payload?.choices?.[0]?.message?.content || payload?.choices?.[0]?.text || '';
 }
 
+function extractAssistantReasoning(payload) {
+    return payload?.choices?.[0]?.message?.reasoning_content || '';
+}
+
+function buildNoReasoningMessages(messages) {
+    return [
+        {
+            role: 'system',
+            content: 'Отвечай только итоговым ответом. Не выводи reasoning, thinking process, chain-of-thought или внутренние рассуждения.',
+        },
+        ...messages,
+    ];
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -291,12 +305,47 @@ async function generate(messages, options = {}, onToken) {
             }
 
             const payload = await fallbackRes.json();
-            const content = String(extractAssistantText(payload) || '').trim();
+            let content = String(extractAssistantText(payload) || '').trim();
+            const reasoning = String(extractAssistantReasoning(payload) || '').trim();
+
+            // Некоторые reasoning-модели (например, gemma) могут вернуть только reasoning_content.
+            // Делаем ещё одну попытку с явным запретом рассуждений.
+            if (!content && reasoning && !abortController.signal.aborted) {
+                logger.warn(`[LocalLLM] Reasoning-only response, retrying with no-reasoning instruction | genId=${genId}`);
+                const noReasoningMessages = buildNoReasoningMessages(messages);
+                const noReasoningBody = buildCompletionBody(
+                    noReasoningMessages,
+                    { ...options, temperature: 0, forceNonStream: true },
+                    resolvedModel,
+                    false
+                );
+
+                const finalRes = await fetch(`${baseUrl}/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(noReasoningBody),
+                    signal: abortController.signal,
+                });
+
+                if (!finalRes.ok) {
+                    const finalErrText = await finalRes.text().catch(() => '');
+                    logger.error(`[LocalLLM] No-reasoning retry failed HTTP ${finalRes.status}: ${finalErrText}`);
+                    const compactErr = String(finalErrText || '').replace(/\s+/g, ' ').trim();
+                    const details = compactErr ? `: ${compactErr.slice(0, 300)}` : '';
+                    return { status: 'error', error: `LM Studio HTTP ${finalRes.status}${details}` };
+                }
+
+                const finalPayload = await finalRes.json();
+                content = String(extractAssistantText(finalPayload) || '').trim();
+            }
+
             if (content) {
                 tokenCount = 1;
                 if (typeof onToken === 'function') {
                     onToken(content);
                 }
+            } else {
+                return { status: 'error', error: 'LM Studio returned empty assistant content (reasoning-only or blank response)' };
             }
         }
 

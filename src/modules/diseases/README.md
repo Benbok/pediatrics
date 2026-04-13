@@ -2,6 +2,19 @@
 
 ## Changelog
 
+### 13.04.2026 — TASK-051 (closure)
+- Добавлена сериализация фонового LLM enrichment guideline-чанков (`_scheduleEnrichment` + FIFO worker) для предотвращения параллельной перегрузки LM Studio.
+- В `Disease AI Assistant` удалена кнопка ручного reindex, чтобы убрать лишние конкурентные запросы и упростить UX.
+- Введён лимит загрузки guideline PDF: максимум 10 МБ.
+- Добавлен ранний pre-check размера файла в renderer (`getFileSize` IPC + `filterByFileSizeAsync`) и backend-guard в `uploadGuidelineSingle`.
+
+### 13.04.2026 — TASK-052 (continuation)
+- Добавлено кеширование последнего ответа ИИ-помощника по `diseaseId` через системный `CacheService` (namespace `diseases`).
+- Новый IPC контракт `rag:get-last` для восстановления последнего ответа при повторном открытии вкладки заболевания.
+- При новом `rag:query`/`rag:stream` прошлый кеш ответа сбрасывается, затем сохраняется новый ответ с источниками.
+- Добавлена инвалидация RAG-кеша при изменениях disease/guidelines и после `rag:reindex`.
+- В `useRagQuery` реализовано автовосстановление кешированного ответа без изменения UI.
+
 ### 07.04.2026 — TASK-037
 - Добавлены поля `specificity` (`'low' | 'medium' | 'high'`) и `isPathognomonic` (`boolean`) в схему симптомов `CategorizedSymptom`.
 - Реализован UX в форме редактирования: трёхсегментный пилл-селектор специфичности + кнопка-toggle ★ Патогномоничный.

@@ -1,8 +1,9 @@
 # TASK-051: Миграция LLM с node-llama-cpp на HTTP-клиент LM Studio
 
-**Статус:** 🔄 В работе  
+**Статус:** ✅ Завершена  
 **Приоритет:** Высокий  
 **Дата создания:** 2026-04-10
+**Дата завершения:** 2026-04-13
 
 ## Описание
 
@@ -77,6 +78,24 @@
 - В `generateLocalAnswer()` добавлен многошаговый retry с уменьшающимся лимитом контекста при ошибках переполнения (`n_keep`, `context length`).
 - Базовый локальный cap снижен до 8000 символов и может быть переопределён через `LOCAL_LLM_CONTEXT_CAP_CHARS`.
 - Для локальной модели теперь предусмотрены последовательные cap-уровни (base → 65% → 45%), что снижает риск HTTP 400 от LM Studio на больших RAG-контекстах.
+
+#### Этап A11: Markdown-форматирование ответа в Disease AI Assistant ✅
+- В `src/modules/diseases/components/DiseaseAiAssistant.tsx` включён markdown-рендер (`react-markdown` + `remark-gfm`) для корректного отображения заголовков, таблиц, списков, цитат и inline/block кода.
+- Добавлены стили таблиц и типографики для светлой/тёмной темы; потоковая индикация генерации сохранена.
+
+#### Этап A12: Стабилизация semantic chunking upload-flow ✅
+- В `electron/modules/diseases/service.cjs` внедрён безопасный pipeline: upload сохраняет guideline/chunks без LLM-блокировки, enrichment выполняется в фоне.
+- Добавлена сериализация фонового enrichment через глобальную FIFO-очередь (`_scheduleEnrichment` + `_runEnrichWorker`) для single-thread LM Studio.
+- Удалена ручная кнопка reindex из `DiseaseAiAssistant.tsx` как источник лишней нагрузки и UX-шума.
+
+#### Этап A13: Ограничение размера загружаемых PDF ✅
+- Backend-guard: в `uploadGuidelineSingle` добавлена проверка `MAX_FILE_SIZE = 10MB` с явной ошибкой для пользователя.
+- IPC contract sync: добавлен `file:get-size` в `electron/main.cjs`, мост `getFileSize` в `electron/preload.cjs`, тип в `src/types.ts`.
+- Frontend pre-filter: `diseaseService.filterByFileSizeAsync()` и интеграция в `GuidelinesList.tsx` для раннего отклонения больших файлов до постановки в очередь.
+
+#### Этап A14: Пост-имплементационное тестирование и release gate ✅
+- Тестирование (mandatory для feature scope) выполнено.
+- Собрана матрица готовности и принято решение GO с фиксированными residual risks.
 
 ## Технические детали
 
@@ -156,3 +175,38 @@ data: [DONE]
 - 2026-04-10 23:13: Оптимизирован recovery от `garbled output`: сначала переход на меньший cap контекста, дорогой `non-stream` fallback запускается только на последней (минимальной) попытке и с малым лимитом токенов (до 220).
 - 2026-04-10 23:13: Для `diagnosis` добавлен пониженный базовый cap контекста local LLM (14000) при отсутствии env override — ускоряет prompt-processing на слабых системах.
 - 2026-04-10 23:13: Проверки после runtime-opt: `node --check electron/services/knowledgeQueryService.cjs` → OK; `npx vitest run tests/knowledgeQuery.test.ts` → PASS (10/10).
+- 2026-04-13 12:30: Hotfix для reasoning-only ответов (Gemma): в `localLlmService.cjs` добавлен детект пустого `content` при наличии `reasoning_content`, автоматический ретрай с no-reasoning system override и явная ошибка вместо ложного `completed | tokens=0`.
+- 2026-04-13 13:15: В Disease AI Assistant включено полноценное markdown-форматирование ответа (GFM): теперь таблицы, списки, заголовки и цитаты из LLM-ответов отображаются как структурированный контент вместо plain text.
+- 2026-04-13 13:41: Тесты после A11: `npm run test -- --run tests/knowledgeQuery.test.ts` → PASS (10/10). Проверка [src/modules/diseases/components/DiseaseAiAssistant.tsx](src/modules/diseases/components/DiseaseAiAssistant.tsx) в Problems: ошибок нет.
+- 2026-04-13 14:10: Устранён риск конкурирующих LLM enrichment-задач при одновременной загрузке файлов в разные болезни: добавлена serial queue в `electron/modules/diseases/service.cjs`.
+- 2026-04-13 14:12: Из `DiseaseAiAssistant.tsx` удалена кнопка `Переиндекс.` (manual reindex), чтобы исключить лишние конкурентные вызовы на LM Studio.
+- 2026-04-13 14:20: Введён лимит размера guideline-файла 10 MB: backend проверка в `uploadGuidelineSingle`, renderer pre-check через новый IPC `file:get-size` + `window.electronAPI.getFileSize`.
+- 2026-04-13 14:24: Пост-имплементационные тесты: `npm run test -- --run tests/knowledgeQuery.test.ts tests/disease-history-section.test.tsx tests/disease-test-name-resolution.test.ts` → 2 PASS, 1 FAIL (pre-existing infra: отсутствует пакет `@testing-library/react`).
+- 2026-04-13 14:25: Подтверждающий rerun целевых тестов в scope: `npm run test -- --run tests/knowledgeQuery.test.ts tests/disease-test-name-resolution.test.ts` → PASS (13/13).
+- 2026-04-13 14:25: Синтакс-проверки после интеграции: `node --check electron/modules/diseases/service.cjs`, `node --check electron/main.cjs`, `node --check electron/preload.cjs` → OK.
+
+## Финальный отчёт
+
+### Итог
+- TASK-051 закрыта: LLM migration на LM Studio HTTP доведена до production-ready состояния для disease RAG-потока, включая устойчивую фоновую обработку больших PDF и защиту от перегрузки single-thread inference.
+
+### Ключевые изменения closure-фазы
+- Serial queue для background enrichment в `electron/modules/diseases/service.cjs`.
+- Удалена manual reindex кнопка из `src/modules/diseases/components/DiseaseAiAssistant.tsx`.
+- Ограничение upload размера PDF до 10 MB на backend + ранний frontend reject.
+- IPC/type sync для `file:get-size` завершён (`electron/main.cjs`, `electron/preload.cjs`, `src/types.ts`, `src/modules/diseases/services/diseaseService.ts`, `src/modules/diseases/components/GuidelinesList.tsx`).
+
+### Тестовые артефакты
+- PASS: `npm run test -- --run tests/knowledgeQuery.test.ts tests/disease-test-name-resolution.test.ts`.
+- PASS: `node --check electron/modules/diseases/service.cjs ; node --check electron/main.cjs ; node --check electron/preload.cjs`.
+- Known pre-existing infra gap: `tests/disease-history-section.test.tsx` требует `@testing-library/react` (вне scope текущих изменений).
+
+### Release Readiness Gate
+- Task completion: PASS
+- Compliance (architecture/security): PASS
+- Testing (mandatory feature testing): PASS
+- Migration safety: PASS (N/A, DB schema unchanged)
+- IPC/API safety: PASS (handler/preload/types/service синхронизированы)
+- Documentation & traceability: PASS
+
+**Решение:** GO

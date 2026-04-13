@@ -195,6 +195,57 @@ def create_clinical_chunks(pdf_path: str, chunk_size: int = 700, overlap: int = 
     return out
 
 
+def create_sections_only(pdf_path: str):
+    """Extract full sections from PDF without character splitting.
+
+    Sections with the same title on consecutive pages are merged.
+    Output designed for downstream LLM-based semantic chunking (chunkEnhancerService).
+
+    Output format:
+    [{"pageStart": 5, "pageEnd": 7, "sectionTitle": "...", "type": "...", "text": "...", "evidenceLevel": "..."}]
+    """
+    if not os.path.exists(pdf_path):
+        return {"error": f"File not found: {pdf_path}"}
+
+    raw_sections = []
+    with open(pdf_path, 'rb') as pdf_file:
+        reader = PyPDF2.PdfReader(pdf_file)
+        for page_num, page in enumerate(reader.pages, start=1):
+            raw = page.extract_text() or ''
+            text = normalize_text(raw)
+            if not text:
+                continue
+
+            for section_title, section_text in extract_sections_from_page(text):
+                section_type = classify_section(section_title or '')
+                evidence = extract_evidence_level(section_text)
+                raw_sections.append({
+                    'pageStart': page_num,
+                    'pageEnd': page_num,
+                    'sectionTitle': section_title or f"Страница {page_num}",
+                    'type': section_type,
+                    'text': section_text,
+                    'evidenceLevel': evidence,
+                })
+
+    # Merge consecutive sections with the same title (spanning multiple pages)
+    if not raw_sections:
+        return raw_sections
+
+    merged = [raw_sections[0].copy()]
+    for s in raw_sections[1:]:
+        prev = merged[-1]
+        if s['sectionTitle'] == prev['sectionTitle']:
+            prev['text'] += '\n\n' + s['text']
+            prev['pageEnd'] = s['pageEnd']
+            if s.get('evidenceLevel') and not prev.get('evidenceLevel'):
+                prev['evidenceLevel'] = s['evidenceLevel']
+        else:
+            merged.append(s.copy())
+
+    return merged
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print(json.dumps({"error": "No file path provided"}, ensure_ascii=False))
@@ -202,7 +253,13 @@ if __name__ == '__main__':
 
     file_path = str(Path(sys.argv[1]).absolute())
 
-    # Optional args: chunk_size, overlap
+    # --sections-only mode: output full sections for LLM-based semantic chunking
+    if '--sections-only' in sys.argv:
+        result = create_sections_only(file_path)
+        print(json.dumps(result, ensure_ascii=False))
+        sys.exit(0)
+
+    # Standard mode: fixed-size character chunking
     chunk_size = 1400
     overlap = 250
     if len(sys.argv) >= 3:

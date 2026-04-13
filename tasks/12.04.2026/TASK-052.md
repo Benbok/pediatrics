@@ -1,6 +1,6 @@
 # TASK-052: ИИ-помощник (RAG) во вкладке заболевания
 
-**Статус:** ✅ Выполнено  
+**Статус:** ✅ Выполнено (updated 2026-04-13)  
 **Приоритет:** Высокий  
 **Дата создания:** 2026-04-12  
 **Модуль:** diseases/guidelines  
@@ -39,6 +39,17 @@
 - [x] **Этап 6**: Вкладка «ИИ помощник» добавлена в `DiseaseKnowledgeView.tsx` (до «Поиск в PDF»)
 - [x] **Этап 7**: TSC no new errors; vitest failures pre-existing (symptom schema + missing testing-library)
 
+## Continuation (2026-04-13): Кеш ответа ИИ во вкладке Болезни
+
+- [x] **Этап 0**: Оркестратор и scope синхронизированы (TASKS.md + AGENT.md + активный TASK)
+- [x] **Этап 1**: Prisma schema / Migration — N/A (изменения БД не требуются)
+- [x] **Этап 2**: Validators — N/A (новые входные контракты не вводятся)
+- [x] **Этап 3**: IPC handler + backend cache (RAG last answer cache, invalidate on new request)
+- [x] **Этап 4**: Types sync (`src/types.ts`)
+- [x] **Этап 5**: Service/renderer integration (`preload` + `useRagQuery`)
+- [x] **Этап 6**: UI compatibility check (без новых UI-элементов)
+- [x] **Этап 7**: Tests/checks + release readiness summary
+
 ## Журнал
 
 ### 2026-04-12 — Задача создана
@@ -53,3 +64,25 @@
 - Изменения: `handlers.cjs` (+3 IPC), `preload.cjs` (+rag namespace), `types.ts` (+3 interfaces + ElectronAPI), `DiseaseKnowledgeView.tsx` (+import Bot, +секция, +TabsContent)
 - TSC: 0 новых ошибок; все ошибки pre-existing
 - Vitest: 239 passed, 7 failed (pre-existing: symptom schema + missing @testing-library/react)
+
+### 2026-04-13 13:00 — Continuation старт
+- Scope: кешировать последний ответ ИИ в модуле Diseases AI assistant до вызова нового запроса.
+- Workflow синхронизирован: TASKS.md, tasks/AGENT.md, TASK-052.
+- MCP routing: filesystem/context7 подключены; dev-db/vidal-db не требуются (SQL-изменений нет).
+
+### 2026-04-13 13:20 — Этап 3 завершён
+- `electron/modules/diseases/handlers.cjs`: добавлен `rag:get-last`, кеш последнего ответа по `diseaseId`, инвалидация перед новым `rag:query`/`rag:stream`.
+- Добавлена инвалидация RAG-кеша при изменениях disease/guidelines и после `rag:reindex`.
+- Проверка: diagnostics для файла без новых ошибок.
+
+### 2026-04-13 13:30 — Этапы 4-6 завершены
+- `src/types.ts`: добавлен контракт `RagCachedEntry` и метод `rag.getLast(...)`.
+- `electron/preload.cjs`: экспортирован мост `rag:get-last`.
+- `src/modules/diseases/hooks/useRagQuery.ts`: добавлено восстановление кешированного ответа при загрузке/смене `diseaseId`.
+- Совместимость UI: `DiseaseAiAssistant` использует существующий state без изменения интерфейса.
+
+### 2026-04-13 13:40 — Этап 7 завершён (проверки)
+- `node --check electron/modules/diseases/handlers.cjs` и `node --check electron/preload.cjs` — OK.
+- `npx tsc --noEmit` — есть pre-existing ошибки в несвязанных файлах (DiseaseFormPage, SettingsModule, MedicationBrowser, medication.types, parseInstructionText, knowledgeQuery.validator, tests/disease-history-section).
+- `npm run test -- --run` — выполнен; часть test suite падает pre-existing (vax, symptom-categorization, отсутствует `@testing-library/react`).
+- По изменённому scope новых ошибок/падений не зафиксировано.

@@ -412,6 +412,16 @@ app.whenReady().then(async () => {
             throw error;
         }
     }));
+
+    ipcMain.handle('file:get-size', ensureAuthenticated(async (_, filePath) => {
+        try {
+            const stat = await fs.promises.stat(filePath);
+            return stat.size;
+        } catch (error) {
+            logger.error('[Main] Failed to stat file', { error, filePath });
+            throw error;
+        }
+    }));
     ipcMain.handle('app:open-path', async (_, filePath) => {
         try {
             return await shell.openPath(filePath);

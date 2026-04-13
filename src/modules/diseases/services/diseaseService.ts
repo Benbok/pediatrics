@@ -104,6 +104,33 @@ export const diseaseService = {
         return result.filePaths;
     },
 
+    async filterByFileSizeAsync(
+        filePaths: string[],
+        maxBytes = 10 * 1024 * 1024,
+    ): Promise<{ validFilePaths: string[]; rejectedFiles: RejectedUploadFile[] }> {
+        const validFilePaths: string[] = [];
+        const rejectedFiles: RejectedUploadFile[] = [];
+        for (const filePath of filePaths) {
+            try {
+                const size = await window.electronAPI.getFileSize(filePath);
+                const maxMb = Math.round(maxBytes / 1024 / 1024);
+                if (size > maxBytes) {
+                    const sizeMb = (size / 1024 / 1024).toFixed(1);
+                    rejectedFiles.push({
+                        fileName: getFileNameFromPath(filePath),
+                        reason: `Файл слишком большой: ${sizeMb} МБ (максимум ${maxMb} МБ)`,
+                    });
+                } else {
+                    validFilePaths.push(filePath);
+                }
+            } catch {
+                // Can't stat — backend will reject with a clear error; allow through
+                validFilePaths.push(filePath);
+            }
+        }
+        return { validFilePaths, rejectedFiles };
+    },
+
     filterGuidelineUploadCandidates(filePaths: string[], guidelines: ClinicalGuideline[]): { validFilePaths: string[]; rejectedFiles: RejectedUploadFile[] } {
         const selected = filePaths.map(filePath => ({
             filePath,
