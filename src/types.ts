@@ -1255,10 +1255,6 @@ declare global {
       deleteVisitTemplate: (id: number) => Promise<boolean>;
       applyVisitTemplate: (params: { templateId: number; existingData: Partial<Visit> }) => Promise<{ mergedData: Partial<Visit>; medicationTemplateId?: number | null; examTemplateSetId?: number | null }>;
 
-      // KNOWLEDGE QUERY MODULE API
-      queryKnowledge: (params: { query: string }) => Promise<KnowledgeQueryResponse>;
-      getLastKnowledgeQuery: () => Promise<KnowledgeCachedEntry | null>;
-
       // RAG AI ASSISTANT API
       rag: {
         query: (params: { query: string; diseaseId: number; history?: { q: string; a: string }[] }) => Promise<RagQueryResult>;
@@ -1273,41 +1269,6 @@ declare global {
       };
     }
   }
-}
-
-// ============= KNOWLEDGE QUERY MODULE TYPES =============
-
-export interface KnowledgeSource {
-  type: 'disease' | 'medication';
-  name: string;
-  id: number;
-}
-
-export interface KnowledgeQueryResponse {
-  success: boolean;
-  answer: string | null;
-  geminiAnswer?: string | null;
-  localAnswer?: string | null;
-  sources: KnowledgeSource[];
-  disclaimer: string;
-  searchedAt: string;
-  noAiKey: boolean;
-  aiErrorMessage?: string | null;
-  geminiErrorMessage?: string | null;
-  localErrorMessage?: string | null;
-  geminiDurationMs?: number | null;
-  localDurationMs?: number | null;
-  startedAt?: string;
-  finishedAt?: string;
-  durationMs?: number;
-  trace?: string[];
-  error?: string;
-}
-
-export interface KnowledgeCachedEntry {
-  query: string;
-  response: KnowledgeQueryResponse;
-  cachedAt: string;
 }
 
 // ============= RAG AI ASSISTANT TYPES =============

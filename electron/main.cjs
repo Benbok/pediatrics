@@ -20,7 +20,6 @@ const { setupRecommendationTemplateHandlers } = require('./modules/recommendatio
 const { setupExamTextTemplateHandlers } = require('./modules/exam-text-templates/handlers.cjs');
 const { setupDashboardHandlers } = require('./modules/dashboard/handlers.cjs');
 const { setupNutritionHandlers } = require('./modules/nutrition/handlers.cjs');
-const { register: registerKnowledgeHandlers } = require('./modules/knowledge/handlers.cjs');
 const { initializeDatabase, seedNutritionData } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const { setupLicenseHandlers } = require('./license/handlers.cjs');
@@ -132,7 +131,6 @@ app.whenReady().then(async () => {
     setupExamTextTemplateHandlers();
     setupDashboardHandlers();
     setupNutritionHandlers();
-    registerKnowledgeHandlers();
     setupLlmHandlers();
 
     // Cache Service handlers

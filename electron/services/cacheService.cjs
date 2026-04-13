@@ -10,7 +10,6 @@ const NAMESPACE_CONFIG = {
     children: { ttl: 60000 },      // 1 минута - часто меняются
     diseases: { ttl: 300000 },     // 5 минут - редко меняются
     medications: { ttl: 300000 },  // 5 минут - редко меняются
-    knowledge: { ttl: 1800000 },   // 30 минут - ответы AI на Dashboard
     profiles: { ttl: 60000 },      // 1 минута - могут часто обновляться
     records: { ttl: 30000 },       // 30 секунд - часто меняются
     vaccineCatalog: { ttl: 300000 }, // 5 минут - глобальный каталог вакцин

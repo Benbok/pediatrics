@@ -276,10 +276,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveChildFeedingPlan: (data) => ipcRenderer.invoke('nutrition:save-child-feeding-plan', data),
     deleteChildFeedingPlan: (id) => ipcRenderer.invoke('nutrition:delete-child-feeding-plan', id),
 
-    // KNOWLEDGE QUERY MODULE API
-    queryKnowledge: (params) => ipcRenderer.invoke('knowledge:query', params),
-    getLastKnowledgeQuery: () => ipcRenderer.invoke('knowledge:get-last-query'),
-
     // RAG AI ASSISTANT API
     rag: {
         query: (params) => ipcRenderer.invoke('rag:query', params),
