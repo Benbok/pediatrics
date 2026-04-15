@@ -2,6 +2,7 @@ import type {
     RagQueryResult,
     RagReindexResult,
     RagCachedEntry,
+    RagMode,
     QaCacheEntry,
     QaTemplate,
 } from '../types';
@@ -10,18 +11,20 @@ import type {
 export async function sendQuery(
     query: string,
     diseaseId: number,
-    history?: { q: string; a: string }[]
+    history?: { q: string; a: string }[],
+    mode: RagMode = 'rag'
 ): Promise<RagQueryResult> {
-    return window.electronAPI.rag.query({ query, diseaseId, history });
+    return window.electronAPI.rag.query({ query, diseaseId, history, mode });
 }
 
 /** Start a streaming RAG query (responses come via onToken/onDone). */
 export function sendQueryStream(
     query: string,
     diseaseId: number,
-    history?: { q: string; a: string }[]
+    history?: { q: string; a: string }[],
+    mode: RagMode = 'rag'
 ): void {
-    window.electronAPI.rag.stream({ query, diseaseId, history });
+    window.electronAPI.rag.stream({ query, diseaseId, history, mode });
 }
 
 /** Reindex embeddings for a disease's guideline chunks. */
@@ -30,8 +33,8 @@ export async function reindexDisease(diseaseId: number): Promise<RagReindexResul
 }
 
 /** Fetch the last cached RAG answer for a disease. */
-export async function getLastCached(diseaseId: number): Promise<RagCachedEntry | null> {
-    return window.electronAPI.rag.getLast({ diseaseId });
+export async function getLastCached(diseaseId: number, mode: RagMode = 'rag'): Promise<RagCachedEntry | null> {
+    return window.electronAPI.rag.getLast({ diseaseId, mode });
 }
 
 /** Fetch pre-computed QA cache entries for a disease. */

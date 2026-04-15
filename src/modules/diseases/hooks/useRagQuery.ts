@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { RagSource, RagQueryResult, RagCachedEntry } from '../../../types';
+import { RagSource, RagQueryResult, RagCachedEntry, RagMode } from '../../../types';
 
 interface HistoryTurn {
     q: string;
@@ -26,7 +26,7 @@ const INITIAL_STATE: RagState = {
     reindexing: false,
 };
 
-export function useRagQuery(diseaseId: number) {
+export function useRagQuery(diseaseId: number, mode: RagMode = 'rag') {
     const [state, setState] = useState<RagState>(INITIAL_STATE);
     const cleanupRef = useRef<Array<() => void>>([]);
     /** Накопленная история диалога. Сбрасывается при смене diseaseId или вызове clearHistory() */
@@ -39,7 +39,7 @@ export function useRagQuery(diseaseId: number) {
     // Сброс истории при смене заболевания
     useEffect(() => {
         historyRef.current = [];
-    }, [diseaseId]);
+    }, [diseaseId, mode]);
 
     // Подтягиваем последний кешированный ответ для diseaseId.
     useEffect(() => {
@@ -47,7 +47,7 @@ export function useRagQuery(diseaseId: number) {
 
         const loadCachedAnswer = async () => {
             try {
-                const cached: RagCachedEntry | null = await window.electronAPI?.rag?.getLast?.({ diseaseId });
+                const cached: RagCachedEntry | null = await window.electronAPI?.rag?.getLast?.({ diseaseId, mode });
                 if (cancelled || !cached || !cached.answer) return;
 
                 setState({
@@ -65,7 +65,7 @@ export function useRagQuery(diseaseId: number) {
         return () => {
             cancelled = true;
         };
-    }, [diseaseId]);
+    }, [diseaseId, mode]);
 
     const cleanup = useCallback(() => {
         cleanupRef.current.forEach(fn => fn());
@@ -86,6 +86,7 @@ export function useRagQuery(diseaseId: number) {
                 query,
                 diseaseId,
                 history: historyRef.current,
+                mode,
             });
             if (result.ok) {
                 const answer = result.answer ?? '';
@@ -98,7 +99,7 @@ export function useRagQuery(diseaseId: number) {
         } catch (err: any) {
             setState({ ...INITIAL_STATE, error: err?.message ?? 'Ошибка запроса' });
         }
-    }, [diseaseId, cleanup]);
+    }, [diseaseId, mode, cleanup]);
 
     const sendQueryStream = useCallback((query: string) => {
         if (!query.trim()) return;
@@ -113,7 +114,7 @@ export function useRagQuery(diseaseId: number) {
             setState(prev => ({ ...prev, answer: streamBufferRef.current }));
         });
 
-        const offDone = window.electronAPI!.rag!.onDone((_: any, data: { sources: RagSource[]; context: string }) => {
+        const offDone = window.electronAPI!.rag!.onDone((_: any, data: { sources: RagSource[]; context: string; mode?: RagMode }) => {
             setState(prev => ({ ...prev, streaming: false, sources: data.sources }));
             // Записываем в историю по завершении стрима
             const completedAnswer = streamBufferRef.current;
@@ -130,8 +131,8 @@ export function useRagQuery(diseaseId: number) {
 
         cleanupRef.current = [offToken, offDone, offError];
 
-        window.electronAPI!.rag!.stream({ query, diseaseId, history: historyRef.current });
-    }, [diseaseId, cleanup]);
+        window.electronAPI!.rag!.stream({ query, diseaseId, history: historyRef.current, mode });
+    }, [diseaseId, mode, cleanup]);
 
     const abortStream = useCallback(() => {
         cleanup();

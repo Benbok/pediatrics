@@ -582,6 +582,12 @@ recommendationTemplateService.delete(id, userId) // Удалить шаблон
 
 ## Changelog
 
+### 15.04.2026 — TASK-058
+- Добавлена подсветка риска лекарственной аллергии в `MedicationBrowser` на уровне препарата и фармгруппы.
+- Добавлен сервис `medicationAllergyRisk.service.ts` для нормализации/матчинга аллергенов из анамнеза.
+- `VisitFormPage` передаёт данные поля «Лекарственная аллергия» в браузер препаратов для моментной индикации риска.
+- Добавлены unit-тесты `tests/medication-allergy-risk.test.ts`.
+
 ### 15.04.2026 — TASK-057
 - CDSS мигрирован с Gemini на Local LLM (LM Studio) для `parseComplaints` и Phase 2 ранжирования диагнозов.
 - Добавлен сервис `electron/services/cdssLocalLlmService.cjs` с health-check cache и graceful fallback.

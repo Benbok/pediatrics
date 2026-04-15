@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, Send, Square, ChevronDown, ChevronUp, Loader2, Zap } from 'lucide-react';
+import { Bot, Send, Square, ChevronDown, ChevronUp, Loader2, Zap, BookOpen, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '../../../components/ui/Button';
 import { LlmStatusBadge } from '../../../components/ui/LlmStatusBadge';
 import { useRagQuery } from '../hooks/useRagQuery';
 import { useLlmStatus } from '../../../hooks/useLlmStatus';
-import { RagSource, QaCacheEntry, QaTemplate } from '../../../types';
+import { RagSource, QaCacheEntry, QaTemplate, RagMode } from '../../../types';
 import { clsx } from 'clsx';
 import { computeChipEntry, getInProgressChipIds } from '../../../services/rag.service';
 
@@ -110,6 +110,7 @@ function SourceItem({ source }: { source: RagSource }) {
 export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
     const [inputValue, setInputValue] = useState('');
     const [sourcesOpen, setSourcesOpen] = useState(false);
+    const [assistantMode, setAssistantMode] = useState<RagMode>('rag');
     const answerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -122,6 +123,7 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
 
     const llmStatus = useLlmStatus();
     const isLlmOffline = llmStatus.available === false;
+    const isRagMode = assistantMode === 'rag';
 
     const {
         answer,
@@ -134,7 +136,7 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
         reset,
         clearHistory,
         historyLength,
-    } = useRagQuery(diseaseId);
+    } = useRagQuery(diseaseId, assistantMode);
 
     // Auto-scroll answer while streaming
     useEffect(() => {
@@ -149,7 +151,7 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
         let cancelled = false;
         const ragApi = window.electronAPI?.rag;
 
-        if (!ragApi) {
+        if (!ragApi || !isRagMode) {
             setQaTemplates([]);
             setQaCache([]);
             return () => { cancelled = true; };
@@ -167,7 +169,12 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
             for (const tid of inProgress) {
                 computeChipEntry(diseaseId, tid)
                     .then(entry => {
-                        if (cancelled || !entry) return;
+                        if (cancelled) return;
+                        if (!entry) {
+                            // Если для шаблона нет данных в документах — убираем чип из UI.
+                            setQaTemplates(prev => prev.filter(t => t.templateId !== tid));
+                            return;
+                        }
                         setQaCache(prev => [...prev.filter(c => c.templateId !== entry.templateId), entry]);
                     })
                     .catch(() => {/* errors already logged in backend */})
@@ -187,7 +194,23 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
             }
         });
         return () => { cancelled = true; };
-    }, [diseaseId]);
+    }, [diseaseId, isRagMode]);
+
+    useEffect(() => {
+        setSourcesOpen(false);
+        setActiveChip(null);
+    }, [assistantMode]);
+
+    const handleModeChange = (mode: RagMode) => {
+        if (mode === assistantMode) return;
+        setAssistantMode(mode);
+        clearHistory();
+        reset();
+        setInputValue('');
+        setSourcesOpen(false);
+        setActiveChip(null);
+        setChipSourcesOpen(false);
+    };
 
     const handleChipClick = useCallback(async (template: QaTemplate) => {
         // Check if we have cached answer
@@ -207,6 +230,10 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                 setQaCache(prev => [...prev.filter(c => c.templateId !== entry.templateId), entry]);
                 setActiveChip(entry);
                 setChipSourcesOpen(false);
+            } else {
+                // Нет данных по этому шаблону — скрываем чип, чтобы не предлагать пустой запрос повторно.
+                setQaTemplates(prev => prev.filter(t => t.templateId !== template.templateId));
+                setActiveChip(prev => prev?.templateId === template.templateId ? null : prev);
             }
         } catch (err) {
             console.warn('Failed to compute QA entry:', err);
@@ -239,9 +266,42 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                 <div className="flex items-center gap-2">
                     <Bot className="h-4 w-4 text-indigo-500" />
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">ИИ помощник</span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">— отвечает только на основе прикреплённых документов</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                        {isRagMode
+                            ? '— режим RAG: ответы только по прикреплённым документам'
+                            : '— режим без RAG: прямой ответ локальной LLM'}
+                    </span>
                 </div>
                 <LlmStatusBadge status={llmStatus} />
+            </div>
+
+            <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={() => handleModeChange('rag')}
+                    className={clsx(
+                        'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                        isRagMode
+                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-950/40 dark:text-indigo-300'
+                            : 'border-gray-300 text-gray-600 hover:border-indigo-300 dark:border-gray-700 dark:text-gray-300'
+                    )}
+                >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    RAG (по документам)
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleModeChange('direct')}
+                    className={clsx(
+                        'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                        !isRagMode
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-400 dark:bg-emerald-950/30 dark:text-emerald-300'
+                            : 'border-gray-300 text-gray-600 hover:border-emerald-300 dark:border-gray-700 dark:text-gray-300'
+                    )}
+                >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Без RAG (прямой LLM)
+                </button>
             </div>
 
             {/* Offline warning bar */}
@@ -252,7 +312,7 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
             )}
 
             {/* Quick-answer chips */}
-            {qaTemplates.length > 0 ? (
+            {isRagMode && qaTemplates.length > 0 ? (
                 <div className="flex flex-col gap-2">
                     <div className="flex gap-1.5 flex-wrap">
                         {qaTemplates.map(template => {
@@ -322,14 +382,20 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                 {!answer && !error && !isBusy && (
                     <div className="text-center text-gray-400 dark:text-gray-500 select-none">
                         <Bot className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-xs">Задайте вопрос по прикреплённым клиническим руководствам</p>
+                        <p className="text-xs">
+                            {isRagMode
+                                ? 'Задайте вопрос по прикреплённым клиническим руководствам'
+                                : 'Задайте вопрос локальной модели без использования RAG-контекста'}
+                        </p>
                     </div>
                 )}
 
                 {isBusy && !answer && (
                     <div className="flex items-center gap-2 text-gray-400">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-xs">Поиск и генерация ответа...</span>
+                        <span className="text-xs">
+                            {isRagMode ? 'Поиск по документам и генерация ответа...' : 'Генерация прямого ответа локальной LLM...'}
+                        </span>
                     </div>
                 )}
 
@@ -378,7 +444,9 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                     onKeyDown={handleKeyDown}
                     disabled={isBusy || isLlmOffline}
                     rows={2}
-                    placeholder="Введите вопрос... (Enter — отправить, Shift+Enter — новая строка)"
+                    placeholder={isRagMode
+                        ? 'Введите вопрос по документам... (Enter — отправить, Shift+Enter — новая строка)'
+                        : 'Введите вопрос к локальной LLM... (Enter — отправить, Shift+Enter — новая строка)'}
                     className={clsx(
                         'flex-1 resize-none rounded-lg border px-3 py-2 text-sm',
                         'border-gray-300 dark:border-gray-600',

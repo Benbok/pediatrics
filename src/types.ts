@@ -1258,12 +1258,12 @@ declare global {
 
       // RAG AI ASSISTANT API
       rag: {
-        query: (params: { query: string; diseaseId: number; history?: { q: string; a: string }[] }) => Promise<RagQueryResult>;
-        stream: (params: { query: string; diseaseId: number; history?: { q: string; a: string }[] }) => void;
+        query: (params: { query: string; diseaseId: number; history?: { q: string; a: string }[]; mode?: RagMode }) => Promise<RagQueryResult>;
+        stream: (params: { query: string; diseaseId: number; history?: { q: string; a: string }[]; mode?: RagMode }) => void;
         reindex: (params: { diseaseId: number }) => Promise<RagReindexResult>;
-        getLast: (params: { diseaseId: number }) => Promise<RagCachedEntry | null>;
+        getLast: (params: { diseaseId: number; mode?: RagMode }) => Promise<RagCachedEntry | null>;
         onToken: (callback: (event: any, token: string) => void) => () => void;
-        onDone: (callback: (event: any, data: { sources: RagSource[]; context: string }) => void) => () => void;
+        onDone: (callback: (event: any, data: { sources: RagSource[]; context: string; mode?: RagMode }) => void) => () => void;
         onError: (callback: (event: any, error: string) => void) => () => void;
         onReindexProgress: (callback: (event: any, data: { done: number; total: number }) => void) => () => void;
         removeListeners: () => void;
@@ -1277,6 +1277,8 @@ declare global {
 }
 
 // ============= RAG AI ASSISTANT TYPES =============
+
+export type RagMode = 'rag' | 'direct';
 
 export interface RagSource {
   id: number;
@@ -1294,6 +1296,7 @@ export interface RagQueryResult {
   answer?: string;
   sources?: RagSource[];
   context?: string;
+  mode?: RagMode;
   error?: string;
 }
 
@@ -1302,6 +1305,7 @@ export interface RagCachedEntry {
   answer: string;
   sources: RagSource[];
   context: string;
+  mode?: RagMode;
   cachedAt: string;
 }
 

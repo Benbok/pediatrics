@@ -21,7 +21,6 @@ import { PhysicalExamBySystems } from './components/PhysicalExamBySystems';
 import { DiagnosisSelector, MultipleDiagnosisSelector } from './components/DiagnosisSelector';
 import { IcdCodeSearchModal } from './components/IcdCodeSearchModal';
 import { DiseaseSearchModal } from './components/DiseaseSearchModal';
-import { DiseaseSidePanel } from './components/DiseaseSidePanel';
 import { VisitTemplateSelector } from './components/VisitTemplateSelector';
 import type { DoseCalculationResult } from '../../types/medication.types';
 import { MedicationDoseModal, DoseData } from './components/MedicationDoseModal';
@@ -67,7 +66,6 @@ import {
     Calendar,
     Clock,
     FileText,
-    Eye,
     Beaker,
     Microscope,
     FlaskConical,
@@ -173,10 +171,6 @@ export const VisitFormPage: React.FC = () => {
     const [isIcdSearchOpen, setIsIcdSearchOpen] = useState(false);
     const [isDiseaseSearchOpen, setIsDiseaseSearchOpen] = useState(false);
     const [currentDiagnosisSelector, setCurrentDiagnosisSelector] = useState<'primary' | 'complications' | 'comorbidities' | null>(null);
-
-    // Sidepanel для просмотра заболевания
-    const [selectedDiseaseForView, setSelectedDiseaseForView] = useState<Disease | null>(null);
-    const [isDiseasePanelOpen, setIsDiseasePanelOpen] = useState(false);
 
     // Восстановление черновика
     const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -1247,20 +1241,6 @@ export const VisitFormPage: React.FC = () => {
         ]);
     };
 
-    const handleViewDisease = async (disease: Disease) => {
-        // Загружаем полные данные заболевания
-        try {
-            const fullDisease = await diseaseService.getDisease(disease.id!);
-            if (fullDisease) {
-                setSelectedDiseaseForView(fullDisease);
-                setIsDiseasePanelOpen(true);
-            }
-        } catch (err: any) {
-            logger.error('[VisitFormPage] Failed to load disease details:', err);
-            setError('Не удалось загрузить детальную информацию о заболевании');
-        }
-    };
-
     const toggleMedicationSelection = async (medicationId: number) => {
         const currentPrescriptions = formData.prescriptions || [];
         const isSelected = currentPrescriptions.some((p: any) => p.medicationId === medicationId);
@@ -1768,9 +1748,7 @@ export const VisitFormPage: React.FC = () => {
     const { activeSection, scrollToSection } = useActiveSection(sectionIds);
 
     return (
-        <div
-            className={`p-6 ${isDiseasePanelOpen ? 'mr-[50%]' : ''} transition-all duration-300`}
-        >
+        <div className="p-6 transition-all duration-300">
             <div className="max-w-[1600px] mx-auto space-y-4">
                 {/* Main Content */}
                 <div className="space-y-4">
@@ -2517,9 +2495,20 @@ export const VisitFormPage: React.FC = () => {
                                                         {confidencePercent}%
                                                     </div>
                                                 </div>
-                                                <div className="font-bold text-slate-800 dark:text-white text-sm mb-1">
-                                                    {s.disease.nameRu}
-                                                </div>
+                                                {s.disease.id ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => navigate(`/diseases/${s.disease.id}`)}
+                                                        className="font-bold text-slate-800 dark:text-white text-sm mb-1 hover:underline underline-offset-2 text-left"
+                                                        title="Открыть карточку заболевания"
+                                                    >
+                                                        {s.disease.nameRu}
+                                                    </button>
+                                                ) : (
+                                                    <div className="font-bold text-slate-800 dark:text-white text-sm mb-1">
+                                                        {s.disease.nameRu}
+                                                    </div>
+                                                )}
                                                 {s.matchedSymptoms && s.matchedSymptoms.length > 0 && (
                                                     <div className="text-xs text-slate-500 mb-2">
                                                         Совпало: {s.matchedSymptoms.join(', ')}
@@ -2538,25 +2527,14 @@ export const VisitFormPage: React.FC = () => {
                                                         style={{ width: `${confidencePercent}%` }}
                                                     />
                                                 </div>
-                                                <div className="flex gap-2">
-                                                    <Button
-                                                        variant="secondary"
-                                                        size="sm"
-                                                        onClick={() => handleViewDisease(s.disease)}
-                                                        className="flex-1"
-                                                    >
-                                                        <Eye className="w-3 h-3 mr-1" />
-                                                        Открыть карточку
-                                                    </Button>
-                                                    <Button
-                                                        variant="primary"
-                                                        size="sm"
-                                                        onClick={() => selectDiagnosis(s.disease)}
-                                                        className="flex-1"
-                                                    >
-                                                        Выбрать
-                                                    </Button>
-                                                </div>
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    onClick={() => selectDiagnosis(s.disease)}
+                                                    className="w-full"
+                                                >
+                                                    Выбрать
+                                                </Button>
                                             </div>
                                         );
                                     })}
@@ -2705,16 +2683,6 @@ export const VisitFormPage: React.FC = () => {
                     }
                     setIsDiseaseSearchOpen(false);
                     setCurrentDiagnosisSelector(null);
-                }}
-            />
-
-            {/* Disease Side Panel */}
-            <DiseaseSidePanel
-                disease={selectedDiseaseForView}
-                isOpen={isDiseasePanelOpen}
-                onClose={() => {
-                    setIsDiseasePanelOpen(false);
-                    setSelectedDiseaseForView(null);
                 }}
             />
 

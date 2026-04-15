@@ -10,8 +10,9 @@ const { computeQaCacheEntry } = require('../../services/ragQaPrecomputeService.c
 
 const RAG_LAST_CACHE_PREFIX = 'rag_last_answer_';
 
-function getRagLastCacheKey(diseaseId) {
-    return `${RAG_LAST_CACHE_PREFIX}${Number(diseaseId)}`;
+function getRagLastCacheKey(diseaseId, mode = 'rag') {
+    const normalizedMode = mode === 'direct' ? 'direct' : 'rag';
+    return `${RAG_LAST_CACHE_PREFIX}${normalizedMode}_${Number(diseaseId)}`;
 }
 
 function safeJsonParse(value, defaultValue = []) {
@@ -293,7 +294,12 @@ const setupDiseaseHandlers = () => {
     }));
 
     // ============= RAG AI ASSISTANT HANDLERS =============
-    const { ragQuery, ragQueryStream, reindexGuidelineEmbeddings } = require('../../services/ragPipelineService.cjs');
+    const { reindexGuidelineEmbeddings } = require('../../services/ragPipelineService.cjs');
+    const {
+        normalizeAssistantMode,
+        runAssistantQuery,
+        runAssistantQueryStream,
+    } = require('../../services/diseaseAssistantModeService.cjs');
     const { schedulePrecompute, triggerPrecompute, getQaCache, QA_TEMPLATES } = require('../../services/ragQaPrecomputeService.cjs');
 
     // Zod-схема для входных параметров RAG-запроса (Phase 1.2 — compliance fix)
@@ -301,34 +307,43 @@ const setupDiseaseHandlers = () => {
         query: z.string().min(1).max(4000),
         diseaseId: z.number().int().positive(),
         history: z.array(z.object({ q: z.string(), a: z.string() })).optional().default([]),
+        mode: z.enum(['rag', 'direct']).optional().default('rag'),
     });
 
-    ipcMain.handle('rag:get-last', ensureAuthenticated(async (_, { diseaseId }) => {
+    ipcMain.handle('rag:get-last', ensureAuthenticated(async (_, payload) => {
+        const diseaseId = Number(payload?.diseaseId);
+        const mode = normalizeAssistantMode(payload?.mode);
         const normalizedDiseaseId = Number(diseaseId);
         if (!Number.isFinite(normalizedDiseaseId) || normalizedDiseaseId <= 0) {
             return null;
         }
-        return CacheService.get('diseases', getRagLastCacheKey(normalizedDiseaseId));
+        return CacheService.get('diseases', getRagLastCacheKey(normalizedDiseaseId, mode));
     }));
 
     ipcMain.handle('rag:query', ensureAuthenticated(async (_, payload) => {
         try {
-            const { query, diseaseId: rawDiseaseId, history } = RagQueryInputSchema.parse({
+            const { query, diseaseId: rawDiseaseId, history, mode } = RagQueryInputSchema.parse({
                 ...payload,
                 diseaseId: Number(payload?.diseaseId),
             });
             const normalizedDiseaseId = rawDiseaseId;
-            const cacheKey = getRagLastCacheKey(normalizedDiseaseId);
+            const cacheKey = getRagLastCacheKey(normalizedDiseaseId, mode);
 
             // Храним только последний ответ: новый запрос сбрасывает предыдущий кеш.
             CacheService.invalidate('diseases', cacheKey);
 
-            const result = await ragQuery({ query, diseaseId: normalizedDiseaseId, history: Array.isArray(history) ? history : [] });
+            const result = await runAssistantQuery({
+                query,
+                diseaseId: normalizedDiseaseId,
+                history: Array.isArray(history) ? history : [],
+                mode,
+            });
             CacheService.set('diseases', cacheKey, {
                 query: String(query || ''),
                 answer: result.answer || '',
                 sources: Array.isArray(result.sources) ? result.sources : [],
                 context: result.context || '',
+                mode,
                 cachedAt: new Date().toISOString(),
             });
             return { ok: true, ...result };
@@ -346,20 +361,21 @@ const setupDiseaseHandlers = () => {
             return;
         }
         try {
-            const { query, diseaseId: normalizedDiseaseId, history } = RagQueryInputSchema.parse({
+            const { query, diseaseId: normalizedDiseaseId, history, mode } = RagQueryInputSchema.parse({
                 ...payload,
                 diseaseId: Number(payload?.diseaseId),
             });
-            const cacheKey = getRagLastCacheKey(normalizedDiseaseId);
+            const cacheKey = getRagLastCacheKey(normalizedDiseaseId, mode);
             let streamedAnswer = '';
 
             // Храним только последний ответ: новый запрос сбрасывает предыдущий кеш.
             CacheService.invalidate('diseases', cacheKey);
 
-            const { sources, context } = await ragQueryStream({
+            const { sources, context } = await runAssistantQueryStream({
                 query,
                 diseaseId: normalizedDiseaseId,
                 history: Array.isArray(history) ? history : [],
+                mode,
                 onToken: (token) => {
                     streamedAnswer += String(token || '');
                     if (!event.sender.isDestroyed()) event.sender.send('rag:token', token);
@@ -371,10 +387,11 @@ const setupDiseaseHandlers = () => {
                 answer: streamedAnswer.trim(),
                 sources: Array.isArray(sources) ? sources : [],
                 context: context || '',
+                mode,
                 cachedAt: new Date().toISOString(),
             });
 
-            if (!event.sender.isDestroyed()) event.sender.send('rag:done', { sources, context });
+            if (!event.sender.isDestroyed()) event.sender.send('rag:done', { sources, context, mode });
         } catch (err) {
             logger.error('[RAG] ragQueryStream error:', err);
             if (!event.sender.isDestroyed()) event.sender.send('rag:error', err.message);

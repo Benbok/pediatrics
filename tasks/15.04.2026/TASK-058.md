@@ -2,7 +2,7 @@
 
 > **Модуль:** `visits/medications + printing`  
 > **Дата начала:** 15.04.2026  
-> **Статус:** 🔄 IN_PROGRESS  
+> **Статус:** ✅ DONE  
 > **Приоритет:** HIGH
 
 ---
@@ -149,6 +149,12 @@ electron/
 - Добавлены unit-тесты `tests/medication-allergy-risk.test.ts`
 - Выполнен прогон: `npm test -- tests/medication-allergy-risk.test.ts --run` → 5/5 passed
 
+### 15.04.2026 17:10 — Финальный gate и закрытие
+- Повторный прогон целевых тестов: `npx vitest run tests/medication-allergy-risk.test.ts` → 5/5 passed
+- Регрессионный прогон: `npx vitest run` → 358 passed, 1 skipped
+- Подтверждено отсутствие регрессий печатной формы и текущего UI-потока подбора назначений
+- Задача переведена в `DONE` и синхронизирована в `tasks/TASKS.md`
+
 ---
 
 ## 🔗 Связанные файлы и ресурсы
@@ -162,6 +168,10 @@ electron/
 
 ## ✅ Финальный отчёт
 
-**Дата завершения:** —  
-**Итог:** —  
-**Изменённые файлы:** —
+**Дата завершения:** 15.04.2026  
+**Итог:** Реализована и подтверждена UX-подсветка риска лекарственной аллергии в браузере препаратов: маркируется совпадение по препарату и клинико-фармакологической группе, данные аллергии корректно извлекаются из анамнеза, покрытие тестами и регрессия green.  
+**Изменённые файлы:**
+- `src/modules/visits/services/medicationAllergyRisk.service.ts`
+- `src/modules/visits/components/MedicationBrowser.tsx`
+- `src/modules/visits/VisitFormPage.tsx`
+- `tests/medication-allergy-risk.test.ts`
