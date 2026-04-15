@@ -269,6 +269,7 @@ export interface DiagnosticPlanItem {
   test: string;
   priority?: 'low' | 'medium' | 'high';
   rationale?: string | null;
+  _aliasFor?: string;
 }
 
 export interface DiagnosticCatalogEntry {

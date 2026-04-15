@@ -1360,7 +1360,7 @@ export const SettingsModule: React.FC = () => {
                             <div className="w-full sm:w-[240px]">
                                 <PrettySelect
                                     value={newEntryType}
-                                    onChange={setNewEntryType}
+                                    onChange={(value) => setNewEntryType(value as 'lab' | 'instrumental')}
                                     options={diagnosticTypeOptions}
                                     buttonClassName="rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm min-h-[42px]"
                                     panelClassName="rounded-xl"

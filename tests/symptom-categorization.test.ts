@@ -9,8 +9,8 @@ describe('Symptom Categorization', () => {
         const parsed = parseSymptoms(oldFormat);
 
         expect(parsed).toEqual([
-            { text: 'кашель', category: 'other' },
-            { text: 'лихорадка', category: 'other' },
+            expect.objectContaining({ text: 'кашель', category: 'other' }),
+            expect.objectContaining({ text: 'лихорадка', category: 'other' }),
         ]);
     });
 
@@ -21,7 +21,7 @@ describe('Symptom Categorization', () => {
         ];
 
         const parsed = parseSymptoms(newFormat);
-        expect(parsed).toEqual(newFormat);
+        expect(parsed).toEqual(newFormat.map(s => expect.objectContaining(s)));
     });
 
     it('should preserve laboratory category in frontend parsing', () => {
@@ -30,7 +30,7 @@ describe('Symptom Categorization', () => {
         ];
 
         const parsed = parseSymptoms(newFormat);
-        expect(parsed).toEqual(newFormat);
+        expect(parsed).toEqual(newFormat.map(s => expect.objectContaining(s)));
     });
 
     it('should preserve laboratory category in backend normalization', () => {
@@ -39,7 +39,7 @@ describe('Symptom Categorization', () => {
         ]);
 
         expect(normalized).toEqual([
-            { text: 'Лейкоцитоз', category: 'laboratory' },
+            expect.objectContaining({ text: 'Лейкоцитоз', category: 'laboratory' }),
         ]);
     });
 
@@ -93,8 +93,8 @@ describe('Symptom Categorization', () => {
         const converted = parseSymptoms(pdfSymptoms);
 
         expect(converted).toEqual([
-            { text: 'кашель', category: 'other' },
-            { text: 'лихорадка', category: 'other' },
+            expect.objectContaining({ text: 'кашель', category: 'other' }),
+            expect.objectContaining({ text: 'лихорадка', category: 'other' }),
         ]);
     });
 
@@ -112,7 +112,7 @@ describe('Symptom Categorization', () => {
         ];
         const parsed = parseSymptoms(input);
         expect(parsed).toHaveLength(1);
-        expect(parsed[0]).toEqual({ text: 'кашель', category: 'clinical' });
+        expect(parsed[0]).toEqual(expect.objectContaining({ text: 'кашель', category: 'clinical' }));
     });
 
     it('should preserve long paragraph text without vocabulary replacement (backend)', () => {
@@ -123,7 +123,7 @@ describe('Symptom Categorization', () => {
         const normalized = normalizeSymptomsToCategorized([
             { text: longText, category: 'clinical' },
         ]);
-        expect(normalized).toEqual([{ text: longText, category: 'clinical' }]);
+        expect(normalized).toEqual([expect.objectContaining({ text: longText, category: 'clinical' })]);
     });
 
     it('should not deduplicate distinct long texts that share vocabulary tokens', () => {

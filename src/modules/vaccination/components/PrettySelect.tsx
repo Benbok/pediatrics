@@ -15,6 +15,7 @@ interface PrettySelectProps<T extends string | number> {
   emptyText?: string;
   buttonClassName?: string;
   panelClassName?: string;
+  searchInputClassName?: string;
   /** Render the dropdown panel with position:fixed to escape overflow:hidden/auto containers */
   useFixedPanel?: boolean;
 }
@@ -28,6 +29,7 @@ export const PrettySelect = <T extends string | number,>({
   emptyText = 'Ничего не найдено',
   buttonClassName = '',
   panelClassName = '',
+  searchInputClassName = '',
   useFixedPanel = false,
 }: PrettySelectProps<T>) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -134,7 +136,10 @@ export const PrettySelect = <T extends string | number,>({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={[
+                  'w-full px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500',
+                  searchInputClassName,
+                ].join(' ').trim()}
                 autoFocus
               />
             </div>

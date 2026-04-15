@@ -2,13 +2,21 @@ import { ExamTextTemplate } from '../../../types';
 import { ExamTextTemplateSchema } from '../../../validators/template.validator';
 import { logger } from '../../../services/logger';
 
+function getElectronApi() {
+    const api = window.electronAPI;
+    if (!api) {
+        throw new Error('Electron API is unavailable');
+    }
+    return api;
+}
+
 export const examTextTemplateService = {
     /**
      * Get exam text template by ID
      */
     async getById(id: number): Promise<ExamTextTemplate | null> {
         try {
-            return await window.electronAPI.getExamTextTemplate(id);
+            return await getElectronApi().getExamTextTemplate(id);
         } catch (error) {
             logger.error('[ExamTextTemplateService] Failed to get template', { error, id });
             throw error;
@@ -20,7 +28,7 @@ export const examTextTemplateService = {
      */
     async getBySystemKey(systemKey: string, userId: number): Promise<ExamTextTemplate[]> {
         try {
-            return await window.electronAPI.getExamTextTemplatesBySystem(systemKey, userId);
+            return await getElectronApi().getExamTextTemplatesBySystem(systemKey, userId);
         } catch (error) {
             logger.error('[ExamTextTemplateService] Failed to get templates by system', { error, systemKey, userId });
             throw error;
@@ -32,7 +40,7 @@ export const examTextTemplateService = {
      */
     async getAll(userId: number): Promise<ExamTextTemplate[]> {
         try {
-            return await window.electronAPI.getAllExamTextTemplates(userId);
+            return await getElectronApi().getAllExamTextTemplates(userId);
         } catch (error) {
             logger.error('[ExamTextTemplateService] Failed to get all templates', { error, userId });
             throw error;
@@ -45,7 +53,7 @@ export const examTextTemplateService = {
     async getByTags(tags: string | string[], userId: number): Promise<ExamTextTemplate[]> {
         try {
             const tagArray = Array.isArray(tags) ? tags : [tags];
-            return await window.electronAPI.getExamTextTemplatesByTags({ tags: tagArray, userId });
+            return await getElectronApi().getExamTextTemplatesByTags({ tags: tagArray, userId });
         } catch (error) {
             logger.error('[ExamTextTemplateService] Failed to get templates by tags', { error, tags, userId });
             throw error;
@@ -64,7 +72,7 @@ export const examTextTemplateService = {
         }
 
         try {
-            return await window.electronAPI.upsertExamTextTemplate(validation.data as ExamTextTemplate);
+            return await getElectronApi().upsertExamTextTemplate(validation.data as ExamTextTemplate);
         } catch (error: any) {
             logger.error('[ExamTextTemplateService] Failed to save template', { error, data });
             throw new Error(error.message || 'Ошибка при сохранении шаблона');
@@ -76,7 +84,7 @@ export const examTextTemplateService = {
      */
     async delete(id: number, userId: number): Promise<boolean> {
         try {
-            return await window.electronAPI.deleteExamTextTemplate(id, userId);
+            return await getElectronApi().deleteExamTextTemplate(id, userId);
         } catch (error) {
             logger.error('[ExamTextTemplateService] Failed to delete template', { error, id, userId });
             throw error;

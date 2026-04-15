@@ -3,9 +3,12 @@ import { Bot, Send, Square, ChevronDown, ChevronUp, Loader2, Zap } from 'lucide-
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '../../../components/ui/Button';
+import { LlmStatusBadge } from '../../../components/ui/LlmStatusBadge';
 import { useRagQuery } from '../hooks/useRagQuery';
+import { useLlmStatus } from '../../../hooks/useLlmStatus';
 import { RagSource, QaCacheEntry, QaTemplate } from '../../../types';
 import { clsx } from 'clsx';
+import { computeChipEntry, getInProgressChipIds } from '../../../services/rag.service';
 
 interface Props {
     diseaseId: number;
@@ -117,6 +120,9 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
     const [activeChip, setActiveChip] = useState<QaCacheEntry | null>(null);
     const [chipSourcesOpen, setChipSourcesOpen] = useState(false);
 
+    const llmStatus = useLlmStatus();
+    const isLlmOffline = llmStatus.available === false;
+
     const {
         answer,
         sources,
@@ -137,12 +143,43 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
         }
     }, [answer, streaming]);
 
-    // Load QA templates and cache on mount / diseaseId change
+    // Load QA templates and cache on mount / diseaseId change.
+    // Also re-attaches to chip computations still running after a tab switch.
     useEffect(() => {
         let cancelled = false;
+        const ragApi = window.electronAPI?.rag;
+
+        if (!ragApi) {
+            setQaTemplates([]);
+            setQaCache([]);
+            return () => { cancelled = true; };
+        }
+
+        // Re-attach to any in-progress chip computations started before the tab switch.
+        // The Promise lives in the module-level registry — it survives component unmounts.
+        const inProgress = getInProgressChipIds(diseaseId);
+        if (inProgress.length > 0) {
+            setLoadingChip(prev => {
+                const next = { ...prev };
+                for (const tid of inProgress) next[tid] = true;
+                return next;
+            });
+            for (const tid of inProgress) {
+                computeChipEntry(diseaseId, tid)
+                    .then(entry => {
+                        if (cancelled || !entry) return;
+                        setQaCache(prev => [...prev.filter(c => c.templateId !== entry.templateId), entry]);
+                    })
+                    .catch(() => {/* errors already logged in backend */})
+                    .finally(() => {
+                        if (!cancelled) setLoadingChip(prev => { const n = { ...prev }; delete n[tid]; return n; });
+                    });
+            }
+        }
+
         Promise.all([
-            window.electronAPI.rag.qaTemplates().catch(() => []),
-            window.electronAPI.rag.qaList({ diseaseId }).catch(() => []),
+            ragApi.qaTemplates().catch(() => []),
+            ragApi.qaList({ diseaseId }).catch(() => []),
         ]).then(([templates, entries]) => {
             if (!cancelled) {
                 setQaTemplates(templates);
@@ -150,21 +187,6 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
             }
         });
         return () => { cancelled = true; };
-    }, [diseaseId]);
-
-    const handleTriggerPrecompute = useCallback(async () => {
-        setQaLoading(true);
-        try {
-            await window.electronAPI.rag.qaTrigger({ diseaseId });
-            // Poll once after a short delay to pick up fast answers
-            setTimeout(async () => {
-                const entries = await window.electronAPI.rag.qaList({ diseaseId }).catch(() => []);
-                setQaCache(entries);
-                setQaLoading(false);
-            }, 3000);
-        } catch {
-            setQaLoading(false);
-        }
     }, [diseaseId]);
 
     const handleChipClick = useCallback(async (template: QaTemplate) => {
@@ -176,10 +198,11 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
             return;
         }
 
-        // Start computing
+        // Start computing via module-level registry — Promise survives tab switches.
+        // If computation was already started (e.g. double-click), returns the same Promise.
         setLoadingChip(prev => ({ ...prev, [template.templateId]: true }));
         try {
-            const entry = await window.electronAPI.rag.qaComputeSingle({ diseaseId, templateId: template.templateId });
+            const entry = await computeChipEntry(diseaseId, template.templateId);
             if (entry) {
                 setQaCache(prev => [...prev.filter(c => c.templateId !== entry.templateId), entry]);
                 setActiveChip(entry);
@@ -218,7 +241,15 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">ИИ помощник</span>
                     <span className="text-xs text-gray-400 dark:text-gray-500">— отвечает только на основе прикреплённых документов</span>
                 </div>
+                <LlmStatusBadge status={llmStatus} />
             </div>
+
+            {/* Offline warning bar */}
+            {isLlmOffline && (
+                <div className="flex items-center gap-2 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                    Локальная модель LM Studio не запущена или недоступна. Запросы к ИИ временно невозможны.
+                </div>
+            )}
 
             {/* Quick-answer chips */}
             {qaTemplates.length > 0 ? (
@@ -231,7 +262,7 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                                 <button
                                     key={template.templateId}
                                     onClick={() => handleChipClick(template)}
-                                    disabled={isLoading}
+                                    disabled={isLoading || isLlmOffline}
                                     className={clsx(
                                         'text-xs px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1',
                                         cached && activeChip?.templateId === template.templateId
@@ -345,7 +376,7 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                     value={inputValue}
                     onChange={e => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    disabled={isBusy}
+                    disabled={isBusy || isLlmOffline}
                     rows={2}
                     placeholder="Введите вопрос... (Enter — отправить, Shift+Enter — новая строка)"
                     className={clsx(
@@ -371,7 +402,7 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                 ) : (
                     <Button
                         onClick={handleSend}
-                        disabled={!inputValue.trim() || loading}
+                        disabled={!inputValue.trim() || loading || isLlmOffline}
                         size="sm"
                         title="Отправить (Enter)"
                         className="shrink-0 h-[56px]"

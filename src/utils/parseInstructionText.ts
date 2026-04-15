@@ -242,7 +242,7 @@ export function parseInstructionText(text: string): InstructionSection[] {
                 .slice(unique[i].endPos, i + 1 < unique.length ? unique[i + 1].pos : processed.length)
                 .trim()
                 // Remove stray heading repetition at the start of content
-                .replace(new RegExp('^' + defById(unique[i].defId)?.headerRe.source ?? '', 'i'), '')
+                .replace(new RegExp('^' + (defById(unique[i].defId)?.headerRe.source ?? ''), 'i'), '')
                 .trim();
             if (content) result.push(makeSection(unique[i].defId, content));
         }

@@ -97,7 +97,6 @@ export interface DoseCalculationResult {
   maxDailyDose?: number | null;
   minInterval?: number | null; // часы
   maxDosesPerDay?: number | null;
-  routeOfAdmin?: string | null;
   form?: CalculatedDoseForm | null;
   infusion?: {
     concentration?: string | null;

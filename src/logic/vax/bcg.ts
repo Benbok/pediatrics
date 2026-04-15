@@ -16,8 +16,9 @@ export const bcgRules: VaxRule = (vaccine, context) => {
     const dueDate = vaccine.dueDate;
     const record = vaccine.userRecord;
 
-    // 1. Birth weight check
-    if ((profile.birthWeight || 0) < 2000) {
+    // 1. Birth weight check (use child or profile, only skip if explicitly provided < 2000)
+    const birthWeightG = child.birthWeight ?? profile.birthWeight ?? null;
+    if (birthWeightG !== null && birthWeightG < 2000) {
         return {
             status: VaccineStatus.SKIPPED,
             alertMessage: "Медотвод: Вес при рождении менее 2000г. Вакцинация БЦЖ противопоказана до набора веса и обследования."

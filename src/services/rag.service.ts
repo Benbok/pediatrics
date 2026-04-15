@@ -58,3 +58,36 @@ export async function computeQaCacheEntry(
 ): Promise<QaCacheEntry | null> {
     return window.electronAPI.rag.qaComputeSingle({ diseaseId, templateId });
 }
+
+// ─── Module-level chip computation registry ───────────────────────────────────
+// Keeps in-flight Promises alive across component unmounts (tab switches).
+// Key: `${diseaseId}:${templateId}`, value: the IPC promise chain.
+const _chipRegistry = new Map<string, Promise<QaCacheEntry | null>>();
+
+/**
+ * Start (or attach to) a chip computation.
+ * If this templateId for this diseaseId is already computing — returns the SAME Promise.
+ * This makes the computation survive tab switches: component unmounts but Promise lives here.
+ */
+export function computeChipEntry(
+    diseaseId: number,
+    templateId: string,
+): Promise<QaCacheEntry | null> {
+    const key = `${diseaseId}:${templateId}`;
+    if (_chipRegistry.has(key)) return _chipRegistry.get(key)!;
+    const promise = (window.electronAPI.rag.qaComputeSingle({ diseaseId, templateId }) as Promise<QaCacheEntry | null>)
+        .finally(() => _chipRegistry.delete(key));
+    _chipRegistry.set(key, promise);
+    return promise;
+}
+
+/**
+ * Returns templateIds currently being computed for a diseaseId.
+ * Used on component mount to restore loading spinners after a tab switch.
+ */
+export function getInProgressChipIds(diseaseId: number): string[] {
+    const prefix = `${diseaseId}:`;
+    return [..._chipRegistry.keys()]
+        .filter(k => k.startsWith(prefix))
+        .map(k => k.slice(prefix.length));
+}

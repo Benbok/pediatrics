@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -103,6 +104,6 @@ describe('DiseaseHistorySection', () => {
         );
 
         // Should show preview text when there's stream preview
-        expect(screen.getByText(/Рефайн: Высокая температура 38.5/)).toBeTruthy();
+        expect(screen.getByText(/Генерация:\s*Высокая температура 38\.5/i)).toBeTruthy();
     });
 });

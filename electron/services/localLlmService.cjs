@@ -47,6 +47,34 @@ function getRequestTimeoutMs(messages, options = {}) {
 const _activeGenerations = new Map();
 let _genCounter = 0;
 
+// ── LLM Request Queue (concurrency = 1) ─────────────────────────────────────
+// Prevents overloading LM Studio with parallel inference requests.
+// Any caller that goes through generate() is automatically serialised.
+
+let _queueRunning = false;
+/** @type {Array<{fn: Function, resolve: Function, reject: Function}>} */
+const _pendingQueue = [];
+
+function _tickQueue() {
+    if (_queueRunning || _pendingQueue.length === 0) return;
+    const { fn, resolve, reject } = _pendingQueue.shift();
+    _queueRunning = true;
+    logger.debug(`[LocalLLM] Queue: starting. Remaining=${_pendingQueue.length}`);
+    fn().then(resolve, reject).finally(() => {
+        _queueRunning = false;
+        logger.debug('[LocalLLM] Queue: done, ticking next.');
+        _tickQueue();
+    });
+}
+
+function _enqueueCall(fn) {
+    return new Promise((resolve, reject) => {
+        _pendingQueue.push({ fn, resolve, reject });
+        logger.debug(`[LocalLLM] Queue: enqueued. Depth=${_pendingQueue.length} running=${_queueRunning}`);
+        _tickQueue();
+    });
+}
+
 
 // ── Model Resolution ────────────────────────────────────────────────────────
 
@@ -224,11 +252,7 @@ async function healthCheck() {
  * @param {(token: string) => void} onToken - Колбэк для каждого токена
  * @returns {Promise<{status: 'completed'|'aborted'|'error', error?: string}>}
  */
-async function generate(messages, options = {}, onToken) {
-    if (!Array.isArray(messages) || messages.length === 0) {
-        throw new Error('LLM_INVALID_MESSAGES');
-    }
-
+async function _generateImpl(messages, options = {}, onToken) {
     const genId = `gen_${++_genCounter}`;
     const abortController = new AbortController();
     _activeGenerations.set(genId, abortController);
@@ -389,15 +413,33 @@ function abort() {
 }
 
 /**
- * Возвращает текущее состояние сервиса.
- * @returns {{ activeGenerations: number, isGenerating: boolean, endpoint: string }}
+ * Public generate — validates args, then serialises through the FIFO queue.
+ * Only ONE request runs at a time; extras wait in order.
+ *
+ * @param {Array<{role: string, content: string}>} messages
+ * @param {object} options
+ * @param {(token: string) => void} onToken
+ * @returns {Promise<{status: 'completed'|'aborted'|'error', error?: string}>}
  */
+async function generate(messages, options = {}, onToken) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+        throw new Error('LLM_INVALID_MESSAGES');
+    }
+    return _enqueueCall(() => _generateImpl(messages, options, onToken));
+}
+
 function getStatus() {
     return {
         activeGenerations: _activeGenerations.size,
         isGenerating: _activeGenerations.size > 0,
+        pendingInQueue: _pendingQueue.length,
         endpoint: getBaseUrl(),
     };
+}
+
+/** Number of generate() calls waiting in queue (not yet started). */
+function getQueueDepth() {
+    return _pendingQueue.length;
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────
@@ -407,4 +449,5 @@ module.exports = {
     generate,
     abort,
     getStatus,
+    getQueueDepth,
 };
