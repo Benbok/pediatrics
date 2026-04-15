@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { diseaseService, parseSymptoms } from './services/diseaseService';
 import { useToast } from '../../context/ToastContext';
 import { icdCodeService } from '../../services/icdCode.service';
@@ -104,7 +104,14 @@ export const DiseaseFormPage: React.FC = () => {
     const { showToast } = useToast();
     const { id } = useParams<{ id?: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
+    const [searchParams] = useSearchParams();
     const isEdit = !!id;
+    const isViewMode = isEdit && searchParams.get('mode') === 'view';
+    const diseasesListParams = new URLSearchParams(searchParams);
+    diseasesListParams.delete('mode');
+    const diseasesListQuery = diseasesListParams.toString();
+    const diseasesListPath = `/diseases${diseasesListQuery ? `?${diseasesListQuery}` : ''}`;
 
     const [formData, setFormData] = useState<Partial<Disease>>({
         nameRu: '',
@@ -639,11 +646,19 @@ export const DiseaseFormPage: React.FC = () => {
         setIsSaving(true);
         try {
             await diseaseService.deleteDisease(Number(id));
-            navigate('/diseases');
+            navigate(diseasesListPath);
         } catch (err: any) {
             setError(err.message || 'Ошибка при удалении');
             setIsSaving(false);
         }
+    };
+
+    const handleSwitchToEditMode = () => {
+        if (!isEdit || !id) return;
+        const params = new URLSearchParams(location.search);
+        params.set('mode', 'edit');
+        const query = params.toString();
+        navigate(`/diseases/edit/${id}${query ? `?${query}` : ''}`);
     };
 
     const handleFileUpload = async () => {
@@ -900,17 +915,17 @@ export const DiseaseFormPage: React.FC = () => {
     ];
 
     return (
-        <div className="p-6 max-w-4xl mx-auto space-y-6">
+        <div className="p-6 max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
-                <Button variant="ghost" onClick={() => navigate('/diseases')} className="rounded-xl">
+                <Button variant="ghost" onClick={() => navigate(diseasesListPath)} className="rounded-xl">
                     <ChevronLeft className="w-5 h-5 mr-1" />
                     Назад
                 </Button>
                 <h1 className="text-2xl font-black text-slate-900 dark:text-white-800">
-                    {isEdit ? 'Редактировать заболевание' : 'Новое заболевание'}
+                    {isViewMode ? 'Карточка заболевания' : isEdit ? 'Редактировать заболевание' : 'Новое заболевание'}
                 </h1>
                 <div className="flex gap-2">
-                    {isEdit && (
+                    {isEdit && !isViewMode && (
                         <Button
                             type="button"
                             variant="ghost"
@@ -919,6 +934,17 @@ export const DiseaseFormPage: React.FC = () => {
                         >
                             <Trash2 className="w-5 h-5 mr-2" />
                             Удалить
+                        </Button>
+                    )}
+                    {isViewMode && (
+                        <Button
+                            type="button"
+                            variant="primary"
+                            onClick={handleSwitchToEditMode}
+                            className="h-12 px-6 rounded-xl font-bold"
+                        >
+                            <FileText className="w-5 h-5 mr-2" />
+                            Перейти в редактирование
                         </Button>
                     )}
                     {!isEdit && (
@@ -947,7 +973,7 @@ export const DiseaseFormPage: React.FC = () => {
                 </div>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-6">
+            <form onSubmit={handleSave} className={isViewMode ? 'space-y-6 pointer-events-none select-none' : 'space-y-6'}>
                 <div id={FORM_SECTION_IDS.general} className="scroll-mt-24">
                 <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl overflow-hidden relative">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1101,7 +1127,7 @@ export const DiseaseFormPage: React.FC = () => {
                         onCategoryChange={updateSymptomCategory}
                         onUpdate={updateSymptom}
                         onError={showTransientError}
-                        editable={true}
+                        editable={!isViewMode}
                     />
                 </Card>
                 </div>
@@ -1434,17 +1460,19 @@ export const DiseaseFormPage: React.FC = () => {
                                 <FileText className="w-6 h-6 text-teal-500" />
                                 Клинические рекомендации (PDF)
                             </h2>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={handleFileUpload}
-                                isLoading={isSaving}
-                                className="rounded-xl"
-                            >
-                                <Upload className="w-4 h-4 mr-2" />
-                                Загрузить PDF
-                            </Button>
+                            {!isViewMode && (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={handleFileUpload}
+                                    isLoading={isSaving}
+                                    className="rounded-xl"
+                                >
+                                    <Upload className="w-4 h-4 mr-2" />
+                                    Загрузить PDF
+                                </Button>
+                            )}
                         </div>
 
                         <div className="space-y-3">
@@ -1532,11 +1560,12 @@ export const DiseaseFormPage: React.FC = () => {
                     )}
                 </div>
 
+                {!isViewMode && (
                 <div className="flex justify-end gap-3 pt-4 pb-12">
                     <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => navigate('/diseases')}
+                        onClick={() => navigate(diseasesListPath)}
                         className="h-14 px-8 rounded-2xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold"
                     >
                         Отмена
@@ -1551,6 +1580,7 @@ export const DiseaseFormPage: React.FC = () => {
                         {isEdit ? 'Сохранить изменения' : 'Создать заболевание'}
                     </Button>
                 </div>
+                )}
             </form>
 
             <ConfirmDialog

@@ -8,7 +8,6 @@
 
 | Дата | ID | Модуль | Задача | Статус | Детали |
 |------|----|--------|--------|--------|--------|
-| 15.04.2026 | TASK-059 | diseases/ai-assistant | Diseases AI Assistant: переключаемые режимы RAG и без RAG | 🔄 IN_PROGRESS | [→](tasks/15.04.2026/TASK-059.md) |
 | 02.04.2026 | TASK-001 | visits/cdss | Консервативный AI-ранжинг при размытых жалобах | ❌ Superseded by TASK-057 | [→](tasks/02.04.2026/TASK-001.md) |
 | 15.04.2026 | TASK-056 | cross-cutting/tests | TypeScript cleanup + full test suite green (309/309) | ✅ DONE | [→](tasks/15.04.2026/TASK-056.md) |
 | 07.04.2026 | TASK-037 | diseases/form | Специфичность и патогномоничность симптомов в базе знаний заболеваний | ✅ DONE | [→](tasks/07.04.2026/TASK-037.md) |
@@ -23,6 +22,8 @@
 
 | Дата | ID | Модуль | Задача | Итог |
 |------|----|--------|--------|------|
+| 15.04.2026 | TASK-059 | diseases/ai-assistant | Diseases AI Assistant: переключаемые режимы RAG и без RAG | ✅ DONE (explicit rag/direct mode switch in UI+IPC+service+tests) | [→](tasks/15.04.2026/TASK-059.md) |
+| 15.04.2026 | TASK-060 | diseases/list-ui | Анимация появления границы при hover на карточке заболевания | ✅ DONE (hover border appears with smooth transition in light/dark themes) | [→](tasks/15.04.2026/TASK-060.md) |
 | 15.04.2026 | TASK-058 | visits/medications | Allergy alert: подсветка препарата и фармгруппы при лекарственной аллергии в анамнезе | ✅ DONE (allergy risk highlighting implemented and verified) | [→](tasks/15.04.2026/TASK-058.md) |
 | 15.04.2026 | TASK-057 | visits/cdss | CDSS: Migrate parseComplaints + rankDiagnoses → Local LLM | ✅ DONE (Local LLM migration complete + stability fixes + tests green) | [→](tasks/15.04.2026/TASK-057.md) |
 | 12.04.2026 | TASK-052 | diseases/guidelines | ИИ-помощник (RAG) во вкладке заболевания | ✅ DONE (updated 13.04.2026: кеш последнего ответа ИИ до нового запроса) | [→](tasks/12.04.2026/TASK-052.md) |

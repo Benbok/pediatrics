@@ -89,7 +89,7 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onSe
 
     return (
         <Card
-            className="p-4 hover:border-primary-500 transition-colors cursor-pointer group"
+            className="relative p-4 border-slate-200 dark:border-slate-800 transition-all duration-200 cursor-pointer group before:content-[''] before:absolute before:inset-0 before:rounded-xl before:border-2 before:border-sky-500/90 dark:before:border-sky-400/80 before:opacity-0 before:transition-opacity before:duration-200 hover:before:opacity-100 before:pointer-events-none"
             onClick={() => medicationId && onSelect(medicationId)}
         >
             <div className="flex items-start justify-between">

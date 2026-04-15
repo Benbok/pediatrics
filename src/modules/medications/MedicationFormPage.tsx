@@ -71,6 +71,7 @@ export const MedicationFormPage: React.FC = () => {
     const location = useLocation();
     const [searchParams] = useSearchParams();
     const isEdit = !!id;
+    const isViewMode = isEdit && searchParams.get('mode') === 'view';
     
     // Определяем источник навигации
     const fromDisease = searchParams.get('from') === 'disease';
@@ -510,24 +511,44 @@ export const MedicationFormPage: React.FC = () => {
         }
     };
 
+    const handleSwitchToEditMode = () => {
+        if (!isEdit || !id) return;
+        const params = new URLSearchParams(location.search);
+        params.set('mode', 'edit');
+        const query = params.toString();
+        navigate(`/medications/${id}${query ? `?${query}` : ''}`);
+    };
+
     return (
-        <div className="p-6 max-w-5xl mx-auto space-y-6">
+        <div className="p-6 max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <Button variant="ghost" onClick={handleBack} className="rounded-xl">
                     <ChevronLeft className="w-5 h-5 mr-1" />
                     Назад
                 </Button>
                 <div className="flex items-center gap-3">
-                    <Button
-                        variant="secondary"
-                        onClick={() => setShowImportDialog(true)}
-                        className="rounded-xl"
-                    >
-                        <Download className="w-5 h-5 mr-2" />
-                        Импорт из Видаль
-                    </Button>
+                    {!isViewMode && (
+                        <Button
+                            variant="secondary"
+                            onClick={() => setShowImportDialog(true)}
+                            className="rounded-xl"
+                        >
+                            <Download className="w-5 h-5 mr-2" />
+                            Импорт из Видаль
+                        </Button>
+                    )}
+                    {isViewMode && (
+                        <Button
+                            variant="primary"
+                            onClick={handleSwitchToEditMode}
+                            className="rounded-xl"
+                        >
+                            <FileText className="w-5 h-5 mr-2" />
+                            Перейти в редактирование
+                        </Button>
+                    )}
                     <h1 className="text-2xl font-black text-slate-900 dark:text-white">
-                        {isEdit ? 'Редактировать препарат' : 'Новый препарат'}
+                        {isViewMode ? 'Карточка препарата' : isEdit ? 'Редактировать препарат' : 'Новый препарат'}
                     </h1>
                 </div>
             </div>
@@ -583,7 +604,7 @@ export const MedicationFormPage: React.FC = () => {
 
             {/* Режим: форма */}
             {activeTab === 'form' && (
-            <form onSubmit={handleSave} className="space-y-6 pb-20">
+            <form onSubmit={handleSave} className={isViewMode ? 'space-y-6 pb-20 pointer-events-none select-none' : 'space-y-6 pb-20'}>
                 <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl">
                     <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                         <Pill className="w-5 h-5 text-primary-500" />
@@ -1297,6 +1318,7 @@ export const MedicationFormPage: React.FC = () => {
                     </div>
                 )}
 
+                {!isViewMode && (
                 <div className="flex justify-between items-center pt-6">
                     {/* Кнопка удаления (только в режиме редактирования) */}
                     {isEdit && id && (
@@ -1332,6 +1354,7 @@ export const MedicationFormPage: React.FC = () => {
                         </Button>
                     </div>
                 </div>
+                )}
             </form>
             )} {/* end activeTab === 'form' */}
 

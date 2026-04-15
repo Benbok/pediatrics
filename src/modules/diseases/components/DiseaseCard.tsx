@@ -1,9 +1,8 @@
 import React from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
 import { Disease } from '../../../types';
-import { ChevronRight, FileText, Activity } from 'lucide-react';
+import { FileText, Activity } from 'lucide-react';
 
 interface DiseaseCardProps {
     disease: Disease;
@@ -14,7 +13,7 @@ interface DiseaseCardProps {
 export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, onSelect, onDelete }) => {
     return (
         <Card
-            className="p-4 hover:border-primary-500 transition-colors cursor-pointer group"
+            className="relative p-4 border-slate-200 dark:border-slate-800 transition-all duration-200 cursor-pointer group before:content-[''] before:absolute before:inset-0 before:rounded-xl before:border-2 before:border-sky-500/90 dark:before:border-sky-400/80 before:opacity-0 before:transition-opacity before:duration-200 hover:before:opacity-100 before:pointer-events-none"
             onClick={() => disease.id && onSelect(disease.id)}
         >
             <div className="flex items-start justify-between">
@@ -22,7 +21,7 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, onSelect, onD
                     <div className="flex flex-col gap-2 mb-2">
                         <div className="flex flex-wrap gap-1">
                             {(() => {
-                                const codes = [];
+                                const codes: string[] = [];
                                 // Add primary code if exists
                                 if (disease.icd10Code) codes.push(disease.icd10Code);
 
@@ -75,11 +74,6 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, onSelect, onD
                     </div>
                 </div>
 
-                <div className="flex flex-col items-center gap-2 ml-4 self-center">
-                    <Button variant="ghost" size="sm" className="rounded-full p-2 h-9 w-9">
-                        <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-primary-500 transition-colors" />
-                    </Button>
-                </div>
             </div>
 
             {disease.guidelines && disease.guidelines.length > 0 && (
