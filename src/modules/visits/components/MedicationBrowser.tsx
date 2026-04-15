@@ -8,7 +8,8 @@ import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { PrettySelect, type SelectOption } from '../../vaccination/components/PrettySelect';
 import { sanitizeDisplayText } from '../../../utils/textSanitizers';
-import { Pill, Search, X, Plus, Loader2 } from 'lucide-react';
+import { extractMedicationAllergyTerms, getMedicationAllergyRiskForMedication } from '../services/medicationAllergyRisk.service';
+import { Pill, Search, X, Plus, Loader2, AlertTriangle } from 'lucide-react';
 
 const DISPLAY_LIMIT = 50;
 
@@ -17,13 +18,15 @@ interface MedicationBrowserProps {
     onClose: () => void;
     onSelect: (medication: Medication) => void;
     currentIcd10Codes?: string[]; // Для фильтрации по ICD-10
+    medicationAllergyText?: string | null;
 }
 
 export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
     isOpen,
     onClose,
     onSelect,
-    currentIcd10Codes = []
+    currentIcd10Codes = [],
+    medicationAllergyText = null,
 }) => {
     const { medications: cachedMedications, loadMedications, isLoadingMedications } = useDataCache();
     const [searchTerm, setSearchTerm] = useState('');
@@ -90,6 +93,30 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
         return currentIcd10Codes;
     }, [expandedIcdCodes, currentIcd10Codes]);
 
+    const allergyTerms = useMemo(
+        () => extractMedicationAllergyTerms(medicationAllergyText),
+        [medicationAllergyText]
+    );
+
+    const allergyRiskByMedicationId = useMemo(() => {
+        const risks = new Map<number, ReturnType<typeof getMedicationAllergyRiskForMedication>>();
+        (cachedMedications ?? []).forEach((medication) => {
+            if (!medication.id) return;
+            risks.set(
+                medication.id,
+                getMedicationAllergyRiskForMedication(
+                    {
+                        nameRu: medication.nameRu,
+                        activeSubstance: medication.activeSubstance,
+                        clinicalPharmGroup: medication.clinicalPharmGroup,
+                    },
+                    allergyTerms
+                )
+            );
+        });
+        return risks;
+    }, [cachedMedications, allergyTerms]);
+
     const medicationsForGroupOptions = useMemo(() => {
         const source = cachedMedications ?? [];
         if (!filterByIcd10 || diagnosisFilterCodes.length === 0) {
@@ -97,6 +124,20 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
         }
         return source.filter(med => hasDiagnosisMatch(med.icd10Codes, diagnosisFilterCodes));
     }, [cachedMedications, filterByIcd10, diagnosisFilterCodes]);
+
+    const groupRiskSet = useMemo(() => {
+        const riskyGroups = new Set<string>();
+
+        medicationsForGroupOptions.forEach((medication) => {
+            if (!medication.id || !medication.clinicalPharmGroup) return;
+            const risk = allergyRiskByMedicationId.get(medication.id);
+            if (risk?.hasMedicationRisk || risk?.hasGroupRisk) {
+                riskyGroups.add(medication.clinicalPharmGroup);
+            }
+        });
+
+        return riskyGroups;
+    }, [medicationsForGroupOptions, allergyRiskByMedicationId]);
 
     // Уникальные группы для фильтра (при включенном ICD-фильтре только релевантные диагнозу)
     const groupSelectOptions = useMemo<Array<SelectOption<string>>>(() => {
@@ -111,10 +152,17 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
             }
         });
         const sorted = Array.from(seen.entries())
-            .map(([key, raw]) => ({ value: raw, label: sanitizeDisplayText(raw) }))
+            .map(([key, raw]) => {
+                const sanitizedLabel = sanitizeDisplayText(raw);
+                const isRiskyGroup = groupRiskSet.has(raw);
+                return {
+                    value: raw,
+                    label: isRiskyGroup ? `[Риск аллергии] ${sanitizedLabel}` : sanitizedLabel,
+                };
+            })
             .sort((a, b) => a.label.localeCompare(b.label, 'ru'));
         return [{ value: '', label: 'Все группы' }, ...sorted];
-    }, [medicationsForGroupOptions]);
+    }, [medicationsForGroupOptions, groupRiskSet]);
 
     useEffect(() => {
         if (!selectedGroup) {
@@ -183,6 +231,14 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
 
                 {/* Search and Filters */}
                 <div className="p-6 border-b border-slate-200 dark:border-slate-800 space-y-3 flex-shrink-0">
+                    {allergyTerms.length > 0 && (
+                        <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                У пациента указана лекарственная аллергия. Препараты и группы риска помечены в списке.
+                            </p>
+                        </div>
+                    )}
                     <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <Input
@@ -257,49 +313,82 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
                     ) : (
                         <>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {filteredMedications.slice(0, displayCount).map((med) => (
-                                <div
-                                    key={med.id}
-                                    className="p-4 rounded-2xl cursor-pointer group border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-indigo-300 hover:shadow-md hover:shadow-indigo-500/10 transition-all duration-200"
-                                    onClick={() => {
-                                        onSelect(med);
-                                        onClose();
-                                    }}
-                                >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug mb-1 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors">
-                                                {med.nameRu}
-                                            </p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                                                {med.activeSubstance}
-                                            </p>
-                                            {med.clinicalPharmGroup && (
-                                                <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mb-2 leading-snug truncate" title={sanitizeDisplayText(med.clinicalPharmGroup)}>
-                                                    {sanitizeDisplayText(med.clinicalPharmGroup)}
+                            {filteredMedications.slice(0, displayCount).map((med) => {
+                                const risk = med.id ? allergyRiskByMedicationId.get(med.id) : undefined;
+                                const hasMedicationRisk = Boolean(risk?.hasMedicationRisk);
+                                const hasGroupRisk = Boolean(risk?.hasGroupRisk);
+
+                                return (
+                                    <div
+                                        key={med.id}
+                                        className={`p-4 rounded-2xl cursor-pointer group border-2 bg-white dark:bg-slate-800/50 hover:shadow-md transition-all duration-200 ${
+                                            hasMedicationRisk
+                                                ? 'border-red-300 dark:border-red-800 hover:border-red-400 hover:shadow-red-500/10'
+                                                : hasGroupRisk
+                                                    ? 'border-amber-300 dark:border-amber-800 hover:border-amber-400 hover:shadow-amber-500/10'
+                                                    : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:shadow-indigo-500/10'
+                                        }`}
+                                        onClick={() => {
+                                            onSelect(med);
+                                            onClose();
+                                        }}
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug mb-1 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors">
+                                                    {med.nameRu}
                                                 </p>
-                                            )}
-                                            {med.icd10Codes && med.icd10Codes.length > 0 && (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {med.icd10Codes.slice(0, 3).map((code, idx) => (
-                                                        <Badge key={idx} variant="outline" size="sm" className="font-mono text-[10px]">
-                                                            {code}
-                                                        </Badge>
-                                                    ))}
-                                                    {med.icd10Codes.length > 3 && (
-                                                        <Badge variant="outline" size="sm" className="text-[10px]">
-                                                            +{med.icd10Codes.length - 3}
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 dark:group-hover:bg-indigo-900/40 dark:group-hover:text-indigo-400 transition-colors">
-                                            <Plus className="w-4 h-4" />
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                                    {med.activeSubstance}
+                                                </p>
+                                                {(hasMedicationRisk || hasGroupRisk) && (
+                                                    <div className="flex flex-wrap gap-1 mb-2">
+                                                        {hasMedicationRisk && (
+                                                            <Badge variant="error" size="sm" className="text-[10px]">
+                                                                Аллергия
+                                                            </Badge>
+                                                        )}
+                                                        {hasGroupRisk && (
+                                                            <Badge variant="warning" size="sm" className="text-[10px]">
+                                                                Группа риска
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {med.clinicalPharmGroup && (
+                                                    <p
+                                                        className={`text-[11px] mb-2 leading-snug truncate ${
+                                                            hasGroupRisk
+                                                                ? 'text-amber-700 dark:text-amber-300'
+                                                                : 'text-indigo-600 dark:text-indigo-400'
+                                                        }`}
+                                                        title={sanitizeDisplayText(med.clinicalPharmGroup)}
+                                                    >
+                                                        {sanitizeDisplayText(med.clinicalPharmGroup)}
+                                                    </p>
+                                                )}
+                                                {med.icd10Codes && med.icd10Codes.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {med.icd10Codes.slice(0, 3).map((code, idx) => (
+                                                            <Badge key={idx} variant="outline" size="sm" className="font-mono text-[10px]">
+                                                                {code}
+                                                            </Badge>
+                                                        ))}
+                                                        {med.icd10Codes.length > 3 && (
+                                                            <Badge variant="outline" size="sm" className="text-[10px]">
+                                                                +{med.icd10Codes.length - 3}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 dark:group-hover:bg-indigo-900/40 dark:group-hover:text-indigo-400 transition-colors">
+                                                <Plus className="w-4 h-4" />
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                         {filteredMedications.length > displayCount && (
                             <div className="mt-4 text-center">

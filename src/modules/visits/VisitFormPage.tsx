@@ -10,7 +10,7 @@ import type { VisitDraftCachePayload } from '../../services/draftService';
 import { useTabs } from '../../context/TabsContext';
 import { useVisitAnalysis } from '../../hooks/useVisitAnalysis';
 import debounce from 'lodash/debounce';
-import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, MedicationRecommendation, getFullName } from '../../types';
+import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, MedicationRecommendation, AllergyStatusData, getFullName } from '../../types';
 import { MedicationBrowser } from './components/MedicationBrowser';
 import { VisitTypeSelector, VisitType } from './components/VisitTypeSelector';
 import { AnamnesisSection } from './components/AnamnesisSection';
@@ -83,6 +83,7 @@ import { calculateAgeInMonths, getFormattedAge } from '../../utils/ageUtils';
 import { getRouteLabel } from '../../utils/routeOfAdmin';
 import { getDiluentLabel } from '../../utils/diluentTypes';
 import { getRandomVitalsInNormForAge } from './constants';
+import { parseMedicationAllergyFromAnamnesis } from './services/medicationAllergyRisk.service';
 
 type PendingFieldRefinement = {
     original: string;
@@ -115,6 +116,8 @@ export const VisitFormPage: React.FC = () => {
 
     const [suggestions, setSuggestions] = useState<DiagnosisSuggestion[]>([]);
     const visitAnalysis = useVisitAnalysis({ maxConcurrentAnalyses: 1, cooldownMs: 2000 });
+    const [analysisProgress, setAnalysisProgress] = useState(0);
+    const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -215,6 +218,33 @@ export const VisitFormPage: React.FC = () => {
             navigate(`/patients/${childId}/visits`);
         }, 0);
     }, [closeTab, tabId, navigate, childId, hasLocalChanges, formData, draftKey, recommendations, suggestions, currentUser?.id]);
+
+    // Анимация прогресса AI анализа
+    useEffect(() => {
+        if (visitAnalysis.isAnalyzing) {
+            setAnalysisProgress(5);
+            progressIntervalRef.current = setInterval(() => {
+                setAnalysisProgress(prev => {
+                    if (prev < 30) return prev + 5;
+                    if (prev < 70) return prev + 3;
+                    if (prev < 90) return prev + 1;
+                    return prev;
+                });
+            }, 300);
+        } else if (analysisProgress > 0) {
+            if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+                progressIntervalRef.current = null;
+            }
+            setAnalysisProgress(100);
+            const t = setTimeout(() => setAnalysisProgress(0), 600);
+            return () => clearTimeout(t);
+        }
+        return () => {
+            if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [visitAnalysis.isAnalyzing]);
 
     // Регистрация вкладки ТОЛЬКО после загрузки данных ребенка
     useEffect(() => {
@@ -1579,6 +1609,11 @@ export const VisitFormPage: React.FC = () => {
         ? (formData.comorbidities ? JSON.parse(formData.comorbidities) : [])
         : (Array.isArray(formData.comorbidities) ? formData.comorbidities : []);
 
+    const medicationAllergyText = useMemo(
+        () => parseMedicationAllergyFromAnamnesis(formData.allergyStatusData as AllergyStatusData | string | null | undefined),
+        [formData.allergyStatusData]
+    );
+
     // Мемоизированные ICD коды для DiagnosticBrowser (предотвращает лишние перерендеры)
     const diagnosticBrowserIcdCodes = useMemo(() => {
         const codes: string[] = [];
@@ -2018,6 +2053,7 @@ export const VisitFormPage: React.FC = () => {
                             pendingRefinements={pendingRefinements}
                             onAcceptRefine={handleAcceptRefine}
                             onRejectRefine={handleRejectRefine}
+                            analysisProgress={analysisProgress}
                         />
                     </div>
 
@@ -2387,7 +2423,7 @@ export const VisitFormPage: React.FC = () => {
                 </div>
 
                 <div className="lg:col-span-1">
-                    <div className="sticky top-[110px] space-y-6 self-start max-h-[calc(100vh-140px)] overflow-y-auto pr-2 custom-scrollbar transition-all duration-300">
+                    <div className="sticky top-[110px] space-y-6 self-start transition-all duration-300">
                         <Card className="p-5 rounded-[32px] bg-gradient-to-br from-primary-50 to-white dark:from-primary-950/20 dark:to-slate-900 border-primary-100 shadow-lg">
                             <h2 className="text-sm font-black text-primary-700 dark:text-primary-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                 <Sparkles className="w-4 h-4" />
@@ -2541,52 +2577,6 @@ export const VisitFormPage: React.FC = () => {
                             </Card>
                         )}
 
-                        {/* Disease Knowledge Recommendations Card */}
-                        {diseaseRecommendations.length > 0 && (
-                            <Card className="p-5 rounded-[32px] border-teal-100 dark:border-teal-900/30 shadow-sm animate-in zoom-in-95 duration-200 bg-gradient-to-br from-teal-50/50 to-white dark:from-teal-950/10 dark:to-slate-900">
-                                <h2 className="text-sm font-black text-teal-700 dark:text-teal-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <BookOpen className="w-4 h-4" />
-                                    Рекомендации из базы знаний
-                                    {isLoadingDiseaseRecs && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
-                                </h2>
-                                <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
-                                    {diseaseRecommendations.map((rec, idx) => {
-                                        const categoryLabels: Record<string, string> = {
-                                            regimen: 'Режим',
-                                            nutrition: 'Питание',
-                                            followup: 'Наблюдение',
-                                            activity: 'Активность',
-                                            education: 'Родителям',
-                                            other: 'Прочее',
-                                        };
-                                        const alreadyAdded = recommendations.includes(rec.item.text);
-                                        return (
-                                            <div key={idx} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-teal-100 dark:border-teal-900/30 flex items-start gap-3">
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-snug">{rec.item.text}</p>
-                                                    <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-1 font-semibold uppercase tracking-wide">
-                                                        {categoryLabels[rec.item.category] || rec.item.category}
-                                                    </p>
-                                                </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        if (!alreadyAdded) {
-                                                            setRecommendations(prev => [...prev, rec.item.text]);
-                                                        }
-                                                    }}
-                                                    disabled={alreadyAdded}
-                                                    className={`flex-shrink-0 ${alreadyAdded ? 'text-green-500' : 'text-teal-600 hover:text-teal-700'}`}
-                                                >
-                                                    {alreadyAdded ? <CheckCircle2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                                                </Button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </Card>
-                        )}
                     </div>
                 </div>
             </div>
@@ -2614,6 +2604,7 @@ export const VisitFormPage: React.FC = () => {
                 onSelect={async (medication) => {
                     await addPrescription(medication);
                 }}
+                medicationAllergyText={medicationAllergyText}
                 currentIcd10Codes={[
                     // Собираем коды всех диагнозов (основной + осложнения + сопутствующие)
                     ...(primaryDiagnosis?.code ? [primaryDiagnosis.code] : []),

@@ -8,7 +8,7 @@ vi.mock('electron', () => ({
 
 const { rankDiagnosesWithContext } = require('../electron/services/cdssRankingService.cjs');
 const { MAX_CANDIDATES_FOR_AI_RANK } = require('../electron/config/cdssConfig.cjs');
-const cdssService = require('../electron/services/cdssService.cjs');
+const cdssLocalLlmSvc = require('../electron/services/cdssLocalLlmService.cjs');
 
 type Candidate = {
     disease: { id: number; nameRu: string };
@@ -34,19 +34,15 @@ function makeCandidates(count: number): Candidate[] {
 }
 
 describe('CDSS Pipeline Integration (No-AI fallback path)', () => {
-    const originalApiKey = process.env.VITE_GEMINI_API_KEY;
 
     beforeEach(() => {
-        delete process.env.VITE_GEMINI_API_KEY;
+        // Default: local LLM unavailable — exercises fallback path
+        vi.spyOn(cdssLocalLlmSvc, 'isLocalLlmAvailable').mockResolvedValue(false);
+        vi.spyOn(cdssLocalLlmSvc, 'rankDiagnosesLocal').mockResolvedValue([]);
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
-        if (originalApiKey === undefined) {
-            delete process.env.VITE_GEMINI_API_KEY;
-            return;
-        }
-        process.env.VITE_GEMINI_API_KEY = originalApiKey;
     });
 
     it('returns bounded fallback ranking with phase1 metadata', async () => {
@@ -94,10 +90,9 @@ describe('CDSS Pipeline Integration (No-AI fallback path)', () => {
         expect(result).toEqual([]);
     });
 
-    it('uses AI ranking when API key is available and preserves phase1 factors', async () => {
-        process.env.VITE_GEMINI_API_KEY = 'fake-key-for-tests';
-
-        vi.spyOn(cdssService, 'rankDiagnoses').mockResolvedValue([
+    it('uses AI ranking when local LLM is available and preserves phase1 factors', async () => {
+        vi.spyOn(cdssLocalLlmSvc, 'isLocalLlmAvailable').mockResolvedValue(true);
+        vi.spyOn(cdssLocalLlmSvc, 'rankDiagnosesLocal').mockResolvedValue([
             {
                 diseaseId: 2,
                 confidence: 0.91,
@@ -125,10 +120,9 @@ describe('CDSS Pipeline Integration (No-AI fallback path)', () => {
         expect(result[1].phase1Score).toBeCloseTo(candidates[0].normalizedScore, 5);
     });
 
-    it('falls back to phase1 ranking when AI ranking throws an error', async () => {
-        process.env.VITE_GEMINI_API_KEY = 'fake-key-for-tests';
-
-        vi.spyOn(cdssService, 'rankDiagnoses').mockRejectedValue(new Error('AI service unavailable'));
+    it('falls back to phase1 ranking when local LLM ranking throws an error', async () => {
+        vi.spyOn(cdssLocalLlmSvc, 'isLocalLlmAvailable').mockResolvedValue(true);
+        vi.spyOn(cdssLocalLlmSvc, 'rankDiagnosesLocal').mockRejectedValue(new Error('AI service unavailable'));
 
         const candidates = makeCandidates(5);
         const result = await rankDiagnosesWithContext(['кашель'], candidates, {}, 'кашель');

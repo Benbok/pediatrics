@@ -142,6 +142,7 @@ interface DiseaseHistorySectionProps {
     pendingRefinements?: Record<string, PendingRefinement>;
     onAcceptRefine?: (field: string) => void;
     onRejectRefine?: (field: string) => void;
+    analysisProgress?: number;
 }
 
 export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
@@ -158,6 +159,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
     pendingRefinements = {},
     onAcceptRefine,
     onRejectRefine,
+    analysisProgress = 0,
 }) => {
     const hasDiseaseHistoryData = Boolean(
         formData.complaints?.trim() ||
@@ -188,7 +190,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                         {isAnalyzing ? (
                             <>
                                 <Sparkles className="w-4 h-4 animate-pulse" />
-                                Анализ AI...
+                                {analysisProgress > 0 && analysisProgress < 100 ? `Анализ ${analysisProgress}%` : 'Анализ AI...'}
                             </>
                         ) : (
                             <>
@@ -217,7 +219,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => onRefine('complaints', formData.complaints || '')}
-                                    disabled={refiningFields.has('complaints') || llmAvailable === false}
+                                    disabled={refiningFields.size > 0 || isAnalyzing || llmAvailable === false}
                                     className="flex items-center gap-1.5 text-xs"
                                 >
                                     {refiningFields.has('complaints') ? (
@@ -290,7 +292,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => onRefine('diseaseOnset', formData.diseaseOnset || '')}
-                                    disabled={refiningFields.has('diseaseOnset') || llmAvailable === false}
+                                    disabled={refiningFields.size > 0 || isAnalyzing || llmAvailable === false}
                                     className="flex items-center gap-1.5 text-xs"
                                 >
                                     {refiningFields.has('diseaseOnset') ? (
@@ -363,7 +365,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => onRefine('diseaseCourse', formData.diseaseCourse || '')}
-                                    disabled={refiningFields.has('diseaseCourse') || llmAvailable === false}
+                                    disabled={refiningFields.size > 0 || isAnalyzing || llmAvailable === false}
                                     className="flex items-center gap-1.5 text-xs"
                                 >
                                     {refiningFields.has('diseaseCourse') ? (
@@ -436,7 +438,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => onRefine('treatmentBeforeVisit', formData.treatmentBeforeVisit || '')}
-                                    disabled={refiningFields.has('treatmentBeforeVisit') || llmAvailable === false}
+                                    disabled={refiningFields.size > 0 || isAnalyzing || llmAvailable === false}
                                     className="flex items-center gap-1.5 text-xs"
                                 >
                                     {refiningFields.has('treatmentBeforeVisit') ? (

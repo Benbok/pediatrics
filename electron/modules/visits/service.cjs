@@ -3,7 +3,7 @@ const { logger } = require('../../logger.cjs');
 const { z } = require('zod');
 const { calculateBMI, calculateBSA, validateAnthropometry } = require('../../utils/anthropometry.cjs');
 const { normalizeText, normalizeContraindicationsText } = require('../../utils/cdssVocabulary.cjs');
-const { parseComplaints, rankDiagnoses } = require('../../services/cdssService.cjs');
+const { parseComplaintsLocal } = require('../../services/cdssLocalLlmService.cjs');
 const { DiseaseService } = require('../diseases/service.cjs');
 const { decrypt } = require('../../crypto.cjs');
 const { MAX_FALLBACK_CONFIDENCE, MIN_FALLBACK_MATCHES, MAX_FALLBACK_SUGGESTIONS } = require('../../config/cdssConfig.cjs');
@@ -612,9 +612,9 @@ const VisitService = {
             const ageMonths = (now.getFullYear() - birthDate.getFullYear()) * 12 +
                 (now.getMonth() - birthDate.getMonth());
 
-            // 2. Парсим клинические данные через Gemini (расширенный анализ)
+            // 2. Парсим клинические данные через локальную LLM
             logger.info(`[VisitService] Parsing clinical data for visit ${visitId}`);
-            const parsed = await parseComplaints(
+            const parsed = await parseComplaintsLocal(
                 combinedClinicalText,
                 ageMonths,
                 visit.currentWeight || null

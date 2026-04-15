@@ -5,7 +5,7 @@ const { MAX_CANDIDATES_FOR_AI_RANK } = require('../config/cdssConfig.cjs');
 /**
  * Двухфазный ранкинг диагнозов с детальным логированием
  * Фаза 1: BM25 + эмбеддинги (быстрый фильтр, уже выполнен CDSSSearchService)
- * Фаза 2: Gemini AI (точный ранкинг топ-результатов)
+ * Фаза 2: Local LLM (LM Studio) — точный ранкинг топ-результатов
  */
 async function rankDiagnosesWithContext(symptoms, candidates, patientContext = {}, clinicalQuery = '') {
     const startTime = Date.now();
@@ -29,10 +29,11 @@ async function rankDiagnosesWithContext(symptoms, candidates, patientContext = {
         logger.info(`[CDSSRankingService] Phase 1 top candidates:`, topCandidates);
     }
 
-    const canRank = Boolean(process.env.VITE_GEMINI_API_KEY);
+    const { isLocalLlmAvailable } = require('./cdssLocalLlmService.cjs');
+    const canRank = await isLocalLlmAvailable();
     if (!canRank) {
-        logger.warn(`[CDSSRankingService] Phase 2 (AI): SKIPPED - No API key available`);
-        logDegradation('rank', 'NoAI');
+        logger.warn(`[CDSSRankingService] Phase 2 (LocalLLM): SKIPPED - LM Studio недоступна`);
+        logDegradation('rank', 'NoLocalLLM');
 
         const fallbackResults = candidates.slice(0, MAX_CANDIDATES_FOR_AI_RANK).map((c, idx) => {
             const confidence = Math.max(0.1, 1 - idx * 0.08);
@@ -56,30 +57,25 @@ async function rankDiagnosesWithContext(symptoms, candidates, patientContext = {
         return fallbackResults;
     }
 
-    // Фаза 2: AI ранкинг топ-кандидатов
+    // Фаза 2: Local LLM ранкинг топ-кандидатов
     const phase2Candidates = candidates.slice(0, MAX_CANDIDATES_FOR_AI_RANK);
-    logger.info(`[CDSSRankingService] Phase 2 (AI): Processing ${phase2Candidates.length} top candidates`);
+    logger.info(`[CDSSRankingService] Phase 2 (LocalLLM): Processing ${phase2Candidates.length} top candidates`);
 
     try {
-        const { rankDiagnoses } = require('./cdssService.cjs');
-
-        const diseasesForPrompt = phase2Candidates.map(c => {
-            const ev = (c.evidence || []).map(e => `${e.type || 'other'}:${e.chunkId}`).join(', ');
-            return {
-                ...c.disease,
-                _cdssEvidence: ev,
-                _cdssClinicalQuery: clinicalQuery,
-            };
-        });
+        const diseasesForPrompt = phase2Candidates.map(c => ({
+            ...c.disease,
+        }));
 
         const aiStartTime = Date.now();
-        const aiRankings = await rankDiagnoses(symptoms, diseasesForPrompt, {
+        const { rankDiagnosesLocal } = require('./cdssLocalLlmService.cjs');
+
+        const aiRankings = await rankDiagnosesLocal(symptoms, diseasesForPrompt, {
             ...patientContext,
             clinicalQuery,
         });
         const aiEndTime = Date.now();
 
-        logger.info(`[CDSSRankingService] Phase 2 (AI): Completed in ${aiEndTime - aiStartTime}ms`);
+        logger.info(`[CDSSRankingService] Phase 2 (LocalLLM): Completed in ${aiEndTime - aiStartTime}ms`);
 
         // Объединяем результаты фаз 1 и 2 с детальным логированием
         const finalResults = aiRankings.map(aiResult => {
@@ -118,14 +114,14 @@ async function rankDiagnosesWithContext(symptoms, candidates, patientContext = {
             logger.info(`[CDSSRankingService] Final top results:`, topResults);
         }
 
-        logDegradation('rank', 'AI');
+        logDegradation('rank', 'LocalLLM');
         const endTime = Date.now();
         logger.info(`[CDSSRankingService] Two-phase ranking completed in ${endTime - startTime}ms - ${finalResults.length} results`);
 
         return finalResults;
 
     } catch (error) {
-        logger.warn(`[CDSSRankingService] Phase 2 (AI): FAILED - ${error.message}`);
+        logger.warn(`[CDSSRankingService] Phase 2 (LocalLLM): FAILED - ${error.message}`);
         logDegradation('rank', 'Fallback');
 
         const fallbackResults = candidates.slice(0, MAX_CANDIDATES_FOR_AI_RANK).map((c, idx) => {

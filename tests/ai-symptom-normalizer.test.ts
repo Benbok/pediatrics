@@ -4,7 +4,7 @@
  */
 import './setup-ai-normalizer.cjs';
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as normalizer from '../electron/services/aiSymptomNormalizer.cjs';
 import { buildClinicalQuery } from '../electron/services/clinicalQueryBuilder.cjs';
 import { CDSSSearchService } from '../electron/services/cdssSearchService.cjs';
@@ -202,9 +202,10 @@ describe('AI Symptom Normalizer', () => {
             expect(Array.isArray(symptomOnly!.evidence)).toBe(true);
         });
 
-        it('cdssRankingService returns fallback rankings when AI is unavailable', async () => {
-            const prevKey = process.env.VITE_GEMINI_API_KEY;
-            delete process.env.VITE_GEMINI_API_KEY;
+        it('cdssRankingService returns fallback rankings when AI (local LLM) is unavailable', async () => {
+            // Spy on isLocalLlmAvailable to return false (no LM Studio in test environment)
+            const cdssLocalLlmSvc = require('../electron/services/cdssLocalLlmService.cjs');
+            vi.spyOn(cdssLocalLlmSvc, 'isLocalLlmAvailable').mockResolvedValue(false);
 
             const ranked = await rankDiagnosesWithContext(
                 ['кашель'],
@@ -219,8 +220,6 @@ describe('AI Symptom Normalizer', () => {
             expect(ranked.length).toBeGreaterThan(0);
             expect(ranked[0]).toHaveProperty('diseaseId');
             expect(String(ranked[0].reasoning)).toContain('AI недоступен');
-
-            if (prevKey) process.env.VITE_GEMINI_API_KEY = prevKey;
         });
     });
 

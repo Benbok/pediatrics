@@ -8,7 +8,9 @@
 
 | Дата | ID | Модуль | Задача | Статус | Детали |
 |------|----|--------|--------|--------|--------|
-| 02.04.2026 | TASK-001 | visits/cdss | Консервативный AI-ранжинг при размытых жалобах | 🔄 IN_PROGRESS | [→](tasks/02.04.2026/TASK-001.md) |
+| 15.04.2026 | TASK-058 | visits/medications | Allergy alert: подсветка препарата и фармгруппы при лекарственной аллергии в анамнезе | 🔄 IN_PROGRESS | [→](tasks/15.04.2026/TASK-058.md) |
+| 15.04.2026 | TASK-057 | visits/cdss | CDSS: Migrate parseComplaints + rankDiagnoses → Local LLM | 🔄 IN_PROGRESS | [→](tasks/15.04.2026/TASK-057.md) |
+| 02.04.2026 | TASK-001 | visits/cdss | Консервативный AI-ранжинг при размытых жалобах | ❌ Superseded by TASK-057 | [→](tasks/02.04.2026/TASK-001.md) |
 | 15.04.2026 | TASK-056 | cross-cutting/tests | TypeScript cleanup + full test suite green (309/309) | ✅ DONE | [→](tasks/15.04.2026/TASK-056.md) |
 | 07.04.2026 | TASK-037 | diseases/form | Специфичность и патогномоничность симптомов в базе знаний заболеваний | ✅ DONE | [→](tasks/07.04.2026/TASK-037.md) |
 | 07.04.2026 | TASK-038 | knowledge/rag | RAG-сервис: TTL-кэш запросов + педиатрический хард-фильтр + rule-based planner | ✅ DONE | [→](tasks/07.04.2026/TASK-038.md) |
