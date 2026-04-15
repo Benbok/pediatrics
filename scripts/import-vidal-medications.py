@@ -5,8 +5,8 @@ TASK-004: Импорт препаратов из vidal.db в dev.db
 Стратегия:
 - Один Document = одна запись Medication (уровень МНН)
 - Idempotent: проверяем по nameRu. Если существует — обновляем
-  Vidal-поля, НЕ трогая pediatricDosing/adultDosing/forms/isFavorite/icd10Codes
-  (если они уже заполнены вручную, т.е. != '[]' или null)
+    Vidal-поля, НЕ трогая pediatricDosing/forms/isFavorite/icd10Codes
+    (если они уже заполнены вручную, т.е. != '[]' или null)
 - HTML-контент сохраняется as-is (dangerouslySetInnerHTML используется во фронте)
 - Batching: COMMIT каждые 200 записей
 """
@@ -16,6 +16,7 @@ import json
 import re
 import sys
 import os
+from html import unescape
 from datetime import datetime, timezone
 
 VIDAL_DB = r"C:\Users\Arty\Desktop\ru.medsolutions\vidal.db"
@@ -36,11 +37,233 @@ def to_title_case(s: str | None) -> str:
 
 def strip_html(html: str | None) -> str | None:
     """Убираем HTML-теги, возвращаем plain text (для indications)."""
-    if not html:
-        return html
-    text = re.sub(r"<[^>]+>", "", html)
-    text = re.sub(r"\s+", " ", text).strip()
+    return clean_html_text(html)
+
+
+def clean_html_text(value: str | None) -> str | None:
+    """Приводит HTML/текст Vidal к читабельному plain-text формату."""
+    if not value:
+        return None
+
+    text = re.sub(r"(?i)<br\s*/?>", "\n", value)
+    text = re.sub(r"(?i)</(p|div|li|tr|h[1-6])>", "\n", text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = unescape(text)
+    text = re.sub(r"[\t\r\f\v ]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n", text)
+    text = re.sub(r"\s*\n\s*", "\n", text).strip()
     return text or None
+
+
+def parse_float(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return float(value.replace(",", "."))
+    except ValueError:
+        return None
+
+
+def normalize_unit(unit_raw: str | None) -> str | None:
+    if not unit_raw:
+        return None
+    u = unit_raw.lower().strip()
+    if u.startswith("мг"):
+        return "mg"
+    if u.startswith("мл"):
+        return "ml"
+    if u.startswith("капсул"):
+        return "capsule"
+    if u.startswith("доз"):
+        return "dose"
+    if u.startswith("капл"):
+        return "drop"
+    if u.startswith("таб"):
+        return "tablet"
+    if u.startswith("пак") or u.startswith("саш"):
+        return "sachet"
+    return unit_raw
+
+
+def infer_route(text: str) -> str | None:
+    t = text.lower()
+    if "интравагин" in t or "влагалищ" in t:
+        return "vaginal"
+    if "ректал" in t:
+        return "rectal"
+    if "ингаляц" in t:
+        return "inhalation"
+    if "внутрь" in t or "перораль" in t or "приема внутрь" in t:
+        return "oral"
+    return None
+
+
+def extract_times_per_day(text: str) -> int | None:
+    match = re.search(r"(?i)(\d+)(?:\s*[-–]\s*(\d+))?\s*раз(?:а)?\s*(?:/|в\s*)(?:сут|день|сутки)", text)
+    if not match:
+        return None
+    low = int(match.group(1))
+    high = int(match.group(2)) if match.group(2) else low
+    return max(low, high)
+
+
+def extract_fixed_dose(text: str) -> dict | None:
+    match = re.search(
+        r"(?i)по\s*(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*(мг|мл|капсул\w*|доз\w*|капл\w*|таблет\w*|пак\w*|саше)",
+        text,
+    )
+    if not match:
+        return None
+
+    dose_min = parse_float(match.group(1))
+    dose_max = parse_float(match.group(2)) if match.group(2) else dose_min
+    unit = normalize_unit(match.group(3))
+    if dose_min is None or dose_max is None:
+        return None
+
+    return {
+        "type": "fixed",
+        "fixedDose": {
+            "min": dose_min,
+            "max": dose_max,
+            "unit": unit,
+        },
+        "unit": unit,
+        "maxSingleDose": dose_max,
+    }
+
+
+def extract_weight_based(text: str) -> dict | None:
+    matches = re.findall(r"(?i)(\d+(?:[.,]\d+)?)\s*[-–]?\s*(\d+(?:[.,]\d+)?)?\s*мг\s*/\s*кг", text)
+    if not matches:
+        return None
+
+    low_raw, high_raw = matches[0]
+    mg_per_kg = parse_float(low_raw)
+    max_mg_per_kg = parse_float(high_raw) if high_raw else mg_per_kg
+    if mg_per_kg is None:
+        return None
+
+    dosing = {
+        "type": "weight_based",
+        "mgPerKg": mg_per_kg,
+    }
+    if max_mg_per_kg is not None:
+        dosing["maxMgPerKg"] = max_mg_per_kg
+
+    return {
+        "dosing": dosing,
+        "unit": "mg",
+    }
+
+
+def extract_age_ranges(text: str) -> list[tuple[int | None, int | None]]:
+    ranges: list[tuple[int | None, int | None]] = []
+
+    for match in re.finditer(r"(?i)до\s*(\d+)\s*мес", text):
+        ranges.append((0, int(match.group(1))))
+
+    for match in re.finditer(r"(?i)от\s*(\d+)\s*мес\s*до\s*(\d+)\s*(?:г(?:ода|од|\.)?|лет)", text):
+        ranges.append((int(match.group(1)), int(match.group(2)) * 12))
+
+    for match in re.finditer(r"(?i)от\s*(\d+)\s*до\s*(\d+)\s*лет", text):
+        ranges.append((int(match.group(1)) * 12, int(match.group(2)) * 12))
+
+    for match in re.finditer(r"(?i)с\s*(\d+)\s*лет", text):
+        ranges.append((int(match.group(1)) * 12, None))
+
+    for match in re.finditer(r"(?i)старше\s*(\d+)\s*лет", text):
+        ranges.append((int(match.group(1)) * 12, None))
+
+    uniq: list[tuple[int | None, int | None]] = []
+    seen = set()
+    for age_range in ranges:
+        if age_range not in seen:
+            uniq.append(age_range)
+            seen.add(age_range)
+    return uniq
+
+
+def build_intelligent_pediatric_dosing(child_insuf: str | None, dosage: str | None) -> str:
+    """Строит структурированный pediatric_dosing из ChildInsuf/Dosage Vidal."""
+    raw = child_insuf or dosage
+    clean_text = clean_html_text(raw)
+    if not clean_text:
+        return json.dumps([], ensure_ascii=False)
+
+    age_ranges = extract_age_ranges(clean_text)
+    route = infer_route(clean_text)
+    times_per_day = extract_times_per_day(clean_text)
+    interval_hours = round(24 / times_per_day) if times_per_day else None
+
+    fixed = extract_fixed_dose(clean_text)
+    weight = extract_weight_based(clean_text)
+
+    base_rule: dict = {
+        "instruction": clean_text,
+    }
+    if route:
+        base_rule["routeOfAdmin"] = route
+    if times_per_day:
+        base_rule["timesPerDay"] = times_per_day
+    if interval_hours:
+        base_rule["intervalHours"] = interval_hours
+
+    if weight:
+        base_rule["dosing"] = weight["dosing"]
+        base_rule["unit"] = weight["unit"]
+    elif fixed:
+        base_rule["dosing"] = {
+            "type": fixed["type"],
+            "fixedDose": fixed["fixedDose"],
+        }
+        base_rule["unit"] = fixed["unit"]
+        base_rule["maxSingleDose"] = fixed["maxSingleDose"]
+
+    rules: list[dict] = []
+    if age_ranges:
+        for min_months, max_months in age_ranges:
+            rule = dict(base_rule)
+            if min_months is not None:
+                rule["minAgeMonths"] = min_months
+            if max_months is not None:
+                rule["maxAgeMonths"] = max_months
+            rules.append(rule)
+    else:
+        rules.append(base_rule)
+
+    return json.dumps(rules, ensure_ascii=False)
+
+
+def build_full_instruction(doc: sqlite3.Row) -> str | None:
+    """Строит plain-text полную инструкцию из разделов Vidal."""
+    sections: list[str] = []
+
+    field_map = [
+        ("indications",         doc["Indication"]),
+        ("contraindications",   doc["ContraIndication"]),
+        ("sideEffects",         doc["SideEffects"]),
+        ("interactions",        doc["Interaction"]),
+        ("pregnancyLactation",  doc["Lactation"]),
+        ("dosage",              doc["Dosage"]),
+        ("childDosing",         doc["ChildInsuf"]),
+        ("overdose",            doc["OverDosage"]),
+        ("renalInsuf",          doc["RenalInsuf"]),
+        ("hepatoInsuf",         doc["HepatoInsuf"]),
+        ("elderlyInsuf",        doc["ElderlyInsuf"]),
+        ("specialInstruction",  doc["SpecialInstruction"]),
+        ("pharmacokinetics",    doc["PhKinetics"]),
+        ("pharmacodynamics",    doc["PhInfluence"]),
+        ("storageCondition",    doc["StorageCondition"]),
+        ("composition",         doc["CompiledComposition"]),
+    ]
+
+    for key, raw in field_map:
+        cleaned = clean_html_text(raw)
+        if cleaned:
+            sections.append(f"{key}:\n{cleaned}")
+
+    return "\n\n".join(sections) if sections else None
 
 
 def normalize_using(val: str | None) -> str | None:
@@ -152,6 +375,24 @@ def load_lookups(vidal: sqlite3.Connection) -> dict:
             icd_map[doc_id] = []
         icd_map[doc_id].append(code)
 
+    # 8. DocumentID → package_description (агрегированный ZipInfo)
+    package_map: dict[int, str] = {}
+    rows = vidal.execute("""
+        SELECT pd.DocumentID, p.ZipInfo
+        FROM Product_Document pd
+        JOIN Product p ON p.ProductID = pd.ProductID
+        ORDER BY pd.DocumentID, pd.ProductID
+    """).fetchall()
+    for doc_id, zip_info in rows:
+        cleaned = clean_html_text(zip_info)
+        if not cleaned:
+            continue
+        package_map.setdefault(doc_id, [])
+        if cleaned not in package_map[doc_id]:
+            package_map[doc_id].append(cleaned)
+
+    package_map = {doc_id: "\n".join(values) for doc_id, values in package_map.items()}
+
     print(f"    molecules: {len(molecule_map)}, atc: {len(atc_map)}, "
           f"clph: {len(clph_map)}, phth: {len(phth_map)}, mfr: {len(mfr_map)}, "
           f"otc: {len(otc_map)}, icd_docs: {len(icd_map)}")
@@ -164,6 +405,7 @@ def load_lookups(vidal: sqlite3.Connection) -> dict:
         "mfr":      mfr_map,
         "otc":      otc_map,
         "icd":      icd_map,
+        "package":  package_map,
     }
 
 
@@ -179,35 +421,39 @@ def build_medication(doc: sqlite3.Row, maps: dict) -> dict:
 
     return {
         "name_ru":             to_title_case(doc["RusName"]),
-        "name_en":             doc["EngName"] or None,
-        "active_substance":    maps["molecule"].get(doc_id) or to_title_case(doc["RusName"]),
+        "name_en":             clean_html_text(doc["EngName"]),
+        "active_substance":    clean_html_text(maps["molecule"].get(doc_id)) or to_title_case(clean_html_text(doc["RusName"])),
         "atc_code":            maps["atc"].get(doc_id),
-        "clinical_pharm_group": maps["clph"].get(doc_id),
-        "pharm_therapy_group": maps["phth"].get(doc_id),
-        "manufacturer":        maps["mfr"].get(doc_id),
-        "indications":         strip_html(doc["Indication"]),
-        "contraindications":   doc["ContraIndication"] or "",  # NOT NULL — fallback пустая строка
-        "side_effects":        doc["SideEffects"] or None,
-        "interactions":        doc["Interaction"] or None,
-        "pregnancy":           doc["Lactation"] or None,
+        "package_description": maps["package"].get(doc_id) or clean_html_text(doc["CompiledComposition"]),
+        "clinical_pharm_group": clean_html_text(maps["clph"].get(doc_id)),
+        "pharm_therapy_group": clean_html_text(maps["phth"].get(doc_id)),
+        "manufacturer":        clean_html_text(maps["mfr"].get(doc_id)),
+        "indications":         json.dumps(
+            [clean_html_text(doc["Indication"])] if clean_html_text(doc["Indication"]) else [],
+            ensure_ascii=False,
+        ),
+        "contraindications":   clean_html_text(doc["ContraIndication"]) or "",  # NOT NULL — fallback пустая строка
+        "side_effects":        clean_html_text(doc["SideEffects"]),
+        "interactions":        clean_html_text(doc["Interaction"]),
+        "pregnancy":           clean_html_text(doc["Lactation"]),
         "lactation":           None,
         "icd10_codes":         json.dumps(icd_codes, ensure_ascii=False),
         "is_otc":              1 if maps["otc"].get(doc_id, False) else 0,
         # TASK-003 Vidal fields
-        "overdose":            doc["OverDosage"] or None,
-        "child_dosing":        doc["ChildInsuf"] or None,
+        "overdose":            clean_html_text(doc["OverDosage"]),
+        "child_dosing":        clean_html_text(doc["ChildInsuf"]) or clean_html_text(doc["Dosage"]),
         "child_using":         normalize_using(doc["ChildInsufUsing"]),
-        "renal_insuf":         doc["RenalInsuf"] or None,
+        "renal_insuf":         clean_html_text(doc["RenalInsuf"]),
         "renal_using":         normalize_using(doc["RenalInsufUsing"]),
-        "hepato_insuf":        doc["HepatoInsuf"] or None,
+        "hepato_insuf":        clean_html_text(doc["HepatoInsuf"]),
         "hepato_using":        normalize_using(doc["HepatoInsufUsing"]),
-        "special_instruction": doc["SpecialInstruction"] or None,
-        "pharmacokinetics":    doc["PhKinetics"] or None,
-        "pharmacodynamics":    doc["PhInfluence"] or None,
+        "special_instruction": clean_html_text(doc["SpecialInstruction"]),
+        "pharmacokinetics":    clean_html_text(doc["PhKinetics"]),
+        "pharmacodynamics":    clean_html_text(doc["PhInfluence"]),
         # Empty/defaults for fields we can't populate from vidal.db
         "forms":               json.dumps([]),
-        "pediatric_dosing":    json.dumps([]),
-        "adult_dosing":        None,
+        "pediatric_dosing":    build_intelligent_pediatric_dosing(doc["ChildInsuf"], doc["Dosage"]),
+        "full_instruction":    build_full_instruction(doc),
         "is_favorite":         0,
         "created_at":          now,
         "updated_at":          now,
@@ -221,28 +467,33 @@ def build_medication(doc: sqlite3.Row, maps: dict) -> dict:
 INSERT_SQL = """
 INSERT INTO medications (
     name_ru, name_en, active_substance, atc_code, clinical_pharm_group, pharm_therapy_group,
-    manufacturer, indications, contraindications, side_effects, interactions, pregnancy, lactation,
+    package_description, manufacturer, indications, contraindications, side_effects, interactions, pregnancy, lactation,
     icd10_codes, is_otc,
     overdose, child_dosing, child_using, renal_insuf, renal_using,
     hepato_insuf, hepato_using, special_instruction, pharmacokinetics, pharmacodynamics,
-    forms, pediatric_dosing, adult_dosing, is_favorite, created_at, updated_at
+    forms, pediatric_dosing, full_instruction, is_favorite, created_at, updated_at
 ) VALUES (
     :name_ru, :name_en, :active_substance, :atc_code, :clinical_pharm_group, :pharm_therapy_group,
-    :manufacturer, :indications, :contraindications, :side_effects, :interactions, :pregnancy, :lactation,
+    :package_description, :manufacturer, :indications, :contraindications, :side_effects, :interactions, :pregnancy, :lactation,
     :icd10_codes, :is_otc,
     :overdose, :child_dosing, :child_using, :renal_insuf, :renal_using,
     :hepato_insuf, :hepato_using, :special_instruction, :pharmacokinetics, :pharmacodynamics,
-    :forms, :pediatric_dosing, :adult_dosing, :is_favorite, :created_at, :updated_at
+    :forms, :pediatric_dosing, :full_instruction, :is_favorite, :created_at, :updated_at
 )
 """
 
-# При обновлении: Vidal-поля + базовые справочные поля; НЕ трогаем pediatric_dosing/adult_dosing/forms/icd10_codes/is_favorite
+# При обновлении: Vidal-поля + базовые справочные поля; НЕ трогаем pediatric_dosing/forms/icd10_codes/is_favorite
 # если они уже заполнены (т.е. != '[]' / NOT NULL)
 UPDATE_SQL = """
 UPDATE medications SET
     name_en              = :name_en,
     active_substance     = :active_substance,
     atc_code             = COALESCE(atc_code, :atc_code),
+    package_description  = CASE
+                              WHEN (package_description IS NULL OR TRIM(package_description) = '')
+                              THEN :package_description
+                              ELSE package_description
+                           END,
     clinical_pharm_group = COALESCE(clinical_pharm_group, :clinical_pharm_group),
     pharm_therapy_group  = COALESCE(pharm_therapy_group, :pharm_therapy_group),
     manufacturer         = COALESCE(manufacturer, :manufacturer),
@@ -264,8 +515,8 @@ UPDATE medications SET
     pharmacokinetics     = :pharmacokinetics,
     pharmacodynamics     = :pharmacodynamics,
     forms                = CASE WHEN (forms IS NULL OR forms = '[]') THEN :forms ELSE forms END,
-    pediatric_dosing     = CASE WHEN (pediatric_dosing IS NULL OR pediatric_dosing = '[]') THEN :pediatric_dosing ELSE pediatric_dosing END,
-    adult_dosing         = CASE WHEN (adult_dosing IS NULL OR adult_dosing = '[]' OR adult_dosing = '') THEN :adult_dosing ELSE adult_dosing END,
+    pediatric_dosing     = CASE WHEN (pediatric_dosing IS NULL OR pediatric_dosing = '[]' OR pediatric_dosing LIKE '%</%') THEN :pediatric_dosing ELSE pediatric_dosing END,
+    full_instruction     = COALESCE(:full_instruction, full_instruction),
     updated_at           = :updated_at
 WHERE name_ru = :name_ru
 """
@@ -288,7 +539,7 @@ def upsert_batch(dest: sqlite3.Connection, batch: list[dict]) -> tuple[int, int,
                 created += 1
         except Exception as e:
             errors += 1
-            print(f"\n  ⚠  Ошибка для '{med.get('nameRu', '?')}': {e}")
+            print(f"\n  ⚠  Ошибка для '{med.get('name_ru', '?')}': {e}")
     return created, updated, errors
 
 
@@ -324,10 +575,12 @@ def main():
     # Загружаем все Documents
     documents = vidal.execute("""
         SELECT DocumentID, RusName, EngName,
-               Indication, ContraIndication, SideEffects, Interaction, Lactation,
+               Indication, ContraIndication, SideEffects, Interaction, Lactation, Dosage,
                OverDosage, ChildInsuf, ChildInsufUsing,
                RenalInsuf, RenalInsufUsing, HepatoInsuf, HepatoInsufUsing,
-               SpecialInstruction, PhKinetics, PhInfluence
+               ElderlyInsuf, ElderlyInsufUsing,
+               SpecialInstruction, PhKinetics, PhInfluence,
+               StorageCondition, CompiledComposition
         FROM Document
         ORDER BY DocumentID
     """).fetchall()

@@ -159,6 +159,10 @@ export const visitFormStyles = `
     font-weight: 600;
 }
 
+.anamnesis-disease-content p {
+    font-weight: 400;
+}
+
 .section-content ul {
     margin: 0 0 8px 0;
     padding-left: 20px;

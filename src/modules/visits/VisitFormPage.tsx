@@ -40,7 +40,9 @@ import { CreateRecommendationTemplateModal } from './components/CreateRecommenda
 import { printService } from '../printing';
 import { VisitFormPrintData } from '../printing/templates/visit/types';
 import { formatDate } from '../printing/utils/formatters';
+import { organizationService } from '../../services/organization.service';
 import { buildVisitPayload } from './utils/buildVisitPayload';
+import { toggleRecommendationSelection } from './utils/recommendationSelection';
 import { VisitFormNavigation, NavigationSection } from './components/VisitFormNavigation';
 import { useActiveSection } from './hooks/useActiveSection';
 import { Card } from '../../components/ui/Card';
@@ -624,11 +626,24 @@ export const VisitFormPage: React.FC = () => {
         }
 
         try {
+            const organizationProfile = await organizationService.getProfile();
             const printData: VisitFormPrintData = {
                 visit: formData as Visit,
                 child: child,
                 doctorName: getFullName(currentUser) || 'Врач',
                 recommendations: recommendations,
+                clinicInfo: {
+                    name: organizationProfile.name,
+                    legalName: organizationProfile.legalName || undefined,
+                    department: organizationProfile.department || undefined,
+                    address: organizationProfile.address || undefined,
+                    phone: organizationProfile.phone || undefined,
+                    email: organizationProfile.email || undefined,
+                    website: organizationProfile.website || undefined,
+                    inn: organizationProfile.inn || undefined,
+                    ogrn: organizationProfile.ogrn || undefined,
+                    chiefDoctor: organizationProfile.chiefDoctor || undefined,
+                },
                 printDate: formatDate(new Date(), 'short'),
             };
 
@@ -2927,11 +2942,8 @@ export const VisitFormPage: React.FC = () => {
             <RecommendationsBrowser
                 isOpen={isRecommendationBrowserOpen}
                 onClose={() => setIsRecommendationBrowserOpen(false)}
-                onSelect={(text) => {
-                    if (!recommendations.includes(text)) {
-                        setRecommendations(prev => [...prev, text]);
-                    }
-                }}
+                onSelect={(text) => setRecommendations(prev => toggleRecommendationSelection(prev, text))}
+                onRemove={(text) => setRecommendations(prev => toggleRecommendationSelection(prev, text))}
                 currentIcd10Codes={[
                     ...(primaryDiagnosis?.code ? [primaryDiagnosis.code] : []),
                     ...complications.map((c: any) => c.code).filter(Boolean),

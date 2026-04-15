@@ -153,3 +153,9 @@ templateRegistry.register(template);
 - `src/modules/printing/types.ts`
 - `electron/preload.cjs`
 - `electron/main.cjs`
+
+## Changelog
+
+### 15.04.2026 — TASK-065
+- В шаблоне `visit-form` шапка печатной формы переведена на данные профиля организации из настроек.
+- Расширены печатные поля организации: наименование, юр. наименование, подразделение, адрес, контакты, ИНН/ОГРН, главный врач.

@@ -5,6 +5,7 @@ import { Card } from '../../../components/ui/Card';
 import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
+import { sortDiagnosticsByPriority } from '../utils/diagnosticPriority';
 import { Microscope, Search, X, Plus, Loader2, FlaskConical, FileBarChart, CheckCircle2, Trash2 } from 'lucide-react';
 
 const DISPLAY_LIMIT = 50;
@@ -98,7 +99,7 @@ export const DiagnosticBrowser: React.FC<DiagnosticBrowserProps> = ({
                 )
             );
         }
-        return filtered;
+        return sortDiagnosticsByPriority(filtered);
     }, [diagnostics, searchTerm, filterByIcd10, expandedIcdCodes, filterType]);
 
     useEffect(() => {

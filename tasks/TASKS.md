@@ -22,6 +22,11 @@
 
 | Дата | ID | Модуль | Задача | Итог |
 |------|----|--------|--------|------|
+| 15.04.2026 | TASK-065 | settings/printing | Профиль организации: сущность + вкладка настроек + шапка печатной формы | ✅ DONE (single-record organization profile + settings tab + print header integration + tests) | [→](tasks/15.04.2026/TASK-065.md) |
+| 15.04.2026 | TASK-061 | medications/data | Перенос пробиотиков из vidal-db в dev-db | ✅ DONE (импорт `A07FA*` завершён; `pediatric_dosing`, `full_instruction` и `package_description` доведены; импортеры обновлены для будущих запусков) | [→](tasks/15.04.2026/TASK-061.md) |
+| 15.04.2026 | TASK-064 | visits/anamnesis | Перевести поля «Аллергический статус» на textarea | ✅ DONE (все поля блока переведены на многострочный ввод) | [→](tasks/15.04.2026/TASK-064.md) |
+| 15.04.2026 | TASK-063 | visits/recommendations | Toggle-удаление повторным выбором в справочнике рекомендаций | ✅ DONE (повторный клик по выбранной рекомендации удаляет её из раздела «Рекомендации») | [→](tasks/15.04.2026/TASK-063.md) |
+| 15.04.2026 | TASK-062 | visits/diagnostics | Сортировка справочника исследований по приоритету | ✅ DONE (список исследований отсортирован по `high -> medium -> low`) | [→](tasks/15.04.2026/TASK-062.md) |
 | 15.04.2026 | TASK-059 | diseases/ai-assistant | Diseases AI Assistant: переключаемые режимы RAG и без RAG | ✅ DONE (explicit rag/direct mode switch in UI+IPC+service+tests) | [→](tasks/15.04.2026/TASK-059.md) |
 | 15.04.2026 | TASK-060 | diseases/list-ui | Анимация появления границы при hover на карточке заболевания | ✅ DONE (hover border appears with smooth transition in light/dark themes) | [→](tasks/15.04.2026/TASK-060.md) |
 | 15.04.2026 | TASK-058 | visits/medications | Allergy alert: подсветка препарата и фармгруппы при лекарственной аллергии в анамнезе | ✅ DONE (allergy risk highlighting implemented and verified) | [→](tasks/15.04.2026/TASK-058.md) |

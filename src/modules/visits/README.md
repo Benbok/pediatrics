@@ -582,6 +582,24 @@ recommendationTemplateService.delete(id, userId) // Удалить шаблон
 
 ## Changelog
 
+### 15.04.2026 — TASK-065
+- `VisitFormPage` при печати формы приема теперь подтягивает профиль организации через `organizationService`.
+- В `VisitFormPrintData` передаются расширенные поля организации для шапки документа.
+
+### 15.04.2026 — TASK-064
+- В `anamnesis025/AllergyStatusSection.tsx` поля карточки «Аллергический статус» переведены с `Input` на `textarea`.
+- Сохранены текущие подписи, placeholder и логика обновления данных.
+
+### 15.04.2026 — TASK-063
+- В `RecommendationsBrowser` повторный клик по выбранной карточке теперь удаляет рекомендацию из раздела «Рекомендации».
+- В `VisitFormPage` подключён единый toggle-обработчик выбора рекомендаций.
+- Добавлен utility `utils/recommendationSelection.ts` и тест `tests/recommendation-selection.test.ts`.
+
+### 15.04.2026 — TASK-062
+- В `DiagnosticBrowser` добавлена сортировка карточек исследований по приоритету `high -> medium -> low`.
+- Добавлен utility `utils/diagnosticPriority.ts` с fallback-сортировкой по названию.
+- Добавлен тест `tests/diagnostic-priority-sort.test.ts`.
+
 ### 15.04.2026 — TASK-058
 - Добавлена подсветка риска лекарственной аллергии в `MedicationBrowser` на уровне препарата и фармгруппы.
 - Добавлен сервис `medicationAllergyRisk.service.ts` для нормализации/матчинга аллергенов из анамнеза.

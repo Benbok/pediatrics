@@ -205,6 +205,22 @@ export interface VaccinePlanTemplate {
   updatedAt?: string;
 }
 
+export interface OrganizationProfile {
+  id?: number;
+  name: string;
+  legalName?: string | null;
+  department?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  inn?: string | null;
+  ogrn?: string | null;
+  chiefDoctor?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface UserVaccineRecord {
   id?: number;
   childId?: number;
@@ -956,6 +972,8 @@ declare global {
       getVaccinePlans: () => Promise<VaccinePlanTemplate[]>;
       upsertVaccinePlan: (plan: VaccinePlanTemplate) => Promise<VaccinePlanTemplate>;
       setVaccinePlanDeleted: (planId: string, isDeleted: boolean) => Promise<VaccinePlanTemplate>;
+      getOrganizationProfile: () => Promise<OrganizationProfile>;
+      upsertOrganizationProfile: (profile: OrganizationProfile) => Promise<OrganizationProfile>;
       print: () => void;
       /** Renders HTML in a hidden Electron window and shows the native OS print dialog */
       printDocument: (payload: {

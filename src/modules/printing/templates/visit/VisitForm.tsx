@@ -34,7 +34,7 @@ function hasText(value?: string | null): boolean {
 }
 
 /**
- * Компонент печатной формы приема (025/у-04)
+ * Компонент печатной формы приема (025/у)
  */
 export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
     data,
@@ -70,14 +70,18 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
     const patientFullName = formatFullName(child.surname, child.name, child.patronymic, 'full');
 
     // Тип визита
-    const visitTypeLabels: Record<string, string> = {
-        primary: 'Первичный',
-        followup: 'Повторный',
-        consultation: 'Консультация',
-        emergency: 'Экстренный',
-        urgent: 'Неотложный',
+    const visitTypeHeaderLabels: Record<string, string> = {
+        primary: 'Первичный осмотр',
+        followup: 'Повторный прием',
+        consultation: 'Консультативный приём',
+        emergency: 'Экстренный и неотложный приём',
+        urgent: 'Экстренный и неотложный приём',
     };
-    const visitTypeLabel = visitTypeLabels[visit.visitType || ''] || visit.visitType || '—';
+    const visitTypeLabel = visitTypeHeaderLabels[visit.visitType || ''] || 'Прием';
+    const visitHeaderMeta = [
+        `Дата приема: ${visitDateFormatted}`,
+        visit.visitTime ? `Время: ${visit.visitTime}` : null,
+    ].filter(Boolean).join('   ');
 
     const heredityItems = [
         heredityData?.tuberculosis
@@ -204,33 +208,27 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                     {clinicInfo && (
                         <>
                             <div className="clinic-name">{clinicInfo.name}</div>
-                            <div className="clinic-address">{clinicInfo.address}</div>
+                            {clinicInfo.legalName && <div className="clinic-address">{clinicInfo.legalName}</div>}
+                            {clinicInfo.department && <div className="clinic-address">{clinicInfo.department}</div>}
+                            {clinicInfo.address && <div className="clinic-address">{clinicInfo.address}</div>}
                             {clinicInfo.phone && <div className="clinic-phone">Тел: {clinicInfo.phone}</div>}
+                            {clinicInfo.email && <div className="clinic-phone">Email: {clinicInfo.email}</div>}
+                            {clinicInfo.website && <div className="clinic-phone">Сайт: {clinicInfo.website}</div>}
+                            {(clinicInfo.inn || clinicInfo.ogrn) && (
+                                <div className="clinic-phone">
+                                    {clinicInfo.inn ? `ИНН: ${clinicInfo.inn}` : ''}
+                                    {clinicInfo.inn && clinicInfo.ogrn ? ' | ' : ''}
+                                    {clinicInfo.ogrn ? `ОГРН: ${clinicInfo.ogrn}` : ''}
+                                </div>
+                            )}
+                            {clinicInfo.chiefDoctor && <div className="clinic-phone">Главный врач: {clinicInfo.chiefDoctor}</div>}
                         </>
                     )}
                 </div>
                 <div className="header-right">
-                    <div className="form-number">ФОРМА № 025/у-04</div>
-                    <div className="form-title">МЕДИЦИНСКАЯ КАРТА</div>
-                    <div className="form-subtitle">амбулаторного больного</div>
-                </div>
-            </div>
-
-            {/* Информация о приеме */}
-            <div className="visit-info">
-                <div className="info-row">
-                    <span className="label">Дата приема:</span>
-                    <span className="value">{visitDateFormatted}</span>
-                    {visit.visitTime && (
-                        <>
-                            <span className="label" style={{ marginLeft: '2rem' }}>Время:</span>
-                            <span className="value">{visit.visitTime}</span>
-                        </>
-                    )}
-                </div>
-                <div className="info-row">
-                    <span className="label">Тип приема:</span>
-                    <span className="value">{visitTypeLabel}</span>
+                    <div className="form-number">ФОРМА № 025/у</div>
+                    <div className="form-title">{visitTypeLabel}</div>
+                    <div className="form-subtitle">{visitHeaderMeta}</div>
                 </div>
             </div>
 
@@ -252,6 +250,30 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Антропометрия */}
+            {(visit.currentWeight || visit.currentHeight) && (
+                <div className="section">
+                    <div className="section-title">Антропометрия</div>
+                    <div className="anthropometry">
+                        {visit.currentWeight && (
+                            <span className="anthro-item">
+                                <span className="label">Вес:</span> {visit.currentWeight} кг
+                            </span>
+                        )}
+                        {visit.currentHeight && (
+                            <span className="anthro-item">
+                                <span className="label">Рост:</span> {visit.currentHeight} см
+                            </span>
+                        )}
+                        {visit.bmi && (
+                            <span className="anthro-item">
+                                <span className="label">ИМТ:</span> {visit.bmi.toFixed(1)}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Анамнез жизни */}
             {hasLifeAnamnesis && (
@@ -316,30 +338,6 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                 </div>
             )}
 
-            {/* Антропометрия */}
-            {(visit.currentWeight || visit.currentHeight) && (
-                <div className="section">
-                    <div className="section-title">Антропометрия</div>
-                    <div className="anthropometry">
-                        {visit.currentWeight && (
-                            <span className="anthro-item">
-                                <span className="label">Вес:</span> {visit.currentWeight} кг
-                            </span>
-                        )}
-                        {visit.currentHeight && (
-                            <span className="anthro-item">
-                                <span className="label">Рост:</span> {visit.currentHeight} см
-                            </span>
-                        )}
-                        {visit.bmi && (
-                            <span className="anthro-item">
-                                <span className="label">ИМТ:</span> {visit.bmi.toFixed(1)}
-                            </span>
-                        )}
-                    </div>
-                </div>
-            )}
-
             {/* Жалобы */}
             {visit.complaints && (
                 <div className="section">
@@ -352,15 +350,15 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
             {(visit.diseaseOnset || visit.diseaseCourse || visit.treatmentBeforeVisit) && (
                 <div className="section">
                     <div className="section-title">Анамнез заболевания</div>
-                    <div className="section-content">
+                    <div className="section-content anamnesis-disease-content">
                         {visit.diseaseOnset && (
-                            <p><strong>Начало заболевания:</strong> {visit.diseaseOnset}</p>
+                            <p>Начало заболевания: {visit.diseaseOnset}</p>
                         )}
                         {visit.diseaseCourse && (
-                            <p><strong>Течение:</strong> {visit.diseaseCourse}</p>
+                            <p>Течение: {visit.diseaseCourse}</p>
                         )}
                         {visit.treatmentBeforeVisit && (
-                            <p><strong>Лечение до обращения:</strong> {visit.treatmentBeforeVisit}</p>
+                            <p>Лечение до обращения: {visit.treatmentBeforeVisit}</p>
                         )}
                     </div>
                 </div>

@@ -519,6 +519,12 @@ medicationService.getChangeHistory(id)              // Получить исто
 
 ## Changelog
 
+### 15.04.2026 — TASK-061
+- Выполнен перенос пробиотиков `A07FA*` из `vidal-db` в `dev-db` с дедупликацией и идемпотентным upsert.
+- Для целевой группы пробиотиков завершено дообогащение полей `pediatricDosing`, `fullInstruction` (plain text), `packageDescription`.
+- В `scripts/import-vidal-medications.py` усилена обработка импортов: очистка HTML, интеллектуальная сборка `pediatricDosing`, автозаполнение `packageDescription` (`ZipInfo` с fallback на `CompiledComposition`).
+- В `scripts/enrich-probiotics.py` добавлена синхронная логика автозаполнения `packageDescription` для целевого backfill.
+
 ### 03.04.2026 — TASK-003
 - Модель `Medication` расширена 11 полями Vidal: `isOtc`, `overdose`, `childDosing`, `childUsing`, `renalInsuf`, `renalUsing`, `hepatoInsuf`, `hepatoUsing`, `specialInstruction`, `pharmacokinetics`, `pharmacodynamics`
 - Обновлены frontend/backend Zod-схемы и TypeScript-типы

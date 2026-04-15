@@ -36,6 +36,7 @@ interface RecommendationsBrowserProps {
     isOpen: boolean;
     onClose: () => void;
     onSelect: (text: string) => void;
+    onRemove?: (text: string) => void;
     currentIcd10Codes?: string[];
     selectedTexts?: string[];
 }
@@ -44,6 +45,7 @@ export const RecommendationsBrowser: React.FC<RecommendationsBrowserProps> = ({
     isOpen,
     onClose,
     onSelect,
+    onRemove,
     currentIcd10Codes = [],
     selectedTexts = [],
 }) => {
@@ -235,7 +237,12 @@ export const RecommendationsBrowser: React.FC<RecommendationsBrowserProps> = ({
                                                 }
                                             `}
                                             onClick={() => {
-                                                if (!isSelected) onSelect(rec.item.text);
+                                                if (isSelected) {
+                                                    onRemove?.(rec.item.text);
+                                                    return;
+                                                }
+
+                                                onSelect(rec.item.text);
                                             }}
                                         >
                                             <div className="flex items-start justify-between gap-3">

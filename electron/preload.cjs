@@ -40,6 +40,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getVaccinePlans: () => ipcRenderer.invoke('db:get-vaccine-plans'),
     upsertVaccinePlan: (plan) => ipcRenderer.invoke('db:upsert-vaccine-plan', plan),
     setVaccinePlanDeleted: (planId, isDeleted) => ipcRenderer.invoke('db:set-vaccine-plan-deleted', planId, isDeleted),
+    getOrganizationProfile: () => ipcRenderer.invoke('db:get-organization-profile'),
+    upsertOrganizationProfile: (profile) => ipcRenderer.invoke('db:upsert-organization-profile', profile),
     print: () => ipcRenderer.send('print-window'),
     // payload: { templateId, html, styles, metadata, options }
     // Renders HTML in a hidden window → native OS print dialog (no popup window)

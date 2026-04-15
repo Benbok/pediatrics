@@ -203,6 +203,24 @@ model VaccinePlanTemplate {
   @@map("vaccine_plan_templates")
 }
 
+model OrganizationProfile {
+  id          Int      @id @default(1)
+  name        String   @default("Медицинская организация")
+  legalName   String?  @map("legal_name")
+  department  String?
+  address     String?
+  phone       String?
+  email       String?
+  website     String?
+  inn         String?
+  ogrn        String?
+  chiefDoctor String?  @map("chief_doctor")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("organization_profiles")
+}
+
 // ============= CDSS MODULE (Diseases, Medications, Visits) =============
 
 model Disease {

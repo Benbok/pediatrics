@@ -116,6 +116,26 @@ const VaccinePlanTemplateSchema = z.object({
   isDeleted: z.boolean().optional(),
 });
 
+const OrganizationProfileSchema = z.object({
+  id: z.number().int().min(1).max(1).optional(),
+  name: z.string().trim().min(1, 'Название организации обязательно').max(200),
+  legalName: z.string().trim().max(300).optional().nullable(),
+  department: z.string().trim().max(200).optional().nullable(),
+  address: z.string().trim().max(500).optional().nullable(),
+  phone: z.string().trim().max(50).optional().nullable(),
+  email: z.string().trim().email('Некорректный email').max(200).optional().nullable().or(z.literal('')),
+  website: z.string().trim().max(250).optional().nullable(),
+  inn: z.string().trim().max(20).optional().nullable(),
+  ogrn: z.string().trim().max(20).optional().nullable(),
+  chiefDoctor: z.string().trim().max(200).optional().nullable(),
+});
+
+function normalizeNullableText(value) {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 const getZodErrorMessage = (error) => {
   const issues = error?.issues || error?.errors || [];
   if (Array.isArray(issues) && issues.length > 0) {
@@ -1175,6 +1195,89 @@ const setupDatabaseHandlers = async () => {
       };
     } catch (error) {
       logger.error('[Database] Failed to mark vaccine catalog entry deleted:', error);
+      throw error;
+    }
+  }));
+
+  const ORGANIZATION_PROFILE_CACHE_KEY = 'singleton';
+
+  ipcMain.handle('db:get-organization-profile', ensureAuthenticated(async () => {
+    const cached = CacheService.get('organization', ORGANIZATION_PROFILE_CACHE_KEY);
+    if (cached) {
+      logger.debug('[DB] Cache hit for organization profile');
+      return cached;
+    }
+
+    const existing = await prisma.organizationProfile.findUnique({
+      where: { id: 1 },
+    });
+
+    const profile = existing || {
+      id: 1,
+      name: 'Медицинская организация',
+      legalName: null,
+      department: null,
+      address: null,
+      phone: null,
+      email: null,
+      website: null,
+      inn: null,
+      ogrn: null,
+      chiefDoctor: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    CacheService.set('organization', ORGANIZATION_PROFILE_CACHE_KEY, profile);
+    return profile;
+  }));
+
+  ipcMain.handle('db:upsert-organization-profile', ensureAuthenticated(async (_, payload) => {
+    try {
+      const validated = OrganizationProfileSchema.parse({
+        ...payload,
+        id: 1,
+      });
+
+      const saved = await prisma.organizationProfile.upsert({
+        where: { id: 1 },
+        update: {
+          name: validated.name,
+          legalName: normalizeNullableText(validated.legalName),
+          department: normalizeNullableText(validated.department),
+          address: normalizeNullableText(validated.address),
+          phone: normalizeNullableText(validated.phone),
+          email: normalizeNullableText(validated.email),
+          website: normalizeNullableText(validated.website),
+          inn: normalizeNullableText(validated.inn),
+          ogrn: normalizeNullableText(validated.ogrn),
+          chiefDoctor: normalizeNullableText(validated.chiefDoctor),
+        },
+        create: {
+          id: 1,
+          name: validated.name,
+          legalName: normalizeNullableText(validated.legalName),
+          department: normalizeNullableText(validated.department),
+          address: normalizeNullableText(validated.address),
+          phone: normalizeNullableText(validated.phone),
+          email: normalizeNullableText(validated.email),
+          website: normalizeNullableText(validated.website),
+          inn: normalizeNullableText(validated.inn),
+          ogrn: normalizeNullableText(validated.ogrn),
+          chiefDoctor: normalizeNullableText(validated.chiefDoctor),
+        },
+      });
+
+      CacheService.invalidate('organization', ORGANIZATION_PROFILE_CACHE_KEY);
+      CacheService.set('organization', ORGANIZATION_PROFILE_CACHE_KEY, saved);
+      logAudit('ORGANIZATION_PROFILE_UPDATED', { profileId: saved.id });
+
+      return saved;
+    } catch (error) {
+      logger.error('[Database] Failed to upsert organization profile:', error);
+      if (error instanceof z.ZodError) {
+        throw new Error(getZodErrorMessage(error));
+      }
       throw error;
     }
   }));

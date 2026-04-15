@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag } from 'lucide-react';
+import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag, Building2 } from 'lucide-react';
 import { getCurrentApiKey, setApiKey, validateApiKey } from '../../services/geminiService';
 import { apiKeyService, ApiKeysConnectivityReport, PoolStatus } from '../../services/apiKeyService';
+import { organizationService, getDefaultOrganizationProfile } from '../../services/organization.service';
 import { vaccinationService } from '../../services/vaccination.service';
 import { PrettySelect, type SelectOption } from '../diseases/components/PrettySelect';
 import { diseaseService } from '../diseases/services/diseaseService';
-import { VaccineCatalogEntry, DiagnosticCatalogEntry } from '../../types';
+import { VaccineCatalogEntry, DiagnosticCatalogEntry, OrganizationProfile } from '../../types';
 import { LicenseAdminPanel } from '../license/LicenseAdminPanel';
 import { useAuth } from '../../context/AuthContext';
 
@@ -13,6 +14,81 @@ const diagnosticTypeOptions: SelectOption<'lab' | 'instrumental'>[] = [
     { value: 'lab', label: 'Лабораторный' },
     { value: 'instrumental', label: 'Инструментальный' },
 ];
+
+const maskDigitsByGroups = (value: string, groups: number[]): string => {
+    const digits = value.replace(/\D/g, '');
+    if (!digits) {
+        return '';
+    }
+
+    const parts: string[] = [];
+    let cursor = 0;
+
+    for (const group of groups) {
+        if (cursor >= digits.length) {
+            break;
+        }
+
+        const nextPart = digits.slice(cursor, cursor + group);
+        if (!nextPart) {
+            break;
+        }
+
+        parts.push(nextPart);
+        cursor += group;
+    }
+
+    return parts.join(' ');
+};
+
+const maskOrganizationInn = (value: string): string => maskDigitsByGroups(value, [4, 6, 2]).slice(0, 14);
+
+const maskOrganizationOgrn = (value: string): string => maskDigitsByGroups(value, [1, 4, 4, 4]).slice(0, 16);
+
+const maskOrganizationPhone = (value: string): string => {
+    let digits = value.replace(/\D/g, '');
+
+    if (!digits) {
+        return '';
+    }
+
+    if (digits.startsWith('8')) {
+        digits = `7${digits.slice(1)}`;
+    } else if (digits.startsWith('9')) {
+        digits = `7${digits}`;
+    } else if (!digits.startsWith('7') && digits.length <= 10) {
+        digits = `7${digits}`;
+    }
+
+    digits = digits.slice(0, 11);
+    const localDigits = digits.startsWith('7') ? digits.slice(1) : digits;
+
+    let masked = '+7';
+    if (localDigits.length > 0) {
+        masked += ` (${localDigits.slice(0, 3)}`;
+    }
+    if (localDigits.length >= 3) {
+        masked += ')';
+    }
+    if (localDigits.length > 3) {
+        masked += ` ${localDigits.slice(3, 6)}`;
+    }
+    if (localDigits.length > 6) {
+        masked += `-${localDigits.slice(6, 8)}`;
+    }
+    if (localDigits.length > 8) {
+        masked += `-${localDigits.slice(8, 10)}`;
+    }
+
+    return masked;
+};
+
+const normalizeOrganizationProfile = (profile: OrganizationProfile): OrganizationProfile => ({
+    ...profile,
+    phone: maskOrganizationPhone(profile.phone || ''),
+    inn: maskOrganizationInn(profile.inn || ''),
+    ogrn: maskOrganizationOgrn(profile.ogrn || ''),
+});
 
 export const SettingsModule: React.FC = () => {
     const { currentUser } = useAuth();
@@ -24,6 +100,13 @@ export const SettingsModule: React.FC = () => {
     const [verificationStatus, setVerificationStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
     const [isSaved, setIsSaved] = useState(false);
+
+    // Organization profile state
+    const [organizationProfile, setOrganizationProfile] = useState<OrganizationProfile>(getDefaultOrganizationProfile());
+    const [isLoadingOrganization, setIsLoadingOrganization] = useState(false);
+    const [isSavingOrganization, setIsSavingOrganization] = useState(false);
+    const [organizationError, setOrganizationError] = useState('');
+    const [organizationInfo, setOrganizationInfo] = useState('');
 
     // Backup State
     const [isBackingUp, setIsBackingUp] = useState(false);
@@ -66,7 +149,7 @@ export const SettingsModule: React.FC = () => {
         availableBrands: []
     });
     const [brandDraft, setBrandDraft] = useState({ name: '', country: '', description: '' });
-    const [activeTab, setActiveTab] = useState<'api' | 'catalog' | 'cache' | 'security' | 'diseases' | 'licenses'>('api');
+    const [activeTab, setActiveTab] = useState<'api' | 'catalog' | 'organization' | 'cache' | 'security' | 'diseases' | 'licenses'>('api');
 
     // Diagnostic catalog CRUD state
     const [catalogEntries, setCatalogEntries] = useState<DiagnosticCatalogEntry[]>([]);
@@ -84,6 +167,60 @@ export const SettingsModule: React.FC = () => {
     const [savingEntryIds, setSavingEntryIds] = useState<Set<number>>(new Set());
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+
+    const loadOrganizationProfile = useCallback(async () => {
+        setIsLoadingOrganization(true);
+        setOrganizationError('');
+        try {
+            const profile = await organizationService.getProfile();
+            setOrganizationProfile(normalizeOrganizationProfile(profile));
+        } catch (error: any) {
+            setOrganizationError(error.message || 'Не удалось загрузить профиль организации');
+        } finally {
+            setIsLoadingOrganization(false);
+        }
+    }, []);
+
+    const handleOrganizationFieldChange = (field: keyof OrganizationProfile, value: string) => {
+        let normalizedValue = value;
+
+        if (field === 'phone') {
+            normalizedValue = maskOrganizationPhone(value);
+        }
+
+        if (field === 'inn') {
+            normalizedValue = maskOrganizationInn(value).slice(0, 14);
+        }
+
+        if (field === 'ogrn') {
+            normalizedValue = maskOrganizationOgrn(value).slice(0, 16);
+        }
+
+        setOrganizationProfile(prev => ({
+            ...prev,
+            [field]: normalizedValue,
+        }));
+        setOrganizationError('');
+        setOrganizationInfo('');
+    };
+
+    const handleOrganizationSave = async () => {
+        setIsSavingOrganization(true);
+        setOrganizationError('');
+        setOrganizationInfo('');
+        try {
+            const saved = await organizationService.upsertProfile({
+                ...organizationProfile,
+                id: 1,
+            });
+            setOrganizationProfile(normalizeOrganizationProfile(saved));
+            setOrganizationInfo('Профиль организации сохранен.');
+        } catch (error: any) {
+            setOrganizationError(error.message || 'Не удалось сохранить профиль организации');
+        } finally {
+            setIsSavingOrganization(false);
+        }
+    };
 
     useEffect(() => {
         if (!isAdmin && activeTab === 'licenses') {
@@ -112,6 +249,9 @@ export const SettingsModule: React.FC = () => {
 
         // Load vaccine catalog
         loadVaccineCatalog();
+
+        // Load organization profile
+        loadOrganizationProfile();
     }, []);
 
     // Load diagnostic catalog when tab is opened
@@ -649,7 +789,7 @@ export const SettingsModule: React.FC = () => {
             </div>
 
             <div className="mb-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
                     <button
                         onClick={() => setActiveTab('api')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -669,6 +809,16 @@ export const SettingsModule: React.FC = () => {
                         }`}
                     >
                         Каталог вакцин
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('organization')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === 'organization'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        }`}
+                    >
+                        Организация
                     </button>
                     <button
                         onClick={() => setActiveTab('diseases')}
@@ -1087,6 +1237,129 @@ export const SettingsModule: React.FC = () => {
                 )}
             </div>
             </>
+            )}
+
+            {activeTab === 'organization' && (
+            <div className="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                        <Building2 className="text-blue-600 dark:text-blue-400" size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Профиль организации</h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                            Данные используются в печатных формах как шапка документа
+                        </p>
+                    </div>
+                </div>
+
+                {isLoadingOrganization ? (
+                    <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 py-3">
+                        <Loader className="animate-spin" size={18} />
+                        Загрузка профиля организации...
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <input
+                                value={organizationProfile.name || ''}
+                                onChange={(e) => handleOrganizationFieldChange('name', e.target.value)}
+                                placeholder="Название организации *"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={organizationProfile.legalName || ''}
+                                onChange={(e) => handleOrganizationFieldChange('legalName', e.target.value)}
+                                placeholder="Полное юридическое наименование"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={organizationProfile.department || ''}
+                                onChange={(e) => handleOrganizationFieldChange('department', e.target.value)}
+                                placeholder="Отделение / подразделение"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={organizationProfile.chiefDoctor || ''}
+                                onChange={(e) => handleOrganizationFieldChange('chiefDoctor', e.target.value)}
+                                placeholder="Главный врач"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={organizationProfile.phone || ''}
+                                onChange={(e) => handleOrganizationFieldChange('phone', e.target.value)}
+                                placeholder="+7 (999) 123-45-67"
+                                inputMode="tel"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={organizationProfile.email || ''}
+                                onChange={(e) => handleOrganizationFieldChange('email', e.target.value)}
+                                placeholder="Email"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={organizationProfile.website || ''}
+                                onChange={(e) => handleOrganizationFieldChange('website', e.target.value)}
+                                placeholder="Сайт"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={organizationProfile.inn || ''}
+                                onChange={(e) => handleOrganizationFieldChange('inn', e.target.value)}
+                                placeholder="1234 567890"
+                                inputMode="numeric"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <input
+                                value={organizationProfile.ogrn || ''}
+                                onChange={(e) => handleOrganizationFieldChange('ogrn', e.target.value)}
+                                placeholder="1 2345 6789 0123"
+                                inputMode="numeric"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                            <textarea
+                                value={organizationProfile.address || ''}
+                                onChange={(e) => handleOrganizationFieldChange('address', e.target.value)}
+                                rows={3}
+                                placeholder="Адрес"
+                                className="md:col-span-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                            />
+                        </div>
+
+                        {organizationError && (
+                            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                                {organizationError}
+                            </div>
+                        )}
+
+                        {organizationInfo && (
+                            <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-700 dark:text-green-300">
+                                {organizationInfo}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={loadOrganizationProfile}
+                                disabled={isLoadingOrganization || isSavingOrganization}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                            >
+                                <RefreshCw size={16} />
+                                Обновить
+                            </button>
+                            <button
+                                onClick={handleOrganizationSave}
+                                disabled={isSavingOrganization}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                                {isSavingOrganization ? <Loader className="animate-spin" size={16} /> : <Check size={16} />}
+                                Сохранить профиль
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
             )}
 
             {activeTab === 'catalog' && (
