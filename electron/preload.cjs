@@ -301,5 +301,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
         removeListeners: () => {
             ['rag:token', 'rag:done', 'rag:error', 'rag:reindex:progress'].forEach(ch => ipcRenderer.removeAllListeners(ch));
         },
+        qaList: (params) => ipcRenderer.invoke('rag:qa:list', params),
+        qaTrigger: (params) => ipcRenderer.invoke('rag:qa:trigger', params),
+        qaTemplates: () => ipcRenderer.invoke('rag:qa:templates'),
+        qaComputeSingle: (params) => ipcRenderer.invoke('rag:qa:compute-single', params),
     },
 });

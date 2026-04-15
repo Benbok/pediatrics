@@ -1266,6 +1266,10 @@ declare global {
         onError: (callback: (event: any, error: string) => void) => () => void;
         onReindexProgress: (callback: (event: any, data: { done: number; total: number }) => void) => () => void;
         removeListeners: () => void;
+        qaList: (params: { diseaseId: number }) => Promise<QaCacheEntry[]>;
+        qaTrigger: (params: { diseaseId: number }) => Promise<{ ok: boolean; error?: string }>;
+        qaTemplates: () => Promise<QaTemplate[]>;
+        qaComputeSingle: (params: { diseaseId: number; templateId: string }) => Promise<QaCacheEntry | null>;
       };
     }
   }
@@ -1304,6 +1308,20 @@ export interface RagReindexResult {
   ok: boolean;
   indexed?: number;
   error?: string;
+}
+
+export interface QaTemplate {
+  templateId: string;
+  label: string;
+}
+
+export interface QaCacheEntry {
+  templateId: string;
+  label: string;
+  question: string;
+  answer: string;
+  sources: RagSource[];
+  generatedAt: string;
 }
 
 // ============= NUTRITION MODULE TYPES =============

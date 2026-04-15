@@ -227,6 +227,7 @@ model Disease {
   medications DiseaseMedication[]
   visits      Visit[]             @relation("PrimaryDiagnosis")
   notes       DiseaseNote[]
+  qaCache     DiseaseQaCache[]
 
   @@map("diseases")
 }
@@ -301,6 +302,25 @@ model GuidelineChunk {
   @@index([guidelineId])
   @@index([diseaseId])
   @@map("guideline_chunks")
+}
+
+// ============= RAG QA CACHE (pre-computed answers for standard questions) =============
+
+model DiseaseQaCache {
+  id          Int      @id @default(autoincrement())
+  diseaseId   Int      @map("disease_id")
+  templateId  String   @map("template_id") // e.g. "treatment_list", "dosing", "first_line"
+  question    String   // canonical question text sent to RAG
+  answer      String   // pre-generated LLM answer
+  sources     String   @default("[]") @map("sources") // JSON array of RagSource
+  generatedAt DateTime @default(now()) @map("generated_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  disease Disease @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+
+  @@unique([diseaseId, templateId])
+  @@index([diseaseId])
+  @@map("disease_qa_cache")
 }
 
 model PdfNote {

@@ -6,6 +6,7 @@ const { logAudit, logger } = require('../../logger.cjs');
 const { CacheService } = require('../../services/cacheService.cjs');
 const { DiseaseValidator } = require('./validator.cjs');
 const { z } = require('zod');
+const { computeQaCacheEntry } = require('../../services/ragQaPrecomputeService.cjs');
 
 const RAG_LAST_CACHE_PREFIX = 'rag_last_answer_';
 
@@ -116,6 +117,9 @@ const setupDiseaseHandlers = () => {
         CacheService.invalidate('diseases', `id_${diseaseId}`);
         CacheService.invalidate('diseases', getRagLastCacheKey(diseaseId));
 
+        // Запускаем фоновый precompute стандартных вопросов
+        schedulePrecompute(diseaseId);
+
         return guideline;
     }));
 
@@ -126,6 +130,9 @@ const setupDiseaseHandlers = () => {
         // Инвалидируем кеш заболевания
         CacheService.invalidate('diseases', `id_${diseaseId}`);
         CacheService.invalidate('diseases', getRagLastCacheKey(diseaseId));
+
+        // Запускаем фоновый precompute стандартных вопросов
+        if (result.success.length > 0) schedulePrecompute(diseaseId);
 
         return result;
     }));
@@ -287,6 +294,14 @@ const setupDiseaseHandlers = () => {
 
     // ============= RAG AI ASSISTANT HANDLERS =============
     const { ragQuery, ragQueryStream, reindexGuidelineEmbeddings } = require('../../services/ragPipelineService.cjs');
+    const { schedulePrecompute, triggerPrecompute, getQaCache, QA_TEMPLATES } = require('../../services/ragQaPrecomputeService.cjs');
+
+    // Zod-схема для входных параметров RAG-запроса (Phase 1.2 — compliance fix)
+    const RagQueryInputSchema = z.object({
+        query: z.string().min(1).max(4000),
+        diseaseId: z.number().int().positive(),
+        history: z.array(z.object({ q: z.string(), a: z.string() })).optional().default([]),
+    });
 
     ipcMain.handle('rag:get-last', ensureAuthenticated(async (_, { diseaseId }) => {
         const normalizedDiseaseId = Number(diseaseId);
@@ -296,9 +311,13 @@ const setupDiseaseHandlers = () => {
         return CacheService.get('diseases', getRagLastCacheKey(normalizedDiseaseId));
     }));
 
-    ipcMain.handle('rag:query', ensureAuthenticated(async (_, { query, diseaseId, history }) => {
+    ipcMain.handle('rag:query', ensureAuthenticated(async (_, payload) => {
         try {
-            const normalizedDiseaseId = Number(diseaseId);
+            const { query, diseaseId: rawDiseaseId, history } = RagQueryInputSchema.parse({
+                ...payload,
+                diseaseId: Number(payload?.diseaseId),
+            });
+            const normalizedDiseaseId = rawDiseaseId;
             const cacheKey = getRagLastCacheKey(normalizedDiseaseId);
 
             // Храним только последний ответ: новый запрос сбрасывает предыдущий кеш.
@@ -319,9 +338,18 @@ const setupDiseaseHandlers = () => {
         }
     }));
 
-    ipcMain.on('rag:stream', async (event, { query, diseaseId, history }) => {
+    ipcMain.on('rag:stream', async (event, payload) => {
+        // Phase 1.1: auth guard for ipcMain.on (ensureAuthenticated не поддерживает on)
+        if (!getSession().isAuthenticated) {
+            logger.warn('[RAG] Unauthorized rag:stream attempt');
+            if (!event.sender.isDestroyed()) event.sender.send('rag:error', 'Unauthorized');
+            return;
+        }
         try {
-            const normalizedDiseaseId = Number(diseaseId);
+            const { query, diseaseId: normalizedDiseaseId, history } = RagQueryInputSchema.parse({
+                ...payload,
+                diseaseId: Number(payload?.diseaseId),
+            });
             const cacheKey = getRagLastCacheKey(normalizedDiseaseId);
             let streamedAnswer = '';
 
@@ -348,6 +376,7 @@ const setupDiseaseHandlers = () => {
 
             if (!event.sender.isDestroyed()) event.sender.send('rag:done', { sources, context });
         } catch (err) {
+            logger.error('[RAG] ragQueryStream error:', err);
             if (!event.sender.isDestroyed()) event.sender.send('rag:error', err.message);
         }
     });
@@ -362,6 +391,43 @@ const setupDiseaseHandlers = () => {
             return { ok: true, ...result };
         } catch (err) {
             return { ok: false, error: err.message };
+        }
+    }));
+
+    ipcMain.handle('rag:qa:list', ensureAuthenticated(async (_, { diseaseId }) => {
+        try {
+            const normalizedDiseaseId = Number(diseaseId);
+            if (!Number.isFinite(normalizedDiseaseId) || normalizedDiseaseId <= 0) return [];
+            return await getQaCache(normalizedDiseaseId);
+        } catch (err) {
+            logger.error('[RAG] rag:qa:list error:', err);
+            return [];
+        }
+    }));
+
+    ipcMain.handle('rag:qa:trigger', ensureAuthenticated(async (_, { diseaseId }) => {
+        try {
+            const normalizedDiseaseId = Number(diseaseId);
+            if (!Number.isFinite(normalizedDiseaseId) || normalizedDiseaseId <= 0) return { ok: false };
+            await triggerPrecompute(normalizedDiseaseId);
+            return { ok: true };
+        } catch (err) {
+            logger.error('[RAG] rag:qa:trigger error:', err);
+            return { ok: false, error: err.message };
+        }
+    }));
+
+    ipcMain.handle('rag:qa:templates', ensureAuthenticated(async () => {
+        return QA_TEMPLATES;
+    }));
+
+    ipcMain.handle('rag:qa:compute-single', ensureAuthenticated(async (_, { diseaseId, templateId }) => {
+        try {
+            const entry = await computeQaCacheEntry(diseaseId, templateId);
+            return entry;
+        } catch (err) {
+            logger.error('[RAG] rag:qa:compute-single error:', err);
+            return null;
         }
     }));
 

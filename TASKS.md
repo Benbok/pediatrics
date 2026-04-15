@@ -16,6 +16,18 @@
 
 ## Активные задачи
 
+### [TASK-054] RAG-пайплайн: compliance-fixes + performance optimizations
+**Статус:** 🔄 В работе
+**Приоритет:** Высокий
+**Дата создания:** 2026-04-13
+
+**Описание:**
+Устранение compliance-нарушений (auth, Zod-валидация, логирование) и реализация набора оптимизаций производительности RAG-пайплайна в модуле «Болезни»: условный LLM query expansion, embed circuit breaker, расширенный кеш ctx-length, туning topK, сервисный слой rag.service.ts, Prisma-таблица disease_qa_cache, фоновый precompute, IPC+types, UI quick-answer chips.
+
+**Ссылка:** [tasks/13.04.2026/TASK-054.md](tasks/13.04.2026/TASK-054.md)
+
+---
+
 ### [TASK-053] Полное удаление поиска по базе знаний из Dashboard
 **Статус:** ✅ Завершена
 **Приоритет:** Высокий
