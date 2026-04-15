@@ -30,6 +30,8 @@ const CFG = {
     maxTokens: 1200,     // fallback
     // LLM query expansion: включать только если FTS вернул мало чанков
     llmExpandMinChunks: 5, // не расширяем через LLM если FTS нашёл >= этого числа
+    // Self-refining: если средний score top-чанков ниже порога — добавляем broad pass
+    selfRefineScoreThreshold: 0.15,
 };
 
 // ─── Системный промпт ────────────────────────────────────────────────────────
@@ -105,6 +107,10 @@ async function embedTextViaLmStudio(text) {
 
     try {
         const baseUrl = getLmStudioBaseUrl();
+        // Embedding model: рекомендуется 'multilingual-e5-large' или 'deepvk/USER-bge-m3'
+        // для русского медицинского текста (лучше понимает морфологию кириллицы).
+        // После смены модели — запустить reindexGuidelineEmbeddings() для всех diseaseId.
+        // Установить через env: EMBED_MODEL=multilingual-e5-large
         const model = process.env.EMBED_MODEL || 'nomic-embed-text';
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000);
@@ -200,6 +206,21 @@ const MEDICAL_SYNONYMS = new Map([
     ['стартов', ['первая линия', 'препарат выбор', 'начальн']],
     ['профилактик', ['превентивн', 'предупрежден']],
 ]);
+
+/**
+ * Дополнительные FTS-проходы по статическим шаблонам (Template-based Multi-query).
+ * Для каждого queryType — 2 альтернативных формулировки, независимые от LLM.
+ * Результаты мёрджатся с основным FTS-проходом в retrieveAndRank.
+ */
+const MULTI_QUERY_TEMPLATES = {
+    list:            ['препарат лечение схема назначение медикамент', 'рекомендован разреш применяют терапия'],
+    drug:            ['препарат выбора первоочередной стартовый рекомендован', 'назначают первой линии эмпирическ'],
+    dose:            ['доза суточная мг кг режим возраст кратность', 'дозировка применение курс длительность'],
+    contraindication:['противопоказан запрещен нельзя ограничен предостережение', 'побочные эффекты непереносимость аллергия'],
+    diagnostic:      ['диагностика критерии симптомы клинические признаки', 'обследование анализ лабораторный инструментальный'],
+    general:         ['лечение терапия препарат назначение клинические'],
+    hospitalization: ['госпитализация показания стационар направление критерии'],
+};
 
 /**
  * Расширяет запрос медицинскими синонимами.
@@ -821,6 +842,23 @@ async function retrieveAndRank({ query, diseaseId, queryVec, queryType, initialC
         }
     }
 
+    // Template-based Multi-query: для каждого queryType — 2 статических FTS-прохода.
+    // Без LLM, без latency overhead — улучшает recall для нестандартных формулировок.
+    {
+        const templates = MULTI_QUERY_TEMPLATES[queryType] || MULTI_QUERY_TEMPLATES.general;
+        for (const tpl of templates) {
+            const tplFtsQuery = buildFtsQuery(tpl);
+            if (!tplFtsQuery) continue;
+            const tplChunks = await ftsRetrieve(diseaseId, tplFtsQuery, effectiveTopK);
+            const existingIds = new Set(chunks.map(c => c.id));
+            const newChunks = tplChunks.filter(c => !existingIds.has(c.id));
+            if (newChunks.length > 0) {
+                chunks = [...chunks, ...newChunks];
+                logger.info(`[RAGPipeline] multi-query template "${tpl.slice(0, 30)}...": +${newChunks.length} new chunks`);
+            }
+        }
+    }
+
     if (queryType === 'list') {
         const broadChunks = await ftsRetrieve(diseaseId, BROAD_PASS_QUERY, effectiveTopK);
         const existingIds = new Set(chunks.map(c => c.id));
@@ -839,6 +877,25 @@ async function retrieveAndRank({ query, diseaseId, queryVec, queryType, initialC
 
     let top = dedup(chunks).slice(0, effectiveTopKAfterRank);
     if (queryType === 'list') top = filterTopForList(top);
+
+    // Self-refining по score: если средний score top-чанков ниже порога —
+    // добавляем широкий проход (broad pass) для восполнения контекста.
+    // list уже получил broad pass выше; не дублируем.
+    if (queryType !== 'list' && top.length > 0) {
+        const avgScore = top.reduce((s, c) => s + c.score, 0) / top.length;
+        if (avgScore < CFG.selfRefineScoreThreshold) {
+            logger.info(`[RAGPipeline] self-refine triggered: avgScore=${avgScore.toFixed(3)} < ${CFG.selfRefineScoreThreshold}`);
+            const broadChunks = await ftsRetrieve(diseaseId, BROAD_PASS_QUERY, effectiveTopK);
+            const existingIds = new Set(top.map(c => c.id));
+            const newBroad = broadChunks.filter(c => !existingIds.has(c.id));
+            if (newBroad.length > 0) {
+                // Присваиваем низкий score чтобы они шли после уже найденных чанков
+                const scoredBroad = newBroad.map(c => ({ ...c, score: CFG.selfRefineScoreThreshold * 0.5 }));
+                top = dedup([...top, ...scoredBroad]).slice(0, effectiveTopKAfterRank);
+                logger.info(`[RAGPipeline] self-refine broad pass: +${newBroad.length} chunks added`);
+            }
+        }
+    }
 
     // Подтягиваем соседние чанки (id ± 1) для каждого top-чанка.
     // Решает проблему разрыва информации: если препарат в чанке N,

@@ -2,7 +2,7 @@
 
 > **Модуль:** `diseases / ragPipeline`
 > **Дата начала:** 2026-04-13
-> **Статус:** 🔄 IN_PROGRESS
+> **Статус:** ✅ DONE
 > **Приоритет:** HIGH
 
 ---
@@ -120,10 +120,11 @@ src/
 - Сохранение в системный кеш для persistence между вкладками
 
 ### Этап 6: Unit tests
-**Статус:** 🔄 IN_PROGRESS
+**Статус:** ✅ DONE
 **Файлы:** `tests/ragPipeline.test.ts`
 
 - `buildFtsQuery`, `detectQueryType`, `rerankByKeywords`, `expandQueryWithSynonyms`, `dedup`, `buildContextSmart`
+- 48 тестов — 48 PASS (2026-04-15)
 
 ---
 

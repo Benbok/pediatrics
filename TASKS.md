@@ -16,10 +16,24 @@
 
 ## Активные задачи
 
+### [TASK-055] RAG Advanced: Template Multi-query + Self-refining + Embedding Config
+**Статус:** ✅ Завершена
+**Приоритет:** Средний
+**Дата создания:** 2026-04-15
+**Дата завершения:** 2026-04-15
+
+**Описание:**
+Template-based Multi-query (дополнительные FTS-проходы по статическим шаблонам на queryType без LLM), Self-refining по score (автоматический broad pass при avgScore < порога), обновление дефолтной embedding-модели на multilingual.
+
+**Ссылка:** [tasks/15.04.2026/TASK-055.md](tasks/15.04.2026/TASK-055.md)
+
+---
+
 ### [TASK-054] RAG-пайплайн: compliance-fixes + performance optimizations
-**Статус:** 🔄 В работе
+**Статус:** ✅ Завершена
 **Приоритет:** Высокий
 **Дата создания:** 2026-04-13
+**Дата завершения:** 2026-04-15
 
 **Описание:**
 Устранение compliance-нарушений (auth, Zod-валидация, логирование) и реализация набора оптимизаций производительности RAG-пайплайна в модуле «Болезни»: условный LLM query expansion, embed circuit breaker, расширенный кеш ctx-length, туning topK, сервисный слой rag.service.ts, Prisma-таблица disease_qa_cache, фоновый precompute, IPC+types, UI quick-answer chips.

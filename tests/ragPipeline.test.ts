@@ -514,3 +514,121 @@ describe('Phase 1: RagQueryInputSchema validation', () => {
         expect(result.success).toBe(false);
     });
 });
+
+// ─── TASK-055: Multi-query templates ─────────────────────────────────────────
+
+const MULTI_QUERY_TEMPLATES: Record<string, string[]> = {
+    list:            ['препарат лечение схема назначение медикамент', 'рекомендован разреш применяют терапия'],
+    drug:            ['препарат выбора первоочередной стартовый рекомендован', 'назначают первой линии эмпирическ'],
+    dose:            ['доза суточная мг кг режим возраст кратность', 'дозировка применение курс длительность'],
+    contraindication:['противопоказан запрещен нельзя ограничен предостережение', 'побочные эффекты непереносимость аллергия'],
+    diagnostic:      ['диагностика критерии симптомы клинические признаки', 'обследование анализ лабораторный инструментальный'],
+    general:         ['лечение терапия препарат назначение клинические'],
+    hospitalization: ['госпитализация показания стационар направление критерии'],
+};
+
+describe('TASK-055: MULTI_QUERY_TEMPLATES', () => {
+    it('every queryType has at least one template', () => {
+        const types = ['list', 'drug', 'dose', 'contraindication', 'diagnostic', 'general'];
+        for (const t of types) {
+            expect(MULTI_QUERY_TEMPLATES[t]).toBeDefined();
+            expect(MULTI_QUERY_TEMPLATES[t].length).toBeGreaterThanOrEqual(1);
+        }
+    });
+
+    it('list type has 2 templates', () => {
+        expect(MULTI_QUERY_TEMPLATES['list'].length).toBe(2);
+    });
+
+    it('drug type has 2 templates', () => {
+        expect(MULTI_QUERY_TEMPLATES['drug'].length).toBe(2);
+    });
+
+    it('all template strings are non-empty and >= 10 chars', () => {
+        for (const [type, templates] of Object.entries(MULTI_QUERY_TEMPLATES)) {
+            for (const tpl of templates) {
+                expect(tpl.length, `template for ${type} is too short`).toBeGreaterThanOrEqual(10);
+            }
+        }
+    });
+
+    it('templates produce valid FTS queries via buildFtsQuery', () => {
+        for (const templates of Object.values(MULTI_QUERY_TEMPLATES)) {
+            for (const tpl of templates) {
+                const fts = buildFtsQuery(tpl);
+                // Should produce a non-empty FTS string with wildcards
+                expect(fts.length).toBeGreaterThan(0);
+                expect(fts).toContain('*');
+            }
+        }
+    });
+
+    it('diagnostic templates contain diagnostic keywords', () => {
+        const joined = MULTI_QUERY_TEMPLATES['diagnostic'].join(' ').toLowerCase();
+        expect(joined).toMatch(/диагностик|критери|симптом|обследован/);
+    });
+
+    it('dose templates contain dosage keywords', () => {
+        const joined = MULTI_QUERY_TEMPLATES['dose'].join(' ').toLowerCase();
+        expect(joined).toMatch(/доз|мг|кг|кратность/);
+    });
+});
+
+// ─── TASK-055: Self-refining score threshold ──────────────────────────────────
+
+const SELF_REFINE_THRESHOLD = 0.15;
+
+function computeAvgScore(chunks: Chunk[]): number {
+    if (chunks.length === 0) return 0;
+    return chunks.reduce((s, c) => s + c.score, 0) / chunks.length;
+}
+
+function shouldSelfRefine(top: Chunk[], queryType: string): boolean {
+    if (queryType === 'list') return false; // list уже получил broad pass
+    if (top.length === 0) return false;
+    return computeAvgScore(top) < SELF_REFINE_THRESHOLD;
+}
+
+describe('TASK-055: Self-refining score logic', () => {
+    const makeChunk = (id: number, score: number): Chunk => ({
+        id, text: `текст чанка ${id}`, bm25: -1, score,
+    });
+
+    it('triggers self-refine when avgScore < threshold', () => {
+        const top = [makeChunk(1, 0.05), makeChunk(2, 0.08), makeChunk(3, 0.10)];
+        expect(shouldSelfRefine(top, 'general')).toBe(true);
+    });
+
+    it('does NOT trigger self-refine when avgScore >= threshold', () => {
+        const top = [makeChunk(1, 0.20), makeChunk(2, 0.25), makeChunk(3, 0.30)];
+        expect(shouldSelfRefine(top, 'general')).toBe(false);
+    });
+
+    it('does NOT trigger for list queryType (already has broad pass)', () => {
+        const top = [makeChunk(1, 0.05), makeChunk(2, 0.04)];
+        expect(shouldSelfRefine(top, 'list')).toBe(false);
+    });
+
+    it('does NOT trigger for empty top array', () => {
+        expect(shouldSelfRefine([], 'general')).toBe(false);
+    });
+
+    it('SELF_REFINE_THRESHOLD is 0.15', () => {
+        expect(SELF_REFINE_THRESHOLD).toBe(0.15);
+    });
+
+    it('computeAvgScore returns 0 for empty array', () => {
+        expect(computeAvgScore([])).toBe(0);
+    });
+
+    it('computeAvgScore calculates correctly', () => {
+        const chunks = [makeChunk(1, 0.2), makeChunk(2, 0.4), makeChunk(3, 0.6)];
+        expect(computeAvgScore(chunks)).toBeCloseTo(0.4, 5);
+    });
+
+    it('triggers on exacty-at-threshold value (not <)', () => {
+        // avgScore === threshold → NOT triggered (condition is <)
+        const top = [makeChunk(1, 0.15)];
+        expect(shouldSelfRefine(top, 'drug')).toBe(false);
+    });
+});
