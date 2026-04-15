@@ -7,6 +7,7 @@ import { patientService } from '../../services/patient.service';
 import { logger } from '../../services/logger';
 import { draftService } from '../../services/draftService';
 import type { VisitDraftCachePayload } from '../../services/draftService';
+import { analysisRegistry } from '../../services/analysisRegistry';
 import { useTabs } from '../../context/TabsContext';
 import { useVisitAnalysis } from '../../hooks/useVisitAnalysis';
 import debounce from 'lodash/debounce';
@@ -246,6 +247,29 @@ export const VisitFormPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visitAnalysis.isAnalyzing]);
 
+    // Переподключение к анализу, запущенному до перехода на другую страницу
+    useEffect(() => {
+        const visitId = formData.id;
+        if (!visitId) return;
+        const entry = analysisRegistry.get(visitId);
+        if (!entry) return;
+        // Отображаем анализ как активный
+        visitAnalysis.cancelAnalysis(); // сбрасываем старый idle-стейт
+        setAnalysisProgress(50); // произвольный прогресс — идёт фоновый анализ
+        logger.info('[VisitFormPage] Re-attaching to in-flight analysis', { visitId, startedAt: entry.startedAt });
+        entry.promise
+            .then((results) => {
+                setSuggestions(results);
+                setHasLocalChanges(true);
+                logger.info('[VisitFormPage] Re-attached analysis completed', { visitId, count: results.length });
+            })
+            .catch((err: any) => {
+                logger.warn('[VisitFormPage] Re-attached analysis failed', { visitId, error: err?.message });
+            });
+    // Run once when visitId becomes known
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.id]);
+
     // Регистрация вкладки ТОЛЬКО после загрузки данных ребенка
     useEffect(() => {
         if (child && !tabRegistered.current) {
@@ -475,6 +499,21 @@ export const VisitFormPage: React.FC = () => {
                 if (visitData.currentWeight && visitData.currentHeight) {
                     setCalculatedBMI(visitData.bmi || calculateBMI(visitData.currentWeight, visitData.currentHeight));
                     setCalculatedBSA(visitData.bsa || calculateBSA(visitData.currentWeight, visitData.currentHeight));
+                }
+
+                // Тихо восстанавливаем suggestions из черновика (без модального окна):
+                // это позволяет вернуться к результатам AI-анализа после навигации
+                const editDraftKey = draftService.getVisitDraftKey(Number(childId), Number(id));
+                const savedEditDraft = draftService.loadDraft<Partial<Visit> | VisitDraftCachePayload>(editDraftKey);
+                if (savedEditDraft?.data) {
+                    const parsed = draftService.parseVisitDraftPayload(savedEditDraft.data);
+                    if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
+                        setSuggestions(parsed.suggestions);
+                        logger.info('[VisitFormPage] Suggestions restored from draft', {
+                            visitId: Number(id),
+                            count: parsed.suggestions.length,
+                        });
+                    }
                 }
 
             } else {
@@ -860,10 +899,20 @@ export const VisitFormPage: React.FC = () => {
                     } as Visit);
                 }
 
+                // Регистрируем промис в реестре — переживёт размонтирование компонента
+                const analysisPromise = visitService.analyzeVisit(visitId!);
+                analysisRegistry.set(visitId!, analysisPromise);
+
                 // Выполняем AI-анализ (использует расширенные поля из service)
-                const results = await visitService.analyzeVisit(visitId!);
+                const results = await analysisPromise;
                 setSuggestions(results);
                 setHasLocalChanges(true);
+
+                // Немедленно сохраняем результаты в черновик — переживут перезагрузку страницы
+                draftService.saveDraft(
+                    draftKey,
+                    draftService.buildVisitDraftPayload(formData, recommendations, results)
+                );
 
                 const duration = Date.now() - startTime;
                 logger.info(`[VisitFormPage] Analysis completed in ${duration}ms`, { visitId, duration });

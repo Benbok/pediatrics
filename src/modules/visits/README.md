@@ -579,3 +579,11 @@ recommendationTemplateService.delete(id, userId) // Удалить шаблон
 - `DEVELOPMENT_RULES.md` - Правила разработки
 - `AI_INTEGRATION_ANALYSIS.md` - Детальный анализ AI-интеграции
 - Форма 025/у - Официальная форма Минздрава РФ
+
+## Changelog
+
+### 15.04.2026 — TASK-057
+- CDSS мигрирован с Gemini на Local LLM (LM Studio) для `parseComplaints` и Phase 2 ранжирования диагнозов.
+- Добавлен сервис `electron/services/cdssLocalLlmService.cjs` с health-check cache и graceful fallback.
+- Обновлены backend пайплайн и тесты (`cdssLocalLlm`, `cdss-pipeline`, `ai-symptom-normalizer`).
+- Добавлена устойчивость UI при навигации во время длительного анализа (`analysisRegistry` + re-attach в `VisitFormPage`).
