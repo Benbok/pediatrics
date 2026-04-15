@@ -51,14 +51,21 @@ function getRefineHints(original: string, refined: string) {
     if (extractNumericValues(original).join('|') === extractNumericValues(refined).join('|') && extractNumericValues(original).length > 0) {
         hints.push('Числа сохранены');
     }
+    if (original.replace(/[\p{L}\p{N}\s]/gu, '') !== refined.replace(/[\p{L}\p{N}\s]/gu, '')) {
+        hints.push('Исправлена пунктуация');
+    }
     if (original.toLowerCase() === refined.toLowerCase() && original !== refined) {
         hints.push('Нормализован регистр');
+    } else if (original.toLowerCase() !== refined.toLowerCase()) {
+        // Check if word-level changes look like spelling corrections (not additions/removals)
+        const origWords = original.toLowerCase().match(/[\p{L}]+/gu) ?? [];
+        const refinedWords = refined.toLowerCase().match(/[\p{L}]+/gu) ?? [];
+        if (origWords.length === refinedWords.length && origWords.some((w, i) => w !== refinedWords[i])) {
+            hints.push('Исправлена орфография');
+        }
     }
     if (/[.\-/\s]\d{1,2}[.\-/\s]\d{2,4}|\d{1,2}\s+\d{1,2}\s+\d{2,4}/.test(original) && original !== refined) {
         hints.push('Нормализована дата');
-    }
-    if (original.replace(/[\p{L}\p{N}\s]/gu, '') !== refined.replace(/[\p{L}\p{N}\s]/gu, '')) {
-        hints.push('Исправлена пунктуация');
     }
     return hints;
 }

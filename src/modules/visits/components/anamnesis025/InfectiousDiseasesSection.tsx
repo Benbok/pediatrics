@@ -23,14 +23,26 @@ export const InfectiousDiseasesSection: React.FC<InfectiousDiseasesSectionProps>
         });
     };
 
-    const handleAgeChange = (diseaseName: string, ageYears: number | null) => {
+    const handleAgeYearsChange = (diseaseName: string, ageYears: number | null) => {
         const current = infectiousData[diseaseName as keyof InfectiousDiseasesData] as any;
         onChange({
             ...infectiousData,
             [diseaseName]: {
                 ...current,
                 had: current?.had || false,
-                ageYears: ageYears || null,
+                ageYears: ageYears !== null && !isNaN(ageYears) ? ageYears : null,
+            },
+        });
+    };
+
+    const handleAgeMonthsChange = (diseaseName: string, ageMonths: number | null) => {
+        const current = infectiousData[diseaseName as keyof InfectiousDiseasesData] as any;
+        onChange({
+            ...infectiousData,
+            [diseaseName]: {
+                ...current,
+                had: current?.had || false,
+                ageMonths: ageMonths !== null && !isNaN(ageMonths) ? ageMonths : null,
             },
         });
     };
@@ -97,16 +109,45 @@ export const InfectiousDiseasesSection: React.FC<InfectiousDiseasesSectionProps>
                                 <span className="text-sm text-slate-700 dark:text-slate-300">{disease.label}</span>
                             </label>
                             {had && (
-                                <div className="w-44">
-                                    <Input
-                                        type="number"
-                                        value={diseaseData?.ageYears?.toString() || ''}
-                                        onChange={(e) => handleAgeChange(disease.key, e.target.value ? parseInt(e.target.value) : null)}
-                                        placeholder="Возраст"
-                                        min={0}
-                                        max={18}
-                                        className="w-full"
-                                    />
+                                <div className="flex items-center gap-2">
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs text-slate-500 dark:text-slate-400">Лет (0–18)</label>
+                                        <input
+                                            type="number"
+                                            value={diseaseData?.ageYears?.toString() ?? ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                                                handleAgeYearsChange(disease.key, val);
+                                            }}
+                                            min={0}
+                                            max={18}
+                                            className={`w-20 px-2 py-1.5 rounded-xl border text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all ${
+                                                diseaseData?.ageYears != null && (diseaseData.ageYears < 0 || diseaseData.ageYears > 18)
+                                                    ? 'border-red-400 dark:border-red-500'
+                                                    : 'border-slate-200 dark:border-slate-700'
+                                            }`}
+                                            placeholder="—"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs text-slate-500 dark:text-slate-400">Мес. (0–11)</label>
+                                        <input
+                                            type="number"
+                                            value={diseaseData?.ageMonths?.toString() ?? ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                                                handleAgeMonthsChange(disease.key, val);
+                                            }}
+                                            min={0}
+                                            max={11}
+                                            className={`w-20 px-2 py-1.5 rounded-xl border text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all ${
+                                                diseaseData?.ageMonths != null && (diseaseData.ageMonths < 0 || diseaseData.ageMonths > 11)
+                                                    ? 'border-red-400 dark:border-red-500'
+                                                    : 'border-slate-200 dark:border-slate-700'
+                                            }`}
+                                            placeholder="—"
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>

@@ -592,6 +592,7 @@ export interface FeedingData {
 export interface InfectiousDiseaseEntry {
   had: boolean;
   ageYears?: number | null;
+  ageMonths?: number | null;
 }
 
 export interface InfectiousDiseasesData {

@@ -54,7 +54,8 @@ export const FeedingDataSchema = z.object({
 
 export const InfectiousDiseaseEntrySchema = z.object({
   had: z.boolean().default(false),
-  ageYears: z.number().min(0).max(18).optional().nullable(),
+  ageYears: z.number().int().min(0).max(18).optional().nullable(),
+  ageMonths: z.number().int().min(0).max(11).optional().nullable(),
 });
 
 export const InfectiousDiseasesDataSchema = z.object({

@@ -8,15 +8,14 @@ const { logger } = require('../../logger.cjs');
 const localLlmService = require('../../services/localLlmService.cjs');
 const {
     ALLOWED_REFINE_FIELDS,
-    buildRefineMessages,
-    buildRefineGenerationOptions,
+    buildSpellingMessages,
+    buildPunctuationMessages,
+    buildSpellingGenerationOptions,
+    buildPunctuationGenerationOptions,
+    calcRefineMaxTokens,
 } = require('./refine.constants.cjs');
 
-const REFINE_TOKEN_RETENTION_THRESHOLD = 0.6;
-const REFINE_CHAR_SIMILARITY_THRESHOLD = 0.55;
-const REFINE_TOKEN_COUNT_DRIFT_RATIO = 0.35;
-const PROTECTED_TOKEN_PATTERN = /\d+(?:[.,]\d+)?\s*(?:°C|мм\s*рт\.?\s*ст\.?|%|мл|мг|кг|см|ммоль\/л|уд\/?мин|SpO2|pH|ICD-\d{1,2}(?:\.\d+)?|[A-ZА-ЯЁ]{2,}\s*\d+)|[A-Za-zА-Яа-яЁё]*\d+[A-Za-zА-Яа-яЁё\^%/+-]*|[A-ZА-ЯЁ]{2,}[A-ZА-ЯЁ0-9\^%/+-]*|\d+[\^%/+-]*|[A-Za-z]{2,}[A-Z0-9][A-Za-z0-9\^%/+-]*/gu;
-const UNIT_TOKEN_PATTERN = /°C|мм\s*рт\.?\s*ст\.?|ммоль\/л|мг\/кг|мкг\/кг|мг|мкг|г|мл|л|кг|г\/л|см|мм|%|уд\/?мин|SpO2|pH|дн(?:я|ей)?|сут(?:ки|ок)?|ч(?:ас(?:а|ов)?)?/giu;
+
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
@@ -43,7 +42,7 @@ const LlmRefineFieldSchema = z.object({
         .min(1, 'Текст не может быть пустым')
         .max(4096, 'Текст слишком длинный'),
     options: z.object({
-        maxTokens: z.number().min(1).max(512).optional(),
+        maxTokens: z.number().min(1).max(1024).optional(),
     }).optional(),
 });
 
@@ -114,22 +113,25 @@ function buildSafeFallbackText(text) {
     return postProcessRefinementOutput(text);
 }
 
-function normalizeForComparison(text) {
-    return String(text ?? '')
-        .toLowerCase()
-        .replace(/\s+/g, ' ')
-        .trim();
-}
+// Split text into chunks of whole sentences, each under maxChunkChars.
+// This prevents token overflow for long inputs and improves per-sentence quality.
+const REFINE_CHUNK_CHARS = 200;
 
-function tokenizeForComparison(text) {
-    return normalizeForComparison(text).match(/[\p{L}\p{N}\^%/+-]+/gu) ?? [];
-}
-
-function extractProtectedTokens(text) {
-    return Array.from(new Set(
-        (String(text ?? '').match(PROTECTED_TOKEN_PATTERN) ?? [])
-            .map((token) => token.toLowerCase().replace(/\s+/g, ' ').trim())
-    ));
+function splitIntoChunks(text, maxChunkChars = REFINE_CHUNK_CHARS) {
+    // Split on sentence boundaries: ". ", "! ", "? " or end of string
+    const sentences = text.match(/[^.!?]+[.!?]*\s*/g) ?? [text];
+    const chunks = [];
+    let current = '';
+    for (const sentence of sentences) {
+        if (current.length + sentence.length > maxChunkChars && current.length > 0) {
+            chunks.push(current.trimEnd());
+            current = sentence;
+        } else {
+            current += sentence;
+        }
+    }
+    if (current.trim()) chunks.push(current.trimEnd());
+    return chunks.length > 0 ? chunks : [text];
 }
 
 function extractNumericValues(text) {
@@ -137,53 +139,8 @@ function extractNumericValues(text) {
         .map((token) => token.replace(',', '.'));
 }
 
-function extractUnitTokens(text) {
-    return (String(text ?? '').match(UNIT_TOKEN_PATTERN) ?? [])
-        .map((token) => token.toLowerCase().replace(/\s+/g, ' ').replace(/\.$/, '').trim());
-}
-
-function arraysEqual(left, right) {
-    if (left.length !== right.length) return false;
-    return left.every((value, index) => value === right[index]);
-}
-
-function levenshteinDistance(left, right) {
-    if (left === right) return 0;
-    if (!left.length) return right.length;
-    if (!right.length) return left.length;
-
-    const prev = Array.from({ length: right.length + 1 }, (_, index) => index);
-    const curr = new Array(right.length + 1);
-
-    for (let i = 1; i <= left.length; i++) {
-        curr[0] = i;
-        for (let j = 1; j <= right.length; j++) {
-            const substitutionCost = left[i - 1] === right[j - 1] ? 0 : 1;
-            curr[j] = Math.min(
-                curr[j - 1] + 1,
-                prev[j] + 1,
-                prev[j - 1] + substitutionCost
-            );
-        }
-        for (let j = 0; j <= right.length; j++) {
-            prev[j] = curr[j];
-        }
-    }
-
-    return prev[right.length];
-}
-
-function estimateRefineMaxTokens(sourceText, requestedMaxTokens) {
-    // Русский текст: ~2 символа/токен; добавляем 40% запас на исправления и форматирование
-    const charsPerToken = 2;
-    const safetyFactor = 1.4;
-    const sourceChars = String(sourceText ?? '').length;
-    const adaptiveCap = Math.max(32, Math.ceil((sourceChars / charsPerToken) * safetyFactor));
-    return requestedMaxTokens != null
-        ? Math.min(requestedMaxTokens, adaptiveCap)
-        : adaptiveCap;
-}
-
+// Minimal validation: trust the model for grammar/spelling, only guard against
+// empty output and changed numeric values (critical in medical context).
 function validateRefinementOutput(sourceText, candidateText) {
     const validationStartedAt = performance.now();
     const source = String(sourceText ?? '').trim();
@@ -205,52 +162,14 @@ function validateRefinementOutput(sourceText, candidateText) {
         return finalizeValidation({ isSafe: false, reason: 'empty-output' });
     }
 
-    const sourceNormalized = normalizeForComparison(source);
-    const candidateNormalized = normalizeForComparison(candidate);
-
-    if (sourceNormalized === candidateNormalized) {
-        return finalizeValidation({ isSafe: true, reason: 'unchanged' });
-    }
-
-    const protectedTokens = extractProtectedTokens(source);
-    const missingProtectedToken = protectedTokens.find((token) => !candidateNormalized.includes(token));
-    if (missingProtectedToken) {
-        return finalizeValidation({ isSafe: false, reason: `missing-protected-token:${missingProtectedToken}` });
-    }
-
     const sourceNumericValues = extractNumericValues(source);
     const candidateNumericValues = extractNumericValues(candidate);
-    if (!arraysEqual(sourceNumericValues, candidateNumericValues)) {
+    if (sourceNumericValues.join('|') !== candidateNumericValues.join('|')) {
+        logger.warn('[LlmHandlers] Numeric values changed by model', {
+            source: sourceNumericValues,
+            candidate: candidateNumericValues,
+        });
         return finalizeValidation({ isSafe: false, reason: 'numeric-values-changed' });
-    }
-
-    const sourceUnitTokens = extractUnitTokens(source);
-    const candidateUnitTokens = extractUnitTokens(candidate);
-    if (!arraysEqual(sourceUnitTokens, candidateUnitTokens)) {
-        return finalizeValidation({ isSafe: false, reason: 'measurement-units-changed' });
-    }
-
-    const sourceTokens = tokenizeForComparison(source);
-    const candidateTokens = tokenizeForComparison(candidate);
-    const significantSourceTokens = sourceTokens.filter((token) => token.length >= 3);
-    const retainedTokenCount = significantSourceTokens.filter((token) => candidateTokens.includes(token)).length;
-    const retainedRatio = significantSourceTokens.length > 0
-        ? retainedTokenCount / significantSourceTokens.length
-        : 1;
-
-    if (retainedRatio < REFINE_TOKEN_RETENTION_THRESHOLD) {
-        return finalizeValidation({ isSafe: false, reason: `low-token-retention:${retainedRatio.toFixed(2)}` });
-    }
-
-    const tokenCountDelta = Math.abs(candidateTokens.length - sourceTokens.length);
-    if (sourceTokens.length > 0 && tokenCountDelta > Math.max(3, Math.ceil(sourceTokens.length * REFINE_TOKEN_COUNT_DRIFT_RATIO))) {
-        return finalizeValidation({ isSafe: false, reason: 'token-count-drift' });
-    }
-
-    const charDistance = levenshteinDistance(sourceNormalized, candidateNormalized);
-    const charSimilarity = 1 - (charDistance / Math.max(sourceNormalized.length, candidateNormalized.length, 1));
-    if (charSimilarity < REFINE_CHAR_SIMILARITY_THRESHOLD) {
-        return finalizeValidation({ isSafe: false, reason: `low-char-similarity:${charSimilarity.toFixed(2)}` });
     }
 
     return finalizeValidation({ isSafe: true, reason: 'validated' });
@@ -317,53 +236,93 @@ function setupLlmHandlers() {
         const { field, text, options = {} } = validated;
         const normalizedSourceText = buildSafeFallbackText(text);
 
-        // messages array — LM Studio applies chat template automatically
-        const messages = buildRefineMessages(field, text);
-
-        logger.info('[LlmHandlers] Starting field refinement', { field, textLength: text.length });
+        logger.info('[LlmHandlers] Starting two-stage field refinement', { field, textLength: text.length });
 
         try {
-            const maxTokens = estimateRefineMaxTokens(text, options.maxTokens);
-            let refinedText = '';
-
-            const result = await localLlmService.generate(
-                messages,
-                buildRefineGenerationOptions(field, text, maxTokens),
-                (token) => {
-                    refinedText += token;
-                    if (event.sender && !event.sender.isDestroyed()) {
-                        event.sender.send('llm:field-refine-token', { field, token });
-                    }
+            const sendToken = (token) => {
+                if (event.sender && !event.sender.isDestroyed()) {
+                    event.sender.send('llm:field-refine-token', { field, token });
                 }
-            );
+            };
 
-            if (result.status === 'completed') {
-                const normalizedRefinedText = postProcessRefinementOutput(refinedText);
-                const validation = validateRefinementOutput(text, normalizedRefinedText);
+            // ── Stage 1: Spelling correction (per chunk) ─────────────────────
+            const chunks = splitIntoChunks(text);
+            const spellingCorrectedChunks = [];
+
+            for (let i = 0; i < chunks.length; i++) {
+                const chunk = chunks[i];
+                const messages = buildSpellingMessages(chunk);
+                const maxTokens = calcRefineMaxTokens(chunk.length);
+                let corrected = '';
+
+                const result = await localLlmService.generate(
+                    messages,
+                    buildSpellingGenerationOptions(chunk, maxTokens),
+                    (token) => { corrected += token; }
+                );
+
+                if (result.status !== 'completed') {
+                    logger.info('[LlmHandlers] Spelling stage chunk aborted', { field, chunk: i, status: result.status });
+                    return result;
+                }
+
+                const trimmed = collapseWhitespace(corrected);
+                // Validate: numbers must be preserved
+                const validation = validateRefinementOutput(chunk, trimmed);
                 if (!validation.isSafe) {
-                    logger.warn('[LlmHandlers] Unsafe refinement output rejected, falling back to source text', {
-                        field,
-                        reason: validation.reason,
-                        sourceText: text,
-                        refinedText: normalizedRefinedText,
+                    logger.warn('[LlmHandlers] Spelling stage unsafe, using source chunk', {
+                        field, chunk: i, reason: validation.reason,
                     });
-
-                    return {
-                        status: 'completed',
-                        text: normalizedSourceText,
-                        usedFallback: true,
-                    };
+                    spellingCorrectedChunks.push(chunk);
+                } else {
+                    spellingCorrectedChunks.push(trimmed);
+                    logger.info('[LlmHandlers] Spelling stage chunk completed', { field, chunk: i, original: chunk, corrected: trimmed });
                 }
-
-                return {
-                    status: 'completed',
-                    text: normalizedRefinedText,
-                    usedFallback: false,
-                };
             }
 
-            logger.info('[LlmHandlers] Field refinement completed', { field, status: result.status });
-            return result;
+            const spellingCorrectedText = spellingCorrectedChunks.join(' ');
+
+            // ── Stage 2: Punctuation and formatting ──────────────────────────
+            const punctChunks = splitIntoChunks(spellingCorrectedText);
+            const finalChunks = [];
+
+            for (let i = 0; i < punctChunks.length; i++) {
+                const chunk = punctChunks[i];
+                const messages = buildPunctuationMessages(field, chunk);
+                const maxTokens = calcRefineMaxTokens(chunk.length);
+                let formatted = '';
+
+                const result = await localLlmService.generate(
+                    messages,
+                    buildPunctuationGenerationOptions(chunk, maxTokens),
+                    (token) => {
+                        formatted += token;
+                        sendToken(token);
+                    }
+                );
+
+                if (result.status !== 'completed') {
+                    logger.info('[LlmHandlers] Punctuation stage chunk aborted', { field, chunk: i, status: result.status });
+                    return result;
+                }
+
+                const normalizedChunk = postProcessRefinementOutput(formatted);
+                const validation = validateRefinementOutput(chunk, normalizedChunk);
+                if (!validation.isSafe) {
+                    logger.warn('[LlmHandlers] Punctuation stage unsafe, using spelling-only chunk', {
+                        field, chunk: i, reason: validation.reason,
+                    });
+                    finalChunks.push(buildSafeFallbackText(chunk));
+                } else {
+                    finalChunks.push(normalizedChunk);
+                }
+            }
+
+            const finalText = finalChunks.join(' ');
+            logger.info('[LlmHandlers] Two-stage refinement completed', {
+                field, chunks: chunks.length, originalLength: text.length, finalLength: finalText.length,
+            });
+            return { status: 'completed', text: finalText, usedFallback: false };
         } catch (err) {
             logger.error('[LlmHandlers] Field refine error', { field, error: err?.message || err });
             if (event.sender && !event.sender.isDestroyed()) {

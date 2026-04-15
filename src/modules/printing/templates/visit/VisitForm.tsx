@@ -139,8 +139,9 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
 
     const feedingItems = [
         breastfeedingLabel ? `Грудное вскармливание: ${breastfeedingLabel}` : null,
-        hasText(feedingData?.breastfeedingFrom) ? `Грудное вскармливание с: ${feedingData?.breastfeedingFrom}` : null,
-        hasText(feedingData?.breastfeedingTo) ? `Грудное вскармливание по: ${feedingData?.breastfeedingTo}` : null,
+        (hasText(feedingData?.breastfeedingFrom) || hasText(feedingData?.breastfeedingTo))
+            ? `Грудное вскармливание с: ${feedingData?.breastfeedingFrom ?? '—'} по ${feedingData?.breastfeedingTo ?? '—'}`
+            : null,
         hasText(feedingData?.formulaName) ? `Молочная смесь: ${feedingData?.formulaName}` : null,
         feedingData?.complementaryFoodAge !== undefined && feedingData?.complementaryFoodAge !== null
             ? `Прикорм введен в возрасте: ${feedingData.complementaryFoodAge} мес`
@@ -160,7 +161,15 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
     for (const disease of infectiousDiseaseMap) {
         const entry = infectiousDiseasesData?.[disease.key];
         if (entry && typeof entry === 'object' && 'had' in entry && entry.had) {
-            const age = 'ageYears' in entry && typeof entry.ageYears === 'number' ? ` (в ${entry.ageYears} лет)` : '';
+            const hasYears = 'ageYears' in entry && typeof entry.ageYears === 'number';
+            const hasMonths = 'ageMonths' in entry && typeof entry.ageMonths === 'number';
+            let age = '';
+            if (hasYears || hasMonths) {
+                const parts: string[] = [];
+                if (hasYears) parts.push(`${entry.ageYears} лет`);
+                if (hasMonths) parts.push(`${(entry as any).ageMonths} мес.`);
+                age = ` (в ${parts.join(' ')})`;
+            }
             infectiousItems.push(`${disease.label}${age}`);
         }
     }

@@ -662,6 +662,7 @@ export const DiseaseFormPage: React.FC = () => {
     };
 
     const handleFileUpload = async () => {
+        if (!window.electronAPI) return;
         try {
             const result = await window.electronAPI.openFile({
                 filters: [{ name: 'PDF Documents', extensions: ['pdf'] }],
@@ -698,6 +699,7 @@ export const DiseaseFormPage: React.FC = () => {
     };
 
     const handlePdfImport = async () => {
+        if (!window.electronAPI) return;
         try {
             const result = await window.electronAPI.openFile({
                 filters: [{ name: 'PDF Documents', extensions: ['pdf'] }]
@@ -1491,7 +1493,7 @@ export const DiseaseFormPage: React.FC = () => {
                                         type="button"
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => window.electronAPI.openExternalPath(guide.pdfPath)}
+                                        onClick={() => window.electronAPI?.openExternalPath(guide.pdfPath)} // eslint-disable-line
                                     >
                                         Открыть
                                     </Button>

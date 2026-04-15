@@ -22,6 +22,7 @@
 
 | Дата | ID | Модуль | Задача | Итог |
 |------|----|--------|--------|------|
+| 15.04.2026 | TASK-066 | visits/anamnesis | Поля «Год» и «Месяц» возраста в перенесённых инфекционных заболеваниях | ✅ DONE (два отдельных поля с валидацией, тесты 10/10) | [→](tasks/15.04.2026/TASK-066.md) |
 | 15.04.2026 | TASK-065 | settings/printing | Профиль организации: сущность + вкладка настроек + шапка печатной формы | ✅ DONE (single-record organization profile + settings tab + print header integration + tests) | [→](tasks/15.04.2026/TASK-065.md) |
 | 15.04.2026 | TASK-061 | medications/data | Перенос пробиотиков из vidal-db в dev-db | ✅ DONE (импорт `A07FA*` завершён; `pediatric_dosing`, `full_instruction` и `package_description` доведены; импортеры обновлены для будущих запусков) | [→](tasks/15.04.2026/TASK-061.md) |
 | 15.04.2026 | TASK-064 | visits/anamnesis | Перевести поля «Аллергический статус» на textarea | ✅ DONE (все поля блока переведены на многострочный ввод) | [→](tasks/15.04.2026/TASK-064.md) |
