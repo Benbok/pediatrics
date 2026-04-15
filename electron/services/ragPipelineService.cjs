@@ -667,6 +667,51 @@ function detectQueryType(query) {
     return 'general';
 }
 
+// ─── Query rewrite для self-refine ─────────────────────────────────────────
+
+/**
+ * Переформулирует запрос через LLM используя альтернативные клинические термины.
+ * Вызывается ТОЛЬКО при срабатывании self-refine (avgScore < threshold).
+ * Timeout 5s, maxTokens 30 — минимальная нагрузка; при ошибке возвращает null → fallback на BROAD_PASS.
+ */
+async function rewriteQueryForRetrieval(query, queryType) {
+    const q = String(query || '').trim();
+    if (q.length < 5) return null;
+
+    const typeHint = {
+        drug:            'препарат выбора, стартовая терапия',
+        dose:            'дозировка, режим приёма, мг/кг',
+        contraindication:'противопоказания, ограничения, запрет',
+        diagnostic:      'критерии диагноза, клинические признаки',
+        list:            'список препаратов, варианты терапии',
+        general:         'лечение, назначение, рекомендации',
+    }[queryType] || 'лечение, рекомендации';
+
+    const prompt = `Переформулируй медицинский вопрос для поиска по клиническим рекомендациям используя альтернативные термины.
+Тип информации: ${typeHint}.
+Верни ТОЛЬКО альтернативную формулировку (5–8 слов), без пояснений.
+Вопрос: ${q}
+Альтернатива:`;
+
+    let result = '';
+    try {
+        const response = await localLlmService.generate(
+            [{ role: 'user', content: prompt }],
+            { maxTokens: 30, temperature: 0.3, topP: 0.9, timeoutMs: 5000 },
+            (token) => { result += token; }
+        );
+        const rewritten = result.trim().replace(/^альтернатива:\s*/i, '').replace(/^["']|["']$/g, '');
+        if (response.status === 'completed' && rewritten.length >= 5 && rewritten.length < 200) {
+            logger.info(`[RAGPipeline] query rewrite: "${q}" → "${rewritten}"`);
+            return rewritten;
+        }
+        logger.info('[RAGPipeline] query rewrite: empty or too short, using fallback');
+    } catch (err) {
+        logger.warn('[RAGPipeline] query rewrite failed:', err.message);
+    }
+    return null;
+}
+
 // ─── Query expansion через LLM ──────────────────────────────────────────────
 
 /**
@@ -878,21 +923,32 @@ async function retrieveAndRank({ query, diseaseId, queryVec, queryType, initialC
     let top = dedup(chunks).slice(0, effectiveTopKAfterRank);
     if (queryType === 'list') top = filterTopForList(top);
 
-    // Self-refining по score: если средний score top-чанков ниже порога —
-    // добавляем широкий проход (broad pass) для восполнения контекста.
+    // Self-refining + Agentic re-write loop:
+    // Если средний score top-чанков ниже порога — пытаемся переформулировать запрос
+    // через LLM и делаем второй FTS-проход с альтернативными терминами.
+    // Fallback: если LLM недоступен или rewrite пустой → BROAD_PASS_QUERY (статичный).
     // list уже получил broad pass выше; не дублируем.
     if (queryType !== 'list' && top.length > 0) {
         const avgScore = top.reduce((s, c) => s + c.score, 0) / top.length;
         if (avgScore < CFG.selfRefineScoreThreshold) {
             logger.info(`[RAGPipeline] self-refine triggered: avgScore=${avgScore.toFixed(3)} < ${CFG.selfRefineScoreThreshold}`);
-            const broadChunks = await ftsRetrieve(diseaseId, BROAD_PASS_QUERY, effectiveTopK);
-            const existingIds = new Set(top.map(c => c.id));
-            const newBroad = broadChunks.filter(c => !existingIds.has(c.id));
-            if (newBroad.length > 0) {
-                // Присваиваем низкий score чтобы они шли после уже найденных чанков
-                const scoredBroad = newBroad.map(c => ({ ...c, score: CFG.selfRefineScoreThreshold * 0.5 }));
-                top = dedup([...top, ...scoredBroad]).slice(0, effectiveTopKAfterRank);
-                logger.info(`[RAGPipeline] self-refine broad pass: +${newBroad.length} chunks added`);
+
+            // Пробуем LLM rewrite; при недоступности LLM падаем на статичный broad pass.
+            const rewrittenQuery = await rewriteQueryForRetrieval(query, queryType);
+            const refineQuery = rewrittenQuery || BROAD_PASS_QUERY;
+            const refineFtsQuery = buildFtsQuery(refineQuery);
+
+            if (refineFtsQuery) {
+                const refineChunks = await ftsRetrieve(diseaseId, refineFtsQuery, effectiveTopK);
+                const existingIds = new Set(top.map(c => c.id));
+                const newChunks = refineChunks.filter(c => !existingIds.has(c.id));
+                if (newChunks.length > 0) {
+                    const scoredNew = newChunks.map(c => ({ ...c, score: CFG.selfRefineScoreThreshold * 0.5 }));
+                    top = dedup([...top, ...scoredNew]).slice(0, effectiveTopKAfterRank);
+                    logger.info(
+                        `[RAGPipeline] self-refine (${rewrittenQuery ? 'LLM rewrite' : 'broad pass fallback'}): +${newChunks.length} chunks added`
+                    );
+                }
             }
         }
     }

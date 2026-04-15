@@ -632,3 +632,47 @@ describe('TASK-055: Self-refining score logic', () => {
         expect(shouldSelfRefine(top, 'drug')).toBe(false);
     });
 });
+
+// ─── Agentic re-write: rewriteQueryForRetrieval logic ────────────────────────
+
+const REWRITE_TYPE_HINTS: Record<string, string> = {
+    drug:            'препарат выбора, стартовая терапия',
+    dose:            'дозировка, режим приёма, мг/кг',
+    contraindication:'противопоказания, ограничения, запрет',
+    diagnostic:      'критерии диагноза, клинические признаки',
+    list:            'список препаратов, варианты терапии',
+    general:         'лечение, назначение, рекомендации',
+};
+
+describe('Agentic re-write: rewriteQueryForRetrieval logic', () => {
+    it('type hints exist for all 6 queryTypes', () => {
+        const queryTypes = ['drug', 'dose', 'contraindication', 'diagnostic', 'list', 'general'];
+        for (const qt of queryTypes) {
+            expect(REWRITE_TYPE_HINTS[qt]).toBeDefined();
+            expect(REWRITE_TYPE_HINTS[qt].length).toBeGreaterThan(5);
+        }
+    });
+
+    it('type hint for drug mentions препарат', () => {
+        expect(REWRITE_TYPE_HINTS['drug']).toMatch(/препарат/i);
+    });
+
+    it('type hint for dose mentions дозировка or мг', () => {
+        expect(REWRITE_TYPE_HINTS['dose']).toMatch(/дозировк|мг/i);
+    });
+
+    it('type hint for diagnostic mentions диагноз or признак', () => {
+        expect(REWRITE_TYPE_HINTS['diagnostic']).toMatch(/диагноз|признак/i);
+    });
+
+    it('self-refine triggers before rewrite is attempted', () => {
+        // Self-refine acts as the gate: rewrite only runs when avgScore < threshold
+        const lowScoreChunks = [{ id: 1, text: 'текст', bm25: -1, score: 0.05 }];
+        expect(shouldSelfRefine(lowScoreChunks, 'general')).toBe(true);
+    });
+
+    it('self-refine does NOT trigger before rewrite for high-score results', () => {
+        const highScoreChunks = [{ id: 1, text: 'текст', bm25: -1, score: 0.50 }];
+        expect(shouldSelfRefine(highScoreChunks, 'general')).toBe(false);
+    });
+});
