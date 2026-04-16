@@ -791,7 +791,7 @@ export const SettingsModule: React.FC = () => {
     ];
 
     return (
-        <div className="max-w-6xl mx-auto pb-12">
+        <div className="max-w-6xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
             {/* ── Mobile: header + horizontal scroll nav (< md) ─────── */}
             <div className="md:hidden mb-6">

@@ -649,14 +649,17 @@ export const VisitFormPage: React.FC = () => {
                 printDate: formatDate(new Date(), 'short'),
             };
 
-            await printService.preview('visit-form', printData, {
+            const result = await printService.exportToPDF('visit-form', printData, {
                 title: `Прием: ${child.surname} ${child.name}`,
                 createdAt: new Date(),
                 author: getFullName(currentUser) || undefined,
             });
+            if (!result.success) {
+                setError(result.error || 'Не удалось создать PDF');
+            }
         } catch (err: any) {
             logger.error('[VisitFormPage] Print failed:', err);
-            setError('Не удалось открыть предпросмотр печати');
+            setError('Не удалось создать PDF');
         }
     }, [child, formData, currentUser, recommendations]);
 
@@ -1765,7 +1768,7 @@ export const VisitFormPage: React.FC = () => {
     const { activeSection, scrollToSection } = useActiveSection(sectionIds);
 
     return (
-        <div className="p-6 transition-all duration-300">
+        <div className="p-6 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="max-w-[1600px] mx-auto space-y-4">
                 {/* Main Content */}
                 <div className="space-y-4">

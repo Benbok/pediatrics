@@ -257,32 +257,30 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                         <span className="label" style={{ marginLeft: '2rem' }}>Возраст:</span>
                         <span className="value">{patientAge || '—'}</span>
                     </div>
+                    {(visit.currentWeight || visit.currentHeight || visit.bmi) && (
+                        <div className="info-row">
+                            {visit.currentWeight && (
+                                <>
+                                    <span className="label">Вес:</span>
+                                    <span className="value">{visit.currentWeight} кг</span>
+                                </>
+                            )}
+                            {visit.currentHeight && (
+                                <>
+                                    <span className="label" style={{ marginLeft: visit.currentWeight ? '2rem' : undefined }}>Рост:</span>
+                                    <span className="value">{visit.currentHeight} см</span>
+                                </>
+                            )}
+                            {visit.bmi && (
+                                <>
+                                    <span className="label" style={{ marginLeft: '2rem' }}>ИМТ:</span>
+                                    <span className="value">{visit.bmi.toFixed(1)}</span>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
-
-            {/* Антропометрия */}
-            {(visit.currentWeight || visit.currentHeight) && (
-                <div className="section">
-                    <div className="section-title">Антропометрия</div>
-                    <div className="anthropometry">
-                        {visit.currentWeight && (
-                            <span className="anthro-item">
-                                <span className="label">Вес:</span> {visit.currentWeight} кг
-                            </span>
-                        )}
-                        {visit.currentHeight && (
-                            <span className="anthro-item">
-                                <span className="label">Рост:</span> {visit.currentHeight} см
-                            </span>
-                        )}
-                        {visit.bmi && (
-                            <span className="anthro-item">
-                                <span className="label">ИМТ:</span> {visit.bmi.toFixed(1)}
-                            </span>
-                        )}
-                    </div>
-                </div>
-            )}
 
             {/* Анамнез жизни */}
             {hasLifeAnamnesis && (

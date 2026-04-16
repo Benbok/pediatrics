@@ -204,7 +204,7 @@ export const UserManagementModule: React.FC = () => {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>

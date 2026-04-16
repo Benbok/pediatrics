@@ -93,7 +93,7 @@ export const DiseaseDetailPage: React.FC = () => {
     }
 
     return (
-        <div className="p-6 max-w-6xl mx-auto space-y-6">
+        <div className="p-6 max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between">
                 <Button variant="ghost" onClick={() => navigate('/diseases')} className="rounded-xl">
                     <ChevronLeft className="w-5 h-5 mr-1" />
