@@ -1,17 +1,16 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-    ArrowLeft,
-    AlertCircle,
-    Check
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, AlertCircle, Check, Loader } from 'lucide-react';
 import { patientService } from '../../services/patient.service';
 import { Button } from '../../components/ui/Button';
 import { PatientFormFields, PatientFormData } from './components/PatientFormFields';
 
-export const CreatePatientPage: React.FC = () => {
+export const EditPatientPage: React.FC = () => {
+    const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+
     const [isLoading, setIsLoading] = useState(false);
+    const [isFetching, setIsFetching] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState<PatientFormData>({
@@ -22,27 +21,55 @@ export const CreatePatientPage: React.FC = () => {
         gender: 'male',
     });
 
+    useEffect(() => {
+        if (!id) return;
+        setIsFetching(true);
+        patientService.getChildById(Number(id))
+            .then((child) => {
+                setFormData({
+                    surname: child.surname,
+                    name: child.name,
+                    patronymic: child.patronymic ?? '',
+                    birthDate: child.birthDate,
+                    gender: child.gender,
+                });
+            })
+            .catch((err) => {
+                setError(err.message || 'Не удалось загрузить данные пациента');
+            })
+            .finally(() => setIsFetching(false));
+    }, [id]);
+
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (!id) return;
         setError(null);
         setIsLoading(true);
 
         try {
-            const createdChild = await patientService.createChild({
+            await patientService.updateChild(Number(id), {
                 name: formData.name,
                 surname: formData.surname,
                 patronymic: formData.patronymic || undefined,
                 birthDate: formData.birthDate,
                 gender: formData.gender,
             });
-            navigate(`/patients/${createdChild.id}`);
+            navigate(`/patients/${id}`);
         } catch (err: any) {
-            console.error('Failed to create child:', err);
-            setError(err.message || 'Произошла ошибка при создании карточки');
+            console.error('Failed to update child:', err);
+            setError(err.message || 'Произошла ошибка при сохранении');
         } finally {
             setIsLoading(false);
         }
     };
+
+    if (isFetching) {
+        return (
+            <div className="flex items-center justify-center p-16 text-slate-400">
+                <Loader className="animate-spin" size={28} />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
@@ -50,17 +77,17 @@ export const CreatePatientPage: React.FC = () => {
             <div className="flex items-center gap-4">
                 <Button
                     variant="ghost"
-                    onClick={() => navigate('/patients')}
+                    onClick={() => navigate(`/patients/${id}`)}
                     className="h-10 w-10 p-0 rounded-full hover:bg-white dark:hover:bg-slate-800"
                 >
                     <ArrowLeft size={24} className="text-slate-400" />
                 </Button>
                 <div>
                     <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-                        Новый пациент
+                        Редактирование профиля
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 font-medium">
-                        Заполните данные для создания медицинской карты
+                        Измените данные медицинской карты пациента
                     </p>
                 </div>
             </div>
@@ -80,7 +107,7 @@ export const CreatePatientPage: React.FC = () => {
                         <Button
                             variant="ghost"
                             type="button"
-                            onClick={() => navigate('/patients')}
+                            onClick={() => navigate(`/patients/${id}`)}
                             className="h-12 px-6 font-bold text-slate-500"
                         >
                             Отмена
@@ -91,7 +118,7 @@ export const CreatePatientPage: React.FC = () => {
                             className="h-12 px-8 text-base rounded-2xl shadow-xl shadow-primary-500/20"
                             leftIcon={<Check size={20} className="stroke-[3]" />}
                         >
-                            Создать карту
+                            Сохранить изменения
                         </Button>
                     </div>
                 </form>

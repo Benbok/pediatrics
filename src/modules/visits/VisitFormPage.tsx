@@ -47,6 +47,8 @@ import { VisitFormNavigation, NavigationSection } from './components/VisitFormNa
 import { useActiveSection } from './hooks/useActiveSection';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
+import { DatePicker } from '../../components/ui/DatePicker';
+import { TimePicker } from '../../components/ui/TimePicker';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { ErrorModal } from '../../components/ui/ErrorModal';
@@ -1945,26 +1947,26 @@ export const VisitFormPage: React.FC = () => {
                     <Card id="section-datetime" className="p-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label htmlFor="visit-date" className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 cursor-pointer">
                                     <Calendar className="w-4 h-4" />
                                     Дата приема
                                 </label>
-                                <Input
-                                    type="date"
+                                <DatePicker
+                                    id="visit-date"
                                     value={formData.visitDate || ''}
-                                    onChange={(e) => handleFieldChange('visitDate', e.target.value)}
+                                    onChange={(value) => handleFieldChange('visitDate', value)}
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label htmlFor="visit-time" className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 cursor-pointer">
                                     <Clock className="w-4 h-4" />
                                     Время приема
                                 </label>
-                                <Input
-                                    type="time"
+                                <TimePicker
+                                    id="visit-time"
                                     value={formData.visitTime || ''}
-                                    onChange={(e) => handleFieldChange('visitTime', e.target.value)}
+                                    onChange={(value) => handleFieldChange('visitTime', value)}
                                     placeholder="ЧЧ:ММ"
                                 />
                             </div>

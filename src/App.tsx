@@ -4,6 +4,7 @@ import { AppShell } from './components/layout/AppShell';
 import { Dashboard } from './modules/dashboard/Dashboard';
 import { PatientsModule } from './modules/patients/PatientsModule';
 import { CreatePatientPage } from './modules/patients/CreatePatientPage';
+import { EditPatientPage } from './modules/patients/EditPatientPage';
 import { PatientDetails } from './modules/patients/PatientDetails';
 import { VaccinationModule } from './modules/vaccination/VaccinationModule';
 import { SettingsModule } from './modules/settings/SettingsModule';
@@ -55,6 +56,10 @@ const router = createHashRouter([
             {
                 path: 'patients/:id',
                 element: <PatientDetails />,
+            },
+            {
+                path: 'patients/:id/edit',
+                element: <EditPatientPage />,
             },
             {
                 path: 'vaccination/:childId', // URL parameter for module isolation

@@ -11,15 +11,7 @@ export const PatientDetails: React.FC = () => {
     const navigate = useNavigate();
     const [child, setChild] = useState<ChildProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-    const [editForm, setEditForm] = useState({
-        name: '',
-        surname: '',
-        patronymic: '',
-        birthDate: '',
-        gender: 'male' as 'male' | 'female'
-    });
 
     useEffect(() => {
         if (id) {
@@ -35,38 +27,6 @@ export const PatientDetails: React.FC = () => {
             console.error('Failed to load child:', error);
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const handleEditClick = () => {
-        if (!child) return;
-        setEditForm({
-            name: child.name,
-            surname: child.surname,
-            patronymic: child.patronymic,
-            birthDate: child.birthDate,
-            gender: child.gender
-        });
-        setIsEditModalOpen(true);
-    };
-
-    const handleUpdateChild = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!child || !child.id) return;
-
-        try {
-            await patientService.updateChild(child.id, {
-                name: editForm.name,
-                surname: editForm.surname,
-                patronymic: editForm.patronymic,
-                birthDate: editForm.birthDate,
-                gender: editForm.gender
-            });
-            setIsEditModalOpen(false);
-            loadChild(child.id);
-        } catch (error: any) {
-            console.error('Failed to update child:', error);
-            alert(error.message || 'Ошибка обновления профиля');
         }
     };
 
@@ -114,7 +74,7 @@ export const PatientDetails: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 flex gap-2">
                     <button
-                        onClick={handleEditClick}
+                        onClick={() => navigate(`/patients/${child.id}/edit`)}
                         className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400"
                         title="Редактировать профиль"
                     >
@@ -248,121 +208,6 @@ export const PatientDetails: React.FC = () => {
                     </div>
                 </div>
             </div>
-
-            {/* Edit Modal */}
-            {isEditModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-xl border dark:border-slate-800">
-                        <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center">
-                            <h2 className="text-xl font-bold dark:text-white">Редактирование профиля</h2>
-                            <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                        <form onSubmit={handleUpdateChild} className="p-6 space-y-4">
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Фамилия</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        value={editForm.surname}
-                                        onChange={e => setEditForm({ ...editForm, surname: e.target.value })}
-                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Имя</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        value={editForm.name}
-                                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Отчество</label>
-                                    <input
-                                        type="text"
-                                        value={editForm.patronymic}
-                                        onChange={e => setEditForm({ ...editForm, patronymic: e.target.value })}
-                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Дата рождения</label>
-                                    <input
-                                        required
-                                        type="date"
-                                        value={editForm.birthDate}
-                                        onChange={e => setEditForm({ ...editForm, birthDate: e.target.value })}
-                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Пол</label>
-                                <div className="flex gap-4">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="gender"
-                                            value="male"
-                                            checked={editForm.gender === 'male'}
-                                            onChange={() => setEditForm({ ...editForm, gender: 'male' })}
-                                            className="text-blue-600 focus:ring-blue-500"
-                                        />
-                                        <span className="dark:text-white">Мальчик</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="gender"
-                                            value="female"
-                                            checked={editForm.gender === 'female'}
-                                            onChange={() => setEditForm({ ...editForm, gender: 'female' })}
-                                            className="text-pink-600 focus:ring-pink-500"
-                                        />
-                                        <span className="dark:text-white">Девочка</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-between items-center pt-4">
-                                <button
-                                    type="button"
-                                    onClick={handleDeleteChild}
-                                    className="px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 text-sm font-medium transition-colors"
-                                >
-                                    Удалить профиль
-                                </button>
-                                <div className="flex gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsEditModalOpen(false)}
-                                        className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                                    >
-                                        Отмена
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-                                    >
-                                        Сохранить
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
 
             <ConfirmDialog
                 isOpen={isDeleteConfirmOpen}

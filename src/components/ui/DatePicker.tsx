@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import {
     Calendar as CalendarIcon,
     ChevronLeft,
@@ -11,6 +12,7 @@ import clsx from 'clsx';
 interface DatePickerProps {
     value?: string; // ISO string YYYY-MM-DD
     onChange: (value: string) => void;
+    id?: string;
     label?: string;
     placeholder?: string;
     required?: boolean;
@@ -30,6 +32,7 @@ type ViewMode = 'days' | 'months' | 'years';
 export const DatePicker: React.FC<DatePickerProps> = ({
     value,
     onChange,
+    id,
     label,
     placeholder = 'дд.мм.гггг',
     required,
@@ -41,13 +44,10 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     const [viewMode, setViewMode] = useState<ViewMode>('days');
     const [inputValue, setInputValue] = useState('');
     const containerRef = useRef<HTMLDivElement>(null);
-
-    const placementStyles = {
-        bottom: "top-full mt-3 left-0 animate-in zoom-in-95 slide-in-from-top-2 origin-top",
-        top: "bottom-full mb-3 left-0 animate-in zoom-in-95 slide-in-from-bottom-2 origin-bottom",
-        right: "left-full ml-4 top-1/2 -translate-y-1/2 animate-in zoom-in-95 slide-in-from-left-2 origin-left",
-        left: "right-full mr-4 top-1/2 -translate-y-1/2 animate-in zoom-in-95 slide-in-from-right-2 origin-right"
-    };
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number; flipUp: boolean }>({
+        top: 0, left: 0, flipUp: false
+    });
 
     // Sync input value when user selects a date (value prop updates)
     useEffect(() => {
@@ -71,10 +71,55 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         }
     }, [isOpen, value]);
 
-    // Close when clicking outside
+    // Recalculate dropdown position (used on open, scroll and resize)
+    const recalcPosition = useCallback(() => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const DROPDOWN_HEIGHT = 430;
+        const DROPDOWN_WIDTH = 320;
+        const MARGIN = 8;
+
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const flipUp = spaceBelow < DROPDOWN_HEIGHT && rect.top > DROPDOWN_HEIGHT;
+
+        let left = rect.left;
+        if (left + DROPDOWN_WIDTH > window.innerWidth - 12) {
+            left = window.innerWidth - DROPDOWN_WIDTH - 12;
+        }
+        if (left < 12) left = 12;
+
+        setDropdownStyle({
+            top: flipUp ? rect.top - DROPDOWN_HEIGHT - MARGIN : rect.bottom + MARGIN,
+            left,
+            flipUp,
+        });
+    }, []);
+
+    useEffect(() => {
+        if (isOpen) recalcPosition();
+    }, [isOpen, recalcPosition]);
+
+    // Track scroll / resize while open so the dropdown follows the field
+    useEffect(() => {
+        if (!isOpen) return;
+        let rafId: number;
+        const update = () => { rafId = requestAnimationFrame(recalcPosition); };
+        document.addEventListener('scroll', update, { capture: true, passive: true });
+        window.addEventListener('resize', update, { passive: true });
+        return () => {
+            cancelAnimationFrame(rafId);
+            document.removeEventListener('scroll', update, { capture: true });
+            window.removeEventListener('resize', update);
+        };
+    }, [isOpen, recalcPosition]);
+
+    // Close when clicking outside (container or portal dropdown)
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+            const target = event.target as Node;
+            const inContainer = containerRef.current?.contains(target) ?? false;
+            const inDropdown = dropdownRef.current?.contains(target) ?? false;
+            if (!inContainer && !inDropdown) {
                 setIsOpen(false);
             }
         };
@@ -212,6 +257,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
             >
                 <input
                     type="text"
+                    id={id}
                     value={inputValue}
                     onChange={handleInputChange}
                     onBlur={handleInputBlur}
@@ -229,11 +275,17 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                 </button>
             </div>
 
-            {isOpen && (
-                <div className={clsx(
-                    "absolute z-[110] w-80 bg-white dark:bg-slate-900 rounded-[24px] shadow-2xl border border-slate-200 dark:border-slate-800 p-5 fade-in duration-200 overflow-hidden",
-                    placementStyles[placement]
-                )}>
+            {isOpen && ReactDOM.createPortal(
+                <div
+                    ref={dropdownRef}
+                    style={{ top: dropdownStyle.top, left: dropdownStyle.left }}
+                    className={clsx(
+                        "fixed z-[9999] w-80 bg-white dark:bg-slate-900 rounded-[24px] shadow-2xl border border-slate-200 dark:border-slate-800 p-5 overflow-hidden",
+                        dropdownStyle.flipUp
+                            ? "animate-in zoom-in-95 slide-in-from-bottom-2 origin-bottom"
+                            : "animate-in zoom-in-95 slide-in-from-top-2 origin-top"
+                    )}
+                >
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div
@@ -394,7 +446,8 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                             Сегодня
                         </button>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

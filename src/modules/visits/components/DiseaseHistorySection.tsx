@@ -187,25 +187,35 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                     </h2>
                 </div>
                 {onAnalyze && (
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={onAnalyze}
-                        disabled={isAnalyzing || !canAnalyze || !hasDiseaseHistoryData}
-                        className="flex items-center gap-2"
+                    <span
+                        title={llmAvailable === false ? 'LM Studio не запущен. Запустите LM Studio и загрузите модель.' : undefined}
+                        className={llmAvailable === false ? 'cursor-not-allowed' : undefined}
                     >
-                        {isAnalyzing ? (
-                            <>
-                                <Sparkles className="w-4 h-4 animate-pulse" />
-                                {analysisProgress > 0 && analysisProgress < 100 ? `Анализ ${analysisProgress}%` : 'Анализ AI...'}
-                            </>
-                        ) : (
-                            <>
-                                <Sparkles className="w-4 h-4" />
-                                Анализ AI
-                            </>
-                        )}
-                    </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={onAnalyze}
+                            disabled={isAnalyzing || !canAnalyze || !hasDiseaseHistoryData || llmAvailable === false}
+                            className="flex items-center gap-2"
+                        >
+                            {isAnalyzing ? (
+                                <>
+                                    <Sparkles className="w-4 h-4 animate-pulse" />
+                                    {analysisProgress > 0 && analysisProgress < 100 ? `Анализ ${analysisProgress}%` : 'Анализ AI...'}
+                                </>
+                            ) : llmAvailable === false ? (
+                                <>
+                                    <WifiOff className="w-4 h-4" />
+                                    Анализ AI
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="w-4 h-4" />
+                                    Анализ AI
+                                </>
+                            )}
+                        </Button>
+                    </span>
                 )}
             </div>
 

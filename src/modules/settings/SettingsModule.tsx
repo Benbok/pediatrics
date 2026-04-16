@@ -779,91 +779,98 @@ export const SettingsModule: React.FC = () => {
         }
     };
 
-    return (
-        <div className="max-w-4xl mx-auto pb-12">
-            <div className="mb-6">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Настройки</h1>
-                <p className="text-slate-600 dark:text-slate-400">
-                    Управляйте параметрами приложения и интеграциями
-                </p>
-            </div>
+    // ── Navigation config ──────────────────────────────────────────────────
+    const NAV_TABS = [
+        { id: 'api'          as const, icon: Key,         label: 'API и ключи',        description: 'Gemini API, пул ключей'   },
+        { id: 'catalog'      as const, icon: Database,    label: 'Каталог вакцин',     description: 'Глобальный календарь'     },
+        { id: 'organization' as const, icon: Building2,   label: 'Организация',        description: 'Профиль организации'      },
+        { id: 'diseases'     as const, icon: Stethoscope, label: 'Болезни',            description: 'Каталог диагностики'      },
+        { id: 'cache'        as const, icon: Zap,         label: 'Производительность', description: 'Мониторинг кеша'          },
+        { id: 'security'     as const, icon: Shield,      label: 'Безопасность',       description: 'Данные и резервные копии' },
+        ...(isAdmin ? [{ id: 'licenses' as const, icon: Key, label: 'Лицензии', description: 'Управление лицензиями' }] : []),
+    ];
 
-            <div className="mb-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
-                    <button
-                        onClick={() => setActiveTab('api')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            activeTab === 'api'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }`}
-                    >
-                        Gemini API и пул ключей
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('catalog')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            activeTab === 'catalog'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }`}
-                    >
-                        Каталог вакцин
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('organization')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            activeTab === 'organization'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }`}
-                    >
-                        Организация
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('diseases')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            activeTab === 'diseases'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }`}
-                    >
-                        Модуль болезни
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('cache')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            activeTab === 'cache'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }`}
-                    >
-                        Производительность кеша
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('security')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            activeTab === 'security'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }`}
-                    >
-                        Безопасность и Данные
-                    </button>
-                    {isAdmin && (
-                        <button
-                            onClick={() => setActiveTab('licenses')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                activeTab === 'licenses'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
-                            }`}
-                        >
-                            🔑 Лицензии
-                        </button>
-                    )}
+    return (
+        <div className="max-w-6xl mx-auto pb-12">
+
+            {/* ── Mobile: header + horizontal scroll nav (< md) ─────── */}
+            <div className="md:hidden mb-6">
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">Настройки</h1>
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                    {NAV_TABS.map((tab) => {
+                        const Icon = tab.icon;
+                        const isActive = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap shrink-0 transition-all ${
+                                    isActive
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700'
+                                }`}
+                            >
+                                <Icon size={14} />
+                                {tab.label}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
+
+            <div className="flex items-start gap-8">
+
+                {/* ── Desktop sidebar (≥ md) ─────────────────────────── */}
+                <aside className="hidden md:flex flex-col w-56 shrink-0">
+                    <div className="mb-6 px-1">
+                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Настройки</h1>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Параметры приложения</p>
+                    </div>
+                    <nav className="sticky top-6 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-2 space-y-0.5">
+                        {NAV_TABS.map((tab) => {
+                            const Icon = tab.icon;
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
+                                        isActive
+                                            ? 'bg-blue-50 dark:bg-blue-950/40'
+                                            : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                                    }`}
+                                >
+                                    <div className={`p-1.5 rounded-lg shrink-0 transition-colors ${
+                                        isActive
+                                            ? 'bg-blue-100 dark:bg-blue-900/50'
+                                            : 'bg-slate-100 dark:bg-slate-700/60'
+                                    }`}>
+                                        <Icon
+                                            size={15}
+                                            className={isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}
+                                        />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className={`text-sm font-medium leading-tight ${
+                                            isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200'
+                                        }`}>
+                                            {tab.label}
+                                        </div>
+                                        <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+                                            {tab.description}
+                                        </div>
+                                    </div>
+                                    {isActive && (
+                                        <div className="w-1 h-5 bg-blue-500 rounded-full shrink-0" />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </nav>
+                </aside>
+
+                {/* ── Main content ───────────────────────────────────── */}
+                <main className="flex-1 min-w-0">
 
             {activeTab === 'api' && (
             <>
@@ -2042,6 +2049,9 @@ export const SettingsModule: React.FC = () => {
                 <LicenseAdminPanel />
             </div>
             )}
+
+                </main>
+            </div>
         </div>
     );
 };
