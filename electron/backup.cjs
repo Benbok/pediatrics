@@ -91,4 +91,36 @@ async function shouldBackupToday() {
     }
 }
 
-module.exports = { createBackup, shouldBackupToday };
+/**
+ * Create a backup only if the database has been modified since the last backup.
+ * Used on app close to capture any changes made during the session.
+ */
+async function createBackupIfChanged(dbPath) {
+    try {
+        if (!fs.existsSync(dbPath)) return { success: false, reason: 'db_not_found' };
+
+        const dbMtime = fs.statSync(dbPath).mtimeMs;
+
+        // Find the most recent backup
+        if (fs.existsSync(backupDir)) {
+            const files = await fs.promises.readdir(backupDir);
+            const backupFiles = files
+                .filter(f => f.startsWith('pediatrics_backup_') && f.endsWith('.db'))
+                .map(f => ({ name: f, mtime: fs.statSync(path.join(backupDir, f)).mtimeMs }))
+                .sort((a, b) => b.mtime - a.mtime);
+
+            if (backupFiles.length > 0 && backupFiles[0].mtime >= dbMtime) {
+                logger.info('[Backup] DB unchanged since last backup — skipping close-backup.');
+                return { success: true, skipped: true };
+            }
+        }
+
+        logger.info('[Backup] DB changed since last backup — creating close-backup...');
+        return await createBackup(dbPath);
+    } catch (error) {
+        logger.error('[Backup] createBackupIfChanged failed:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+module.exports = { createBackup, shouldBackupToday, createBackupIfChanged };

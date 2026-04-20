@@ -7,6 +7,8 @@ const os = require('os');
 const fs = require('fs');
 const { setupDatabaseHandlers } = require('./database.cjs');
 const { setupAuthHandlers, ensureAuthenticated } = require('./auth.cjs');
+const { createBackupIfChanged } = require('./backup.cjs');
+const { dbPath } = require('./prisma-client.cjs');
 const { setupDiseaseHandlers } = require('./modules/diseases/handlers.cjs');
 const { setupPdfNoteHandlers } = require('./modules/pdf-notes/handlers.cjs');
 const { setupMedicationHandlers } = require('./modules/medications/handlers.cjs');
@@ -184,6 +186,27 @@ app.whenReady().then(async () => {
         logger.info('[Main] Received app-close request, quitting...');
         logAudit('APP_SHUTDOWN');
         app.quit();
+    });
+
+    // Backup on close: create backup only if DB changed since last backup
+    let closeBackupDone = false;
+    app.on('before-quit', (event) => {
+        if (closeBackupDone) return;
+        event.preventDefault();
+        createBackupIfChanged(dbPath)
+            .then((result) => {
+                if (result.skipped) {
+                    logger.info('[Main] Close-backup skipped (no changes).');
+                } else if (result.success) {
+                    logger.info('[Main] Close-backup created successfully.');
+                    logAudit('DATABASE_BACKUP_ON_CLOSE');
+                }
+            })
+            .catch((err) => logger.error('[Main] Close-backup error:', err))
+            .finally(() => {
+                closeBackupDone = true;
+                app.quit();
+            });
     });
 
     // Direct document print: renders HTML in hidden window → native OS print dialog (no popup)

@@ -251,7 +251,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
 
     // BACKUP API
-    createBackup: () => ipcRenderer.invoke('create-backup'),
+    createBackup: () => ipcRenderer.invoke('db:create-backup'),
 
     // DB IMPORT API
     getImportDbTables: (filePath) => ipcRenderer.invoke('db:import-get-tables', { filePath }),
