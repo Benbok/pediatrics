@@ -250,6 +250,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return () => ipcRenderer.removeListener('api-keys:low-warning', callback);
     },
 
+    // API KEYS CRUD (in-app encrypted storage)
+    listApiKeys: () => ipcRenderer.invoke('api-keys:list'),
+    addApiKey: (label, value) => ipcRenderer.invoke('api-keys:add', { label, value }),
+    deleteApiKey: (id) => ipcRenderer.invoke('api-keys:delete', { id }),
+    updateApiKeyLabel: (id, label) => ipcRenderer.invoke('api-keys:update-label', { id, label }),
+    updateApiKeyModel: (id, model) => ipcRenderer.invoke('api-keys:update-model', { id, model }),
+    setApiKeyPrimary: (id) => ipcRenderer.invoke('api-keys:set-primary', { id }),
+    testSingleApiKey: (id) => ipcRenderer.invoke('api-keys:test-key', { id }),
+
     // BACKUP API
     createBackup: () => ipcRenderer.invoke('db:create-backup'),
 

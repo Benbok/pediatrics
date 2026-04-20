@@ -5,8 +5,41 @@ const { calculateBMI, calculateBSA, validateAnthropometry } = require('../../uti
 const { normalizeText, normalizeContraindicationsText } = require('../../utils/cdssVocabulary.cjs');
 const { parseComplaintsLocal } = require('../../services/cdssLocalLlmService.cjs');
 const { DiseaseService } = require('../diseases/service.cjs');
-const { decrypt } = require('../../crypto.cjs');
+const { encrypt, decrypt } = require('../../crypto.cjs');
 const { MAX_FALLBACK_CONFIDENCE, MIN_FALLBACK_MATCHES, MAX_FALLBACK_SUGGESTIONS } = require('../../config/cdssConfig.cjs');
+
+const VISIT_TEXT_FIELDS = [
+    'complaints', 'complaintsJson', 'physicalExam',
+    'diseaseOnset', 'diseaseCourse', 'treatmentBeforeVisit',
+    'heredityData', 'birthData', 'feedingData', 'infectiousDiseasesData', 'allergyStatusData',
+    'generalCondition', 'consciousness', 'skinMucosa', 'lymphNodes', 'musculoskeletal',
+    'respiratory', 'cardiovascular', 'abdomen', 'urogenital', 'nervousSystem',
+    'primaryDiagnosis', 'complications', 'comorbidities',
+    'prescriptions', 'recommendations', 'notes',
+    'additionalExaminationPlan', 'laboratoryTests', 'instrumentalTests',
+    'consultationRequests', 'physiotherapy', 'hospitalizationIndication', 'consciousnessLevel',
+];
+
+function _encryptVisitFields(data) {
+    const result = { ...data };
+    for (const field of VISIT_TEXT_FIELDS) {
+        if (result[field] != null && typeof result[field] === 'string') {
+            result[field] = encrypt(result[field]);
+        }
+    }
+    return result;
+}
+
+function _decryptVisitFields(data) {
+    if (!data) return data;
+    const result = { ...data };
+    for (const field of VISIT_TEXT_FIELDS) {
+        if (result[field] != null && typeof result[field] === 'string') {
+            result[field] = decrypt(result[field]);
+        }
+    }
+    return result;
+}
 
 /**
  * Безопасный парсинг JSON полей
@@ -324,7 +357,7 @@ const VisitService = {
     _parseVisitFields(visit) {
         if (!visit) return visit;
         
-        const parsed = { ...visit };
+        const parsed = _decryptVisitFields({ ...visit });
         
         // Парсинг диагнозов
         if (parsed.primaryDiagnosis && typeof parsed.primaryDiagnosis === 'string') {
@@ -503,15 +536,17 @@ const VisitService = {
             nextVisitDate: normalized.nextVisitDate ? new Date(normalized.nextVisitDate) : null,
         };
 
+        const encryptedData = _encryptVisitFields(dbData);
+
         if (id) {
             return await prisma.visit.update({
                 where: { id },
-                data: dbData,
+                data: encryptedData,
             });
         }
 
         return await prisma.visit.create({
-            data: dbData,
+            data: encryptedData,
         });
     },
 

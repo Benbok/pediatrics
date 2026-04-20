@@ -1,6 +1,6 @@
 const { ipcMain } = require('electron');
 const { DiagnosticTemplateService } = require('./service.cjs');
-const { ensureAuthenticated } = require('../../auth.cjs');
+const { ensureAuthenticated, getSession } = require('../../auth.cjs');
 const { logAudit, logger } = require('../../logger.cjs');
 
 /**
@@ -16,21 +16,23 @@ module.exports.setupDiagnosticTemplateHandlers = () => {
         }
     }));
 
-    ipcMain.handle('diagnostic-templates:get-all', ensureAuthenticated(async (_, userId) => {
+    ipcMain.handle('diagnostic-templates:get-all', ensureAuthenticated(async () => {
         try {
-            return await DiagnosticTemplateService.getAll(userId);
+            const { user } = getSession();
+            return await DiagnosticTemplateService.getAll(user.id);
         } catch (error) {
-            logger.error('[DiagnosticTemplateHandler] Failed to get all templates', { error, userId });
+            logger.error('[DiagnosticTemplateHandler] Failed to get all templates', { error });
             throw error;
         }
     }));
 
     ipcMain.handle('diagnostic-templates:upsert', ensureAuthenticated(async (_, data) => {
         try {
-            const result = await DiagnosticTemplateService.upsert(data);
+            const { user } = getSession();
+            const result = await DiagnosticTemplateService.upsert({ ...data, createdById: user.id });
             logAudit(data.id ? 'DIAGNOSTIC_TEMPLATE_UPDATED' : 'DIAGNOSTIC_TEMPLATE_CREATED', {
                 templateId: result.id,
-                userId: data.createdById
+                userId: user.id
             });
             return result;
         } catch (error) {
@@ -39,13 +41,14 @@ module.exports.setupDiagnosticTemplateHandlers = () => {
         }
     }));
 
-    ipcMain.handle('diagnostic-templates:delete', ensureAuthenticated(async (_, id, userId) => {
+    ipcMain.handle('diagnostic-templates:delete', ensureAuthenticated(async (_, id) => {
         try {
-            await DiagnosticTemplateService.delete(id, userId);
-            logAudit('DIAGNOSTIC_TEMPLATE_DELETED', { templateId: id, userId });
+            const { user } = getSession();
+            await DiagnosticTemplateService.delete(id, user.id);
+            logAudit('DIAGNOSTIC_TEMPLATE_DELETED', { templateId: id, userId: user.id });
             return true;
         } catch (error) {
-            logger.error('[DiagnosticTemplateHandler] Failed to delete template', { error, id, userId });
+            logger.error('[DiagnosticTemplateHandler] Failed to delete template', { error, id });
             throw error;
         }
     }));

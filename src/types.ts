@@ -1280,6 +1280,15 @@ declare global {
       }>;
       onApiKeysLowWarning: (callback: (event: any, data: { remaining: number; total: number }) => void) => () => void;
 
+      // API KEYS CRUD (in-app encrypted storage)
+      listApiKeys: () => Promise<Array<{ id: string; label: string; model: string; isPrimary: boolean; createdAt: string; updatedAt: string }>>;
+      addApiKey: (label: string, value: string, model?: string) => Promise<{ id: string }>;
+      deleteApiKey: (id: string) => Promise<boolean>;
+      updateApiKeyLabel: (id: string, label: string) => Promise<boolean>;
+      updateApiKeyModel: (id: string, model: string) => Promise<boolean>;
+      setApiKeyPrimary: (id: string) => Promise<boolean>;
+      testSingleApiKey: (id: string) => Promise<{ ok: boolean; status: string; message: string; latencyMs: number | null; model: string | null; checkedAt: string }>;
+
       // NUTRITION MODULE API
       getNutritionAgeNorms: () => Promise<NutritionAgeNorm[]>;
       getNutritionProductCategories: () => Promise<NutritionProductCategory[]>;

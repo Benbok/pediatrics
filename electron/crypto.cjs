@@ -46,8 +46,28 @@ function encrypt(text) {
 /**
  * Decrypt a string
  */
+/**
+ * Check if a string is in the encrypted format: salt(32h):iv(24h):tag(32h):data(hex)
+ * More reliable than a simple colon check — JSON strings often contain colons too.
+ */
+function isEncrypted(value) {
+    if (!value || typeof value !== 'string') return false;
+    // salt=32 hex, colon at 32, iv=24 hex, colon at 57, tag=32 hex, colon at 90, data follows
+    if (value.length <= 91) return false;
+    if (value[32] !== ':' || value[57] !== ':' || value[90] !== ':') return false;
+    const salt = value.slice(0, 32);
+    const iv   = value.slice(33, 57);
+    const tag  = value.slice(58, 90);
+    return /^[0-9a-f]+$/i.test(salt) &&
+           /^[0-9a-f]+$/i.test(iv) &&
+           /^[0-9a-f]+$/i.test(tag);
+}
+
+/**
+ * Decrypt a string
+ */
 function decrypt(encryptedData) {
-    if (!encryptedData || !encryptedData.includes(':')) return encryptedData;
+    if (!isEncrypted(encryptedData)) return encryptedData;
 
     const secret = process.env.DB_ENCRYPTION_KEY;
     if (!secret) throw new Error('DB_ENCRYPTION_KEY is not set');
@@ -73,4 +93,4 @@ function decrypt(encryptedData) {
     }
 }
 
-module.exports = { encrypt, decrypt };
+module.exports = { encrypt, decrypt, isEncrypted };

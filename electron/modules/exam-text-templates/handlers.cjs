@@ -1,6 +1,6 @@
 const { ipcMain } = require('electron');
 const { ExamTextTemplateService } = require('./service.cjs');
-const { ensureAuthenticated } = require('../../auth.cjs');
+const { ensureAuthenticated, getSession } = require('../../auth.cjs');
 const { logAudit, logger } = require('../../logger.cjs');
 
 /**
@@ -16,39 +16,43 @@ module.exports.setupExamTextTemplateHandlers = () => {
         }
     }));
 
-    ipcMain.handle('exam-text-templates:get-by-system', ensureAuthenticated(async (_, systemKey, userId) => {
+    ipcMain.handle('exam-text-templates:get-by-system', ensureAuthenticated(async (_, systemKey) => {
         try {
-            return await ExamTextTemplateService.getBySystemKey(systemKey, userId);
+            const { user } = getSession();
+            return await ExamTextTemplateService.getBySystemKey(systemKey, user.id);
         } catch (error) {
-            logger.error('[ExamTextTemplateHandler] Failed to get templates by system', { error, systemKey, userId });
+            logger.error('[ExamTextTemplateHandler] Failed to get templates by system', { error, systemKey });
             throw error;
         }
     }));
 
-    ipcMain.handle('exam-text-templates:get-all', ensureAuthenticated(async (_, userId) => {
+    ipcMain.handle('exam-text-templates:get-all', ensureAuthenticated(async () => {
         try {
-            return await ExamTextTemplateService.getAll(userId);
+            const { user } = getSession();
+            return await ExamTextTemplateService.getAll(user.id);
         } catch (error) {
-            logger.error('[ExamTextTemplateHandler] Failed to get all templates', { error, userId });
+            logger.error('[ExamTextTemplateHandler] Failed to get all templates', { error });
             throw error;
         }
     }));
 
-    ipcMain.handle('exam-text-templates:get-by-tags', ensureAuthenticated(async (_, { tags, userId }) => {
+    ipcMain.handle('exam-text-templates:get-by-tags', ensureAuthenticated(async (_, { tags }) => {
         try {
-            return await ExamTextTemplateService.getByTags(tags, userId);
+            const { user } = getSession();
+            return await ExamTextTemplateService.getByTags(tags, user.id);
         } catch (error) {
-            logger.error('[ExamTextTemplateHandler] Failed to get templates by tags', { error, tags, userId });
+            logger.error('[ExamTextTemplateHandler] Failed to get templates by tags', { error, tags });
             throw error;
         }
     }));
 
     ipcMain.handle('exam-text-templates:upsert', ensureAuthenticated(async (_, data) => {
         try {
-            const result = await ExamTextTemplateService.upsert(data);
+            const { user } = getSession();
+            const result = await ExamTextTemplateService.upsert({ ...data, createdById: user.id });
             logAudit(data.id ? 'EXAM_TEXT_TEMPLATE_UPDATED' : 'EXAM_TEXT_TEMPLATE_CREATED', {
                 templateId: result.id,
-                userId: data.createdById
+                userId: user.id
             });
             return result;
         } catch (error) {
@@ -57,13 +61,14 @@ module.exports.setupExamTextTemplateHandlers = () => {
         }
     }));
 
-    ipcMain.handle('exam-text-templates:delete', ensureAuthenticated(async (_, id, userId) => {
+    ipcMain.handle('exam-text-templates:delete', ensureAuthenticated(async (_, id) => {
         try {
-            await ExamTextTemplateService.delete(id, userId);
-            logAudit('EXAM_TEXT_TEMPLATE_DELETED', { templateId: id, userId });
+            const { user } = getSession();
+            await ExamTextTemplateService.delete(id, user.id);
+            logAudit('EXAM_TEXT_TEMPLATE_DELETED', { templateId: id, userId: user.id });
             return true;
         } catch (error) {
-            logger.error('[ExamTextTemplateHandler] Failed to delete template', { error, id, userId });
+            logger.error('[ExamTextTemplateHandler] Failed to delete template', { error, id });
             throw error;
         }
     }));

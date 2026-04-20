@@ -1,6 +1,6 @@
 const { ipcMain } = require('electron');
 const { MedicationTemplateService } = require('./service.cjs');
-const { ensureAuthenticated } = require('../../auth.cjs');
+const { ensureAuthenticated, getSession } = require('../../auth.cjs');
 const { logAudit, logger } = require('../../logger.cjs');
 
 /**
@@ -16,21 +16,23 @@ module.exports.setupMedicationTemplateHandlers = () => {
         }
     }));
 
-    ipcMain.handle('medication-templates:get-all', ensureAuthenticated(async (_, userId) => {
+    ipcMain.handle('medication-templates:get-all', ensureAuthenticated(async () => {
         try {
-            return await MedicationTemplateService.getAll(userId);
+            const { user } = getSession();
+            return await MedicationTemplateService.getAll(user.id);
         } catch (error) {
-            logger.error('[MedicationTemplateHandler] Failed to get all templates', { error, userId });
+            logger.error('[MedicationTemplateHandler] Failed to get all templates', { error });
             throw error;
         }
     }));
 
     ipcMain.handle('medication-templates:upsert', ensureAuthenticated(async (_, data) => {
         try {
-            const result = await MedicationTemplateService.upsert(data);
+            const { user } = getSession();
+            const result = await MedicationTemplateService.upsert({ ...data, createdById: user.id });
             logAudit(data.id ? 'MEDICATION_TEMPLATE_UPDATED' : 'MEDICATION_TEMPLATE_CREATED', {
                 templateId: result.id,
-                userId: data.createdById
+                userId: user.id
             });
             return result;
         } catch (error) {
@@ -39,13 +41,14 @@ module.exports.setupMedicationTemplateHandlers = () => {
         }
     }));
 
-    ipcMain.handle('medication-templates:delete', ensureAuthenticated(async (_, id, userId) => {
+    ipcMain.handle('medication-templates:delete', ensureAuthenticated(async (_, id) => {
         try {
-            await MedicationTemplateService.delete(id, userId);
-            logAudit('MEDICATION_TEMPLATE_DELETED', { templateId: id, userId });
+            const { user } = getSession();
+            await MedicationTemplateService.delete(id, user.id);
+            logAudit('MEDICATION_TEMPLATE_DELETED', { templateId: id, userId: user.id });
             return true;
         } catch (error) {
-            logger.error('[MedicationTemplateHandler] Failed to delete template', { error, id, userId });
+            logger.error('[MedicationTemplateHandler] Failed to delete template', { error, id });
             throw error;
         }
     }));

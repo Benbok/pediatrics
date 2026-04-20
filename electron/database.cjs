@@ -397,6 +397,29 @@ async function initDatabase() {
   }
 }
 
+/**
+ * Проверяет право доступа текущего пользователя к данным пациента.
+ * Бросает ошибку если доступ запрещён.
+ * @param {number} childId
+ * @param {{ user: { id: number, roles?: string[] } }} session
+ * @param {object} prismaClient
+ * @param {boolean} requireEdit — требовать canEdit=true у shared-пользователя
+ */
+async function checkChildAccess(childId, session, prismaClient, requireEdit = false) {
+  const child = await prismaClient.child.findUnique({
+    where: { id: Number(childId) },
+    select: { createdByUserId: true },
+  });
+  if (!child) throw new Error('Пациент не найден');
+  const isAdmin = Boolean(session.user.roles?.includes('admin'));
+  if (child.createdByUserId !== session.user.id && !isAdmin) {
+    const shareWhere = { childId: Number(childId), sharedWith: session.user.id };
+    if (requireEdit) shareWhere.canEdit = true;
+    const share = await prismaClient.patientShare.findFirst({ where: shareWhere });
+    if (!share) throw new Error('Доступ запрещён');
+  }
+}
+
 const setupDatabaseHandlers = async () => {
   logger.info('[Database] ========== SETUP START ==========');
 
@@ -482,11 +505,19 @@ const setupDatabaseHandlers = async () => {
   }));
 
   ipcMain.handle('db:get-child', ensureAuthenticated(async (_, id) => {
+    const session = getSession();
+    const isAdmin = Boolean(session.user.roles?.includes('admin'));
     const cacheKey = `child_${id}`;
-    
-    // Проверяем кеш
+
+    // Check cache first, but still validate ownership
     const cached = CacheService.get('children', cacheKey);
     if (cached) {
+      if (cached.createdByUserId !== session.user.id && !isAdmin) {
+        const share = await prisma.patientShare.findFirst({
+          where: { childId: Number(id), sharedWith: session.user.id },
+        });
+        if (!share) throw new Error('Доступ запрещён');
+      }
       logger.debug(`[DB] Cache hit for child ${id}`);
       return cached;
     }
@@ -496,6 +527,14 @@ const setupDatabaseHandlers = async () => {
     });
 
     if (!child) return null;
+
+    // Ownership check
+    if (child.createdByUserId !== session.user.id && !isAdmin) {
+      const share = await prisma.patientShare.findFirst({
+        where: { childId: Number(id), sharedWith: session.user.id },
+      });
+      if (!share) throw new Error('Доступ запрещён');
+    }
 
     const decrypted = {
       ...child,
@@ -570,6 +609,11 @@ const setupDatabaseHandlers = async () => {
 
   ipcMain.handle('db:update-child', ensureAuthenticated(async (_, id, updates) => {
     try {
+      const session = getSession();
+
+      // Ownership check (shared users with canEdit may also update)
+      await checkChildAccess(id, session, prisma, true);
+
       const validatedUpdates = ChildProfileSchema.partial().parse(updates);
       const { name, surname, patronymic, birthDate, gender } = validatedUpdates;
 
@@ -587,7 +631,6 @@ const setupDatabaseHandlers = async () => {
       logAudit('PATIENT_UPDATED', { childId: id, updates: Object.keys(dataToUpdate) });
       
       // Инвалидируем кеш
-      const session = getSession();
       CacheService.invalidate('children', `child_${id}`);
       CacheService.invalidate('children', `user_${session.user.id}_admin_false`);
       CacheService.invalidate('children', `user_${session.user.id}_admin_true`);
@@ -607,7 +650,21 @@ const setupDatabaseHandlers = async () => {
 
   ipcMain.handle('db:delete-child', ensureAuthenticated(async (_, id) => {
     const session = getSession();
-    
+
+    // Only owner or admin may delete (shared access does not grant delete)
+    await checkChildAccess(id, session, prisma, false);
+    const isAdmin = Boolean(session.user.roles?.includes('admin'));
+    if (!isAdmin) {
+      // Re-check: shared users cannot delete, only owner
+      const child = await prisma.child.findUnique({
+        where: { id: Number(id) },
+        select: { createdByUserId: true },
+      });
+      if (child && child.createdByUserId !== session.user.id) {
+        throw new Error('Доступ запрещён: удалять можно только своих пациентов');
+      }
+    }
+
     await prisma.child.delete({
       where: { id: Number(id) },
     });
@@ -740,9 +797,11 @@ const setupDatabaseHandlers = async () => {
 
   // ============= VACCINATION MODULE HANDLERS =============
   ipcMain.handle('db:get-vaccination-profile', ensureAuthenticated(async (_, childId) => {
+    const session = getSession();
+    await checkChildAccess(childId, session, prisma);
+
     const cacheKey = `child_${childId}`;
-    
-    // Проверяем кеш
+
     const cached = CacheService.get('profiles', cacheKey);
     if (cached) {
       logger.debug(`[DB] Cache hit for vaccination profile ${childId}`);
@@ -757,20 +816,22 @@ const setupDatabaseHandlers = async () => {
       profile = await prisma.vaccinationProfile.create({
         data: {
           childId: Number(childId),
-          hepBRiskFactors: JSON.stringify([]),
-          pneumoRiskFactors: JSON.stringify([]),
-          pertussisContraindications: JSON.stringify([]),
-          polioRiskFactors: JSON.stringify([]),
-          mmrContraindications: JSON.stringify([]),
-          meningRiskFactors: JSON.stringify([]),
-          varicellaRiskFactors: JSON.stringify([]),
-          hepaRiskFactors: JSON.stringify([]),
-          fluRiskFactors: JSON.stringify([]),
-          hpvRiskFactors: JSON.stringify([]),
-          tbeRiskFactors: JSON.stringify([]),
-          rotaRiskFactors: JSON.stringify([]),
+          hepBRiskFactors: encrypt(JSON.stringify([])),
+          pneumoRiskFactors: encrypt(JSON.stringify([])),
+          pertussisContraindications: encrypt(JSON.stringify([])),
+          polioRiskFactors: encrypt(JSON.stringify([])),
+          mmrContraindications: encrypt(JSON.stringify([])),
+          meningRiskFactors: encrypt(JSON.stringify([])),
+          varicellaRiskFactors: encrypt(JSON.stringify([])),
+          hepaRiskFactors: encrypt(JSON.stringify([])),
+          fluRiskFactors: encrypt(JSON.stringify([])),
+          hpvRiskFactors: encrypt(JSON.stringify([])),
+          tbeRiskFactors: encrypt(JSON.stringify([])),
+          rotaRiskFactors: encrypt(JSON.stringify([])),
           birthWeight: null,
-          customVaccines: JSON.stringify([]),
+          customVaccines: encrypt(JSON.stringify([])),
+          mantouxDate: null,
+          mantouxResult: null,
         },
       });
     }
@@ -778,33 +839,32 @@ const setupDatabaseHandlers = async () => {
     const parsed = {
       id: profile.id,
       childId: profile.childId,
-      hepBRiskFactors: JSON.parse(profile.hepBRiskFactors || '[]'),
-      pneumoRiskFactors: JSON.parse(profile.pneumoRiskFactors || '[]'),
-      pertussisContraindications: JSON.parse(profile.pertussisContraindications || '[]'),
-      polioRiskFactors: JSON.parse(profile.polioRiskFactors || '[]'),
-      mmrContraindications: JSON.parse(profile.mmrContraindications || '[]'),
-      meningRiskFactors: JSON.parse(profile.meningRiskFactors || '[]'),
-      varicellaRiskFactors: JSON.parse(profile.varicellaRiskFactors || '[]'),
-      hepaRiskFactors: JSON.parse(profile.hepaRiskFactors || '[]'),
-      fluRiskFactors: JSON.parse(profile.fluRiskFactors || '[]'),
-      hpvRiskFactors: JSON.parse(profile.hpvRiskFactors || '[]'),
-      tbeRiskFactors: JSON.parse(profile.tbeRiskFactors || '[]'),
-      rotaRiskFactors: JSON.parse(profile.rotaRiskFactors || '[]'),
+      hepBRiskFactors: JSON.parse(decrypt(profile.hepBRiskFactors) || '[]'),
+      pneumoRiskFactors: JSON.parse(decrypt(profile.pneumoRiskFactors) || '[]'),
+      pertussisContraindications: JSON.parse(decrypt(profile.pertussisContraindications) || '[]'),
+      polioRiskFactors: JSON.parse(decrypt(profile.polioRiskFactors) || '[]'),
+      mmrContraindications: JSON.parse(decrypt(profile.mmrContraindications) || '[]'),
+      meningRiskFactors: JSON.parse(decrypt(profile.meningRiskFactors) || '[]'),
+      varicellaRiskFactors: JSON.parse(decrypt(profile.varicellaRiskFactors) || '[]'),
+      hepaRiskFactors: JSON.parse(decrypt(profile.hepaRiskFactors) || '[]'),
+      fluRiskFactors: JSON.parse(decrypt(profile.fluRiskFactors) || '[]'),
+      hpvRiskFactors: JSON.parse(decrypt(profile.hpvRiskFactors) || '[]'),
+      tbeRiskFactors: JSON.parse(decrypt(profile.tbeRiskFactors) || '[]'),
+      rotaRiskFactors: JSON.parse(decrypt(profile.rotaRiskFactors) || '[]'),
       birthWeight: profile.birthWeight,
-      customVaccines: JSON.parse(profile.customVaccines || '[]'),
-      mantouxDate: profile.mantouxDate,
+      customVaccines: JSON.parse(decrypt(profile.customVaccines) || '[]'),
+      mantouxDate: decrypt(profile.mantouxDate),
       mantouxResult: profile.mantouxResult,
       createdAt: profile.createdAt,
     };
 
-    // Сохраняем в кеш
     CacheService.set('profiles', cacheKey, parsed);
-    
     return parsed;
   }));
 
   ipcMain.handle('db:update-vaccination-profile', ensureAuthenticated(async (_, profile) => {
     try {
+      const session = getSession();
       const validatedProfile = VaccinationProfileSchema.parse(profile);
       const {
         childId,
@@ -817,25 +877,27 @@ const setupDatabaseHandlers = async () => {
         mantouxResult
       } = validatedProfile;
 
+      await checkChildAccess(childId, session, prisma, true);
+
       await prisma.vaccinationProfile.update({
         where: { childId: Number(childId) },
         data: {
-          hepBRiskFactors: JSON.stringify(hepBRiskFactors || []),
-          pneumoRiskFactors: JSON.stringify(pneumoRiskFactors || []),
-          pertussisContraindications: JSON.stringify(pertussisContraindications || []),
-          polioRiskFactors: JSON.stringify(polioRiskFactors || []),
-          mmrContraindications: JSON.stringify(validatedProfile.mmrContraindications || []),
-          meningRiskFactors: JSON.stringify(validatedProfile.meningRiskFactors || []),
-          varicellaRiskFactors: JSON.stringify(validatedProfile.varicellaRiskFactors || []),
-          hepaRiskFactors: JSON.stringify(validatedProfile.hepaRiskFactors || []),
-          fluRiskFactors: JSON.stringify(validatedProfile.fluRiskFactors || []),
-          hpvRiskFactors: JSON.stringify(validatedProfile.hpvRiskFactors || []),
-          tbeRiskFactors: JSON.stringify(validatedProfile.tbeRiskFactors || []),
-          rotaRiskFactors: JSON.stringify(validatedProfile.rotaRiskFactors || []),
+          hepBRiskFactors: encrypt(JSON.stringify(hepBRiskFactors || [])),
+          pneumoRiskFactors: encrypt(JSON.stringify(pneumoRiskFactors || [])),
+          pertussisContraindications: encrypt(JSON.stringify(pertussisContraindications || [])),
+          polioRiskFactors: encrypt(JSON.stringify(polioRiskFactors || [])),
+          mmrContraindications: encrypt(JSON.stringify(validatedProfile.mmrContraindications || [])),
+          meningRiskFactors: encrypt(JSON.stringify(validatedProfile.meningRiskFactors || [])),
+          varicellaRiskFactors: encrypt(JSON.stringify(validatedProfile.varicellaRiskFactors || [])),
+          hepaRiskFactors: encrypt(JSON.stringify(validatedProfile.hepaRiskFactors || [])),
+          fluRiskFactors: encrypt(JSON.stringify(validatedProfile.fluRiskFactors || [])),
+          hpvRiskFactors: encrypt(JSON.stringify(validatedProfile.hpvRiskFactors || [])),
+          tbeRiskFactors: encrypt(JSON.stringify(validatedProfile.tbeRiskFactors || [])),
+          rotaRiskFactors: encrypt(JSON.stringify(validatedProfile.rotaRiskFactors || [])),
           birthWeight,
-          mantouxDate,
+          mantouxDate: encrypt(mantouxDate),
           mantouxResult,
-          customVaccines: JSON.stringify(validatedProfile.customVaccines || []),
+          customVaccines: encrypt(JSON.stringify(validatedProfile.customVaccines || [])),
         },
       });
       logAudit('VACCINATION_PROFILE_UPDATED', { childId });
@@ -847,21 +909,21 @@ const setupDatabaseHandlers = async () => {
         const parsedUpdated = {
           id: updated.id,
           childId: updated.childId,
-          hepBRiskFactors: JSON.parse(updated.hepBRiskFactors || '[]'),
-          pneumoRiskFactors: JSON.parse(updated.pneumoRiskFactors || '[]'),
-          pertussisContraindications: JSON.parse(updated.pertussisContraindications || '[]'),
-          polioRiskFactors: JSON.parse(updated.polioRiskFactors || '[]'),
-          mmrContraindications: JSON.parse(updated.mmrContraindications || '[]'),
-          meningRiskFactors: JSON.parse(updated.meningRiskFactors || '[]'),
-          varicellaRiskFactors: JSON.parse(updated.varicellaRiskFactors || '[]'),
-          hepaRiskFactors: JSON.parse(updated.hepaRiskFactors || '[]'),
-          fluRiskFactors: JSON.parse(updated.fluRiskFactors || '[]'),
-          hpvRiskFactors: JSON.parse(updated.hpvRiskFactors || '[]'),
-          tbeRiskFactors: JSON.parse(updated.tbeRiskFactors || '[]'),
-          rotaRiskFactors: JSON.parse(updated.rotaRiskFactors || '[]'),
+          hepBRiskFactors: JSON.parse(decrypt(updated.hepBRiskFactors) || '[]'),
+          pneumoRiskFactors: JSON.parse(decrypt(updated.pneumoRiskFactors) || '[]'),
+          pertussisContraindications: JSON.parse(decrypt(updated.pertussisContraindications) || '[]'),
+          polioRiskFactors: JSON.parse(decrypt(updated.polioRiskFactors) || '[]'),
+          mmrContraindications: JSON.parse(decrypt(updated.mmrContraindications) || '[]'),
+          meningRiskFactors: JSON.parse(decrypt(updated.meningRiskFactors) || '[]'),
+          varicellaRiskFactors: JSON.parse(decrypt(updated.varicellaRiskFactors) || '[]'),
+          hepaRiskFactors: JSON.parse(decrypt(updated.hepaRiskFactors) || '[]'),
+          fluRiskFactors: JSON.parse(decrypt(updated.fluRiskFactors) || '[]'),
+          hpvRiskFactors: JSON.parse(decrypt(updated.hpvRiskFactors) || '[]'),
+          tbeRiskFactors: JSON.parse(decrypt(updated.tbeRiskFactors) || '[]'),
+          rotaRiskFactors: JSON.parse(decrypt(updated.rotaRiskFactors) || '[]'),
           birthWeight: updated.birthWeight,
-          customVaccines: JSON.parse(updated.customVaccines || '[]'),
-          mantouxDate: updated.mantouxDate,
+          customVaccines: JSON.parse(decrypt(updated.customVaccines) || '[]'),
+          mantouxDate: decrypt(updated.mantouxDate),
           mantouxResult: updated.mantouxResult,
           createdAt: updated.createdAt,
         };
@@ -879,9 +941,11 @@ const setupDatabaseHandlers = async () => {
   }));
 
   ipcMain.handle('db:get-records', ensureAuthenticated(async (_, childId) => {
+    const session = getSession();
+    await checkChildAccess(childId, session, prisma);
+
     const cacheKey = `child_${childId}`;
-    
-    // Проверяем кеш
+
     const cached = CacheService.get('records', cacheKey);
     if (cached) {
       logger.debug(`[DB] Cache hit for vaccination records ${childId}`);
@@ -894,13 +958,16 @@ const setupDatabaseHandlers = async () => {
 
     const decrypted = records.map(record => ({
       ...record,
+      completedDate: decrypt(record.completedDate),
       vaccineBrand: decrypt(record.vaccineBrand),
       notes: decrypt(record.notes),
+      dose: decrypt(record.dose),
+      series: decrypt(record.series),
+      expiryDate: decrypt(record.expiryDate),
+      manufacturer: decrypt(record.manufacturer),
     }));
 
-    // Сохраняем в кеш
     CacheService.set('records', cacheKey, decrypted);
-    
     return decrypted;
   }));
 
@@ -909,6 +976,7 @@ const setupDatabaseHandlers = async () => {
 
   ipcMain.handle('db:save-record', ensureAuthenticated(async (_, record) => {
     try {
+      const session = getSession();
       const validatedRecord = UserVaccineRecordSchema.parse(record);
       const {
         childId,
@@ -921,8 +989,10 @@ const setupDatabaseHandlers = async () => {
         series,
         expiryDate,
         manufacturer,
-        ignoreValidation // New flag for import/bypass
+        ignoreValidation
       } = validatedRecord;
+
+      await checkChildAccess(childId, session, prisma, true);
 
       logger.info(`[Database] Saving record for child ${childId}, vaccine ${vaccineId}:`, {
         isCompleted,
@@ -932,9 +1002,7 @@ const setupDatabaseHandlers = async () => {
         ignoreValidation
       });
 
-      // Валидация для БЦЖ: проверка требования Манту
       if (vaccineId.startsWith('bcg') && isCompleted && completedDate && !ignoreValidation) {
-        // Получаем данные ребенка
         const child = await prisma.child.findUnique({
           where: { id: Number(childId) },
         });
@@ -944,13 +1012,9 @@ const setupDatabaseHandlers = async () => {
         }
 
         const childBirthDate = decrypt(child.birthDate);
-
-        // Вычисляем возраст на момент прививки БЦЖ
         const ageAtVaccination = calculateAgeInMonths(childBirthDate, completedDate);
 
-        // Если ребенку >= 2 месяцев на момент прививки, требуется Манту
         if (ageAtVaccination >= 2) {
-          // Получаем профиль вакцинации
           const profile = await prisma.vaccinationProfile.findUnique({
             where: { childId: Number(childId) },
           });
@@ -959,12 +1023,11 @@ const setupDatabaseHandlers = async () => {
             throw new Error('Профиль вакцинации не найден');
           }
 
-          // Проверяем наличие пробы Манту
-          if (!profile.mantouxDate) {
+          const mantouxDate = decrypt(profile.mantouxDate);
+          if (!mantouxDate) {
             throw new Error('Внимание: Требуется проба Манту перед вакцинацией БЦЖ (ребенку > 2 мес на момент прививки).');
           }
 
-          // Проверяем результат Манту (если положительная - запрещено)
           if (profile.mantouxResult === true) {
             throw new Error('Вакцинация запрещена: Проба Манту положительная. Необходима консультация фтизиатра.');
           }
@@ -980,25 +1043,25 @@ const setupDatabaseHandlers = async () => {
         },
         update: {
           isCompleted,
-          completedDate,
+          completedDate: encrypt(completedDate),
           vaccineBrand: encrypt(vaccineBrand),
           notes: encrypt(notes),
-          dose,
-          series,
-          expiryDate,
-          manufacturer
+          dose: encrypt(dose),
+          series: encrypt(series),
+          expiryDate: encrypt(expiryDate),
+          manufacturer: encrypt(manufacturer),
         },
         create: {
           childId: Number(childId),
           vaccineId,
           isCompleted,
-          completedDate,
+          completedDate: encrypt(completedDate),
           vaccineBrand: encrypt(vaccineBrand),
           notes: encrypt(notes),
-          dose,
-          series,
-          expiryDate,
-          manufacturer
+          dose: encrypt(dose),
+          series: encrypt(series),
+          expiryDate: encrypt(expiryDate),
+          manufacturer: encrypt(manufacturer),
         },
       });
       logAudit('VACCINATION_RECORD_SAVED', { childId, vaccineId, isCompleted });
@@ -1008,8 +1071,13 @@ const setupDatabaseHandlers = async () => {
       });
       const decryptedFresh = freshRecords.map(r => ({
         ...r,
+        completedDate: decrypt(r.completedDate),
         vaccineBrand: decrypt(r.vaccineBrand),
         notes: decrypt(r.notes),
+        dose: decrypt(r.dose),
+        series: decrypt(r.series),
+        expiryDate: decrypt(r.expiryDate),
+        manufacturer: decrypt(r.manufacturer),
       }));
       CacheService.set('records', `child_${childId}`, decryptedFresh);
 
@@ -1025,6 +1093,9 @@ const setupDatabaseHandlers = async () => {
 
   ipcMain.handle('db:delete-record', ensureAuthenticated(async (_, childId, vaccineId) => {
     try {
+      const session = getSession();
+      await checkChildAccess(childId, session, prisma, true);
+
       await prisma.vaccinationRecord.delete({
         where: {
           childId_vaccineId: {
@@ -1040,8 +1111,13 @@ const setupDatabaseHandlers = async () => {
       });
       const decryptedFresh = freshRecords.map(r => ({
         ...r,
+        completedDate: decrypt(r.completedDate),
         vaccineBrand: decrypt(r.vaccineBrand),
         notes: decrypt(r.notes),
+        dose: decrypt(r.dose),
+        series: decrypt(r.series),
+        expiryDate: decrypt(r.expiryDate),
+        manufacturer: decrypt(r.manufacturer),
       }));
       CacheService.set('records', `child_${childId}`, decryptedFresh);
 

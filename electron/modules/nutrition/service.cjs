@@ -2,6 +2,7 @@
 
 const { prisma } = require('../../prisma-client.cjs');
 const { logger } = require('../../logger.cjs');
+const { encrypt, decrypt } = require('../../crypto.cjs');
 
 const NutritionService = {
     // ——— Age Norms ———
@@ -144,13 +145,14 @@ const NutritionService = {
     // ——— Child Feeding Plans ———
 
     async getFeedingPlans(childId) {
-        return prisma.childFeedingPlan.findMany({
+        const plans = await prisma.childFeedingPlan.findMany({
             where: { childId: Number(childId) },
             include: {
                 formula: { select: { id: true, name: true, brand: true, energyKcalPer100ml: true } },
             },
             orderBy: { createdAt: 'desc' },
         });
+        return plans.map(p => ({ ...p, comments: decrypt(p.comments) }));
     },
 
     async saveFeedingPlan(data) {
@@ -173,6 +175,10 @@ const NutritionService = {
                 ? { formula: { connect: { id: Number(formulaId) } } }
                 : {}),
         };
+
+        if (fields.comments != null) {
+            fields.comments = encrypt(fields.comments);
+        }
 
         if (id) {
             return prisma.childFeedingPlan.update({

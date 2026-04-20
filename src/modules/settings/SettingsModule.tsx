@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag, Building2, Upload, FileCheck, ChevronDown, ChevronRight } from 'lucide-react';
-import { getCurrentApiKey, setApiKey, validateApiKey } from '../../services/geminiService';
-import { apiKeyService, ApiKeysConnectivityReport, PoolStatus } from '../../services/apiKeyService';
+import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag, Building2, Upload, FileCheck, ChevronDown, ChevronRight, Eye, EyeOff, Pencil, Star } from 'lucide-react';
+import { apiKeyService, ApiKeysConnectivityReport, PoolStatus, ApiKeyEntry } from '../../services/apiKeyService';
 import { organizationService, getDefaultOrganizationProfile } from '../../services/organization.service';
 import { vaccinationService } from '../../services/vaccination.service';
 import { PrettySelect, type SelectOption } from '../diseases/components/PrettySelect';
@@ -9,6 +8,46 @@ import { diseaseService } from '../diseases/services/diseaseService';
 import { VaccineCatalogEntry, DiagnosticCatalogEntry, OrganizationProfile, DbImportTableInfo, DbImportTableSelection, DbImportTableResult, DbImportStrategy } from '../../types';
 import { LicenseAdminPanel } from '../license/LicenseAdminPanel';
 import { useAuth } from '../../context/AuthContext';
+
+const GEMINI_MODELS: { label: string; value: string }[] = [
+  { label: 'Gemini 2.5 Flash', value: 'gemini-2.5-flash' },
+  { label: 'Gemini 2.5 Pro', value: 'gemini-2.5-pro' },
+  { label: 'Gemini 2.5 Flash Lite', value: 'gemini-2.5-flash-lite-preview' },
+  { label: 'Gemini 2 Flash', value: 'gemini-2.0-flash' },
+  { label: 'Gemini 2 Flash Lite', value: 'gemini-2.0-flash-lite' },
+  { label: 'Gemini 3 Flash', value: 'gemini-3.0-flash-preview' },
+  { label: 'Gemini 3.1 Flash Lite', value: 'gemini-3.1-flash-lite-preview' },
+  { label: 'Gemini 3.1 Pro', value: 'gemini-3.1-pro-preview' },
+  { label: 'Gemini 2.5 Flash TTS', value: 'gemini-2.5-flash-preview-tts' },
+  { label: 'Gemini 2.5 Pro TTS', value: 'gemini-2.5-pro-preview-tts' },
+  { label: 'Gemini 3.1 Flash TTS', value: 'gemini-3.1-flash-preview-tts' },
+  { label: 'Gemini 2.5 Flash Native Audio Dialog', value: 'gemini-2.5-flash-exp-native-audio-thinking-dialog' },
+  { label: 'Gemini 3 Flash Live', value: 'gemini-3.0-flash-live-preview' },
+  { label: 'Gemini Embedding 1', value: 'text-embedding-004' },
+  { label: 'Gemini Embedding 2', value: 'gemini-embedding-exp' },
+  { label: 'Gemma 3 1B', value: 'gemma-3-1b-it' },
+  { label: 'Gemma 3 2B', value: 'gemma-3-2b-it' },
+  { label: 'Gemma 3 4B', value: 'gemma-3-4b-it' },
+  { label: 'Gemma 3 12B', value: 'gemma-3-12b-it' },
+  { label: 'Gemma 3 27B', value: 'gemma-3-27b-it' },
+  { label: 'Gemma 4 26B', value: 'gemma-4-26b-it' },
+  { label: 'Gemma 4 31B', value: 'gemma-4-31b-it' },
+  { label: 'Imagen 4 Generate', value: 'imagen-4.0-generate-preview' },
+  { label: 'Imagen 4 Ultra Generate', value: 'imagen-4.0-ultra-generate-preview' },
+  { label: 'Imagen 4 Fast Generate', value: 'imagen-4.0-fast-generate-preview' },
+  { label: 'Nano Banana (Gemini 2.5 Flash Preview Image)', value: 'gemini-2.5-flash-preview-04-17' },
+  { label: 'Nano Banana Pro (Gemini 3 Pro Image)', value: 'gemini-3.0-pro-preview' },
+  { label: 'Nano Banana 2 (Gemini 3.1 Flash Image)', value: 'gemini-3.1-flash-preview' },
+  { label: 'Veo 3 Generate', value: 'veo-3.0-generate-preview' },
+  { label: 'Veo 3 Fast Generate', value: 'veo-3.0-fast-generate-preview' },
+  { label: 'Veo 3 Lite Generate', value: 'veo-3.0-lite-generate-preview' },
+  { label: 'Lyria 3 Clip', value: 'lyria-3-clip' },
+  { label: 'Lyria 3 Pro', value: 'lyria-3-pro' },
+  { label: 'Gemini Robotics ER 1.5 Preview', value: 'gemini-robotics-er-1.5-preview' },
+  { label: 'Gemini Robotics ER 1.6 Preview', value: 'gemini-robotics-er-1.6-preview' },
+  { label: 'Computer Use Preview', value: 'gemini-2.5-pro-preview-computer-use' },
+  { label: 'Deep Research Pro Preview', value: 'gemini-deep-research-pro-preview' },
+];
 import { dbImportService } from '../../services/dbImportService';
 
 const diagnosticTypeOptions: SelectOption<'lab' | 'instrumental'>[] = [
@@ -95,13 +134,6 @@ export const SettingsModule: React.FC = () => {
     const { currentUser } = useAuth();
     const isAdmin = Boolean(currentUser?.roles?.includes('admin'));
 
-    const [apiKey, setLocalApiKey] = useState('');
-    const [baseUrl, setBaseUrl] = useState('');
-    const [isVerifying, setIsVerifying] = useState(false);
-    const [verificationStatus, setVerificationStatus] = useState<'idle' | 'success' | 'error'>('idle');
-    const [errorMessage, setErrorMessage] = useState('');
-    const [isSaved, setIsSaved] = useState(false);
-
     // Organization profile state
     const [organizationProfile, setOrganizationProfile] = useState<OrganizationProfile>(getDefaultOrganizationProfile());
     const [isLoadingOrganization, setIsLoadingOrganization] = useState(false);
@@ -125,11 +157,28 @@ export const SettingsModule: React.FC = () => {
     const [poolStatus, setPoolStatus] = useState<PoolStatus | null>(null);
     const [isLoadingPool, setIsLoadingPool] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
-    const [isReloading, setIsReloading] = useState(false);
     const [isTestingPool, setIsTestingPool] = useState(false);
     const [testOnlyActiveKeys, setTestOnlyActiveKeys] = useState(true);
     const [poolConnectivityReport, setPoolConnectivityReport] = useState<ApiKeysConnectivityReport | null>(null);
     const [poolConnectivityError, setPoolConnectivityError] = useState('');
+
+    // API Key CRUD state
+    const [keysList, setKeysList] = useState<ApiKeyEntry[]>([]);
+    const [isLoadingKeys, setIsLoadingKeys] = useState(false);
+    const [newKeyValue, setNewKeyValue] = useState('');
+    const [newKeyModel, setNewKeyModel] = useState('gemini-2.5-flash');
+    const [showNewKeyValue, setShowNewKeyValue] = useState(false);
+    const [isAddingKey, setIsAddingKey] = useState(false);
+    const [addKeyError, setAddKeyError] = useState('');
+    const [deletingKeyId, setDeletingKeyId] = useState<string | null>(null);
+    const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
+    const [editingKeyLabel, setEditingKeyLabel] = useState('');
+    const [savingLabelId, setSavingLabelId] = useState<string | null>(null);
+    const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
+    const [editingModelId, setEditingModelId] = useState<string | null>(null);
+    const [savingModelId, setSavingModelId] = useState<string | null>(null);
+    const [testingKeyId, setTestingKeyId] = useState<string | null>(null);
+    const [keyTestResults, setKeyTestResults] = useState<Record<string, { ok: boolean; message: string; latencyMs: number | null }>>({});
 
     // Cache State
     const [cacheStats, setCacheStats] = useState<any>(null);
@@ -238,20 +287,9 @@ export const SettingsModule: React.FC = () => {
     }, [isAdmin, activeTab]);
 
     useEffect(() => {
-        // Load current API key and base URL on mount
-        const currentKey = getCurrentApiKey();
-        if (currentKey) {
-            setLocalApiKey(currentKey);
-            setIsSaved(true);
-        }
-
-        const currentBaseUrl = localStorage.getItem('gemini_base_url');
-        if (currentBaseUrl) {
-            setBaseUrl(currentBaseUrl);
-        }
-
-        // Load pool status
+        // Load pool status and stored keys on mount
         loadPoolStatus();
+        loadKeysList();
         
         // Load cache stats
         loadCacheStats();
@@ -535,17 +573,105 @@ export const SettingsModule: React.FC = () => {
         }
     };
 
-    const handleReloadFromEnv = async () => {
-        setIsReloading(true);
+    // ── Key CRUD handlers ────────────────────────────────────────────────────
+
+    const loadKeysList = async () => {
+        setIsLoadingKeys(true);
         try {
-            const result = await apiKeyService.reloadKeysFromEnv();
-            if (result.success) {
-                await loadPoolStatus();
-            }
+            const list = await apiKeyService.listKeys();
+            setKeysList(list);
         } catch (error: any) {
-            console.error('Failed to reload keys:', error);
+            console.error('Failed to load keys list:', error);
         } finally {
-            setIsReloading(false);
+            setIsLoadingKeys(false);
+        }
+    };
+
+    const handleAddKey = async () => {
+        setAddKeyError('');
+        if (!newKeyValue.trim()) { setAddKeyError('Вставьте ключ'); return; }
+        setIsAddingKey(true);
+        try {
+            const autoLabel = `Ключ ${keysList.length + 1}`;
+            await apiKeyService.addKey(autoLabel, newKeyValue.trim(), newKeyModel);
+            setNewKeyValue('');
+            setNewKeyModel('gemini-2.5-flash');
+            await loadKeysList();
+            await loadPoolStatus();
+        } catch (error: any) {
+            setAddKeyError(error.message || 'Не удалось добавить ключ');
+        } finally {
+            setIsAddingKey(false);
+        }
+    };
+
+    const handleSaveModel = async (id: string, model: string) => {
+        setSavingModelId(id);
+        try {
+            await apiKeyService.updateModel(id, model);
+            await loadKeysList();
+            setEditingModelId(null);
+        } catch (error: any) {
+            console.error('Failed to update model:', error);
+        } finally {
+            setSavingModelId(null);
+        }
+    };
+
+    const handleTestKey = async (id: string) => {
+        setTestingKeyId(id);
+        setKeyTestResults(prev => { const next = { ...prev }; delete next[id]; return next; });
+        try {
+            const result = await apiKeyService.testSingleKey(id);
+            setKeyTestResults(prev => ({ ...prev, [id]: { ok: result.ok, message: result.message, latencyMs: result.latencyMs } }));
+        } catch (error: any) {
+            setKeyTestResults(prev => ({ ...prev, [id]: { ok: false, message: error?.message || 'Ошибка', latencyMs: null } }));
+        } finally {
+            setTestingKeyId(null);
+        }
+    };
+
+    const handleDeleteKey = async (id: string) => {
+        setDeletingKeyId(id);
+        try {
+            await apiKeyService.deleteKey(id);
+            await loadKeysList();
+            await loadPoolStatus();
+        } catch (error: any) {
+            console.error('Failed to delete key:', error);
+        } finally {
+            setDeletingKeyId(null);
+        }
+    };
+
+    const handleStartEditLabel = (key: ApiKeyEntry) => {
+        setEditingKeyId(key.id);
+        setEditingKeyLabel(key.label);
+    };
+
+    const handleSaveLabel = async (id: string) => {
+        if (!editingKeyLabel.trim()) return;
+        setSavingLabelId(id);
+        try {
+            await apiKeyService.updateKeyLabel(id, editingKeyLabel.trim());
+            await loadKeysList();
+            setEditingKeyId(null);
+        } catch (error: any) {
+            console.error('Failed to update label:', error);
+        } finally {
+            setSavingLabelId(null);
+        }
+    };
+
+    const handleSetPrimary = async (id: string) => {
+        setSettingPrimaryId(id);
+        try {
+            await apiKeyService.setPrimary(id);
+            await loadKeysList();
+        } catch (error: any) {
+            console.error('Failed to set primary key:', error);
+        } finally {
+            setSettingPrimaryId(null);
         }
     };
 
@@ -713,63 +839,6 @@ export const SettingsModule: React.FC = () => {
         } finally {
             setIsClearingCache(false);
         }
-    };
-
-    const handleVerify = async () => {
-        if (!apiKey.trim()) {
-            setErrorMessage('Введите API ключ');
-            setVerificationStatus('error');
-            return;
-        }
-
-        setIsVerifying(true);
-        setVerificationStatus('idle');
-        setErrorMessage('');
-
-        const result = await validateApiKey(apiKey, baseUrl);
-
-        setIsVerifying(false);
-
-        if (result.valid) {
-            setVerificationStatus('success');
-            setErrorMessage('');
-        } else {
-            setVerificationStatus('error');
-            setErrorMessage(result.error || 'Ошибка проверки');
-        }
-    };
-
-    const handleSave = () => {
-        if (!apiKey.trim()) {
-            setErrorMessage('Введите API ключ');
-            setVerificationStatus('error');
-            return;
-        }
-
-        setApiKey(apiKey);
-        if (baseUrl) {
-            localStorage.setItem('gemini_base_url', baseUrl);
-        } else {
-            localStorage.removeItem('gemini_base_url');
-        }
-
-        setIsSaved(true);
-        setVerificationStatus('success');
-        setErrorMessage('');
-    };
-
-    const handleKeyChange = (value: string) => {
-        setLocalApiKey(value);
-        setIsSaved(false);
-        setVerificationStatus('idle');
-        setErrorMessage('');
-    };
-
-    const handleBaseUrlChange = (value: string) => {
-        setBaseUrl(value);
-        setIsSaved(false);
-        setVerificationStatus('idle');
-        setErrorMessage('');
     };
 
     const handleCreateBackup = async () => {
@@ -946,115 +1015,164 @@ export const SettingsModule: React.FC = () => {
 
             {activeTab === 'api' && (
             <>
-            {/* API Settings Section */}
+            {/* Google Gemini API Keys — CRUD */}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                 <div className="flex items-center gap-3 mb-4">
                     <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                         <Key className="text-blue-600 dark:text-blue-400" size={24} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Gemini API</h2>
+                        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Google Gemini API ключи</h2>
                         <p className="text-sm text-slate-600 dark:text-slate-400">
-                            Ключ для интеграции с AI-консультантом по вакцинации
+                            Ключи хранятся зашифрованными внутри приложения. Получить ключ на{' '}
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"
+                                className="text-blue-600 dark:text-blue-400 hover:underline">Google AI Studio</a>.
                         </p>
                     </div>
                 </div>
 
-                <div className="space-y-4">
-                    {/* API Key Input */}
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                            API ключ
-                        </label>
-                        <input
-                            type="password"
-                            value={apiKey}
-                            onChange={(e) => handleKeyChange(e.target.value)}
-                            placeholder="AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXX"
-                            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg 
-                       bg-white dark:bg-slate-900 text-slate-900 dark:text-white
-                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                       placeholder:text-slate-400"
-                        />
-                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                            Получить ключ можно на{' '}
-                            <a
-                                href="https://aistudio.google.com/app/apikey"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                                Google AI Studio
-                            </a>
-                        </p>
-                    </div>
-
-                    {/* Base URL Input (Optional) */}
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                            Base URL / Proxy (Опционально)
-                        </label>
-                        <input
-                            type="text"
-                            value={baseUrl}
-                            onChange={(e) => handleBaseUrlChange(e.target.value)}
-                            placeholder="https://apitheia.ru.tuna.am/v1"
-                            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg 
-                       bg-white dark:bg-slate-900 text-slate-900 dark:text-white
-                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                       placeholder:text-slate-400"
-                        />
-                    </div>
-
-                    {/* Status Messages */}
-                    {verificationStatus === 'success' && (
-                        <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                            <Check className="text-green-600 dark:text-green-400" size={20} />
-                            <p className="text-sm text-green-700 dark:text-green-300 font-medium">
-                                {isSaved ? 'Настройки сохранены и проверены' : 'Настройки корректны'}
-                            </p>
+                {/* Stored keys list */}
+                <div className="space-y-2 mb-5">
+                    {isLoadingKeys ? (
+                        <div className="flex items-center gap-2 py-4 text-slate-400">
+                            <Loader className="animate-spin" size={16} />
+                            <span className="text-sm">Загрузка ключей...</span>
                         </div>
-                    )}
-
-                    {verificationStatus === 'error' && (
-                        <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                            <X className="text-red-600 dark:text-red-400" size={20} />
-                            <p className="text-sm text-red-700 dark:text-red-300 font-medium">{errorMessage}</p>
+                    ) : keysList.length === 0 ? (
+                        <div className="py-4 text-sm text-slate-500 dark:text-slate-400 text-center">
+                            Ключи не добавлены. Добавьте первый ключ ниже.
                         </div>
+                    ) : (
+                        keysList.map((key) => (
+                            <div key={key.id}
+                                className={`flex items-center gap-3 p-3 rounded-lg border bg-slate-50 dark:bg-slate-900/40 ${
+                                    key.isPrimary
+                                        ? 'border-yellow-400 dark:border-yellow-500'
+                                        : 'border-slate-200 dark:border-slate-700'
+                                }`}>
+                                <Key size={16} className={key.isPrimary ? 'text-yellow-500 flex-shrink-0' : 'text-slate-400 flex-shrink-0'} />
+                                {editingKeyId === key.id ? (
+                                    <input
+                                        className="flex-1 px-2 py-1 text-sm border border-blue-400 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none"
+                                        value={editingKeyLabel}
+                                        onChange={e => setEditingKeyLabel(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleSaveLabel(key.id); if (e.key === 'Escape') setEditingKeyId(null); }}
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <span className="flex-1 text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                                        {key.label}
+                                        {key.isPrimary && <span className="ml-2 text-xs text-yellow-600 dark:text-yellow-400 font-normal">основной</span>}
+                                    </span>
+                                )}
+                                <span className="text-xs text-slate-400 hidden sm:block flex-shrink-0">
+                                    {new Date(key.createdAt).toLocaleDateString('ru-RU')}
+                                </span>
+                                {/* Model selector / badge */}
+                                {editingModelId === key.id ? (
+                                    <select
+                                        value={key.model}
+                                        onChange={e => handleSaveModel(key.id, e.target.value)}
+                                        onBlur={() => setEditingModelId(null)}
+                                        autoFocus
+                                        className="text-xs px-2 py-1 border border-blue-400 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none max-w-[200px]"
+                                    >
+                                        {GEMINI_MODELS.map(m => (
+                                            <option key={m.value} value={m.value}>{m.label}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <button onClick={() => setEditingModelId(key.id)} title="Изменить модель"
+                                        className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0 max-w-[160px] truncate">
+                                        {savingModelId === key.id
+                                            ? <Loader size={12} className="animate-spin" />
+                                            : (GEMINI_MODELS.find(m => m.value === key.model)?.label ?? key.model)}
+                                    </button>
+                                )}
+                                {/* Set primary button */}
+                                {!key.isPrimary && editingKeyId !== key.id && (
+                                    <button onClick={() => handleSetPrimary(key.id)} disabled={settingPrimaryId === key.id}
+                                        title="Сделать основным"
+                                        className="p-1.5 rounded text-slate-300 hover:text-yellow-500 dark:text-slate-600 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 disabled:opacity-50">
+                                        {settingPrimaryId === key.id ? <Loader size={14} className="animate-spin" /> : <Star size={14} />}
+                                    </button>
+                                )}
+                                {editingKeyId === key.id ? (
+                                    <button onClick={() => handleSaveLabel(key.id)} disabled={!!savingLabelId}
+                                        className="p-1.5 rounded text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50">
+                                        {savingLabelId === key.id ? <Loader size={14} className="animate-spin" /> : <Check size={14} />}
+                                    </button>
+                                ) : (
+                                    <button onClick={() => handleStartEditLabel(key)} title="Переименовать"
+                                        className="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
+                                        <Pencil size={14} />
+                                    </button>
+                                )}
+                                {/* Test key button */}
+                                <button onClick={() => handleTestKey(key.id)} disabled={testingKeyId === key.id}
+                                    title="Проверить ключ"
+                                    className="p-1.5 rounded text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50">
+                                    {testingKeyId === key.id
+                                        ? <Loader size={14} className="animate-spin" />
+                                        : keyTestResults[key.id] !== undefined
+                                            ? keyTestResults[key.id].ok
+                                                ? <Check size={14} className="text-green-500" />
+                                                : <X size={14} className="text-red-500" />
+                                            : <Zap size={14} />}
+                                </button>
+                                {keyTestResults[key.id] && (
+                                    <span className={`text-xs flex-shrink-0 max-w-[200px] break-words whitespace-normal leading-tight ${keyTestResults[key.id].ok ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                                        {keyTestResults[key.id].ok
+                                            ? `${keyTestResults[key.id].latencyMs}ms`
+                                            : keyTestResults[key.id].message}
+                                    </span>
+                                )}
+                                <button onClick={() => handleDeleteKey(key.id)} disabled={deletingKeyId === key.id}
+                                    title="Удалить ключ"
+                                    className="p-1.5 rounded text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50">
+                                    {deletingKeyId === key.id ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                </button>
+                            </div>
+                        ))
                     )}
+                </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex gap-3">
-                        <button
-                            onClick={handleVerify}
-                            disabled={isVerifying || !apiKey.trim()}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 
-                       rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors
-                       disabled:opacity-50 disabled:cursor-not-allowed"
+                {/* Add key form */}
+                <div className="border-t border-slate-100 dark:border-slate-700 pt-4 space-y-3">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Добавить ключ</p>
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <input
+                                type={showNewKeyValue ? 'text' : 'password'}
+                                placeholder="Вставьте ключ из Google AI Studio (AIzaSy...)"
+                                value={newKeyValue}
+                                onChange={e => { setNewKeyValue(e.target.value); setAddKeyError(''); }}
+                                onKeyDown={e => { if (e.key === 'Enter') handleAddKey(); }}
+                                className="w-full px-3 py-2 pr-10 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <button type="button" onClick={() => setShowNewKeyValue(v => !v)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                                {showNewKeyValue ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+                        <select
+                            value={newKeyModel}
+                            onChange={e => setNewKeyModel(e.target.value)}
+                            className="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent max-w-[220px]"
                         >
-                            {isVerifying ? (
-                                <>
-                                    <Loader className="animate-spin" size={18} />
-                                    Проверка...
-                                </>
-                            ) : (
-                                <>
-                                    <AlertCircle size={18} />
-                                    Проверить
-                                </>
-                            )}
-                        </button>
-
-                        <button
-                            onClick={handleSave}
-                            disabled={!apiKey.trim() || isSaved}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg 
-                       hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <Check size={18} />
-                            {isSaved ? 'Сохранено' : 'Сохранить'}
+                            {GEMINI_MODELS.map(m => (
+                                <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
+                        </select>
+                        <button onClick={handleAddKey} disabled={isAddingKey || !newKeyValue.trim()}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0">
+                            {isAddingKey ? <Loader size={15} className="animate-spin" /> : <Plus size={15} />}
+                            Добавить
                         </button>
                     </div>
+                    {addKeyError && (
+                        <p className="text-sm text-red-600 dark:text-red-400">{addKeyError}</p>
+                    )}
                 </div>
             </div>
 
@@ -1125,7 +1243,7 @@ export const SettingsModule: React.FC = () => {
                                         ⚠️ КРИТИЧНО: Осталось {poolStatus.active} рабочих ключей!
                                     </p>
                                     <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-                                        Проверьте .env.local файл и добавьте новые ключи (переменная GEMINI_API_KEYS).
+                                        Добавьте новые ключи в разделе «Google Gemini API ключи» выше.
                                     </p>
                                 </div>
                             </div>
@@ -1184,25 +1302,6 @@ export const SettingsModule: React.FC = () => {
                                     <>
                                         <RotateCcw size={16} />
                                         Сбросить все
-                                    </>
-                                )}
-                            </button>
-                            <button
-                                onClick={handleReloadFromEnv}
-                                disabled={isReloading}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 
-                                    rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors
-                                    disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                            >
-                                {isReloading ? (
-                                    <>
-                                        <Loader className="animate-spin" size={16} />
-                                        Загрузка...
-                                    </>
-                                ) : (
-                                    <>
-                                        <RefreshCw size={16} />
-                                        Перезагрузить из .env
                                     </>
                                 )}
                             </button>
@@ -1305,7 +1404,7 @@ export const SettingsModule: React.FC = () => {
                         {/* Info */}
                         <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-700">
                             <p className="text-xs text-slate-600 dark:text-slate-400">
-                                ⚠️ Для добавления ключей отредактируйте файл <code className="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">.env.local</code> (переменная <code className="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">GEMINI_API_KEYS</code>)
+                                Ключи хранятся зашифрованными внутри приложения. Для добавления новых ключей используйте форму выше.
                             </p>
                         </div>
                     </div>

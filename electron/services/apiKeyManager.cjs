@@ -1,11 +1,13 @@
 /**
  * API Key Manager Service
- * 
+ *
  * Управляет пулом API ключей Gemini с автоматической ротацией при ошибках.
- * Ключи загружаются из .env файла (GEMINI_API_KEYS), статусы сохраняются в JSON.
+ * Ключи загружаются из зашифрованного хранилища (apiKeyStore).
+ * Env-переменные используются только как fallback/миграция при первом запуске.
  */
 
 const { logger } = require('../logger.cjs');
+const apiKeyStore = require('./apiKeyStore.cjs');
 const fs = require('fs').promises;
 const path = require('path');
 const { app } = require('electron');
@@ -16,7 +18,8 @@ const http = require('http');
 const STATUS_FILE_PATH = path.join(app.getPath('userData'), 'api-keys-status.json');
 
 // Внутреннее состояние
-let keys = []; // Массив ключей
+let keys = []; // Массив ключей (plain strings)
+let keyModels = []; // Массив моделей, параллельный keys (string[])
 let keyMetadata = new Map(); // Map<index, {status, errorCount, lastUsed, lastError, failedAt}>
 let currentKeyIndex = 0;
 let isInitialized = false;
@@ -33,39 +36,33 @@ function validateApiKey(key) {
 }
 
 /**
- * Загрузка ключей из переменных окружения
+ * Загрузка ключей из зашифрованного хранилища.
+ * При первом запуске выполняет миграцию из env-переменных.
+ * @returns {Promise<string[]>}
  */
-function loadKeysFromEnv() {
-    const keysString = process.env.GEMINI_API_KEYS;
-    
-    if (keysString) {
-        // Новый формат: массив через запятую
-        const rawKeys = keysString.split(',').map(k => k.trim()).filter(k => k);
-        const validKeys = rawKeys.filter((key, idx) => {
-            const isValid = validateApiKey(key);
-            if (!isValid) {
-                logger.warn(`[ApiKeyManager] Invalid key at index ${idx}, skipping`);
-            }
-            return isValid;
-        });
-        
-        logger.info(`[ApiKeyManager] Loaded ${validKeys.length} keys from GEMINI_API_KEYS`);
-        return validKeys;
-    }
-    
-    // Fallback на старый формат
-    const singleKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    if (singleKey) {
-        if (validateApiKey(singleKey)) {
-            logger.warn('[ApiKeyManager] Using single key (legacy mode)');
-            return [singleKey];
-        } else {
-            logger.warn('[ApiKeyManager] Single key found but invalid, skipping');
+async function loadKeysFromStore() {
+    // Миграция из env при первом запуске (idempotent — пропустит, если ключи уже есть)
+    try {
+        const migrated = await apiKeyStore.migrateFromEnv();
+        if (migrated > 0) {
+            logger.info(`[ApiKeyManager] Migrated ${migrated} key(s) from environment to store`);
         }
+    } catch (err) {
+        logger.warn('[ApiKeyManager] Env migration failed:', err.message);
     }
-    
-    logger.error('[ApiKeyManager] No valid API keys found in environment');
-    return [];
+
+    try {
+        const stored = await apiKeyStore.getDecryptedKeys();
+        const valid = stored.filter(entry => validateApiKey(entry.value));
+        const validKeys = valid.map(e => e.value);
+        const validModels = valid.map(e => e.model || 'gemini-2.5-flash');
+        keyModels = validModels;
+        logger.info(`[ApiKeyManager] Loaded ${validKeys.length} key(s) from store`);
+        return validKeys;
+    } catch (err) {
+        logger.error('[ApiKeyManager] Failed to load keys from store:', err.message);
+        return [];
+    }
 }
 
 function getValidationModel() {
@@ -191,6 +188,76 @@ function requestGeminiPing(apiKey, timeoutMs) {
 }
 
 /**
+ * Ping a specific key with a specific model (for per-key test button).
+ */
+function requestGeminiPingWithModel(apiKey, model, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        try {
+            const baseUrl = normalizeBaseUrl(getBaseUrl());
+            const url = new URL(`/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, baseUrl);
+            const isHttps = url.protocol === 'https:';
+            const transport = isHttps ? https : http;
+            const startedAt = Date.now();
+
+            const payload = JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+                generationConfig: { maxOutputTokens: 4, temperature: 0 }
+            });
+
+            const req = transport.request(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+                timeout: timeoutMs
+            }, (res) => {
+                const chunks = [];
+                res.on('data', c => chunks.push(c));
+                res.on('end', () => {
+                    const latencyMs = Date.now() - startedAt;
+                    const raw = Buffer.concat(chunks).toString('utf8');
+                    try {
+                        const parsed = raw ? JSON.parse(raw) : {};
+                        if (res.statusCode >= 200 && res.statusCode < 300) { resolve({ latencyMs }); return; }
+                        const apiMessage = parsed?.error?.message || `HTTP ${res.statusCode}`;
+                        const error = new Error(apiMessage);
+                        error.statusCode = res.statusCode;
+                        reject(error);
+                    } catch {
+                        const error = new Error(raw || `HTTP ${res.statusCode}`);
+                        error.statusCode = res.statusCode;
+                        reject(error);
+                    }
+                });
+            });
+            req.on('timeout', () => req.destroy(new Error(`Timeout after ${timeoutMs}ms`)));
+            req.on('error', reject);
+            req.write(payload);
+            req.end();
+        } catch (error) { reject(error); }
+    });
+}
+
+/**
+ * Test a single stored key by id, using its stored model.
+ * Returns { ok, status, message, latencyMs, model }
+ */
+async function testKeyById(id, timeoutMs = 10000) {
+    const apiKeyStore = require('./apiKeyStore.cjs');
+    const checkedAt = new Date().toISOString();
+    try {
+        const stored = await apiKeyStore.getDecryptedKeys();
+        const entry = stored.find(k => k.id === id);
+        if (!entry) {
+            return { ok: false, status: 'unknown', message: `Ключ с id "${id}" не найден`, latencyMs: null, model: null, checkedAt };
+        }
+        const { latencyMs } = await requestGeminiPingWithModel(entry.value, entry.model || 'gemini-2.5-flash', timeoutMs);
+        return { ok: true, status: 'ok', message: 'Ключ активен', latencyMs, model: entry.model || 'gemini-2.5-flash', checkedAt };
+    } catch (error) {
+        const classified = classifyConnectivityError(error);
+        return { ok: false, status: classified.status, message: classified.message, latencyMs: null, model: null, checkedAt };
+    }
+}
+
+/**
  * Загрузка статусов из JSON файла
  */
 async function loadStatusFromFile() {
@@ -269,8 +336,8 @@ async function initialize() {
         return;
     }
     
-    // Загружаем ключи из .env
-    keys = loadKeysFromEnv();
+    // Загружаем ключи из зашифрованного хранилища (с миграцией из env)
+    keys = await loadKeysFromStore();
     
     if (keys.length === 0) {
         logger.error('[ApiKeyManager] No keys available, API features will be disabled');
@@ -344,6 +411,13 @@ function getActiveKey() {
     }
     
     return key;
+}
+
+/**
+ * Получить модель для текущего активного ключа
+ */
+function getActiveKeyModel() {
+    return keyModels[currentKeyIndex] || 'gemini-2.5-flash';
 }
 
 /**
@@ -603,7 +677,15 @@ async function resetAllKeys() {
  * Перезагрузка ключей из .env
  */
 async function reloadFromEnv() {
-    const newKeys = loadKeysFromEnv();
+    return reloadFromStore();
+}
+
+/**
+ * Перезагрузить ключи из зашифрованного хранилища.
+ * Вызывается после CRUD-операций через UI.
+ */
+async function reloadFromStore({ resetIndex = false } = {}) {
+    const newKeys = await loadKeysFromStore();
     
     if (newKeys.length === 0) {
         logger.error('[ApiKeyManager] No keys found in .env after reload');
@@ -612,6 +694,7 @@ async function reloadFromEnv() {
     
     // Обновляем список ключей
     keys = newKeys;
+    // keyModels is already updated inside loadKeysFromStore()
     
     // Обновляем метаданные для новых ключей
     keys.forEach((key, index) => {
@@ -635,12 +718,12 @@ async function reloadFromEnv() {
     }
     
     // Проверяем текущий индекс
-    if (currentKeyIndex >= keys.length) {
+    if (resetIndex || currentKeyIndex >= keys.length) {
         currentKeyIndex = 0;
     }
     
     await saveStatusToFile();
-    logger.info(`[ApiKeyManager] Reloaded ${keys.length} keys from .env`);
+    logger.info(`[ApiKeyManager] Reloaded ${keys.length} keys from store`);
     
     return { success: true, keysCount: keys.length };
 }
@@ -762,15 +845,18 @@ async function testPoolConnectivity(options = {}) {
 const apiKeyManager = {
     initialize,
     getActiveKey,
+    getActiveKeyModel,
     retryWithRotation,
     markKeyAsFailed,
     rotateToNextKey,
     resetKeyStatus,
     resetAllKeys,
     reloadFromEnv,
+    reloadFromStore,
     getPoolStatus,
     testKeyConnectivityByIndex,
     testPoolConnectivity,
+    testKeyById,
     getWorkingKeysCount,
     shouldNotifyUser,
     shouldRotateKey

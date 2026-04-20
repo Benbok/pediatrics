@@ -25,7 +25,7 @@ function getApiKeyManager() {
 }
 
 /**
- * Получает API ключ Gemini (fallback для обратной совместимости)
+ * Получает API ключ Gemini через apiKeyManager
  */
 function getApiKey() {
     const manager = getApiKeyManager();
@@ -33,10 +33,10 @@ function getApiKey() {
         try {
             return manager.getActiveKey();
         } catch (error) {
-            logger.warn('[CDSSService] Failed to get key from manager, using env fallback');
+            logger.warn('[CDSSService] Failed to get key from manager:', error.message);
         }
     }
-    return process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    return null;
 }
 
 /**
@@ -47,9 +47,15 @@ function getBaseUrl() {
 }
 
 /**
- * Получает имя модели из окружения
+ * Получает имя модели — сначала из активного ключа, затем из env
  */
 function getModelName() {
+    const manager = getApiKeyManager();
+    if (manager) {
+        try {
+            return manager.getActiveKeyModel();
+        } catch (_) { /* fall through */ }
+    }
     return process.env.VITE_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 }
 
