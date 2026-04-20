@@ -554,6 +554,74 @@ function setupAuthHandlers() {
         }
     });
 
+    // ── auth:first-run-user-setup ──────────────────────────────────────────────
+    // Создаёт первого пользователя (doctor) на клиентской машине при первом запуске.
+    // Требует: userCount === 0 И валидная лицензия (license.json на диске).
+    // НЕ требует private.pem — это пользовательский сценарий, не администраторский.
+    // Не требует аутентификации.
+    ipcMain.handle('auth:first-run-user-setup', async (_, data) => {
+        try {
+            const { username, password, lastName } = data || {};
+
+            if (!username || username.trim().length < 3) {
+                return { success: false, error: 'Логин должен быть минимум 3 символа' };
+            }
+            if (!password || password.length < 6) {
+                return { success: false, error: 'Пароль должен быть минимум 6 символов' };
+            }
+
+            // Guard 1: no users yet (idempotency — cannot call twice)
+            const count = await prisma.user.count();
+            if (count > 0) {
+                return { success: false, error: 'Первоначальная настройка уже была выполнена' };
+            }
+
+            // Guard 2: valid license must already be imported on this machine.
+            // We reuse checkCurrentLicense from license/handlers.cjs.
+            const { checkCurrentLicense } = require('./license/handlers.cjs');
+            const licenseResult = await checkCurrentLicense();
+            if (!licenseResult.valid && !licenseResult.devMode) {
+                return { success: false, error: 'Лицензия не найдена или недействительна. Сначала импортируйте license.json.' };
+            }
+
+            const passwordHash = await bcrypt.hash(password.trim(), 10);
+
+            const newUser = await prisma.$transaction(async (tx) => {
+                const created = await tx.user.create({
+                    data: {
+                        username: username.trim(),
+                        passwordHash,
+                        lastName: (lastName || '').trim(),
+                        firstName: '',
+                        middleName: '',
+                        isAdmin: false,
+                        isActive: true,
+                    },
+                });
+
+                const roleDoctor = await tx.role.upsert({
+                    where: { key: 'doctor' },
+                    update: {},
+                    create: { key: 'doctor' },
+                });
+
+                await tx.userRole.create({
+                    data: { userId: created.id, roleId: roleDoctor.id },
+                });
+
+                return created;
+            });
+
+            logger.info(`[Auth] First-run user setup complete. Doctor user "${newUser.username}" created.`);
+            logAudit('FIRST_RUN_USER_SETUP', { userId: newUser.id, username: newUser.username });
+
+            return { success: true, username: newUser.username };
+        } catch (err) {
+            logger.error('[Auth] first-run-user-setup error:', err.message);
+            return { success: false, error: err.message };
+        }
+    });
+
     // ── auth:first-run-setup ───────────────────────────────────────────────────
     // Создаёт первого пользователя (admin) при первом запуске.
     // Защищено двойной проверкой: userCount === 0 И приватный ключ уже импортирован.

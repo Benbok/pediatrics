@@ -954,6 +954,7 @@ declare global {
       // AUTH BOOTSTRAP API (no auth required — first run)
       isFirstRun: () => Promise<{ isFirstRun: boolean }>;
       firstRunSetup: (data: { username: string; password: string }) => Promise<{ success: boolean; username?: string; error?: string }>;
+      firstRunUserSetup: (data: { username: string; password: string; lastName?: string }) => Promise<{ success: boolean; username?: string; error?: string }>;
 
       // LOGGER API
       log: (level: string, message: string, metadata?: Record<string, any>) => Promise<void>;

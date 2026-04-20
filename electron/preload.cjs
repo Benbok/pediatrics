@@ -18,8 +18,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     licenseAdminCreateClientBundle: (args) => ipcRenderer.invoke('license-admin:create-client-bundle', args),
 
     // AUTH BOOTSTRAP API (no auth required — used before any users exist)
-    isFirstRun:      ()     => ipcRenderer.invoke('auth:is-first-run'),
-    firstRunSetup:   (data) => ipcRenderer.invoke('auth:first-run-setup', data),
+    isFirstRun:           ()     => ipcRenderer.invoke('auth:is-first-run'),
+    firstRunSetup:        (data) => ipcRenderer.invoke('auth:first-run-setup', data),
+    // User-side first run: creates doctor account using admin-issued credentials + valid license
+    firstRunUserSetup:    (data) => ipcRenderer.invoke('auth:first-run-user-setup', data),
 
     // PATIENTS MODULE API
     getChildren: () => ipcRenderer.invoke('db:get-children'),

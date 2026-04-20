@@ -27,6 +27,7 @@ const { logger, logAudit } = require('./logger.cjs');
 const { setupLicenseHandlers } = require('./license/handlers.cjs');
 const { setupLicenseAdminHandlers } = require('./license/admin-handlers.cjs');
 const { setupLlmHandlers } = require('./modules/llm/handlers.cjs');
+const { runMigrations } = require('./migrate-db.cjs');
 const isDev = !app.isPackaged;
 
 function createWindow() {
@@ -58,6 +59,7 @@ function createWindow() {
     });
 
     if (isDev) {
+        win.webContents.session.clearCache();
         win.loadURL('http://localhost:5173');
         win.webContents.openDevTools();
     } else {
@@ -68,10 +70,22 @@ function createWindow() {
 app.whenReady().then(async () => {
     logger.info('[Main] ========== APP READY ==========');
 
+    // Apply DB migrations FIRST — before any Prisma queries (runs synchronously via better-sqlite3)
+    if (!isDev) {
+        logger.info('[Main] Running database migrations...');
+        runMigrations(dbPath, logger);
+        logger.info('[Main] Database migrations complete');
+    }
+
     // Register license handlers FIRST (no auth required, needed before window for checkLicense IPC)
     setupLicenseHandlers();
     setupLicenseAdminHandlers();
     logger.info('[Main] License handlers registered');
+
+    // Register auth handlers before creating window to avoid IPC race on login/check-session.
+    // DB-dependent operations still happen inside handlers at call time.
+    setupAuthHandlers();
+    logger.info('[Main] setupAuthHandlers completed (early registration)');
 
     // Logger IPC: renderer uses this immediately on load — register before window
     ipcMain.handle('logger:log', async (_, level, message, metadata) => {
@@ -100,9 +114,6 @@ app.whenReady().then(async () => {
     await initializeDatabase();
     await seedNutritionData();
     logger.info('[Main] Database initialization completed');
-
-    setupAuthHandlers();
-    logger.info('[Main] setupAuthHandlers completed');
 
     // ── Background init — CDSS indexes, all feature handlers, API keys ──────────
     (async () => {

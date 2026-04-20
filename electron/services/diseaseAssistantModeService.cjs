@@ -5,11 +5,11 @@
  *
  * Единая точка маршрутизации запросов AI assistant для diseases:
  * - mode=rag    -> retrieval + grounding (ragPipelineService)
- * - mode=direct -> прямой запрос в local LLM без RAG-контекста
+ * - mode=direct -> прямой запрос к провайдеру из AI routing без RAG-контекста
  */
 
 const { logger } = require('../logger.cjs');
-const localLlmService = require('./localLlmService.cjs');
+const llmRouter = require('./llmRouter.cjs');
 
 const DIRECT_SYSTEM_PROMPT = `Ты — медицинский ассистент для врача-педиатра.
 
@@ -47,10 +47,31 @@ function buildDirectMessages(query, history = []) {
     ];
 }
 
+function buildDirectGenerationOptions(llmProvider) {
+    const options = { maxTokens: 900, temperature: 0.3, topP: 0.9 };
+    // Some Gemini models require thinking mode and reject thinkingBudget=0.
+    if (llmProvider?.providerType === 'gemini') options.thinkingBudget = 128;
+    return options;
+}
+
+function mapDirectGenerationError(errorMessage, llmProvider) {
+    const raw = String(errorMessage || '').trim();
+    if (!raw) {
+        return llmProvider?.providerType === 'gemini'
+            ? 'Ошибка Gemini API. Проверьте API ключ и сеть.'
+            : 'Локальная модель недоступна. Запустите LM Studio.';
+    }
+    if (/fetch failed|ECONNREFUSED|ENOTFOUND|network/i.test(raw)) {
+        return llmProvider?.providerType === 'gemini'
+            ? 'Gemini API недоступен. Проверьте API ключ и сеть.'
+            : 'Локальная модель LM Studio недоступна. Запустите LM Studio.';
+    }
+    return raw;
+}
+
 async function runAssistantQuery({ query, diseaseId, history = [], mode = 'rag' }, deps = {}) {
     const normalizedMode = normalizeAssistantMode(mode);
     const ragService = deps.ragPipelineService || getRagPipelineService();
-    const llmService = deps.localLlmService || localLlmService;
 
     if (normalizedMode === 'rag') {
         const result = await ragService.ragQuery({ query, diseaseId, history });
@@ -63,15 +84,16 @@ async function runAssistantQuery({ query, diseaseId, history = [], mode = 'rag' 
     });
 
     const messages = buildDirectMessages(query, history);
+    const llmProvider = await llmRouter.getProvider('rag');
     let answerText = '';
-    const generation = await llmService.generate(
+    const generation = await llmProvider.generate(
         messages,
-        { maxTokens: 900, temperature: 0.3, topP: 0.9 },
+        buildDirectGenerationOptions(llmProvider),
         (token) => { answerText += token; }
     );
 
     if (generation.status === 'error') {
-        throw new Error(generation.error || 'LM Studio generation failed');
+        throw new Error(mapDirectGenerationError(generation.error, llmProvider));
     }
     if (generation.status === 'aborted') {
         throw new Error('Generation aborted');
@@ -88,7 +110,6 @@ async function runAssistantQuery({ query, diseaseId, history = [], mode = 'rag' 
 async function runAssistantQueryStream({ query, diseaseId, history = [], mode = 'rag', onToken }, deps = {}) {
     const normalizedMode = normalizeAssistantMode(mode);
     const ragService = deps.ragPipelineService || getRagPipelineService();
-    const llmService = deps.localLlmService || localLlmService;
 
     if (normalizedMode === 'rag') {
         const result = await ragService.ragQueryStream({ query, diseaseId, history, onToken });
@@ -101,16 +122,17 @@ async function runAssistantQueryStream({ query, diseaseId, history = [], mode = 
     });
 
     const messages = buildDirectMessages(query, history);
-    const generation = await llmService.generate(
+    const llmProvider = await llmRouter.getProvider('rag');
+    const generation = await llmProvider.generate(
         messages,
-        { maxTokens: 900, temperature: 0.3, topP: 0.9 },
+        buildDirectGenerationOptions(llmProvider),
         (token) => {
             if (typeof onToken === 'function') onToken(token);
         }
     );
 
     if (generation.status === 'error') {
-        throw new Error(generation.error || 'LM Studio generation failed');
+        throw new Error(mapDirectGenerationError(generation.error, llmProvider));
     }
     if (generation.status === 'aborted') {
         throw new Error('Generation aborted');
