@@ -162,7 +162,11 @@ app.whenReady().then(async () => {
     // Setup API Key handlers
     const { setupApiKeyHandlers } = require('./modules/apiKeys/handlers.cjs');
     setupApiKeyHandlers();
-        logger.info('[Main] API Key handlers registered');
+    logger.info('[Main] API Key handlers registered');
+
+    const { setupAiRoutingHandlers } = require('./modules/aiRouting/handlers.cjs');
+    setupAiRoutingHandlers();
+    logger.info('[Main] AI Routing handlers registered');
 
         logger.info('[Main] Background setup complete');
     })().catch(err => logger.error('[Main] Background setup failed:', err));

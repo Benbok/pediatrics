@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag, Building2, Upload, FileCheck, ChevronDown, ChevronRight, Eye, EyeOff, Pencil, Star } from 'lucide-react';
 import { apiKeyService, ApiKeysConnectivityReport, PoolStatus, ApiKeyEntry } from '../../services/apiKeyService';
+import { aiRoutingService, AiRoutingEntry } from '../../services/aiRoutingService';
 import { organizationService, getDefaultOrganizationProfile } from '../../services/organization.service';
 import { vaccinationService } from '../../services/vaccination.service';
 import { PrettySelect, type SelectOption } from '../diseases/components/PrettySelect';
@@ -180,6 +181,11 @@ export const SettingsModule: React.FC = () => {
     const [testingKeyId, setTestingKeyId] = useState<string | null>(null);
     const [keyTestResults, setKeyTestResults] = useState<Record<string, { ok: boolean; message: string; latencyMs: number | null }>>({});
 
+    // AI Routing state
+    const [aiRouting, setAiRouting] = useState<AiRoutingEntry[]>([]);
+    const [isLoadingRouting, setIsLoadingRouting] = useState(false);
+    const [savingRoutingId, setSavingRoutingId] = useState<string | null>(null);
+
     // Cache State
     const [cacheStats, setCacheStats] = useState<any>(null);
     const [isLoadingCache, setIsLoadingCache] = useState(false);
@@ -290,6 +296,7 @@ export const SettingsModule: React.FC = () => {
         // Load pool status and stored keys on mount
         loadPoolStatus();
         loadKeysList();
+        loadRouting();
         
         // Load cache stats
         loadCacheStats();
@@ -628,6 +635,30 @@ export const SettingsModule: React.FC = () => {
             setKeyTestResults(prev => ({ ...prev, [id]: { ok: false, message: error?.message || 'Ошибка', latencyMs: null } }));
         } finally {
             setTestingKeyId(null);
+        }
+    };
+
+    const loadRouting = useCallback(async () => {
+        setIsLoadingRouting(true);
+        try {
+            const data = await aiRoutingService.getAll();
+            setAiRouting(data);
+        } catch (error: any) {
+            console.error('Failed to load AI routing:', error);
+        } finally {
+            setIsLoadingRouting(false);
+        }
+    }, []);
+
+    const handleSetRouting = async (featureId: string, provider: 'local' | 'gemini') => {
+        setSavingRoutingId(featureId);
+        try {
+            await aiRoutingService.set(featureId, provider);
+            setAiRouting(prev => prev.map(r => r.id === featureId ? { ...r, provider } : r));
+        } catch (error: any) {
+            console.error('Failed to update AI routing:', error);
+        } finally {
+            setSavingRoutingId(null);
         }
     };
 
@@ -1172,6 +1203,58 @@ export const SettingsModule: React.FC = () => {
                     </div>
                     {addKeyError && (
                         <p className="text-sm text-red-600 dark:text-red-400">{addKeyError}</p>
+                    )}
+                </div>
+            </div>
+
+            {/* AI Provider Routing Section */}
+            <div className="mt-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                            <Zap className="text-purple-600 dark:text-purple-400" size={20} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">AI Провайдер по функциям</h2>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Выберите движок для каждой функции: локальный ИИ (LM Studio) или Gemini API</p>
+                        </div>
+                    </div>
+                    {isLoadingRouting && <Loader size={16} className="animate-spin text-slate-400" />}
+                </div>
+                <div className="space-y-3">
+                    {aiRouting.map(route => (
+                        <div key={route.id} className="flex items-center justify-between gap-4 p-3 rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1">{route.label}</span>
+                            <div className="flex items-center gap-1 bg-slate-200 dark:bg-slate-700 rounded-lg p-1">
+                                <button
+                                    onClick={() => handleSetRouting(route.id, 'local')}
+                                    disabled={savingRoutingId === route.id}
+                                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                                        route.provider === 'local'
+                                            ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm'
+                                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                    } disabled:opacity-50`}
+                                >
+                                    {savingRoutingId === route.id && route.provider !== 'local' ? <Loader size={12} className="animate-spin inline mr-1" /> : null}
+                                    Локальный ИИ
+                                </button>
+                                <button
+                                    onClick={() => handleSetRouting(route.id, 'gemini')}
+                                    disabled={savingRoutingId === route.id}
+                                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                                        route.provider === 'gemini'
+                                            ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 shadow-sm'
+                                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                    } disabled:opacity-50`}
+                                >
+                                    {savingRoutingId === route.id && route.provider !== 'gemini' ? <Loader size={12} className="animate-spin inline mr-1" /> : null}
+                                    Gemini API
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                    {aiRouting.length === 0 && !isLoadingRouting && (
+                        <p className="text-sm text-slate-400 text-center py-2">Настройки маршрутизации недоступны</p>
                     )}
                 </div>
             </div>

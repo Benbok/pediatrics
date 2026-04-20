@@ -162,7 +162,10 @@ export const VisitFormPage: React.FC = () => {
     // LLM field refinement
     const [refiningFields, setRefiningFields] = useState<Set<string>>(new Set());
     const [streamPreview, setStreamPreview] = useState<Record<string, string>>({});
-    const [llmAvailable, setLlmAvailable] = useState<boolean | null>(null);
+    const [refineAiAvailable, setRefineAiAvailable] = useState<boolean | null>(null);
+    const [refineAiProvider, setRefineAiProvider] = useState<'local' | 'gemini'>('local');
+    const [analysisAiAvailable, setAnalysisAiAvailable] = useState<boolean | null>(null);
+    const [analysisAiProvider, setAnalysisAiProvider] = useState<'local' | 'gemini'>('local');
     const [pendingRefinements, setPendingRefinements] = useState<Record<string, PendingFieldRefinement>>({});
 
     // Рекомендации
@@ -663,25 +666,39 @@ export const VisitFormPage: React.FC = () => {
         }
     }, [child, formData, currentUser, recommendations]);
 
-    const checkLlmAvailability = useCallback(async () => {
-        if (!window.electronAPI?.llm?.healthCheck) {
-            setLlmAvailable(false);
+    const checkFeatureAvailability = useCallback(async (
+        featureId: 'refine-field' | 'visit-analysis',
+        onAvailable: (v: boolean) => void,
+        onProvider: (p: 'local' | 'gemini') => void,
+    ) => {
+        if (!window.electronAPI?.llm?.checkFeature) {
+            onAvailable(false);
             return false;
         }
 
         try {
-            const health = await window.electronAPI.llm.healthCheck();
-            setLlmAvailable(Boolean(health.available));
-            return Boolean(health.available);
+            const result = await window.electronAPI.llm.checkFeature(featureId);
+            onAvailable(Boolean(result.available));
+            onProvider(result.provider ?? 'local');
+            return Boolean(result.available);
         } catch {
-            setLlmAvailable(false);
+            onAvailable(false);
             return false;
         }
     }, []);
 
+    const checkRefineAvailability = useCallback(async () => {
+        return checkFeatureAvailability('refine-field', setRefineAiAvailable, setRefineAiProvider);
+    }, [checkFeatureAvailability]);
+
+    const checkAnalysisAvailability = useCallback(async () => {
+        return checkFeatureAvailability('visit-analysis', setAnalysisAiAvailable, setAnalysisAiProvider);
+    }, [checkFeatureAvailability]);
+
     useEffect(() => {
-        checkLlmAvailability();
-    }, [checkLlmAvailability]);
+        checkRefineAvailability();
+        checkAnalysisAvailability();
+    }, [checkRefineAvailability, checkAnalysisAvailability]);
 
     const handleAcceptRefine = useCallback((field: string) => {
         const proposal = pendingRefinements[field];
@@ -718,9 +735,13 @@ export const VisitFormPage: React.FC = () => {
         }
 
         // Check LM Studio availability before starting
-        const isAvailable = await checkLlmAvailability();
+        const isAvailable = await checkRefineAvailability();
         if (!isAvailable) {
-            setError('LM Studio не запущен или не доступен. Запустите LM Studio и загрузите модель.');
+            if (refineAiProvider === 'gemini') {
+                setError('Gemini API недоступен. Проверьте API ключи в настройках.');
+            } else {
+                setError('Локальный ИИ недоступен. Запустите LM Studio и загрузите модель.');
+            }
             return;
         }
 
@@ -796,6 +817,16 @@ export const VisitFormPage: React.FC = () => {
     const handleSave = async (status: 'draft' | 'completed' = 'draft') => {
         setIsSaving(true);
         setError(null);
+
+        const analysisAvailable = await checkAnalysisAvailability();
+        if (!analysisAvailable) {
+            if (analysisAiProvider === 'gemini') {
+                setError('Gemini API недоступен для анализа. Проверьте API ключи в настройках.');
+            } else {
+                setError('Локальный ИИ недоступен для анализа. Запустите LM Studio и загрузите модель.');
+            }
+            return;
+        }
 
         // Проверка наличия основного диагноза
         // Диагноз может быть объектом или строкой (JSON), проверяем оба варианта
@@ -2096,7 +2127,10 @@ export const VisitFormPage: React.FC = () => {
                             onRefine={handleRefineField}
                             refiningFields={refiningFields}
                             streamPreview={streamPreview}
-                            llmAvailable={llmAvailable}
+                            refineAiAvailable={refineAiAvailable}
+                            refineAiProvider={refineAiProvider}
+                            analysisAiAvailable={analysisAiAvailable}
+                            analysisAiProvider={analysisAiProvider}
                             pendingRefinements={pendingRefinements}
                             onAcceptRefine={handleAcceptRefine}
                             onRejectRefine={handleRejectRefine}

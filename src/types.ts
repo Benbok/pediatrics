@@ -959,6 +959,7 @@ declare global {
       log: (level: string, message: string, metadata?: Record<string, any>) => Promise<void>;
       llm: {
         healthCheck: () => Promise<{ available: boolean; models?: string[]; endpoint?: string }>;
+        checkFeature: (featureId: string) => Promise<{ available: boolean; provider: 'local' | 'gemini'; reason?: string; endpoint?: string; models?: string[] }>;
         generate: (messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>, options?: { maxTokens?: number; temperature?: number; topP?: number; stop?: string[]; model?: string }) => Promise<{ status: 'completed' | 'aborted' | 'error'; error?: string }>;
         abort: () => Promise<{ success: boolean }>;
         getStatus: () => Promise<{ activeGenerations: number; isGenerating: boolean; endpoint: string }>;
@@ -1288,6 +1289,10 @@ declare global {
       updateApiKeyModel: (id: string, model: string) => Promise<boolean>;
       setApiKeyPrimary: (id: string) => Promise<boolean>;
       testSingleApiKey: (id: string) => Promise<{ ok: boolean; status: string; message: string; latencyMs: number | null; model: string | null; checkedAt: string }>;
+
+      // AI ROUTING API
+      getAiRouting: () => Promise<Array<{ id: string; label: string; provider: 'local' | 'gemini' }>>;
+      setAiRouting: (featureId: string, provider: 'local' | 'gemini') => Promise<{ ok: boolean }>;
 
       // NUTRITION MODULE API
       getNutritionAgeNorms: () => Promise<NutritionAgeNorm[]>;

@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, Send, Square, ChevronDown, ChevronUp, Loader2, Zap, BookOpen, Sparkles } from 'lucide-react';
+import { Bot, Send, Square, ChevronDown, ChevronUp, Loader2, Zap, BookOpen, Sparkles, Wifi, WifiOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '../../../components/ui/Button';
-import { LlmStatusBadge } from '../../../components/ui/LlmStatusBadge';
 import { useRagQuery } from '../hooks/useRagQuery';
-import { useLlmStatus } from '../../../hooks/useLlmStatus';
+import { useRagAiStatus } from '../../../hooks/useRagAiStatus';
 import { RagSource, QaCacheEntry, QaTemplate, RagMode } from '../../../types';
 import { clsx } from 'clsx';
 import { computeChipEntry, getInProgressChipIds } from '../../../services/rag.service';
@@ -121,8 +120,9 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
     const [activeChip, setActiveChip] = useState<QaCacheEntry | null>(null);
     const [chipSourcesOpen, setChipSourcesOpen] = useState(false);
 
-    const llmStatus = useLlmStatus();
-    const isLlmOffline = llmStatus.available === false;
+    const ragAiStatus = useRagAiStatus();
+    const isAiOffline = ragAiStatus.available === false;
+    const ragProvider = ragAiStatus.provider;
     const isRagMode = assistantMode === 'rag';
 
     const {
@@ -263,16 +263,39 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
         <div className="flex flex-col h-full min-h-[420px] gap-3">
             {/* Header */}
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <Bot className="h-4 w-4 text-indigo-500" />
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">ИИ помощник</span>
+                    <span className={clsx(
+                        'text-[10px] font-semibold px-1.5 py-0.5 rounded-full border',
+                        ragProvider === 'gemini'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                    )}>
+                        {ragProvider === 'gemini' ? 'Gemini' : 'Local'}
+                    </span>
                     <span className="text-xs text-gray-400 dark:text-gray-500">
                         {isRagMode
                             ? '— режим RAG: ответы только по прикреплённым документам'
-                            : '— режим без RAG: прямой ответ локальной LLM'}
+                            : `— режим без RAG: прямой ответ ${ragProvider === 'gemini' ? 'Gemini API' : 'локальной LLM'}`}
                     </span>
                 </div>
-                <LlmStatusBadge status={llmStatus} />
+                {ragAiStatus.available === null ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Проверка...
+                    </span>
+                ) : ragAiStatus.available ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <Wifi className="h-3 w-3 shrink-0" />
+                        {ragProvider === 'gemini' ? 'API доступен' : 'Модель активна'}
+                    </span>
+                ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400">
+                        <WifiOff className="h-3 w-3 shrink-0" />
+                        {ragProvider === 'gemini' ? 'API недоступен' : 'Модель недоступна'}
+                    </span>
+                )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -305,9 +328,11 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
             </div>
 
             {/* Offline warning bar */}
-            {isLlmOffline && (
+            {isAiOffline && (
                 <div className="flex items-center gap-2 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-600 dark:text-red-400">
-                    Локальная модель LM Studio не запущена или недоступна. Запросы к ИИ временно невозможны.
+                    {ragProvider === 'gemini'
+                        ? 'Gemini API недоступен. Проверьте API ключ в Настройках → API.'
+                        : 'Локальная модель LM Studio не запущена или недоступна. Запустите LM Studio.'}
                 </div>
             )}
 
@@ -322,7 +347,7 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                                 <button
                                     key={template.templateId}
                                     onClick={() => handleChipClick(template)}
-                                    disabled={isLoading || isLlmOffline}
+                                    disabled={isLoading || isAiOffline}
                                     className={clsx(
                                         'text-xs px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1',
                                         cached && activeChip?.templateId === template.templateId
@@ -442,11 +467,11 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                     value={inputValue}
                     onChange={e => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    disabled={isBusy || isLlmOffline}
+                    disabled={isBusy || isAiOffline}
                     rows={2}
                     placeholder={isRagMode
                         ? 'Введите вопрос по документам... (Enter — отправить, Shift+Enter — новая строка)'
-                        : 'Введите вопрос к локальной LLM... (Enter — отправить, Shift+Enter — новая строка)'}
+                        : `Введите вопрос к ${ragProvider === 'gemini' ? 'Gemini API' : 'локальной LLM'}... (Enter — отправить, Shift+Enter — новая строка)`}
                     className={clsx(
                         'flex-1 resize-none rounded-lg border px-3 py-2 text-sm',
                         'border-gray-300 dark:border-gray-600',
@@ -470,7 +495,7 @@ export const DiseaseAiAssistant: React.FC<Props> = ({ diseaseId }) => {
                 ) : (
                     <Button
                         onClick={handleSend}
-                        disabled={!inputValue.trim() || loading || isLlmOffline}
+                        disabled={!inputValue.trim() || loading || isAiOffline}
                         size="sm"
                         title="Отправить (Enter)"
                         className="shrink-0 h-[56px]"

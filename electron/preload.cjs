@@ -209,6 +209,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // LOCAL LLM API (HTTP client to LM Studio)
     llm: {
         healthCheck: () => ipcRenderer.invoke('llm:health-check'),
+        checkFeature: (featureId) => ipcRenderer.invoke('llm:check-feature', { featureId }),
         generate: (messages, options) => ipcRenderer.invoke('llm:generate', { messages, options }),
         abort: () => ipcRenderer.invoke('llm:abort'),
         getStatus: () => ipcRenderer.invoke('llm:get-status'),
@@ -258,6 +259,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateApiKeyModel: (id, model) => ipcRenderer.invoke('api-keys:update-model', { id, model }),
     setApiKeyPrimary: (id) => ipcRenderer.invoke('api-keys:set-primary', { id }),
     testSingleApiKey: (id) => ipcRenderer.invoke('api-keys:test-key', { id }),
+
+    // AI ROUTING API
+    getAiRouting: () => ipcRenderer.invoke('ai-routing:get-all'),
+    setAiRouting: (featureId, provider) => ipcRenderer.invoke('ai-routing:set', { featureId, provider }),
 
     // BACKUP API
     createBackup: () => ipcRenderer.invoke('db:create-backup'),

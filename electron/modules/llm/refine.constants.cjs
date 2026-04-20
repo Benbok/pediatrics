@@ -85,10 +85,41 @@ const REFINE_SECTIONS = Object.freeze({
   }),
 });
 
-// Динамический лимит: минимум 128, подстраивается под длину ввода.
-// Русский текст ≈2 символа/токен, выход может быть чуть длиннее из-за знаков.
+// ── Stage Combined: single-pass spelling + punctuation for cloud models ─────
+// Used instead of the two-stage pipeline when the provider is a cloud LLM
+// (e.g. Gemini). Cloud models handle both tasks well in one pass and tend to
+// truncate output when asked to do repetitive word-by-word tasks stage by stage.
+const COMBINED_STAGE = Object.freeze({
+  systemPrompt:
+    'Ты — медицинский редактор и корректор русского текста.\n' +
+    'Твои задачи (обе выполняются за один проход):\n' +
+    '1. Исправь орфографические ошибки в каждом слове.\n' +
+    '2. Расставь знаки препинания и заглавные буквы.\n' +
+    'Строгие правила:\n' +
+    '- Сохрани ВСЕ слова: не добавляй и не удаляй ни одного.\n' +
+    '- Сохрани исходный порядок слов.\n' +
+    '- Числа и единицы измерения оставь точно как есть (37,5 — сохрани запятую).\n' +
+    '- Медицинские аббревиатуры (ОРВИ, ЧСС, SpO2, АД) оставь заглавными.\n' +
+    '- Верни результат одной строкой.\n' +
+    '- НЕ добавляй заголовки, пояснения, вводные слова или метки полей.\n' +
+    'Пример:\n' +
+    'Вход: рибёнок кашляит 3 дня насморк силный тимпература 38 слабасть апетит снижен\n' +
+    'Выход: Ребёнок кашляет 3 дня, насморк сильный, температура 38, слабость, аппетит снижен.\n' +
+    'Верни ТОЛЬКО отредактированный текст.',
+  userPromptPrefix: 'Исправь орфографию и пунктуацию:\n',
+  generation: Object.freeze({
+    temperature: 0.1,
+    topP: 0.9,
+    stop: [],
+    thinkingBudget: 0,
+  }),
+});
+
+// Динамический лимит с запасом для Gemini и русского текста.
+// В cloud-моделях output может токенизироваться плотнее, поэтому
+// используем более консервативный budget, чтобы не получать обрезанные ответы.
 function calcRefineMaxTokens(inputLength) {
-  return Math.min(1024, Math.max(128, Math.ceil((inputLength / 2) * 1.6)));
+  return Math.min(2048, Math.max(256, Math.ceil(inputLength * 2.2)));
 }
 
 const ALLOWED_REFINE_FIELDS = Object.freeze(
@@ -133,6 +164,37 @@ function buildPunctuationMessages(field, text) {
   ];
 }
 
+// Combined single-pass: spelling + punctuation for cloud models
+function buildCombinedRefineMessages(field, text) {
+  const section = getRefineSectionByField(field);
+  const fieldConfig = getRefineFieldConfig(field);
+  if (!section) throw new Error('LLM_REFINE_SECTION_NOT_FOUND');
+  if (!fieldConfig) throw new Error('LLM_REFINE_FIELD_NOT_FOUND');
+  return [
+    {
+      role: 'system',
+      content:
+        COMBINED_STAGE.systemPrompt + '\n' +
+        `Это поле: "${fieldConfig.label}". Стиль: ${fieldConfig.styleGuidance}.`,
+    },
+    {
+      role: 'user',
+      content: `${COMBINED_STAGE.userPromptPrefix}${text}`,
+    },
+  ];
+}
+
+function buildCombinedGenerationOptions(inputText, requestedMaxTokens) {
+  const inputLen = typeof inputText === 'string' ? inputText.length : 0;
+  const calculatedMaxTokens = calcRefineMaxTokens(inputLen);
+  return {
+    maxTokens: typeof requestedMaxTokens === 'number'
+      ? Math.min(requestedMaxTokens, calculatedMaxTokens)
+      : calculatedMaxTokens,
+    ...COMBINED_STAGE.generation,
+  };
+}
+
 // Legacy single-pass builder (kept for compatibility)
 function buildRefineMessages(field, text) {
   return buildPunctuationMessages(field, text);
@@ -168,11 +230,14 @@ module.exports = {
   REFINE_SECTIONS,
   SPELLING_STAGE,
   PUNCTUATION_STAGE,
+  COMBINED_STAGE,
   ALLOWED_REFINE_FIELDS,
   getRefineSectionByField,
   getRefineFieldConfig,
   buildSpellingMessages,
   buildPunctuationMessages,
+  buildCombinedRefineMessages,
+  buildCombinedGenerationOptions,
   buildRefineMessages,
   buildSpellingGenerationOptions,
   buildPunctuationGenerationOptions,

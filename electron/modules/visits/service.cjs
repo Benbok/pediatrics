@@ -4,6 +4,8 @@ const { z } = require('zod');
 const { calculateBMI, calculateBSA, validateAnthropometry } = require('../../utils/anthropometry.cjs');
 const { normalizeText, normalizeContraindicationsText } = require('../../utils/cdssVocabulary.cjs');
 const { parseComplaintsLocal } = require('../../services/cdssLocalLlmService.cjs');
+const { parseComplaints } = require('../../services/cdssService.cjs');
+const aiRoutingStore = require('../../services/aiRoutingStore.cjs');
 const { DiseaseService } = require('../diseases/service.cjs');
 const { encrypt, decrypt } = require('../../crypto.cjs');
 const { MAX_FALLBACK_CONFIDENCE, MIN_FALLBACK_MATCHES, MAX_FALLBACK_SUGGESTIONS } = require('../../config/cdssConfig.cjs');
@@ -647,9 +649,12 @@ const VisitService = {
             const ageMonths = (now.getFullYear() - birthDate.getFullYear()) * 12 +
                 (now.getMonth() - birthDate.getMonth());
 
-            // 2. Парсим клинические данные через локальную LLM
-            logger.info(`[VisitService] Parsing clinical data for visit ${visitId}`);
-            const parsed = await parseComplaintsLocal(
+            // 2. Парсим клинические данные через выбранный AI-провайдер
+            const provider = await aiRoutingStore.get('visit-analysis').catch(() => 'local');
+            const parseClinicalData = provider === 'gemini' ? parseComplaints : parseComplaintsLocal;
+
+            logger.info(`[VisitService] Parsing clinical data for visit ${visitId}`, { provider });
+            const parsed = await parseClinicalData(
                 combinedClinicalText,
                 ageMonths,
                 visit.currentWeight || null

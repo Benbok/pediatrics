@@ -6,10 +6,13 @@ const { z } = require('zod');
 const { ensureAuthenticated } = require('../../auth.cjs');
 const { logger } = require('../../logger.cjs');
 const localLlmService = require('../../services/localLlmService.cjs');
+const llmRouter = require('../../services/llmRouter.cjs');
 const {
     ALLOWED_REFINE_FIELDS,
     buildSpellingMessages,
     buildPunctuationMessages,
+    buildCombinedRefineMessages,
+    buildCombinedGenerationOptions,
     buildSpellingGenerationOptions,
     buildPunctuationGenerationOptions,
     calcRefineMaxTokens,
@@ -60,6 +63,7 @@ function normalizeDateLikeSequences(text) {
 
 function collapseWhitespace(text) {
     return String(text ?? '')
+        .replace(/[\r\n]+/g, ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
 }
@@ -115,7 +119,7 @@ function buildSafeFallbackText(text) {
 
 // Split text into chunks of whole sentences, each under maxChunkChars.
 // This prevents token overflow for long inputs and improves per-sentence quality.
-const REFINE_CHUNK_CHARS = 200;
+const REFINE_CHUNK_CHARS = 160;
 
 function splitIntoChunks(text, maxChunkChars = REFINE_CHUNK_CHARS) {
     // Split on sentence boundaries: ". ", "! ", "? " or end of string
@@ -162,6 +166,17 @@ function validateRefinementOutput(sourceText, candidateText) {
         return finalizeValidation({ isSafe: false, reason: 'empty-output' });
     }
 
+    // Guard against truncated model outputs (typically max-tokens cut).
+    // Punctuation stage can shrink text a bit, but drastic drops are suspicious.
+    if (source.length > 40 && candidate.length < source.length * 0.6) {
+        logger.warn('[LlmHandlers] Refine output is unexpectedly short', {
+            sourceLength: source.length,
+            candidateLength: candidate.length,
+            ratio: Number((candidate.length / source.length).toFixed(3)),
+        });
+        return finalizeValidation({ isSafe: false, reason: 'too-short-output' });
+    }
+
     const sourceNumericValues = extractNumericValues(source);
     const candidateNumericValues = extractNumericValues(candidate);
     if (sourceNumericValues.join('|') !== candidateNumericValues.join('|')) {
@@ -181,6 +196,11 @@ function setupLlmHandlers() {
     // ── Health check ──────────────────────────────────────────────────────────
     ipcMain.handle('llm:health-check', ensureAuthenticated(async () => {
         return localLlmService.healthCheck();
+    }));
+
+    // Routing-aware health check for a specific feature
+    ipcMain.handle('llm:check-feature', ensureAuthenticated(async (_, { featureId }) => {
+        return llmRouter.checkFeatureHealth(featureId);
     }));
 
     ipcMain.handle('llm:get-status', ensureAuthenticated(async () => {
@@ -216,7 +236,7 @@ function setupLlmHandlers() {
     }));
 
     ipcMain.handle('llm:abort', ensureAuthenticated(async () => {
-        localLlmService.abort();
+        llmRouter.abortAll();
         return { success: true };
     }));
 
@@ -239,25 +259,77 @@ function setupLlmHandlers() {
         logger.info('[LlmHandlers] Starting two-stage field refinement', { field, textLength: text.length });
 
         try {
+            // Resolve provider once per request (local or Gemini based on routing)
+            const llmProvider = await llmRouter.getProvider('refine-field');
+
             const sendToken = (token) => {
                 if (event.sender && !event.sender.isDestroyed()) {
                     event.sender.send('llm:field-refine-token', { field, token });
                 }
             };
 
+            // ── Cloud LLM (Gemini): single combined pass ──────────────────────
+            // Two-stage spelling→punctuation pipeline causes truncation with cloud
+            // models (they stop after the first sentence). Use one combined prompt.
+            if (llmProvider.providerType === 'gemini') {
+                logger.info('[LlmHandlers] Using single-pass refine for cloud provider', { field });
+                const flatText = collapseWhitespace(text);
+                const messages = buildCombinedRefineMessages(field, flatText);
+                const maxTokens = calcRefineMaxTokens(flatText.length);
+                let combined = '';
+
+                const result = await llmProvider.generate(
+                    messages,
+                    buildCombinedGenerationOptions(flatText, maxTokens),
+                    (token) => {
+                        combined += token;
+                        sendToken(token);
+                    }
+                );
+
+                if (result.status !== 'completed') {
+                    logger.info('[LlmHandlers] Combined refine aborted', { field, status: result.status });
+                    return result;
+                }
+
+                const normalizedCombined = postProcessRefinementOutput(combined);
+                logger.info('[LlmHandlers] Combined refine raw output', {
+                    field,
+                    rawLength: combined.length,
+                    normalizedLength: normalizedCombined.length,
+                    raw: combined.slice(0, 200),
+                });
+                const validation = validateRefinementOutput(flatText, normalizedCombined);
+                if (!validation.isSafe) {
+                    logger.warn('[LlmHandlers] Combined refine unsafe, using safe fallback', {
+                        field, reason: validation.reason,
+                    });
+                    return { status: 'completed', text: normalizedSourceText, usedFallback: true };
+                }
+
+                logger.info('[LlmHandlers] Single-pass refinement completed', {
+                    field, originalLength: text.length, finalLength: normalizedCombined.length,
+                });
+                return { status: 'completed', text: normalizedCombined, usedFallback: false };
+            }
+
+            // ── Local LLM: two-stage pipeline ─────────────────────────────────
             // ── Stage 1: Spelling correction (per chunk) ─────────────────────
             const chunks = splitIntoChunks(text);
             const spellingCorrectedChunks = [];
 
             for (let i = 0; i < chunks.length; i++) {
                 const chunk = chunks[i];
-                const messages = buildSpellingMessages(chunk);
-                const maxTokens = calcRefineMaxTokens(chunk.length);
+                // Flatten newlines to spaces: spelling is word-level only and
+                // embedded line breaks cause cloud models to stop after the first line.
+                const flatChunk = collapseWhitespace(chunk);
+                const messages = buildSpellingMessages(flatChunk);
+                const maxTokens = calcRefineMaxTokens(flatChunk.length);
                 let corrected = '';
 
-                const result = await localLlmService.generate(
+                const result = await llmProvider.generate(
                     messages,
-                    buildSpellingGenerationOptions(chunk, maxTokens),
+                    buildSpellingGenerationOptions(flatChunk, maxTokens),
                     (token) => { corrected += token; }
                 );
 
@@ -268,15 +340,15 @@ function setupLlmHandlers() {
 
                 const trimmed = collapseWhitespace(corrected);
                 // Validate: numbers must be preserved
-                const validation = validateRefinementOutput(chunk, trimmed);
+                const validation = validateRefinementOutput(flatChunk, trimmed);
                 if (!validation.isSafe) {
                     logger.warn('[LlmHandlers] Spelling stage unsafe, using source chunk', {
                         field, chunk: i, reason: validation.reason,
                     });
-                    spellingCorrectedChunks.push(chunk);
+                    spellingCorrectedChunks.push(flatChunk);
                 } else {
                     spellingCorrectedChunks.push(trimmed);
-                    logger.info('[LlmHandlers] Spelling stage chunk completed', { field, chunk: i, original: chunk, corrected: trimmed });
+                    logger.info('[LlmHandlers] Spelling stage chunk completed', { field, chunk: i, original: flatChunk, corrected: trimmed });
                 }
             }
 
@@ -292,7 +364,7 @@ function setupLlmHandlers() {
                 const maxTokens = calcRefineMaxTokens(chunk.length);
                 let formatted = '';
 
-                const result = await localLlmService.generate(
+                const result = await llmProvider.generate(
                     messages,
                     buildPunctuationGenerationOptions(chunk, maxTokens),
                     (token) => {

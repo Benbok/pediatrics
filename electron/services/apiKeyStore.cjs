@@ -20,6 +20,17 @@ const { app } = require('electron');
 const STORE_FILE = path.join(app.getPath('userData'), 'gemini-keys.enc.json');
 const STORE_VERSION = 1;
 
+async function _storeFileExists() {
+    try {
+        await fs.access(STORE_FILE);
+        return true;
+    } catch (err) {
+        if (err.code === 'ENOENT') return false;
+        logger.warn('[ApiKeyStore] Failed to check store file existence:', err.message);
+        return false;
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ──────────────────────────────────────────────────────────────────────────────
@@ -213,6 +224,13 @@ async function getDecryptedKeys() {
  * Reads GEMINI_API_KEYS or VITE_GEMINI_API_KEY and stores them if not already present.
  */
 async function migrateFromEnv() {
+    // Migrate only on first initialization, before store file is created.
+    // If the user later deletes all keys, we keep store empty and do not re-import env keys.
+    const hasStoreFile = await _storeFileExists();
+    if (hasStoreFile) {
+        return 0;
+    }
+
     const store = await _readStore();
     if (store.keys.length > 0) {
         // Already have stored keys — skip migration
@@ -232,7 +250,11 @@ async function migrateFromEnv() {
         rawKeys.push(singleKey);
     }
 
-    if (rawKeys.length === 0) return 0;
+    if (rawKeys.length === 0) {
+        // Create an empty initialized store to prevent repeated env migration attempts.
+        await _writeStore(store);
+        return 0;
+    }
 
     const now = new Date().toISOString();
     rawKeys.forEach((rawValue, idx) => {
