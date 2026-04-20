@@ -221,6 +221,27 @@ export interface OrganizationProfile {
   updatedAt?: string;
 }
 
+// ============= DB IMPORT TYPES =============
+
+export type DbImportStrategy = 'replace' | 'merge' | 'append';
+
+export interface DbImportTableInfo {
+  name: string;
+  rowCount: number;
+}
+
+export interface DbImportTableSelection {
+  name: string;
+  strategy: DbImportStrategy;
+}
+
+export interface DbImportTableResult {
+  table: string;
+  status: 'success' | 'skipped' | 'error';
+  imported?: number;
+  reason?: string;
+}
+
 export interface UserVaccineRecord {
   id?: number;
   childId?: number;
@@ -1000,6 +1021,21 @@ declare global {
       readTextFile: (filePath: string) => Promise<string>;
       getFileSize: (filePath: string) => Promise<number>;
       createBackup: () => Promise<{ success: boolean; path?: string; error?: string }>;
+
+      // DB IMPORT API
+      getImportDbTables: (filePath: string) => Promise<{
+        success: boolean;
+        tables?: DbImportTableInfo[];
+        error?: string;
+      }>;
+      executeDbImport: (
+        filePath: string,
+        tables: DbImportTableSelection[]
+      ) => Promise<{
+        success: boolean;
+        results?: DbImportTableResult[];
+        error?: string;
+      }>;
 
       // CACHE MANAGEMENT API
       getCacheStats: () => Promise<{

@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag, Building2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag, Building2, Upload, FileCheck, ChevronDown, ChevronRight } from 'lucide-react';
 import { getCurrentApiKey, setApiKey, validateApiKey } from '../../services/geminiService';
 import { apiKeyService, ApiKeysConnectivityReport, PoolStatus } from '../../services/apiKeyService';
 import { organizationService, getDefaultOrganizationProfile } from '../../services/organization.service';
 import { vaccinationService } from '../../services/vaccination.service';
 import { PrettySelect, type SelectOption } from '../diseases/components/PrettySelect';
 import { diseaseService } from '../diseases/services/diseaseService';
-import { VaccineCatalogEntry, DiagnosticCatalogEntry, OrganizationProfile } from '../../types';
+import { VaccineCatalogEntry, DiagnosticCatalogEntry, OrganizationProfile, DbImportTableInfo, DbImportTableSelection, DbImportTableResult, DbImportStrategy } from '../../types';
 import { LicenseAdminPanel } from '../license/LicenseAdminPanel';
 import { useAuth } from '../../context/AuthContext';
+import { dbImportService } from '../../services/dbImportService';
 
 const diagnosticTypeOptions: SelectOption<'lab' | 'instrumental'>[] = [
     { value: 'lab', label: 'Лабораторный' },
@@ -111,6 +112,14 @@ export const SettingsModule: React.FC = () => {
     // Backup State
     const [isBackingUp, setIsBackingUp] = useState(false);
     const [backupResult, setBackupResult] = useState<{ success?: boolean; path?: string; error?: string } | null>(null);
+
+    // DB Import State
+    const [importStep, setImportStep] = useState<'idle' | 'scanning' | 'selecting' | 'importing' | 'done'>('idle');
+    const [importFilePath, setImportFilePath] = useState<string | null>(null);
+    const [importTables, setImportTables] = useState<DbImportTableInfo[]>([]);
+    const [importSelections, setImportSelections] = useState<Record<string, { selected: boolean; strategy: DbImportStrategy }>>({});
+    const [importResults, setImportResults] = useState<DbImportTableResult[]>([]);
+    const [importError, setImportError] = useState<string>('');
 
     // API Key Pool State
     const [poolStatus, setPoolStatus] = useState<PoolStatus | null>(null);
@@ -777,6 +786,69 @@ export const SettingsModule: React.FC = () => {
         } finally {
             setIsBackingUp(false);
         }
+    };
+
+    const handleImportSelectFile = async () => {
+        setImportError('');
+        setImportResults([]);
+        const filePath = await dbImportService.selectDbFile();
+        if (!filePath) return;
+
+        setImportStep('scanning');
+        setImportFilePath(filePath);
+        setImportTables([]);
+        setImportSelections({});
+
+        const result = await dbImportService.getTablesFromFile(filePath);
+        if (!result.success || !result.tables) {
+            setImportError(result.error || 'Не удалось прочитать таблицы из файла');
+            setImportStep('idle');
+            return;
+        }
+
+        const initialSelections: Record<string, { selected: boolean; strategy: DbImportStrategy }> = {};
+        for (const t of result.tables) {
+            initialSelections[t.name] = { selected: true, strategy: 'merge' };
+        }
+
+        setImportTables(result.tables);
+        setImportSelections(initialSelections);
+        setImportStep('selecting');
+    };
+
+    const handleImportExecute = async () => {
+        if (!importFilePath) return;
+
+        const selected: DbImportTableSelection[] = Object.entries(importSelections)
+            .filter(([, v]) => v.selected)
+            .map(([name, v]) => ({ name, strategy: v.strategy }));
+
+        if (selected.length === 0) {
+            setImportError('Выберите хотя бы одну таблицу для импорта');
+            return;
+        }
+
+        setImportStep('importing');
+        setImportError('');
+
+        const result = await dbImportService.executeImport(importFilePath, selected);
+
+        setImportResults(result.results || []);
+        if (!result.success && !result.results?.length) {
+            setImportError(result.error || 'Импорт завершился с ошибкой');
+            setImportStep('selecting');
+        } else {
+            setImportStep('done');
+        }
+    };
+
+    const handleImportReset = () => {
+        setImportStep('idle');
+        setImportFilePath(null);
+        setImportTables([]);
+        setImportSelections({});
+        setImportResults([]);
+        setImportError('');
     };
 
     // ── Navigation config ──────────────────────────────────────────────────
@@ -2040,6 +2112,180 @@ export const SettingsModule: React.FC = () => {
                             </p>
                         </div>
                     </div>
+
+                    {/* ── DB Import Section ──────────────────────────── */}
+                    {isAdmin && (
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                        <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900/50">
+                            <div className="p-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                                <Upload className="text-amber-600 dark:text-amber-400" size={18} />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Импорт из внешней базы данных</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Перенос таблиц из другого файла БД той же архитектуры. Перед импортом автоматически создаётся резервная копия.
+                                </p>
+                            </div>
+                            {importStep !== 'idle' && (
+                                <button
+                                    onClick={handleImportReset}
+                                    className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-1 rounded"
+                                >
+                                    Сбросить
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                            {/* Step: idle */}
+                            {importStep === 'idle' && (
+                                <button
+                                    onClick={handleImportSelectFile}
+                                    className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors text-sm font-medium"
+                                >
+                                    <Upload size={16} />
+                                    Выбрать файл базы данных…
+                                </button>
+                            )}
+
+                            {/* Step: scanning */}
+                            {importStep === 'scanning' && (
+                                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                                    <Loader className="animate-spin" size={16} />
+                                    Сканирование таблиц…
+                                </div>
+                            )}
+
+                            {/* Error */}
+                            {importError && (
+                                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                                    <AlertCircle className="text-red-500 mt-0.5 flex-shrink-0" size={16} />
+                                    <p className="text-xs text-red-700 dark:text-red-300">{importError}</p>
+                                </div>
+                            )}
+
+                            {/* Step: selecting */}
+                            {importStep === 'selecting' && importTables.length > 0 && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                                            Файл: <span className="font-mono text-slate-700 dark:text-slate-300 break-all">{importFilePath?.split(/[\\/]/).pop()}</span>
+                                        </p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setImportSelections(prev => {
+                                                    const next = { ...prev };
+                                                    for (const k of Object.keys(next)) next[k] = { ...next[k], selected: true };
+                                                    return next;
+                                                })}
+                                                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                                            >
+                                                Все
+                                            </button>
+                                            <span className="text-slate-300 dark:text-slate-600">|</span>
+                                            <button
+                                                onClick={() => setImportSelections(prev => {
+                                                    const next = { ...prev };
+                                                    for (const k of Object.keys(next)) next[k] = { ...next[k], selected: false };
+                                                    return next;
+                                                })}
+                                                className="text-xs text-slate-500 dark:text-slate-400 hover:underline"
+                                            >
+                                                Снять
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="max-h-72 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-700/50">
+                                        {importTables.map((t) => {
+                                            const sel = importSelections[t.name];
+                                            if (!sel) return null;
+                                            return (
+                                                <div key={t.name} className={`flex items-center gap-3 px-3 py-2 transition-colors ${sel.selected ? 'bg-white dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-900/30'}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={sel.selected}
+                                                        onChange={(e) => setImportSelections(prev => ({
+                                                            ...prev,
+                                                            [t.name]: { ...prev[t.name], selected: e.target.checked }
+                                                        }))}
+                                                        className="rounded border-slate-300 text-indigo-600"
+                                                    />
+                                                    <span className="flex-1 text-xs font-mono text-slate-700 dark:text-slate-300">{t.name}</span>
+                                                    <span className="text-xs text-slate-400 tabular-nums">{t.rowCount} строк</span>
+                                                    {sel.selected && (
+                                                        <select
+                                                            value={sel.strategy}
+                                                            onChange={(e) => setImportSelections(prev => ({
+                                                                ...prev,
+                                                                [t.name]: { ...prev[t.name], strategy: e.target.value as DbImportStrategy }
+                                                            }))}
+                                                            className="text-xs border border-slate-200 dark:border-slate-600 rounded px-1.5 py-0.5 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                                                        >
+                                                            <option value="merge">Merge (пропустить дубли)</option>
+                                                            <option value="replace">Replace (заменить всё)</option>
+                                                            <option value="append">Append (добавить с заменой)</option>
+                                                        </select>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <button
+                                            onClick={handleImportExecute}
+                                            className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                        >
+                                            <FileCheck size={16} />
+                                            Выполнить импорт
+                                        </button>
+                                        <p className="text-xs text-slate-400">
+                                            {Object.values(importSelections).filter(s => s.selected).length} из {importTables.length} таблиц выбрано
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Step: importing */}
+                            {importStep === 'importing' && (
+                                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                                    <Loader className="animate-spin" size={16} />
+                                    Выполняется импорт… Пожалуйста, не закрывайте приложение.
+                                </div>
+                            )}
+
+                            {/* Step: done */}
+                            {importStep === 'done' && importResults.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Результаты импорта:</p>
+                                    <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-700/50">
+                                        {importResults.map((r) => (
+                                            <div key={r.table} className="flex items-center gap-3 px-3 py-2">
+                                                {r.status === 'success' && <Check className="text-green-500 flex-shrink-0" size={14} />}
+                                                {r.status === 'skipped' && <ChevronRight className="text-slate-400 flex-shrink-0" size={14} />}
+                                                {r.status === 'error' && <X className="text-red-500 flex-shrink-0" size={14} />}
+                                                <span className="flex-1 text-xs font-mono text-slate-700 dark:text-slate-300">{r.table}</span>
+                                                {r.status === 'success' && (
+                                                    <span className="text-xs text-green-600 dark:text-green-400">{r.imported} строк</span>
+                                                )}
+                                                {r.status === 'skipped' && (
+                                                    <span className="text-xs text-slate-400">{r.reason}</span>
+                                                )}
+                                                {r.status === 'error' && (
+                                                    <span className="text-xs text-red-500 truncate max-w-[200px]" title={r.reason}>{r.reason}</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                        ✓ Импорт завершён. {importResults.filter(r => r.status === 'success').length} таблиц успешно.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    )}
                 </div>
             </div>
             )}

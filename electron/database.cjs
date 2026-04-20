@@ -1,7 +1,8 @@
 const { app, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { z } = require('zod');
-const { ensureAuthenticated, getSession } = require('./auth.cjs');
+const { ensureAuthenticated, ensureAdmin, getSession } = require('./auth.cjs');
 const { encrypt, decrypt } = require('./crypto.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const { createBackup, shouldBackupToday } = require('./backup.cjs');
@@ -1371,6 +1372,228 @@ const setupDatabaseHandlers = async () => {
   ipcMain.handle('db:create-backup', ensureAuthenticated(async () => {
     return await createBackup(dbPath);
   }));
+
+  // ============= DB IMPORT HANDLERS =============
+
+  /**
+   * Whitelist of tables that can be imported.
+   * FTS virtual tables and Prisma internal tables are excluded.
+   */
+  const IMPORTABLE_TABLES = new Set([
+    'children',
+    'vaccination_profiles',
+    'vaccination_records',
+    'patient_allergies',
+    'patient_shares',
+    'informed_consents',
+    'visits',
+    'diseases',
+    'disease_medications',
+    'disease_notes',
+    'disease_qa_cache',
+    'clinical_guidelines',
+    'guideline_chunks',
+    'medications',
+    'medication_change_logs',
+    'medication_templates',
+    'diagnostic_templates',
+    'diagnostic_test_catalog',
+    'exam_text_templates',
+    'visit_templates',
+    'recommendation_templates',
+    'vaccine_catalog_entries',
+    'vaccine_plan_templates',
+    'vaccination_profiles',
+    'organization_profiles',
+    'roles',
+    'users',
+    'user_roles',
+    'nutrition_age_norms',
+    'nutrition_product_categories',
+    'nutrition_products',
+    'nutrition_feeding_templates',
+    'nutrition_feeding_template_items',
+    'reception_day_schedules',
+    'pdf_notes',
+    'child_feeding_plans',
+  ]);
+
+  const DbImportGetTablesSchema = z.object({
+    filePath: z.string().min(1).refine(
+      (p) => /\.(db|sqlite|sqlite3)$/i.test(p),
+      'Файл должен иметь расширение .db, .sqlite или .sqlite3'
+    ),
+  });
+
+  const DbImportTableSelectionSchema = z.object({
+    name: z.string().min(1).max(100).regex(/^[a-z_][a-z0-9_]*$/, 'Недопустимое имя таблицы'),
+    strategy: z.enum(['replace', 'merge', 'append']),
+  });
+
+  const DbImportExecuteSchema = z.object({
+    filePath: z.string().min(1).refine(
+      (p) => /\.(db|sqlite|sqlite3)$/i.test(p),
+      'Файл должен иметь расширение .db, .sqlite или .sqlite3'
+    ),
+    tables: z.array(DbImportTableSelectionSchema).min(1).max(50),
+  });
+
+  /**
+   * Scan external DB file and return list of tables with row counts.
+   */
+  ipcMain.handle('db:import-get-tables', ensureAuthenticated(ensureAdmin(async (_, payload) => {
+    const parsed = DbImportGetTablesSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new Error(parsed.error.errors.map(e => e.message).join('; '));
+    }
+
+    const { filePath: extDbPath } = parsed.data;
+
+    if (!fs.existsSync(extDbPath)) {
+      throw new Error('Файл базы данных не найден');
+    }
+
+    let extDb;
+    try {
+      const BetterSqlite3 = require('better-sqlite3');
+      extDb = new BetterSqlite3(extDbPath, { readonly: true, fileMustExist: true });
+
+      // Get all user tables from external DB
+      const tables = extDb.prepare(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_prisma_%' ORDER BY name`
+      ).all();
+
+      const result = [];
+      for (const { name } of tables) {
+        if (!IMPORTABLE_TABLES.has(name)) continue;
+        try {
+          const count = extDb.prepare(`SELECT COUNT(*) as cnt FROM "${name}"`).get();
+          result.push({ name, rowCount: count.cnt });
+        } catch (err) {
+          logger.warn(`[DbImport] Could not count rows in table ${name}:`, err.message);
+        }
+      }
+
+      logger.info(`[DbImport] Scanned external DB: ${result.length} importable tables found`);
+      return { success: true, tables: result };
+    } catch (error) {
+      logger.error('[DbImport] Failed to scan external DB:', error);
+      return { success: false, error: error.message };
+    } finally {
+      if (extDb) extDb.close();
+    }
+  })));
+
+  /**
+   * Execute import from external DB for selected tables.
+   * Strategies:
+   *   replace — DELETE all rows in target table, then INSERT from source
+   *   merge   — INSERT OR IGNORE (skip rows with conflicting PK)
+   *   append  — INSERT OR REPLACE (overwrite rows with conflicting PK)
+   */
+  ipcMain.handle('db:import-execute', ensureAuthenticated(ensureAdmin(async (_, payload) => {
+    const parsed = DbImportExecuteSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new Error(parsed.error.errors.map(e => e.message).join('; '));
+    }
+
+    const { filePath: extDbPath, tables } = parsed.data;
+
+    // Validate all table names against whitelist
+    for (const t of tables) {
+      if (!IMPORTABLE_TABLES.has(t.name)) {
+        throw new Error(`Таблица "${t.name}" не входит в список разрешённых для импорта`);
+      }
+    }
+
+    if (!fs.existsSync(extDbPath)) {
+      throw new Error('Файл базы данных не найден');
+    }
+
+    // Create safety backup before import
+    logger.info('[DbImport] Creating pre-import backup...');
+    const backupResult = await createBackup(dbPath);
+    if (!backupResult.success) {
+      throw new Error(`Не удалось создать резервную копию перед импортом: ${backupResult.error}`);
+    }
+
+    let extDb;
+    const BetterSqlite3 = require('better-sqlite3');
+    const results = [];
+
+    try {
+      extDb = new BetterSqlite3(extDbPath, { readonly: true, fileMustExist: true });
+      const targetDb = new BetterSqlite3(dbPath);
+
+      targetDb.pragma('journal_mode = WAL');
+      targetDb.pragma('foreign_keys = OFF');
+
+      try {
+        for (const { name: tableName, strategy } of tables) {
+          try {
+            // Get columns from external table
+            const colInfo = extDb.prepare(`PRAGMA table_info("${tableName}")`).all();
+            if (!colInfo || colInfo.length === 0) {
+              results.push({ table: tableName, status: 'skipped', reason: 'Таблица не найдена во внешней БД' });
+              continue;
+            }
+
+            const colNames = colInfo.map(c => `"${c.name}"`).join(', ');
+            const colPlaceholders = colInfo.map(c => `@${c.name}`).join(', ');
+            const sourceRows = extDb.prepare(`SELECT * FROM "${tableName}"`).all();
+
+            if (sourceRows.length === 0) {
+              results.push({ table: tableName, status: 'skipped', reason: 'Таблица пуста' });
+              continue;
+            }
+
+            const importInTransaction = targetDb.transaction(() => {
+              if (strategy === 'replace') {
+                targetDb.prepare(`DELETE FROM "${tableName}"`).run();
+              }
+
+              const insertSql = strategy === 'merge'
+                ? `INSERT OR IGNORE INTO "${tableName}" (${colNames}) VALUES (${colPlaceholders})`
+                : `INSERT OR REPLACE INTO "${tableName}" (${colNames}) VALUES (${colPlaceholders})`;
+
+              const insertStmt = targetDb.prepare(insertSql);
+              let inserted = 0;
+              for (const row of sourceRows) {
+                insertStmt.run(row);
+                inserted++;
+              }
+              return inserted;
+            });
+
+            const inserted = importInTransaction();
+            results.push({ table: tableName, status: 'success', imported: inserted });
+            logger.info(`[DbImport] Table "${tableName}": ${inserted} rows imported (strategy: ${strategy})`);
+          } catch (tableError) {
+            logger.error(`[DbImport] Failed to import table "${tableName}":`, tableError);
+            results.push({ table: tableName, status: 'error', reason: tableError.message });
+          }
+        }
+      } finally {
+        targetDb.pragma('foreign_keys = ON');
+        targetDb.close();
+      }
+
+      logAudit('DATABASE_IMPORT_EXECUTED', {
+        extDbPath: path.basename(extDbPath),
+        tables: tables.map(t => t.name),
+        results: results.map(r => ({ table: r.table, status: r.status })),
+      });
+
+      const successCount = results.filter(r => r.status === 'success').length;
+      logger.info(`[DbImport] Import complete: ${successCount}/${tables.length} tables succeeded`);
+      return { success: true, results };
+    } catch (error) {
+      logger.error('[DbImport] Import failed:', error);
+      return { success: false, error: error.message, results };
+    } finally {
+      if (extDb) extDb.close();
+    }
+  })));
 }
 
 module.exports = { setupDatabaseHandlers };

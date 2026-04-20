@@ -253,6 +253,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // BACKUP API
     createBackup: () => ipcRenderer.invoke('create-backup'),
 
+    // DB IMPORT API
+    getImportDbTables: (filePath) => ipcRenderer.invoke('db:import-get-tables', { filePath }),
+    executeDbImport: (filePath, tables) => ipcRenderer.invoke('db:import-execute', { filePath, tables }),
+
     // CACHE MANAGEMENT API
     getCacheStats: () => ipcRenderer.invoke('cache:get-stats'),
     clearAllCache: () => ipcRenderer.invoke('cache:clear-all'),
