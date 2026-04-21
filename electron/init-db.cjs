@@ -483,6 +483,10 @@ async function seedReferenceData() {
         dstDb.pragma('busy_timeout = 5000');
         dstDb.pragma('foreign_keys = OFF'); // FK отключены на время seed — пользователь с id=1 создаётся в initializeDatabase до этого вызова
 
+        // Prepare PDF destination dir for clinical_guidelines
+        const userGuidelinesDir = path.join(app.getPath('userData'), 'clinical_guidelines');
+        const bundledGuidelinesDir = path.join(appPath, 'prisma', 'clinical_guidelines');
+
         for (const table of TABLES) {
             // Check if user table already has data — idempotent, never overwrite.
             const existingRow = dstDb.prepare(`SELECT COUNT(*) as cnt FROM "${table}"`).get();
@@ -492,10 +496,40 @@ async function seedReferenceData() {
             }
 
             // Read all rows from seed source
-            const rows = srcDb.prepare(`SELECT * FROM "${table}"`).all();
+            let rows = srcDb.prepare(`SELECT * FROM "${table}"`).all();
             if (rows.length === 0) {
                 logger.info(`[DB Seed] Table "${table}" is empty in seed source — skipping`);
                 continue;
+            }
+
+            // ── Special handling: clinical_guidelines has absolute pdf_path ──
+            // Copy bundled PDFs to userData and rewrite paths so they resolve on any machine.
+            if (table === 'clinical_guidelines') {
+                fs.mkdirSync(userGuidelinesDir, { recursive: true });
+
+                rows = rows.map(row => {
+                    if (!row.pdf_path) return row;
+                    const fileName = path.basename(row.pdf_path);
+                    const bundledPdf = path.join(bundledGuidelinesDir, fileName);
+                    const destPdf = path.join(userGuidelinesDir, fileName);
+
+                    if (!fs.existsSync(destPdf)) {
+                        if (fs.existsSync(bundledPdf)) {
+                            try {
+                                fs.copyFileSync(bundledPdf, destPdf);
+                                logger.info(`[DB Seed] Copied guideline PDF: ${fileName}`);
+                            } catch (copyErr) {
+                                logger.warn(`[DB Seed] Failed to copy PDF ${fileName}:`, copyErr.message);
+                                return { ...row, pdf_path: null };
+                            }
+                        } else {
+                            // PDF not bundled — seed without path so CDSS chunks still work
+                            logger.warn(`[DB Seed] Bundled PDF not found: ${bundledPdf} — seeding without pdf_path`);
+                            return { ...row, pdf_path: null };
+                        }
+                    }
+                    return { ...row, pdf_path: destPdf };
+                });
             }
 
             // Build INSERT statement from column names of the first row

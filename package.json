@@ -1,7 +1,7 @@
 {
   "name": "pediassist",
   "private": true,
-  "version": "2.0.2",
+  "version": "2.0.4",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -9,8 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "concurrently \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "npx prisma generate && npm run build && electron-builder",
-    "electron:release": "dotenv -e .env.local -- cross-env-shell \"npx prisma generate && npm run build && electron-builder --publish always\"",
+    "prepare:pdfs": "python scripts/prepare-pdf-bundle.py",
+    "electron:build": "npm run prepare:pdfs && npx prisma generate && npm run build && electron-builder",
+    "electron:release": "dotenv -e .env.local -- cross-env-shell \"npm run prepare:pdfs && npx prisma generate && npm run build && electron-builder --publish always\"",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
     "test:vaccination": "node tests/vaccination-records.test.cjs",
@@ -49,7 +50,8 @@
       "node_modules/.prisma/**/*",
       "node_modules/@prisma/client/**/*",
       "**/*.node",
-      "prisma/dev.db"
+      "prisma/dev.db",
+      "prisma/clinical_guidelines/**"
     ],
     "publish": {
       "provider": "github",
