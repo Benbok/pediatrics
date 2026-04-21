@@ -18,6 +18,11 @@ export const visitFormStyles = `
     margin: 0 auto;
 }
 
+.body-content {
+    font-size: 10pt;
+    line-height: 1.35;
+}
+
 /* ── ШАПКА ─────────────────────────────────────────────── */
 
 .header {
@@ -96,12 +101,12 @@ export const visitFormStyles = `
 
 /* ── СЕКЦИИ ─────────────────────────────────────────────── */
 
-.section {
+.body-content .section {
     margin-bottom: 14px;
     page-break-inside: avoid;
 }
 
-.section-title {
+.body-content .section-title {
     font-weight: 700;
     font-size: 8.5pt;
     text-transform: uppercase;
@@ -114,7 +119,7 @@ export const visitFormStyles = `
     border-bottom: 2px solid #111;
 }
 
-.section-content {
+.body-content .section-content {
     padding-left: 12px;
     white-space: pre-wrap;
     font-size: 10.5pt;
@@ -122,7 +127,7 @@ export const visitFormStyles = `
 
 /* ── СТРОКИ ИНФОРМАЦИИ ──────────────────────────────────── */
 
-.info-row {
+.body-content .info-row {
     margin-bottom: 4px;
     display: flex;
     align-items: baseline;
@@ -130,45 +135,45 @@ export const visitFormStyles = `
     flex-wrap: wrap;
 }
 
-.info-row .label {
+.body-content .info-row .label {
     font-weight: 600;
     white-space: nowrap;
     flex-shrink: 0;
 }
 
-.info-row .value {
+.body-content .info-row .value {
     font-weight: 400;
 }
 
 /* ── ДАННЫЕ ПАЦИЕНТА ────────────────────────────────────── */
 
-.patient-info {
+.body-content .patient-info {
     padding: 9px 12px;
     border: 1px solid #ccc;
     border-left: 4px solid #111;
 }
 
-.patient-info .info-row {
+.body-content .patient-info .info-row {
     margin-bottom: 4px;
 }
 
 /* ── АНАМНЕЗ ЖИЗНИ ──────────────────────────────────────── */
 
-.section-content p {
+.body-content .section-content p {
     margin: 6px 0 2px 0;
     font-weight: 600;
 }
 
-.anamnesis-disease-content p {
+.body-content .anamnesis-disease-content p {
     font-weight: 400;
 }
 
-.section-content ul {
+.body-content .section-content ul {
     margin: 0 0 8px 0;
     padding-left: 20px;
 }
 
-.section-content ul li {
+.body-content .section-content ul li {
     margin-bottom: 2px;
 }
 
@@ -194,13 +199,13 @@ export const visitFormStyles = `
 
 /* ── ДИАГНОЗЫ ───────────────────────────────────────────── */
 
-.diagnoses {
+.body-content .diagnoses {
     border: 1px solid #ccc;
     border-left: 4px solid #111;
     padding: 9px 12px;
 }
 
-.diagnosis {
+.body-content .diagnosis {
     margin-bottom: 6px;
     display: flex;
     align-items: flex-start;
@@ -208,17 +213,17 @@ export const visitFormStyles = `
     flex-wrap: wrap;
 }
 
-.diagnosis.primary {
+.body-content .diagnosis.primary {
     font-weight: 600;
 }
 
-.diagnosis-label {
+.body-content .diagnosis-label {
     font-weight: 600;
     white-space: nowrap;
     flex-shrink: 0;
 }
 
-.diagnosis-code {
+.body-content .diagnosis-code {
     font-family: 'Courier New', monospace;
     font-size: 9pt;
     background: transparent;
@@ -230,18 +235,18 @@ export const visitFormStyles = `
     letter-spacing: 0.04em;
 }
 
-.diagnosis-name {
+.body-content .diagnosis-name {
     font-weight: 400;
 }
 
-.diagnosis-group {
+.body-content .diagnosis-group {
     margin-top: 8px;
     padding-left: 0;
     border-top: 1px dashed #ccc;
     padding-top: 6px;
 }
 
-.diagnosis-group .diagnosis-label {
+.body-content .diagnosis-group .diagnosis-label {
     display: block;
     margin-bottom: 4px;
     font-style: normal;
@@ -249,22 +254,22 @@ export const visitFormStyles = `
 
 /* ── ТАБЛИЦА НАЗНАЧЕНИЙ ─────────────────────────────────── */
 
-.prescriptions-table {
+.body-content .prescriptions-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 6px;
     font-size: 10.5pt;
 }
 
-.prescriptions-table th,
-.prescriptions-table td {
+.body-content .prescriptions-table th,
+.body-content .prescriptions-table td {
     border: 1px solid #bbb;
     padding: 5px 8px;
     text-align: left;
     vertical-align: top;
 }
 
-.prescriptions-table th {
+.body-content .prescriptions-table th {
     background: #f0f0f0;
     color: #111;
     font-weight: 700;
@@ -274,18 +279,18 @@ export const visitFormStyles = `
     text-transform: uppercase;
 }
 
-.prescriptions-table tr:nth-child(even) td {
+.body-content .prescriptions-table tr:nth-child(even) td {
     background: #f7f7f7;
 }
 
-.prescriptions-table td:first-child {
+.body-content .prescriptions-table td:first-child {
     text-align: center;
     width: 28px;
     font-weight: 600;
     color: #555;
 }
 
-.dose-detail {
+.body-content .dose-detail {
     font-size: 9pt;
     color: #666;
     margin-top: 3px;
@@ -294,40 +299,40 @@ export const visitFormStyles = `
 
 /* ── ДИАГНОСТИЧЕСКИЕ ИССЛЕДОВАНИЯ ───────────────────────── */
 
-.tests-group {
+.body-content .tests-group {
     margin-bottom: 8px;
     padding-left: 12px;
 }
 
-.tests-subtitle {
+.body-content .tests-subtitle {
     font-weight: 600;
     margin-bottom: 3px;
 }
 
-.tests-list {
+.body-content .tests-list {
     margin: 0;
     padding-left: 20px;
 }
 
-.tests-list li {
+.body-content .tests-list li {
     margin-bottom: 3px;
 }
 
 /* ── РЕКОМЕНДАЦИИ ───────────────────────────────────────── */
 
-.recommendations-list {
+.body-content .recommendations-list {
     margin: 0;
     padding-left: 22px;
 }
 
-.recommendations-list li {
+.body-content .recommendations-list li {
     margin-bottom: 5px;
     page-break-inside: avoid;
 }
 
 /* ── ПОДВАЛ ─────────────────────────────────────────────── */
 
-.footer {
+.body-content .footer {
     margin-top: 28px;
     padding: 9px 12px;
     border: 1px solid #ccc;
@@ -338,15 +343,125 @@ export const visitFormStyles = `
     gap: 16px;
 }
 
-.footer .info-row {
+.body-content .footer .info-row {
     margin-bottom: 0;
 }
 
-.signature-line {
+.body-content .signature-line {
     display: inline-block;
     width: 180px;
     border-bottom: 1px solid #111;
     transform: translateY(-2px);
+}
+
+.body-content .section {
+    margin-bottom: 8px;
+}
+
+.body-content .section-title {
+    font-size: 8pt;
+    letter-spacing: 0.08em;
+    padding: 2px 0;
+    margin-bottom: 4px;
+    border-bottom: 1px solid #111;
+}
+
+.body-content .section-content {
+    padding-left: 6px;
+    font-size: 9.5pt;
+}
+
+.body-content .info-row {
+    margin-bottom: 2px;
+    gap: 4px;
+}
+
+.body-content .patient-info {
+    padding: 6px 8px;
+    border-left-width: 3px;
+}
+
+.body-content .section-content p {
+    margin: 3px 0 1px 0;
+}
+
+.body-content .section-content ul {
+    margin: 0 0 4px 0;
+    padding-left: 16px;
+}
+
+.body-content .section-content ul li {
+    margin-bottom: 1px;
+}
+
+.body-content .diagnoses {
+    padding: 6px 8px;
+    border-left-width: 3px;
+}
+
+.body-content .diagnosis {
+    margin-bottom: 3px;
+    gap: 5px;
+}
+
+.body-content .diagnosis-group {
+    margin-top: 4px;
+    padding-top: 4px;
+}
+
+.body-content .prescriptions-table {
+    margin-top: 4px;
+    font-size: 9pt;
+}
+
+.body-content .prescriptions-table th,
+.body-content .prescriptions-table td {
+    padding: 3px 5px;
+}
+
+.body-content .prescriptions-table th {
+    font-size: 7.5pt;
+}
+
+.body-content .dose-detail {
+    font-size: 8pt;
+    margin-top: 1px;
+}
+
+.body-content .tests-group {
+    margin-bottom: 4px;
+    padding-left: 6px;
+}
+
+.body-content .tests-subtitle {
+    margin-bottom: 1px;
+}
+
+.body-content .tests-list {
+    padding-left: 16px;
+}
+
+.body-content .tests-list li {
+    margin-bottom: 1px;
+}
+
+.body-content .recommendations-list {
+    padding-left: 18px;
+}
+
+.body-content .recommendations-list li {
+    margin-bottom: 2px;
+}
+
+.body-content .footer {
+    margin-top: 12px;
+    padding: 6px 8px;
+    gap: 10px;
+    border-left-width: 3px;
+}
+
+.body-content .signature-line {
+    width: 140px;
 }
 
 /* ── ПЕЧАТНЫЕ СТИЛИ ─────────────────────────────────────── */

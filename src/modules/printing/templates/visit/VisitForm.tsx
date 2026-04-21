@@ -241,6 +241,8 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                 </div>
             </div>
 
+            <div className="body-content">
+
             {/* Данные пациента */}
             <div className="section">
                 <div className="section-title">Данные пациента</div>
@@ -254,7 +256,7 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                         <span className="value">
                             {child.birthDate ? formatDate(new Date(child.birthDate), 'short') : '—'}
                         </span>
-                        <span className="label" style={{ marginLeft: '2rem' }}>Возраст:</span>
+                        <span className="label" style={{ marginLeft: '1rem' }}>Возраст:</span>
                         <span className="value">{patientAge || '—'}</span>
                     </div>
                     {(visit.currentWeight || visit.currentHeight || visit.bmi) && (
@@ -267,13 +269,13 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                             )}
                             {visit.currentHeight && (
                                 <>
-                                    <span className="label" style={{ marginLeft: visit.currentWeight ? '2rem' : undefined }}>Рост:</span>
+                                    <span className="label" style={{ marginLeft: visit.currentWeight ? '1rem' : undefined }}>Рост:</span>
                                     <span className="value">{visit.currentHeight} см</span>
                                 </>
                             )}
                             {visit.bmi && (
                                 <>
-                                    <span className="label" style={{ marginLeft: '2rem' }}>ИМТ:</span>
+                                    <span className="label" style={{ marginLeft: '1rem' }}>ИМТ:</span>
                                     <span className="value">{visit.bmi.toFixed(1)}</span>
                                 </>
                             )}
@@ -506,6 +508,7 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                     <span className="label">Подпись:</span>
                     <span className="signature-line" aria-hidden="true"></span>
                 </div>
+            </div>
             </div>
         </div>
     );
