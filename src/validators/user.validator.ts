@@ -30,3 +30,7 @@ export const ResetPasswordInputSchema = z.object({
   newPassword: z.string().min(6),
 });
 
+export const DeleteUserInputSchema = z.object({
+  userId: z.number().int().positive(),
+});
+

@@ -60,6 +60,10 @@ const ResetPasswordSchema = z.object({
     newPassword: z.string().min(6)
 });
 
+const DeleteUserSchema = z.object({
+    userId: z.number().int().positive()
+});
+
 const ChangePasswordSchema = z.object({
     userId: z.number().int().positive(),
     oldPassword: z.string().min(1).optional(),
@@ -460,6 +464,108 @@ function setupAuthHandlers() {
         } catch (error) {
             logger.error('[Auth] Activate user error:', error);
             return { success: false, error: 'Ошибка при активации пользователя' };
+        }
+    })));
+
+    /**
+     * Delete User (Admin Only)
+     */
+    ipcMain.handle('auth:delete-user', ensureAuthenticated(ensureAdmin(async (_, data) => {
+        try {
+            const { userId } = DeleteUserSchema.parse(data);
+
+            // Cannot delete self
+            if (userId === currentSession.user.id) {
+                return { success: false, error: 'Нельзя удалить свою учетную запись' };
+            }
+
+            const existing = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { id: true, username: true }
+            });
+
+            if (!existing) {
+                return { success: false, error: 'Пользователь не найден' };
+            }
+
+            const blockers = await prisma.$transaction(async (tx) => {
+                const [
+                    childrenCount,
+                    visitsCount,
+                    notesCount,
+                    pdfNotesCount,
+                    medicationChangesCount,
+                    informedConsentsCount,
+                    visitTemplatesCount,
+                    medicationTemplatesCount,
+                    examTemplatesCount,
+                    diagnosticTemplatesCount,
+                    recommendationTemplatesCount,
+                    feedingPlansCount,
+                    sharedByCount,
+                    sharedWithCount,
+                ] = await Promise.all([
+                    tx.child.count({ where: { createdByUserId: userId } }),
+                    tx.visit.count({ where: { doctorId: userId } }),
+                    tx.diseaseNote.count({ where: { authorId: userId } }),
+                    tx.pdfNote.count({ where: { authorId: userId } }),
+                    tx.medicationChangeLog.count({ where: { userId } }),
+                    tx.informedConsent.count({ where: { doctorId: userId } }),
+                    tx.visitTemplate.count({ where: { createdById: userId } }),
+                    tx.medicationTemplate.count({ where: { createdById: userId } }),
+                    tx.examTextTemplate.count({ where: { createdById: userId } }),
+                    tx.diagnosticTemplate.count({ where: { createdById: userId } }),
+                    tx.recommendationTemplate.count({ where: { createdById: userId } }),
+                    tx.childFeedingPlan.count({ where: { createdByUserId: userId } }),
+                    tx.patientShare.count({ where: { sharedBy: userId } }),
+                    tx.patientShare.count({ where: { sharedWith: userId } }),
+                ]);
+
+                const items = [
+                    { label: 'карты пациентов', count: childrenCount },
+                    { label: 'приемы', count: visitsCount },
+                    { label: 'заметки по заболеваниям', count: notesCount },
+                    { label: 'pdf-заметки', count: pdfNotesCount },
+                    { label: 'изменения медикаментов', count: medicationChangesCount },
+                    { label: 'информированные согласия', count: informedConsentsCount },
+                    { label: 'шаблоны приемов', count: visitTemplatesCount },
+                    { label: 'шаблоны назначений', count: medicationTemplatesCount },
+                    { label: 'шаблоны текста осмотра', count: examTemplatesCount },
+                    { label: 'диагностические шаблоны', count: diagnosticTemplatesCount },
+                    { label: 'шаблоны рекомендаций', count: recommendationTemplatesCount },
+                    { label: 'планы питания', count: feedingPlansCount },
+                    { label: 'расшаривания как владелец', count: sharedByCount },
+                    { label: 'расшаривания как получатель', count: sharedWithCount },
+                ];
+
+                return items.filter((item) => item.count > 0);
+            });
+
+            if (blockers.length > 0) {
+                const blockerText = blockers.map((b) => `${b.label}: ${b.count}`).join(', ');
+                return {
+                    success: false,
+                    error: `Нельзя удалить пользователя: найдены связанные данные (${blockerText}). Сначала передайте данные другому врачу или деактивируйте учетную запись.`
+                };
+            }
+
+            await prisma.$transaction(async (tx) => {
+                await tx.userRole.deleteMany({ where: { userId } });
+                await tx.receptionDaySchedule.deleteMany({ where: { doctorId: userId } });
+                await tx.vaccinationRecord.updateMany({ where: { createdByUserId: userId }, data: { createdByUserId: null } });
+                await tx.user.delete({ where: { id: userId } });
+            });
+
+            logger.info(`[Auth] User deleted: ID ${userId}, username ${existing.username}`);
+            logAudit('USER_DELETED', { userId, username: existing.username, deletedBy: currentSession.user.id });
+
+            return { success: true };
+        } catch (error) {
+            logger.error('[Auth] Delete user error:', error);
+            if (error instanceof z.ZodError) {
+                return { success: false, error: error.errors.map(e => e.message).join(', ') };
+            }
+            return { success: false, error: 'Ошибка при удалении пользователя' };
         }
     })));
 

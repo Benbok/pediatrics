@@ -69,6 +69,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateUser: (data) => ipcRenderer.invoke('auth:update-user', data),
     setUserRoles: (data) => ipcRenderer.invoke('auth:set-user-roles', data),
     resetPassword: (data) => ipcRenderer.invoke('auth:reset-password', data),
+    deleteUser: (data) => ipcRenderer.invoke('auth:delete-user', data),
 
     // PATIENT SHARING API
     sharePatient: (data) => ipcRenderer.invoke('db:share-patient', data),
@@ -327,5 +328,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
         qaTrigger: (params) => ipcRenderer.invoke('rag:qa:trigger', params),
         qaTemplates: () => ipcRenderer.invoke('rag:qa:templates'),
         qaComputeSingle: (params) => ipcRenderer.invoke('rag:qa:compute-single', params),
+    },
+
+    // WINDOW CONTROL API
+    window: {
+        minimize: () => ipcRenderer.invoke('window:minimize'),
+        maximize: () => ipcRenderer.invoke('window:maximize'),
+        unmaximize: () => ipcRenderer.invoke('window:unmaximize'),
+        close: () => ipcRenderer.invoke('window:close'),
+        isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
     },
 });

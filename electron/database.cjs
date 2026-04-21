@@ -1479,10 +1479,8 @@ const setupDatabaseHandlers = async () => {
     'recommendation_templates',
     'vaccine_catalog_entries',
     'vaccine_plan_templates',
-    'vaccination_profiles',
     'organization_profiles',
     'roles',
-    'users',
     'user_roles',
     'nutrition_age_norms',
     'nutrition_product_categories',
@@ -1492,6 +1490,12 @@ const setupDatabaseHandlers = async () => {
     'reception_day_schedules',
     'pdf_notes',
     'child_feeding_plans',
+  ]);
+
+  // Hard denylist for sensitive tables. Even if a table is accidentally added
+  // to IMPORTABLE_TABLES later, import execution must still reject it.
+  const NON_IMPORTABLE_TABLES = new Set([
+    'users',
   ]);
 
   const DbImportGetTablesSchema = z.object({
@@ -1541,6 +1545,7 @@ const setupDatabaseHandlers = async () => {
 
       const result = [];
       for (const { name } of tables) {
+        if (NON_IMPORTABLE_TABLES.has(name)) continue;
         if (!IMPORTABLE_TABLES.has(name)) continue;
         try {
           const count = extDb.prepare(`SELECT COUNT(*) as cnt FROM "${name}"`).get();
@@ -1577,6 +1582,9 @@ const setupDatabaseHandlers = async () => {
 
     // Validate all table names against whitelist
     for (const t of tables) {
+      if (NON_IMPORTABLE_TABLES.has(t.name)) {
+        throw new Error(`Таблица "${t.name}" запрещена для импорта`);
+      }
       if (!IMPORTABLE_TABLES.has(t.name)) {
         throw new Error(`Таблица "${t.name}" не входит в список разрешённых для импорта`);
       }
@@ -1594,12 +1602,13 @@ const setupDatabaseHandlers = async () => {
     }
 
     let extDb;
+    let targetDb;
     const BetterSqlite3 = require('better-sqlite3');
     const results = [];
 
     try {
       extDb = new BetterSqlite3(extDbPath, { readonly: true, fileMustExist: true });
-      const targetDb = new BetterSqlite3(dbPath);
+      targetDb = new BetterSqlite3(dbPath);
 
       targetDb.pragma('journal_mode = WAL');
       targetDb.pragma('foreign_keys = OFF');
@@ -1607,15 +1616,30 @@ const setupDatabaseHandlers = async () => {
       try {
         for (const { name: tableName, strategy } of tables) {
           try {
-            // Get columns from external table
-            const colInfo = extDb.prepare(`PRAGMA table_info("${tableName}")`).all();
-            if (!colInfo || colInfo.length === 0) {
+            // Get columns from external (source) table
+            const srcColInfo = extDb.prepare(`PRAGMA table_info("${tableName}")`).all();
+            if (!srcColInfo || srcColInfo.length === 0) {
               results.push({ table: tableName, status: 'skipped', reason: 'Таблица не найдена во внешней БД' });
               continue;
             }
 
-            const colNames = colInfo.map(c => `"${c.name}"`).join(', ');
-            const colPlaceholders = colInfo.map(c => `@${c.name}`).join(', ');
+            // Get columns from target table and intersect — protects against schema drift
+            const tgtColInfo = targetDb.prepare(`PRAGMA table_info("${tableName}")`).all();
+            const tgtColSet = new Set(tgtColInfo.map(c => c.name));
+            const commonCols = srcColInfo.map(c => c.name).filter(n => tgtColSet.has(n));
+
+            if (commonCols.length === 0) {
+              results.push({ table: tableName, status: 'skipped', reason: 'Нет совместимых колонок между источником и целевой БД' });
+              continue;
+            }
+
+            const skippedCols = srcColInfo.map(c => c.name).filter(n => !tgtColSet.has(n));
+            if (skippedCols.length > 0) {
+              logger.warn(`[DbImport] Table "${tableName}": skipping ${skippedCols.length} column(s) absent in target: ${skippedCols.join(', ')}`);
+            }
+
+            const colNames = commonCols.map(n => `"${n}"`).join(', ');
+            const colPlaceholders = commonCols.map(n => `@${n}`).join(', ');
             const sourceRows = extDb.prepare(`SELECT * FROM "${tableName}"`).all();
 
             if (sourceRows.length === 0) {
@@ -1635,7 +1659,10 @@ const setupDatabaseHandlers = async () => {
               const insertStmt = targetDb.prepare(insertSql);
               let inserted = 0;
               for (const row of sourceRows) {
-                insertStmt.run(row);
+                // Pass only the common columns to avoid "no such column" binding errors
+                const filteredRow = {};
+                for (const col of commonCols) filteredRow[col] = row[col];
+                insertStmt.run(filteredRow);
                 inserted++;
               }
               return inserted;
@@ -1650,8 +1677,7 @@ const setupDatabaseHandlers = async () => {
           }
         }
       } finally {
-        targetDb.pragma('foreign_keys = ON');
-        targetDb.close();
+        if (targetDb) targetDb.pragma('foreign_keys = ON');
       }
 
       logAudit('DATABASE_IMPORT_EXECUTED', {
@@ -1662,11 +1688,19 @@ const setupDatabaseHandlers = async () => {
 
       const successCount = results.filter(r => r.status === 'success').length;
       logger.info(`[DbImport] Import complete: ${successCount}/${tables.length} tables succeeded`);
+
+      // Invalidate all caches so fresh data is loaded after import
+      if (successCount > 0) {
+        CacheService.invalidateAll();
+        logger.info('[DbImport] All caches invalidated after successful import');
+      }
+
       return { success: true, results };
     } catch (error) {
       logger.error('[DbImport] Import failed:', error);
       return { success: false, error: error.message, results };
     } finally {
+      if (targetDb) targetDb.close();
       if (extDb) extDb.close();
     }
   })));

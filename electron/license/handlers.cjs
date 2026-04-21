@@ -17,6 +17,7 @@ const fs = require('fs');
 const { getFingerprint, getDisplayFingerprint } = require('./fingerprint.cjs');
 const { verifyLicense } = require('./verify.cjs');
 const { logger, logAudit } = require('../logger.cjs');
+const { prisma } = require('../prisma-client.cjs');
 
 const isDev = !app.isPackaged;
 
@@ -26,6 +27,112 @@ const isDev = !app.isPackaged;
  */
 function getLicensePath() {
     return path.join(app.getPath('userData'), 'license.json');
+}
+
+function toPublicLicenseData(data) {
+    return {
+        userName: data.userName,
+        expiresAt: data.expiresAt,
+        username: data.username,
+    };
+}
+
+/**
+ * Auto-provisions a local doctor account from signed Variant A credentials.
+ * Backward compatibility: if credentials are absent, returns success with manual credential flow required.
+ *
+ * @param {{ userName: string, username?: string, passwordHash?: string }} licenseData
+ * @returns {Promise<{ success: boolean, autoProvisioned: boolean, requiresManualCredentials: boolean, username?: string, reason?: string }>}
+ */
+async function autoProvisionUserFromLicense(licenseData) {
+    const username = typeof licenseData.username === 'string' ? licenseData.username.trim() : '';
+    const passwordHash = typeof licenseData.passwordHash === 'string' ? licenseData.passwordHash : '';
+
+    if (!username || !passwordHash) {
+        return { success: true, autoProvisioned: false, requiresManualCredentials: true };
+    }
+
+    try {
+        const result = await prisma.$transaction(async (tx) => {
+            const roleAdmin = await tx.role.upsert({
+                where: { key: 'admin' },
+                update: {},
+                create: { key: 'admin' },
+            });
+            const roleDoctor = await tx.role.upsert({
+                where: { key: 'doctor' },
+                update: {},
+                create: { key: 'doctor' },
+            });
+
+            const existing = await tx.user.findUnique({ where: { username } });
+            if (existing) {
+                // Keep imported credentials authoritative for this licensed local admin account.
+                await tx.user.update({
+                    where: { id: existing.id },
+                    data: {
+                        passwordHash,
+                        isAdmin: true,
+                        isActive: true,
+                    },
+                });
+
+                const existingRoleRows = await tx.userRole.findMany({
+                    where: {
+                        userId: existing.id,
+                        roleId: { in: [roleAdmin.id, roleDoctor.id] },
+                    },
+                });
+                const existingRoleIds = new Set(existingRoleRows.map((r) => r.roleId));
+                const missingRoleIds = [roleAdmin.id, roleDoctor.id].filter((roleId) => !existingRoleIds.has(roleId));
+
+                if (missingRoleIds.length > 0) {
+                    await tx.userRole.createMany({
+                        data: missingRoleIds.map((roleId) => ({ userId: existing.id, roleId })),
+                    });
+                }
+
+                return { status: 'existing', username: existing.username };
+            }
+
+            const created = await tx.user.create({
+                data: {
+                    username,
+                    passwordHash,
+                    lastName: (licenseData.userName || username).trim(),
+                    firstName: '',
+                    middleName: '',
+                    isAdmin: true,
+                    isActive: true,
+                },
+            });
+
+            await tx.userRole.createMany({
+                data: [
+                    { userId: created.id, roleId: roleAdmin.id },
+                    { userId: created.id, roleId: roleDoctor.id },
+                ],
+            });
+
+            return { status: 'created', username: created.username };
+        });
+
+        const autoProvisioned = result.status === 'created' || result.status === 'existing';
+        return {
+            success: true,
+            autoProvisioned,
+            requiresManualCredentials: false,
+            username: result.username,
+        };
+    } catch (err) {
+        logger.error('[License] Auto-provision failed:', err.message);
+        return {
+            success: false,
+            autoProvisioned: false,
+            requiresManualCredentials: false,
+            reason: 'Не удалось автоматически создать пользователя из лицензии: ' + err.message,
+        };
+    }
 }
 
 /**
@@ -52,7 +159,13 @@ async function checkCurrentLicense() {
         return { valid: false, reason: 'Не удалось определить идентификатор машины: ' + err.message };
     }
 
-    return verifyLicense(licensePath, fingerprint);
+    const result = verifyLicense(licensePath, fingerprint);
+    if (!result.valid) return result;
+
+    return {
+        ...result,
+        data: toPublicLicenseData(result.data),
+    };
 }
 
 /**
@@ -129,6 +242,15 @@ function setupLicenseHandlers() {
             return { success: false, reason: verifyResult.reason };
         }
 
+        const provisionResult = await autoProvisionUserFromLicense(verifyResult.data);
+        if (!provisionResult.success) {
+            logAudit('LICENSE_IMPORT_PROVISION_FAILED', {
+                userName: verifyResult.data.userName,
+                reason: provisionResult.reason,
+            });
+            return { success: false, reason: provisionResult.reason };
+        }
+
         // Copy license file to userData
         const destPath = getLicensePath();
         try {
@@ -142,7 +264,20 @@ function setupLicenseHandlers() {
         logAudit('LICENSE_IMPORTED', { userName: verifyResult.data.userName });
         logger.info('[License] License imported successfully for:', verifyResult.data.userName);
 
-        return { success: true, data: verifyResult.data };
+        if (provisionResult.autoProvisioned) {
+            logAudit('LICENSE_USER_AUTO_PROVISIONED', {
+                userName: verifyResult.data.userName,
+                username: provisionResult.username,
+            });
+        }
+
+        return {
+            success: true,
+            data: toPublicLicenseData(verifyResult.data),
+            autoProvisioned: provisionResult.autoProvisioned,
+            requiresManualCredentials: provisionResult.requiresManualCredentials,
+            username: provisionResult.username,
+        };
     });
 
     logger.info('[License] License handlers registered');

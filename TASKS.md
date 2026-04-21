@@ -16,6 +16,35 @@
 
 ## Активные задачи
 
+### [TASK-078] Refactor: DB Import — устранение findings compliance audit
+**Статус:** ✅ Завершена
+**Приоритет:** Высокий
+**Дата создания:** 2026-04-21
+
+**Описание:**
+Устранить HIGH/LOW findings из compliance-аудита сервиса импорта БД (Settings → Import):
+- HIGH-3: утечка ресурса targetDb при ошибке до inner-try
+- HIGH-1: отсутствие Zod-валидации в frontend service layer (dbImportService.ts)
+- HIGH-2: отсутствие try/catch в handleImportSelectFile и handleImportExecute
+- LOW-1: дублирование 'vaccination_profiles' в IMPORTABLE_TABLES
+- MEDIUM-2: отсутствие UI-предупреждения для security-таблиц (users, roles, user_roles)
+
+**Ссылка:** [tasks/21.04.2026/TASK-078.md](tasks/21.04.2026/TASK-078.md)
+
+---
+
+### [TASK-077] User Management: удаление пользователей (admin only)
+**Статус:** 🔄 В работе
+**Приоритет:** Высокий
+**Дата создания:** 2026-04-21
+
+**Описание:**
+Добавить в модуль «Управление пользователями» возможность удаления учетной записи администратором с подтверждением действия и backend-проверками безопасности.
+
+**Ссылка:** [tasks/21.04.2026/TASK-077.md](tasks/21.04.2026/TASK-077.md)
+
+---
+
 ### [TASK-075] Google AI Keys: In-App Encrypted Storage + Full CRUD UI
 **Статус:** ✅ Завершена
 **Приоритет:** Высокий

@@ -607,8 +607,23 @@ export const VaccinationModule: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center p-12">
-                <div className="text-slate-500">Загрузка данных вакцинации...</div>
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Header skeleton */}
+                <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 shadow-xl p-5">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                        <div className="space-y-2 flex-1">
+                            <div className="h-5 w-48 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-lg" />
+                            <div className="h-4 w-32 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-lg" />
+                        </div>
+                    </div>
+                </div>
+                {/* Cards skeleton */}
+                <div className="space-y-3">
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                        <div key={i} className="h-20 bg-slate-100 dark:bg-slate-800/50 animate-pulse rounded-2xl" />
+                    ))}
+                </div>
             </div>
         );
     }
@@ -860,8 +875,8 @@ export const VaccinationModule: React.FC = () => {
                             </div>
                         )}
                     </div>
-                    {sortedAges.map(age => (
-                        <div key={age} className="space-y-3">
+                    {sortedAges.map((age, ageIndex) => (
+                        <div key={age} className="space-y-3" style={{ animation: `slideIn 0.3s ease-out ${ageIndex * 0.05}s both` }}>
                             <div className="sticky top-0 z-20 bg-slate-100/90 dark:bg-slate-900/90 backdrop-blur-md py-1 px-3 rounded-lg font-bold text-xs uppercase text-slate-500 border dark:border-slate-800">{getAgeLabel(age)}</div>
                             <div className="space-y-3">
                                 {groupedVaccines[age].map(vaccine => (

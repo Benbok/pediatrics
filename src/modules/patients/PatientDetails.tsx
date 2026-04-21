@@ -54,7 +54,30 @@ export const PatientDetails: React.FC = () => {
     const getAge = (birthDate: string) => patientService.getAgeLabel(birthDate);
 
     if (isLoading) {
-        return <div className="flex items-center justify-center p-12 text-slate-500">Загрузка данных...</div>;
+        return (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Header skeleton */}
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                    <div className="flex flex-col md:flex-row gap-6 items-start">
+                        <div className="w-24 h-24 rounded-3xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                        <div className="flex-1 space-y-3">
+                            <div className="h-8 w-64 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-xl" />
+                            <div className="flex gap-2">
+                                <div className="h-7 w-28 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-full" />
+                                <div className="h-7 w-20 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-full" />
+                                <div className="h-7 w-20 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-full" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {/* Modules grid skeleton */}
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="h-44 bg-slate-100 dark:bg-slate-800/50 animate-pulse rounded-3xl" />
+                    ))}
+                </div>
+            </div>
+        );
     }
 
     if (!child) {
@@ -150,6 +173,7 @@ export const PatientDetails: React.FC = () => {
                     <div
                         onClick={() => navigate(`/vaccination/${child.id}`)}
                         className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 cursor-pointer group hover:shadow-xl hover:border-blue-500 transition-all relative overflow-hidden"
+                        style={{ animation: 'slideIn 0.3s ease-out 0s both' }}
                     >
                         <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-blue-500">
@@ -169,6 +193,7 @@ export const PatientDetails: React.FC = () => {
                     <div
                         onClick={() => navigate(`/patients/${child.id}/visits`)}
                         className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 cursor-pointer group hover:shadow-xl hover:border-primary-500 transition-all relative overflow-hidden"
+                        style={{ animation: 'slideIn 0.3s ease-out 0.05s both' }}
                     >
                         <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-primary-500">
@@ -190,6 +215,7 @@ export const PatientDetails: React.FC = () => {
                     <div
                         onClick={() => navigate(`/patients/${child.id}/nutrition`)}
                         className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 cursor-pointer group hover:shadow-xl hover:border-emerald-500 transition-all relative overflow-hidden"
+                        style={{ animation: 'slideIn 0.3s ease-out 0.1s both' }}
                     >
                         <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-emerald-500">

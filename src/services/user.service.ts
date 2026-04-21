@@ -1,6 +1,7 @@
 import { logger } from './logger';
 import type { User, UserRoleKey } from '../types';
 import {
+  DeleteUserInputSchema,
   RegisterUserInputSchema,
   ResetPasswordInputSchema,
   SetUserRolesInputSchema,
@@ -38,6 +39,11 @@ export const userService = {
 
   async deactivateUser(userId: number) {
     return await window.electronAPI.deactivateUser(userId);
+  },
+
+  async deleteUser(data: { userId: number }) {
+    const validated = DeleteUserInputSchema.parse(data);
+    return await window.electronAPI.deleteUser(validated);
   },
 
   hasRole(user: User | null | undefined, role: UserRoleKey): boolean {

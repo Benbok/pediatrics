@@ -50,6 +50,7 @@ const GEMINI_MODELS: { label: string; value: string }[] = [
   { label: 'Deep Research Pro Preview', value: 'gemini-deep-research-pro-preview' },
 ];
 import { dbImportService } from '../../services/dbImportService';
+import { dataEvents } from '../../services/dataEvents';
 
 const diagnosticTypeOptions: SelectOption<'lab' | 'instrumental'>[] = [
     { value: 'lab', label: 'Лабораторный' },
@@ -134,6 +135,8 @@ const normalizeOrganizationProfile = (profile: OrganizationProfile): Organizatio
 export const SettingsModule: React.FC = () => {
     const { currentUser } = useAuth();
     const isAdmin = Boolean(currentUser?.roles?.includes('admin'));
+    const [hasPrivateKey, setHasPrivateKey] = useState(false);
+    const canAccessLicenses = isAdmin && hasPrivateKey;
 
     // Organization profile state
     const [organizationProfile, setOrganizationProfile] = useState<OrganizationProfile>(getDefaultOrganizationProfile());
@@ -287,17 +290,17 @@ export const SettingsModule: React.FC = () => {
     };
 
     useEffect(() => {
-        if (!isAdmin && activeTab === 'licenses') {
+        if (!canAccessLicenses && activeTab === 'licenses') {
             setActiveTab('api');
         }
-    }, [isAdmin, activeTab]);
+    }, [canAccessLicenses, activeTab]);
 
     useEffect(() => {
         // Load pool status and stored keys on mount
         loadPoolStatus();
         loadKeysList();
         loadRouting();
-        
+
         // Load cache stats
         loadCacheStats();
 
@@ -306,6 +309,11 @@ export const SettingsModule: React.FC = () => {
 
         // Load organization profile
         loadOrganizationProfile();
+
+        // License tab is available only when private key exists locally.
+        window.electronAPI?.licenseAdminCheckKey?.()
+            .then((res) => setHasPrivateKey(Boolean(res?.exists)))
+            .catch(() => setHasPrivateKey(false));
     }, []);
 
     // Load diagnostic catalog when tab is opened
@@ -891,29 +899,34 @@ export const SettingsModule: React.FC = () => {
     const handleImportSelectFile = async () => {
         setImportError('');
         setImportResults([]);
-        const filePath = await dbImportService.selectDbFile();
-        if (!filePath) return;
+        try {
+            const filePath = await dbImportService.selectDbFile();
+            if (!filePath) return;
 
-        setImportStep('scanning');
-        setImportFilePath(filePath);
-        setImportTables([]);
-        setImportSelections({});
+            setImportStep('scanning');
+            setImportFilePath(filePath);
+            setImportTables([]);
+            setImportSelections({});
 
-        const result = await dbImportService.getTablesFromFile(filePath);
-        if (!result.success || !result.tables) {
-            setImportError(result.error || 'Не удалось прочитать таблицы из файла');
+            const result = await dbImportService.getTablesFromFile(filePath);
+            if (!result.success || !result.tables) {
+                setImportError(result.error || 'Не удалось прочитать таблицы из файла');
+                setImportStep('idle');
+                return;
+            }
+
+            const initialSelections: Record<string, { selected: boolean; strategy: DbImportStrategy }> = {};
+            for (const t of result.tables) {
+                initialSelections[t.name] = { selected: true, strategy: 'merge' };
+            }
+
+            setImportTables(result.tables);
+            setImportSelections(initialSelections);
+            setImportStep('selecting');
+        } catch (error: any) {
+            setImportError(error?.message || 'Не удалось открыть файл базы данных');
             setImportStep('idle');
-            return;
         }
-
-        const initialSelections: Record<string, { selected: boolean; strategy: DbImportStrategy }> = {};
-        for (const t of result.tables) {
-            initialSelections[t.name] = { selected: true, strategy: 'merge' };
-        }
-
-        setImportTables(result.tables);
-        setImportSelections(initialSelections);
-        setImportStep('selecting');
     };
 
     const handleImportExecute = async () => {
@@ -931,14 +944,21 @@ export const SettingsModule: React.FC = () => {
         setImportStep('importing');
         setImportError('');
 
-        const result = await dbImportService.executeImport(importFilePath, selected);
+        try {
+            const result = await dbImportService.executeImport(importFilePath, selected);
 
-        setImportResults(result.results || []);
-        if (!result.success && !result.results?.length) {
-            setImportError(result.error || 'Импорт завершился с ошибкой');
+            setImportResults(result.results || []);
+            if (!result.success && !result.results?.length) {
+                setImportError(result.error || 'Импорт завершился с ошибкой');
+                setImportStep('selecting');
+            } else {
+                setImportStep('done');
+                // Invalidate frontend data cache so all modules reload fresh data
+                dataEvents.emit({ dataType: 'all', eventType: 'updated' });
+            }
+        } catch (error: any) {
+            setImportError(error?.message || 'Неожиданная ошибка при импорте');
             setImportStep('selecting');
-        } else {
-            setImportStep('done');
         }
     };
 
@@ -959,7 +979,7 @@ export const SettingsModule: React.FC = () => {
         { id: 'diseases'     as const, icon: Stethoscope, label: 'Болезни',            description: 'Каталог диагностики'      },
         { id: 'cache'        as const, icon: Zap,         label: 'Производительность', description: 'Мониторинг кеша'          },
         { id: 'security'     as const, icon: Shield,      label: 'Безопасность',       description: 'Данные и резервные копии' },
-        ...(isAdmin ? [{ id: 'licenses' as const, icon: Key, label: 'Лицензии', description: 'Управление лицензиями' }] : []),
+        ...(canAccessLicenses ? [{ id: 'licenses' as const, icon: Key, label: 'Лицензии', description: 'Управление лицензиями' }] : []),
     ];
 
     return (
@@ -2382,6 +2402,7 @@ export const SettingsModule: React.FC = () => {
                                         {importTables.map((t) => {
                                             const sel = importSelections[t.name];
                                             if (!sel) return null;
+                                            const isSecurityTable = ['users', 'roles', 'user_roles'].includes(t.name);
                                             return (
                                                 <div key={t.name} className={`flex items-center gap-3 px-3 py-2 transition-colors ${sel.selected ? 'bg-white dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-900/30'}`}>
                                                     <input
@@ -2394,6 +2415,11 @@ export const SettingsModule: React.FC = () => {
                                                         className="rounded border-slate-300 text-indigo-600"
                                                     />
                                                     <span className="flex-1 text-xs font-mono text-slate-700 dark:text-slate-300">{t.name}</span>
+                                                    {isSecurityTable && (
+                                                        <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded px-1.5 py-0.5">
+                                                            ⚠ Учётные записи
+                                                        </span>
+                                                    )}
                                                     <span className="text-xs text-slate-400 tabular-nums">{t.rowCount} строк</span>
                                                     {sel.selected && (
                                                         <select

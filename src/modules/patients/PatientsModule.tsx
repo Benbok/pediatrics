@@ -49,15 +49,6 @@ export const PatientsModule: React.FC = () => {
         return full.includes(searchQuery.toLowerCase());
     });
 
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center p-24 space-y-4">
-                <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
-                <div className="text-slate-500 font-bold animate-pulse">Загрузка картотеки...</div>
-            </div>
-        );
-    }
-
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header Area */}
@@ -117,13 +108,23 @@ export const PatientsModule: React.FC = () => {
             )}
 
             {/* Patients Grid */}
+            {isLoading ? (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                        <div key={i} className="h-44 bg-slate-100 dark:bg-slate-800/50 animate-pulse rounded-2xl" />
+                    ))}
+                </div>
+            ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {filteredChildren.map((child) => (
+                {filteredChildren.map((child, index) => (
                     <Card
                         key={child.id}
                         hoverable
                         onClick={() => handleSelectPatient(child)}
-                        className="p-6 border-slate-200 dark:border-slate-800/50 group relative overflow-hidden flex flex-col transition-all duration-300 active:scale-[0.98]"
+                        className="relative p-6 border-slate-200 dark:border-slate-800/50 group overflow-hidden flex flex-col transition-all duration-300 active:scale-[0.98] before:content-[''] before:absolute before:inset-0 before:rounded-xl before:border-2 before:border-primary-500/80 dark:before:border-primary-400/70 before:opacity-0 before:transition-opacity before:duration-200 hover:before:opacity-100 before:pointer-events-none"
+                        style={{
+                            animation: `slideIn 0.3s ease-out ${index * 0.05}s both`
+                        }}
                     >
                         {/* Status Dots or Indicators could go here */}
                         <div className="flex items-start gap-5">
@@ -162,6 +163,7 @@ export const PatientsModule: React.FC = () => {
                     </Card>
                 ))}
             </div>
+            )}
         </div>
     );
 };

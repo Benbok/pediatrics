@@ -35,14 +35,29 @@ function createWindow() {
         width: 1200,
         height: 800,
         icon: path.join(__dirname, 'icon.png'),
+        show: false, // Don't show until ready
         webPreferences: {
             preload: path.join(__dirname, 'preload.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
         },
+        // Modern window styling
+        frame: true,
+        titleBarStyle: 'hidden',
+        trafficLightPosition: { x: 10, y: 10 }, // For macOS only
+        webgl: true,
+        v8Code: true,
     });
 
+    // Скрыть стандартное меню
+    win.removeMenu();
+
     win.maximize();
+    
+    // Показать окно после загрузки контента
+    win.webContents.on('dom-ready', () => {
+        win.show();
+    });
 
     // Set Content Security Policy
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -201,6 +216,32 @@ app.whenReady().then(async () => {
         logger.info('[Main] Received app-close request, quitting...');
         logAudit('APP_SHUTDOWN');
         app.quit();
+    });
+
+    // Window control handlers
+    ipcMain.handle('window:minimize', async (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) win.minimize();
+    });
+
+    ipcMain.handle('window:maximize', async (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) win.maximize();
+    });
+
+    ipcMain.handle('window:unmaximize', async (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) win.unmaximize();
+    });
+
+    ipcMain.handle('window:close', async (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) win.close();
+    });
+
+    ipcMain.handle('window:is-maximized', async (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        return win ? win.isMaximized() : false;
     });
 
     // Backup on close: create backup only if DB changed since last backup

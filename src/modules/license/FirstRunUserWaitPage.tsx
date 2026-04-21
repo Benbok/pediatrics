@@ -15,6 +15,7 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [manualCredentialsRequired, setManualCredentialsRequired] = useState(false);
 
   // Credentials form
   const [username, setUsername] = useState('');
@@ -45,6 +46,19 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
     try {
       const res = await window.electronAPI?.importLicense?.();
       if (res?.success) {
+        if (res.autoProvisioned) {
+          onAccessGranted();
+          return;
+        }
+
+        if (res.requiresManualCredentials) {
+          setManualCredentialsRequired(true);
+          setStep('enter-credentials');
+          return;
+        }
+
+        // Safe fallback for mixed versions.
+        setManualCredentialsRequired(true);
         setStep('enter-credentials');
       } else {
         setError(res?.reason || 'Не удалось импортировать лицензию. Убедитесь, что файл предназначен для этой машины.');
@@ -86,13 +100,13 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
   const stepIndex = steps.findIndex(s => s.key === step);
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-7 space-y-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-7 space-y-6 shadow-sm">
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-white">Активация пользователя</h1>
-          <p className="text-slate-400 text-sm mt-1">Выполните 3 шага для начала работы</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Активация пользователя</h1>
+          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">Получите и импортируйте license.json для начала работы</p>
         </div>
 
         {/* Step indicator */}
@@ -100,19 +114,19 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
           {steps.map((s, i) => (
             <React.Fragment key={s.key}>
               <div className={`flex items-center gap-1.5 text-xs font-medium ${
-                i < stepIndex ? 'text-emerald-400' :
-                i === stepIndex ? 'text-blue-300' :
-                'text-slate-600'
+                i < stepIndex ? 'text-emerald-600 dark:text-emerald-400' :
+                i === stepIndex ? 'text-blue-600 dark:text-blue-300' :
+                'text-slate-500 dark:text-slate-600'
               }`}>
                 {i < stepIndex
                   ? <CheckCircle2 className="w-4 h-4" />
                   : <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
-                      i === stepIndex ? 'border-blue-400 text-blue-300' : 'border-slate-700 text-slate-600'
+                      i === stepIndex ? 'border-blue-500 dark:border-blue-400 text-blue-600 dark:text-blue-300' : 'border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-600'
                     }`}>{i + 1}</span>
                 }
                 <span className="hidden sm:inline">{s.label}</span>
               </div>
-              {i < steps.length - 1 && <div className={`flex-1 h-px ${i < stepIndex ? 'bg-emerald-700' : 'bg-slate-700'}`} />}
+              {i < steps.length - 1 && <div className={`flex-1 h-px ${i < stepIndex ? 'bg-emerald-300 dark:bg-emerald-700' : 'bg-slate-200 dark:bg-slate-700'}`} />}
             </React.Fragment>
           ))}
         </div>
@@ -120,24 +134,24 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
         {/* ── Step 1: Share Machine ID ─────────────────────────────────────── */}
         {step === 'share-id' && (
           <div className="space-y-4">
-            <p className="text-slate-300 text-sm">
-              Скопируйте ваш <strong className="text-white">Machine ID</strong> и отправьте его администратору.
-              Администратор сгенерирует файл <code className="text-emerald-300 bg-slate-800 px-1 rounded">license.json</code> и
-              сообщит вам логин и пароль.
+            <p className="text-slate-700 dark:text-slate-300 text-sm">
+              Скопируйте ваш <strong className="text-slate-900 dark:text-white">Machine ID</strong> и отправьте его администратору.
+              Администратор сгенерирует файл <code className="text-emerald-700 dark:text-emerald-300 bg-slate-100 dark:bg-slate-800 px-1 rounded">license.json</code> и
+              при необходимости сообщит логин и пароль.
             </p>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 space-y-3">
-              <p className="text-xs text-slate-400 uppercase tracking-wide">Ваш Machine ID</p>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-4 space-y-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ваш Machine ID</p>
               <div className="flex items-start gap-2">
-                <div className="flex-1 font-mono text-xs sm:text-sm text-emerald-300 break-all bg-slate-950 rounded-lg p-3 select-all">
+                <div className="flex-1 font-mono text-xs sm:text-sm text-emerald-700 dark:text-emerald-300 break-all bg-white dark:bg-slate-950 rounded-lg p-3 select-all border border-slate-200 dark:border-slate-800">
                   {display || 'Загрузка...'}
                 </div>
                 <button
                   onClick={handleCopy}
-                  className="shrink-0 p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200"
+                  className="shrink-0 p-2 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200"
                   title="Копировать Machine ID"
                 >
-                  {copied ? <CheckCheck className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  {copied ? <CheckCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -146,7 +160,7 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
 
             <div className="flex flex-wrap gap-2 pt-1">
               <button onClick={onBack}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm">
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">
                 <ArrowLeft className="w-4 h-4" />Назад
               </button>
               <button
@@ -163,15 +177,15 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
         {/* ── Step 2: Import license.json ──────────────────────────────────── */}
         {step === 'import-license' && (
           <div className="space-y-4">
-            <p className="text-slate-300 text-sm">
-              Нажмите кнопку и выберите файл <code className="text-emerald-300 bg-slate-800 px-1 rounded">license.json</code>, который прислал администратор.
+            <p className="text-slate-700 dark:text-slate-300 text-sm">
+              Нажмите кнопку и выберите файл <code className="text-emerald-700 dark:text-emerald-300 bg-slate-100 dark:bg-slate-800 px-1 rounded">license.json</code>, который прислал администратор.
             </p>
 
             {error && <p className="text-xs text-amber-400">{error}</p>}
 
             <div className="flex flex-wrap gap-2 pt-1">
               <button onClick={() => { setError(''); setStep('share-id'); }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm">
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">
                 <ArrowLeft className="w-4 h-4" />Назад
               </button>
               <button
@@ -192,13 +206,15 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
         {/* ── Step 3: Enter credentials ─────────────────────────────────────── */}
         {step === 'enter-credentials' && (
           <form onSubmit={handleActivate} className="space-y-4">
-            <p className="text-slate-300 text-sm">
-              Лицензия принята. Введите <strong className="text-white">логин и пароль</strong>, которые сообщил вам администратор.
+            <p className="text-slate-700 dark:text-slate-300 text-sm">
+              {manualCredentialsRequired
+                ? 'Лицензия принята. Введите логин и пароль, которые сообщил администратор (fallback для раннего формата лицензии).'
+                : 'Лицензия принята. Введите логин и пароль, которые сообщил администратор.'}
             </p>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Логин</label>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Логин</label>
                 <input
                   type="text"
                   value={username}
@@ -206,11 +222,11 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
                   placeholder="Введите логин"
                   required
                   autoComplete="username"
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Пароль</label>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Пароль</label>
                 <input
                   type="password"
                   value={password}
@@ -218,7 +234,7 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
                   placeholder="Введите пароль"
                   required
                   autoComplete="current-password"
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -227,7 +243,7 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
 
             <div className="flex flex-wrap gap-2 pt-1">
               <button type="button" onClick={() => { setError(''); setStep('import-license'); }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm">
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">
                 <ArrowLeft className="w-4 h-4" />Назад
               </button>
               <button

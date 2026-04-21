@@ -49,13 +49,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
     return (
         <div 
-            className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-300 ease-out ${
-                isAnimating ? 'bg-black bg-opacity-50' : 'bg-black bg-opacity-0'
+            className={`fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-300 ease-out ${
+                isAnimating ? 'bg-black/50' : 'bg-black/0'
             }`}
             onClick={onCancel}
         >
             <div 
-                className={`bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full mx-4 border border-slate-200 dark:border-slate-800 transform transition-all duration-300 ease-out ${
+                className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full mx-4 border border-slate-200 dark:border-slate-800 transform transition-all duration-300 ease-out ${
                     isAnimating ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'
                 }`}
                 onClick={(e) => e.stopPropagation()}

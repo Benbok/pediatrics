@@ -8,6 +8,7 @@
 
 | Дата | ID | Модуль | Задача | Статус | Детали |
 |------|----|--------|--------|--------|--------|
+| 21.04.2026 | TASK-076 | license/auth | Variant A: автосоздание пользователя из подписанной лицензии | 🔄 IN_PROGRESS | [→](tasks/21.04.2026/TASK-076.md) |
 | 02.04.2026 | TASK-001 | visits/cdss | Консервативный AI-ранжинг при размытых жалобах | ❌ Superseded by TASK-057 | [→](tasks/02.04.2026/TASK-001.md) |
 | 15.04.2026 | TASK-056 | cross-cutting/tests | TypeScript cleanup + full test suite green (309/309) | ✅ DONE | [→](tasks/15.04.2026/TASK-056.md) |
 | 07.04.2026 | TASK-037 | diseases/form | Специфичность и патогномоничность симптомов в базе знаний заболеваний | ✅ DONE | [→](tasks/07.04.2026/TASK-037.md) |

@@ -52,7 +52,7 @@ const IcdCodeService = {
         }
 
         try {
-            const jsonPath = path.join(process.cwd(), 'src', 'data', 'мкб.json');
+            const jsonPath = path.join(__dirname, '..', '..', '..', 'src', 'data', 'мкб.json');
             logger.info(`[IcdCodeService] Loading ICD codes from: ${jsonPath}`);
 
             const fileContent = await fs.readFile(jsonPath, 'utf-8');

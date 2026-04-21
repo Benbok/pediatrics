@@ -937,8 +937,8 @@ declare global {
     electronAPI?: {
       // LICENSE ACTIVATION API (no auth required)
       getLicenseFingerprint: () => Promise<{ fingerprint: string | null; display: string; error?: string }>;
-      checkLicense: () => Promise<{ valid: boolean; reason?: string; devMode?: boolean; data?: { userName: string; expiresAt: string | null } }>;
-      importLicense: () => Promise<{ success: boolean; reason?: string; data?: { userName: string; expiresAt: string | null } }>;
+      checkLicense: () => Promise<{ valid: boolean; reason?: string; devMode?: boolean; data?: { userName: string; expiresAt: string | null; username?: string } }>;
+      importLicense: () => Promise<{ success: boolean; reason?: string; data?: { userName: string; expiresAt: string | null; username?: string }; autoProvisioned?: boolean; requiresManualCredentials?: boolean; username?: string }>;
 
       // LICENSE ADMIN API (developer-only, requires private.pem in userData)
       licenseAdminList: () => Promise<{ success: boolean; records: LicenseRecord[]; error?: string }>;
@@ -1073,6 +1073,7 @@ declare global {
       updateUser: (data: { userId: number; username: string; lastName: string; firstName?: string; middleName?: string; isActive: boolean }) => Promise<{ success: boolean; user?: User; error?: string }>;
       setUserRoles: (data: { userId: number; roles: UserRoleKey[] }) => Promise<{ success: boolean; error?: string }>;
       resetPassword: (data: { userId: number; newPassword: string }) => Promise<{ success: boolean; error?: string }>;
+      deleteUser: (data: { userId: number }) => Promise<{ success: boolean; error?: string }>;
 
       // PATIENT SHARING API
       sharePatient: (data: { childId: number; userId: number; canEdit: boolean }) => Promise<{ success: boolean; error?: string }>;

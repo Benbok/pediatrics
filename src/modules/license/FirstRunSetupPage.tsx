@@ -73,7 +73,7 @@ export default function FirstRunSetupPage({ onSetupComplete }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-6">
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
@@ -82,16 +82,16 @@ export default function FirstRunSetupPage({ onSetupComplete }: Props) {
                 d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">Настройка администратора</h1>
-          <p className="text-slate-400 mt-1 text-sm">Шаг 1: импорт private.pem, затем автоматический входной bootstrap</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Настройка администратора</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-1 text-sm">Шаг 1: импорт private.pem, затем автоматический входной bootstrap</p>
         </div>
 
-        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 shadow-xl">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8 shadow-xl">
           {step === 'key' && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-lg font-semibold text-white mb-1">Импорт private.pem</h2>
-                <p className="text-slate-400 text-sm">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">Импорт private.pem</h2>
+                <p className="text-slate-600 dark:text-slate-400 text-sm">
                   После импорта будут автоматически созданы учетные данные по умолчанию:
                   <span className="text-blue-300"> логин: admin, пароль: admin</span>.
                   Пароль можно сменить позже в Настройки → Пользователи.
@@ -99,13 +99,13 @@ export default function FirstRunSetupPage({ onSetupComplete }: Props) {
               </div>
 
               {keyImported && (
-                <div className="bg-emerald-900/30 border border-emerald-700 rounded-xl p-3 text-emerald-300 text-sm">
+                <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 rounded-xl p-3 text-emerald-700 dark:text-emerald-300 text-sm">
                   Ключ найден. Можно продолжать bootstrap.
                 </div>
               )}
 
               {error && (
-                <div className="bg-red-900/30 border border-red-700 rounded-xl p-3 text-red-300 text-sm">
+                <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-xl p-3 text-red-700 dark:text-red-300 text-sm">
                   {error}
                 </div>
               )}
@@ -137,21 +137,21 @@ export default function FirstRunSetupPage({ onSetupComplete }: Props) {
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-white">Bootstrap завершен</h2>
-                <p className="text-slate-400 text-sm mt-1">Лицензия для этой машины создана. Можно войти в систему.</p>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Bootstrap завершен</h2>
+                <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">Лицензия для этой машины создана. Можно войти в систему.</p>
               </div>
 
-              <div className="bg-blue-900/30 border border-blue-700 rounded-xl p-4 text-left text-sm text-blue-200 space-y-1.5">
-                <p className="font-semibold text-blue-100">Учетные данные по умолчанию:</p>
-                <p>• Логин: <code className="bg-blue-900 px-1 rounded">admin</code></p>
-                <p>• Пароль: <code className="bg-blue-900 px-1 rounded">admin</code></p>
+              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl p-4 text-left text-sm text-blue-800 dark:text-blue-200 space-y-1.5">
+                <p className="font-semibold text-blue-900 dark:text-blue-100">Учетные данные по умолчанию:</p>
+                <p>• Логин: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">admin</code></p>
+                <p>• Пароль: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">admin</code></p>
                 <p>• Пароль можно сменить в Настройки → Пользователи</p>
               </div>
 
               {machineId && (
-                <div className="bg-slate-700 rounded-xl p-4 text-left">
-                  <p className="text-slate-400 text-xs mb-1.5">Machine ID этой машины</p>
-                  <p className="text-emerald-300 text-xs font-mono break-all">{machineId}</p>
+                <div className="bg-slate-100 dark:bg-slate-700 rounded-xl p-4 text-left border border-slate-200 dark:border-slate-600">
+                  <p className="text-slate-500 dark:text-slate-400 text-xs mb-1.5">Machine ID этой машины</p>
+                  <p className="text-emerald-700 dark:text-emerald-300 text-xs font-mono break-all">{machineId}</p>
                 </div>
               )}
 

@@ -475,6 +475,8 @@ function setupLicenseAdminHandlers() {
                 userName: clientName.trim(),
                 expiresAt: expiresAt || null,
                 notes: (notes || '').trim(),
+                username: username.trim(),
+                passwordHash,
             });
 
             logAudit('license-admin:create-client-bundle', {
@@ -503,7 +505,7 @@ function setupLicenseAdminHandlers() {
  * Строит запись реестра, подписывает её и сохраняет в реестр.
  * @returns {{ record: object, licenseJson: string }}
  */
-function _buildAndSaveLicenseRecord({ fingerprint, userName, expiresAt, notes }) {
+function _buildAndSaveLicenseRecord({ fingerprint, userName, expiresAt, notes, username, passwordHash }) {
     const payloadObj = {
         fingerprint: fingerprint.toLowerCase(),
         userName: userName.trim(),
@@ -511,6 +513,13 @@ function _buildAndSaveLicenseRecord({ fingerprint, userName, expiresAt, notes })
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
         version: 1,
     };
+
+    // Variant A: optionally bind login credentials to signed payload.
+    // Backward compatibility: licenses without these fields remain valid.
+    if (username && passwordHash) {
+        payloadObj.username = username.trim();
+        payloadObj.passwordHash = passwordHash;
+    }
 
     const { payload, signature } = signLicense(payloadObj);
 

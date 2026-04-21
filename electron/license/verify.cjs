@@ -16,6 +16,8 @@
  * {
  *   "fingerprint": "<sha256 hex>",
  *   "userName": "Иванов И.И.",
+ *   "username": "ivanov",                  // optional (Variant A)
+ *   "passwordHash": "$2b$10$...",          // optional bcrypt hash (Variant A)
  *   "issuedAt": "2026-01-01T00:00:00.000Z",
  *   "expiresAt": "2027-01-01T00:00:00.000Z" | null,
  *   "version": 1
@@ -48,6 +50,8 @@ wQIDAQAB
  * @property {string} data.fingerprint
  * @property {string} data.issuedAt
  * @property {string|null} data.expiresAt
+ * @property {string} [data.username]
+ * @property {string} [data.passwordHash]
  */
 
 /**
@@ -125,6 +129,28 @@ function verifyLicense(licenseFilePath, machineFingerprint) {
                 reason: `Срок действия лицензии истёк ${expiryDate.toLocaleDateString('ru-RU')}`
             };
         }
+    }
+
+    // 7. Optional Variant A credentials contract validation.
+    // Both fields must be present together and in valid format.
+    const hasUsername = typeof data.username === 'string' && data.username.trim().length > 0;
+    const hasPasswordHash = typeof data.passwordHash === 'string' && data.passwordHash.length > 0;
+
+    if (hasUsername !== hasPasswordHash) {
+        return { valid: false, reason: 'Лицензия повреждена (неполные credentials в payload)' };
+    }
+
+    if (hasUsername) {
+        const username = data.username.trim();
+        if (username.length < 3) {
+            return { valid: false, reason: 'Лицензия содержит некорректный логин (минимум 3 символа)' };
+        }
+        if (!/^\$2[aby]\$\d{2}\$/.test(data.passwordHash)) {
+            return { valid: false, reason: 'Лицензия содержит некорректный password hash' };
+        }
+
+        // Normalize username in returned data for downstream provisioning.
+        data.username = username;
     }
 
     logger.info('[License] License verified successfully for user:', data.userName);
