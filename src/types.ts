@@ -11,6 +11,7 @@ export interface ChildProfile {
   birthDate: string; // ISO string YYYY-MM-DD
   gender: 'male' | 'female';
   birthWeight?: number | null;
+  createdAt?: string;
 }
 
 export interface PatientAllergy {

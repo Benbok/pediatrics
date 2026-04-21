@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
-import { Syringe } from 'lucide-react';
+import { Syringe, UserRound, Pencil, Trash2 } from 'lucide-react';
 import { ChildProfile } from '../../types';
 import { patientService } from '../../services/patient.service';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { PatientModuleHeader } from '../../components/PatientModuleHeader';
+import { logger } from '../../services/logger';
 
 export const PatientDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -24,7 +26,7 @@ export const PatientDetails: React.FC = () => {
             const data = await patientService.getChildById(childId);
             setChild(data);
         } catch (error) {
-            console.error('Failed to load child:', error);
+            logger.error('[PatientDetails] Failed to load child', { error, childId });
         } finally {
             setIsLoading(false);
         }
@@ -43,7 +45,7 @@ export const PatientDetails: React.FC = () => {
             await patientService.deleteChild(child.id);
             navigate('/patients');
         } catch (error) {
-            console.error('Failed to delete child:', error);
+            logger.error('[PatientDetails] Failed to delete child', { error, childId: child.id });
             alert('Не удалось удалить профиль пациента');
         } finally {
             setIsDeleteConfirmOpen(false);
@@ -93,75 +95,37 @@ export const PatientDetails: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Header / Patient Card */}
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 flex gap-2">
-                    <button
-                        onClick={() => navigate(`/patients/${child.id}/edit`)}
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400"
-                        title="Редактировать профиль"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                        </svg>
-                    </button>
-                    <button
-                        onClick={handleDeleteChild}
-                        className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400"
-                        title="Удалить профиль"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                        </svg>
-                    </button>
-                    <button
-                        onClick={() => navigate('/patients')}
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400"
-                        title="Назад к списку"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-
-                <div className="flex flex-col md:flex-row gap-6 items-start">
-                    <div className={clsx(
-                        "w-24 h-24 rounded-3xl flex items-center justify-center font-bold text-4xl shadow-lg transition-transform",
-                        child.gender === 'male'
-                            ? "bg-blue-600 text-white shadow-blue-500/20"
-                            : "bg-rose-500 text-white shadow-rose-500/20"
-                    )}>
-                        {child.surname.charAt(0)}
-                    </div>
-
-                    <div className="flex-1 space-y-4">
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white leading-tight">
-                                {getFullName(child)}
-                            </h1>
-                            <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400 mt-2">
-                                <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-sm font-medium">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                                    </svg>
-                                    {new Date(child.birthDate).toLocaleDateString('ru-RU')}
-                                </span>
-                                <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-sm font-medium">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    {getAge(child.birthDate)}
-                                </span>
-                                <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-sm font-medium">
-                                    {child.gender === 'male' ? 'Мальчик' : 'Девочка'}
-                                </span>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-            </div>
+            <PatientModuleHeader
+                child={child}
+                title="Карточка пациента"
+                icon={<UserRound className="w-6 h-6 !text-white" strokeWidth={2.5} />}
+                iconBgClass={child.gender === 'male' ? 'bg-blue-600' : 'bg-rose-500'}
+                iconShadowClass={child.gender === 'male' ? 'shadow-blue-500/25' : 'shadow-rose-500/25'}
+                onBack={() => navigate('/patients')}
+                badge={
+                    <span className="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">
+                        {getAge(child.birthDate)}
+                    </span>
+                }
+                actions={
+                    <>
+                        <button
+                            onClick={() => navigate(`/patients/${child.id}/edit`)}
+                            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-500 hover:text-blue-600"
+                            title="Редактировать профиль"
+                        >
+                            <Pencil className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={handleDeleteChild}
+                            className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition text-slate-500 hover:text-red-600"
+                            title="Удалить профиль"
+                        >
+                            <Trash2 className="w-5 h-5" />
+                        </button>
+                    </>
+                }
+            />
 
             {/* Modules Grid */}
             <div>

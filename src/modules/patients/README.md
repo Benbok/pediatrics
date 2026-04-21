@@ -345,3 +345,11 @@ model Child {
 - `MULTI_USER_ARCHITECTURE.md` - Архитектура мультипользовательской системы
 - `src/services/patient.service.ts` - Реализация сервиса
 - `src/validators/child.validator.ts` - Схемы валидации
+
+## Changelog
+
+### 21.04.2026 — TASK-079
+- В `PatientsModule` добавлены поиск по ФИО и фильтр по диапазону дат создания карточки с комбинированной фильтрацией через `useMemo`
+- Frontend contract `ChildProfile` и backend handler `db:get-children` синхронизированы по полю `createdAt`
+- Шапка страницы `Пациенты` визуально унифицирована со стилями `PatientModuleHeader`, а в карточках добавлено отображение `Дата создания: дд.мм.гггг`
+- Добавлен smoke test `tests/patients-module.test.tsx` для проверки поиска и фильтрации по `createdAt`

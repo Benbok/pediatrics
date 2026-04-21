@@ -493,6 +493,7 @@ const setupDatabaseHandlers = async () => {
       surname: decrypt(child.surname),
       patronymic: decrypt(child.patronymic),
       birthDate: decrypt(child.birthDate),
+      createdAt: child.createdAt instanceof Date ? child.createdAt.toISOString() : child.createdAt,
       isShared: child.shares.length > 0, // Mark as shared
       sharedBy: child.shares[0]?.ownerUser ? [child.shares[0].ownerUser.lastName, child.shares[0].ownerUser.firstName, child.shares[0].ownerUser.middleName].filter(Boolean).join(' ') : null,
       canEdit: child.createdByUserId === userId || child.shares[0]?.canEdit || isAdmin

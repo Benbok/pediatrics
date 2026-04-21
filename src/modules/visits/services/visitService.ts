@@ -69,8 +69,14 @@ export const visitService = {
      * Delete a visit
      */
     async deleteVisit(id: number): Promise<boolean> {
+        const validation = AnalyzeVisitSchema.safeParse({ visitId: id });
+        if (!validation.success) {
+            const errorMsg = validation.error.issues.map(i => i.message).join(', ');
+            throw new Error(`Ошибка валидации: ${errorMsg}`);
+        }
+
         try {
-            return await window.electronAPI.deleteVisit(id);
+            return await window.electronAPI.deleteVisit(validation.data.visitId);
         } catch (error) {
             logger.error('[VisitService] Failed to delete visit', { error, visitId: id });
             throw error;

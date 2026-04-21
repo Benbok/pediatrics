@@ -2,7 +2,7 @@ import React from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
 import { Visit, getFullName } from '../../../types';
-import { Calendar, User, Stethoscope, Trash2 } from 'lucide-react';
+import { Calendar, User, Trash2 } from 'lucide-react';
 
 interface VisitCardProps {
     visit: Visit;
@@ -50,13 +50,6 @@ export const VisitCard: React.FC<VisitCardProps> = ({ visit, onClick, onDelete }
             </div>
 
             <div className="space-y-2">
-                <div className="flex items-start gap-2 text-sm">
-                    <Stethoscope className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                    <p className="text-slate-600 dark:text-slate-400 line-clamp-2 italic">
-                        "{visit.complaints}"
-                    </p>
-                </div>
-
                 {visit.primaryDiagnosisId && (
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
                         <Badge variant="primary" size="sm" className="font-mono text-[10px]">

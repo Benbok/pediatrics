@@ -7,6 +7,7 @@ const { parseComplaintsLocal } = require('../../services/cdssLocalLlmService.cjs
 const { parseComplaints } = require('../../services/cdssService.cjs');
 const aiRoutingStore = require('../../services/aiRoutingStore.cjs');
 const { DiseaseService } = require('../diseases/service.cjs');
+const { assertCanDeleteVisit } = require('./access.cjs');
 const { encrypt, decrypt } = require('../../crypto.cjs');
 const { MAX_FALLBACK_CONFIDENCE, MIN_FALLBACK_MATCHES, MAX_FALLBACK_SUGGESTIONS } = require('../../config/cdssConfig.cjs');
 
@@ -555,9 +556,21 @@ const VisitService = {
     /**
      * Delete visit
      */
-    async delete(id) {
+    async delete(id, sessionUser) {
+        const visitId = z.number().int().positive().parse(Number(id));
+        const visit = await prisma.visit.findUnique({
+            where: { id: visitId },
+            select: {
+                id: true,
+                childId: true,
+                doctorId: true,
+            },
+        });
+
+        assertCanDeleteVisit(sessionUser, visit);
+
         return await prisma.visit.delete({
-            where: { id: Number(id) },
+            where: { id: visitId },
         });
     },
 

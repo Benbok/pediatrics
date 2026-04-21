@@ -82,8 +82,18 @@ const setupVisitHandlers = () => {
     }));
 
     ipcMain.handle('visits:delete', ensureAuthenticated(async (_, id) => {
-        await VisitService.delete(id);
-        logAudit('VISIT_DELETED', { id });
+        const session = getSession();
+        const currentUser = session?.user;
+        if (!currentUser) {
+            throw new Error('Unauthorized');
+        }
+
+        const deletedVisit = await VisitService.delete(id, currentUser);
+        logAudit('VISIT_DELETED', {
+            id: deletedVisit.id,
+            childId: deletedVisit.childId,
+            deletedByUserId: currentUser.id,
+        });
         return true;
     }));
 

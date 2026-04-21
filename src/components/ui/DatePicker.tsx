@@ -12,6 +12,8 @@ import clsx from 'clsx';
 interface DatePickerProps {
     value?: string; // ISO string YYYY-MM-DD
     onChange: (value: string) => void;
+    min?: string;
+    max?: string;
     id?: string;
     label?: string;
     placeholder?: string;
@@ -32,6 +34,8 @@ type ViewMode = 'days' | 'months' | 'years';
 export const DatePicker: React.FC<DatePickerProps> = ({
     value,
     onChange,
+    min,
+    max,
     id,
     label,
     placeholder = 'дд.мм.гггг',
@@ -78,9 +82,16 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         const DROPDOWN_HEIGHT = 430;
         const DROPDOWN_WIDTH = 320;
         const MARGIN = 8;
+        const SAFE_TOP = 72;
+        const SAFE_BOTTOM = 12;
 
         const spaceBelow = window.innerHeight - rect.bottom;
-        const flipUp = spaceBelow < DROPDOWN_HEIGHT && rect.top > DROPDOWN_HEIGHT;
+        const shouldFlipUp = spaceBelow < DROPDOWN_HEIGHT && rect.top > DROPDOWN_HEIGHT;
+        const flipUp = placement === 'top'
+            ? true
+            : placement === 'bottom'
+                ? false
+                : shouldFlipUp;
 
         let left = rect.left;
         if (left + DROPDOWN_WIDTH > window.innerWidth - 12) {
@@ -88,12 +99,16 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         }
         if (left < 12) left = 12;
 
+        let top = flipUp ? rect.top - DROPDOWN_HEIGHT - MARGIN : rect.bottom + MARGIN;
+        top = Math.max(SAFE_TOP, top);
+        top = Math.min(top, window.innerHeight - DROPDOWN_HEIGHT - SAFE_BOTTOM);
+
         setDropdownStyle({
-            top: flipUp ? rect.top - DROPDOWN_HEIGHT - MARGIN : rect.bottom + MARGIN,
+            top,
             left,
             flipUp,
         });
-    }, []);
+    }, [placement]);
 
     useEffect(() => {
         if (isOpen) recalcPosition();
@@ -116,9 +131,17 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     // Close when clicking outside (container or portal dropdown)
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
+            const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
             const target = event.target as Node;
-            const inContainer = containerRef.current?.contains(target) ?? false;
-            const inDropdown = dropdownRef.current?.contains(target) ?? false;
+
+            const inContainer = containerRef.current
+                ? path.includes(containerRef.current) || containerRef.current.contains(target)
+                : false;
+
+            const inDropdown = dropdownRef.current
+                ? path.includes(dropdownRef.current) || dropdownRef.current.contains(target)
+                : false;
+
             if (!inContainer && !inDropdown) {
                 setIsOpen(false);
             }
@@ -126,6 +149,12 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const isOutOfRange = useCallback((dateStr: string) => {
+        if (min && dateStr < min) return true;
+        if (max && dateStr > max) return true;
+        return false;
+    }, [min, max]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         let raw = e.target.value;
@@ -211,16 +240,18 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
         const dayStr = String(selectedDate.getDate()).padStart(2, '0');
 
-        onChange(`${year}-${month}-${dayStr}`);
+        const nextValue = `${year}-${month}-${dayStr}`;
+        if (isOutOfRange(nextValue)) return;
+        onChange(nextValue);
         setIsOpen(false);
     };
 
     const changeMonth = (offset: number) => {
-        setViewDate(new Date(currentYear, currentMonth + offset, 1));
+        setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
     };
 
     const changeYear = (offset: number) => {
-        setViewDate(new Date(currentYear + offset, currentMonth, 1));
+        setViewDate((prev) => new Date(prev.getFullYear() + offset, prev.getMonth(), 1));
     };
 
     const handleToday = () => {
@@ -228,7 +259,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');
-        onChange(`${year}-${month}-${day}`);
+        const todayValue = `${year}-${month}-${day}`;
+        if (isOutOfRange(todayValue)) return;
+        onChange(todayValue);
         setIsOpen(false);
     };
 
@@ -278,6 +311,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
             {isOpen && ReactDOM.createPortal(
                 <div
                     ref={dropdownRef}
+                    onMouseDown={(e) => e.stopPropagation()}
                     style={{ top: dropdownStyle.top, left: dropdownStyle.left }}
                     className={clsx(
                         "fixed z-[9999] w-80 bg-white dark:bg-slate-900 rounded-[24px] shadow-2xl border border-slate-200 dark:border-slate-800 p-5 overflow-hidden",
@@ -290,7 +324,15 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                     <div className="flex items-center justify-between mb-6">
                         <div
                             className="flex items-center gap-1 group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 px-2 py-1 rounded-lg transition-colors"
-                            onClick={() => setViewMode(viewMode === 'days' ? 'months' : viewMode === 'months' ? 'years' : 'days')}
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setViewMode((prev) => (prev === 'days' ? 'months' : prev === 'months' ? 'years' : 'days'));
+                            }}
                         >
                             <span className="text-base font-black text-slate-900 dark:text-white capitalize">
                                 {viewMode === 'days' && `${MONTHS[currentMonth]} ${currentYear}`}
@@ -306,6 +348,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                         <div className="flex gap-1">
                             <button
                                 onClick={(e) => {
+                                    e.preventDefault();
                                     e.stopPropagation();
                                     if (viewMode === 'days') changeMonth(-1);
                                     else if (viewMode === 'months') changeYear(-1);
@@ -318,6 +361,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                             </button>
                             <button
                                 onClick={(e) => {
+                                    e.preventDefault();
                                     e.stopPropagation();
                                     if (viewMode === 'days') changeMonth(1);
                                     else if (viewMode === 'months') changeYear(1);
@@ -351,6 +395,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
 
                                     const isToday = new Date().toISOString().split('T')[0] === dateStr;
                                     const isSelected = value === dateStr;
+                                    const isDisabled = isOutOfRange(dateStr);
 
                                     return (
                                         <button
@@ -362,6 +407,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                                             }}
                                             className={clsx(
                                                 "h-9 w-full rounded-xl flex items-center justify-center text-sm font-bold transition-all",
+                                                isDisabled && "opacity-40 cursor-not-allowed pointer-events-none",
                                                 item.month === 'current'
                                                     ? "text-slate-700 dark:text-slate-200"
                                                     : "text-slate-400/50 dark:text-slate-600",
@@ -387,8 +433,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                                     key={month}
                                     type="button"
                                     onClick={(e) => {
+                                        e.preventDefault();
                                         e.stopPropagation();
-                                        setViewDate(new Date(currentYear, idx, 1));
+                                        setViewDate((prev) => new Date(prev.getFullYear(), idx, 1));
                                         setViewMode('days');
                                     }}
                                     className={clsx(
@@ -412,8 +459,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                                     key={year}
                                     type="button"
                                     onClick={(e) => {
+                                        e.preventDefault();
                                         e.stopPropagation();
-                                        setViewDate(new Date(year, currentMonth, 1));
+                                        setViewDate((prev) => new Date(year, prev.getMonth(), 1));
                                         setViewMode('months');
                                     }}
                                     className={clsx(

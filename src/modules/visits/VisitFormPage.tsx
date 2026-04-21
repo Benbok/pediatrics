@@ -124,6 +124,7 @@ export const VisitFormPage: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('Прием успешно сохранен!');
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
     const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
     const [calculatedBMI, setCalculatedBMI] = useState<number | null>(null);
@@ -819,16 +820,6 @@ export const VisitFormPage: React.FC = () => {
         setIsSaving(true);
         setError(null);
 
-        const analysisAvailable = await checkAnalysisAvailability();
-        if (!analysisAvailable) {
-            if (analysisAiProvider === 'gemini') {
-                setError('Gemini API недоступен для анализа. Проверьте API ключи в настройках.');
-            } else {
-                setError('Локальный ИИ недоступен для анализа. Запустите LM Studio и загрузите модель.');
-            }
-            return;
-        }
-
         // Проверка наличия основного диагноза
         // Диагноз может быть объектом или строкой (JSON), проверяем оба варианта
         let hasPrimaryDiagnosis = false;
@@ -862,6 +853,16 @@ export const VisitFormPage: React.FC = () => {
         try {
             const dataToSave = buildVisitPayload(formData, recommendations, status);
             const savedVisit = await visitService.upsertVisit(dataToSave);
+            setFormData(prev => ({
+                ...prev,
+                id: savedVisit.id,
+                status: savedVisit.status ?? status,
+            }));
+            setSuccessMessage(
+                status === 'completed'
+                    ? (isCompletedVisit ? 'Изменения успешно сохранены!' : 'Прием успешно завершен!')
+                    : 'Черновик успешно сохранен!'
+            );
             setSuccess(true);
             
             // Очищаем черновик и помечаем вкладку как "чистую" после успешного сохранения
@@ -1798,6 +1799,7 @@ export const VisitFormPage: React.FC = () => {
         [navigationSections]
     );
     const { activeSection, scrollToSection } = useActiveSection(sectionIds);
+    const isCompletedVisit = formData.status === 'completed';
 
     return (
         <div className="p-6 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1839,24 +1841,38 @@ export const VisitFormPage: React.FC = () => {
                             <Printer className="w-4 h-4 mr-2" />
                             Печать
                         </Button>
-                        <Button 
-                            variant="secondary" 
-                            onClick={() => handleSave('draft')} 
-                            isLoading={isSaving} 
-                            className="rounded-xl h-10 px-5 font-semibold"
-                        >
-                            <Save className="w-4 h-4 mr-2" />
-                            Сохранить черновик
-                        </Button>
-                        <Button 
-                            variant="primary" 
-                            onClick={() => handleSave('completed')} 
-                            isLoading={isSaving} 
-                            className="rounded-xl h-10 px-6 !text-white font-bold shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30 transition-all"
-                        >
-                            <CheckCircle2 className="w-5 h-5 mr-2 !text-white" />
-                            Завершить прием
-                        </Button>
+                        {isCompletedVisit ? (
+                            <Button 
+                                variant="primary" 
+                                onClick={() => handleSave('completed')} 
+                                isLoading={isSaving} 
+                                className="rounded-xl h-10 px-6 !text-white font-bold shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30 transition-all"
+                            >
+                                <Save className="w-4 h-4 mr-2 !text-white" />
+                                Сохранить изменения
+                            </Button>
+                        ) : (
+                            <>
+                                <Button 
+                                    variant="secondary" 
+                                    onClick={() => handleSave('draft')} 
+                                    isLoading={isSaving} 
+                                    className="rounded-xl h-10 px-5 font-semibold"
+                                >
+                                    <Save className="w-4 h-4 mr-2" />
+                                    Сохранить черновик
+                                </Button>
+                                <Button 
+                                    variant="primary" 
+                                    onClick={() => handleSave('completed')} 
+                                    isLoading={isSaving} 
+                                    className="rounded-xl h-10 px-6 !text-white font-bold shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30 transition-all"
+                                >
+                                    <CheckCircle2 className="w-5 h-5 mr-2 !text-white" />
+                                    Завершить прием
+                                </Button>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -2533,7 +2549,7 @@ export const VisitFormPage: React.FC = () => {
             {success && (
                 <div className="fixed bottom-10 left-1/2 -translate-x-1/2 p-4 bg-green-600 text-white rounded-2xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-bottom-5">
                     <CheckCircle2 className="w-6 h-6" />
-                    <p className="font-bold">Прием успешно сохранен!</p>
+                    <p className="font-bold">{successMessage}</p>
                 </div>
             )}
 
