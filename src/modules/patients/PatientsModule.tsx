@@ -7,7 +7,8 @@ import {
     Calendar,
     Weight,
     Users as UsersIcon,
-    ChevronRight
+    ChevronRight,
+    X
 } from 'lucide-react';
 import { ChildProfile } from '../../types';
 import { useChild } from '../../context/ChildContext';
@@ -71,6 +72,8 @@ export const PatientsModule: React.FC = () => {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         leftIcon={<Search size={18} className="text-slate-500" />}
+                        rightIcon={searchQuery ? <X size={16} /> : undefined}
+                        onRightIconClick={searchQuery ? () => setSearchQuery('') : undefined}
                         className="w-full md:w-80 h-12 !rounded-2xl"
                     />
                     <Button

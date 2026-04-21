@@ -9,6 +9,8 @@ import { PatientDetails } from './modules/patients/PatientDetails';
 import { VaccinationModule } from './modules/vaccination/VaccinationModule';
 import { SettingsModule } from './modules/settings/SettingsModule';
 import { UserManagementModule } from './modules/users/UserManagementModule';
+import { CreateUserPage } from './modules/users/CreateUserPage';
+import { EditUserPage } from './modules/users/EditUserPage';
 import { DiseasesModule } from './modules/diseases/DiseasesModule';
 import { DiseaseFormPage } from './modules/diseases/DiseaseFormPage';
 import { DiseaseDetailPage } from './modules/diseases/DiseaseDetailPage';
@@ -68,6 +70,14 @@ const router = createHashRouter([
             {
                 path: 'users',
                 element: <UserManagementModule />,
+            },
+            {
+                path: 'users/new',
+                element: <CreateUserPage />,
+            },
+            {
+                path: 'users/:id/edit',
+                element: <EditUserPage />,
             },
             {
                 path: 'diseases',
