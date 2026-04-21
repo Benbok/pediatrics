@@ -35,6 +35,7 @@ license.json
 *.sw?
 
 # Project-local task tracking and root notes
+/.github/
 /tasks/
 /*.md
 !README.md
