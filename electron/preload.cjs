@@ -339,4 +339,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
         close: () => ipcRenderer.invoke('window:close'),
         isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
     },
+
+    // AUTO-UPDATE API
+    updater: {
+        checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+        downloadUpdate: () => ipcRenderer.invoke('updater:download'),
+        installAndRestart: () => ipcRenderer.invoke('updater:install'),
+        onChecking: (callback) => {
+            ipcRenderer.on('updater:checking', callback);
+            return () => ipcRenderer.removeListener('updater:checking', callback);
+        },
+        onUpdateAvailable: (callback) => {
+            ipcRenderer.on('updater:update-available', callback);
+            return () => ipcRenderer.removeListener('updater:update-available', callback);
+        },
+        onUpToDate: (callback) => {
+            ipcRenderer.on('updater:up-to-date', callback);
+            return () => ipcRenderer.removeListener('updater:up-to-date', callback);
+        },
+        onDownloadProgress: (callback) => {
+            ipcRenderer.on('updater:download-progress', callback);
+            return () => ipcRenderer.removeListener('updater:download-progress', callback);
+        },
+        onUpdateDownloaded: (callback) => {
+            ipcRenderer.on('updater:update-downloaded', callback);
+            return () => ipcRenderer.removeListener('updater:update-downloaded', callback);
+        },
+        onError: (callback) => {
+            ipcRenderer.on('updater:error', callback);
+            return () => ipcRenderer.removeListener('updater:error', callback);
+        },
+    },
 });

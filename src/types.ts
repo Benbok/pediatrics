@@ -1374,6 +1374,19 @@ declare global {
         qaTemplates: () => Promise<QaTemplate[]>;
         qaComputeSingle: (params: { diseaseId: number; templateId: string }) => Promise<QaCacheEntry | null>;
       };
+
+      // AUTO-UPDATE API
+      updater: {
+        checkForUpdates: () => Promise<{ success: boolean; error?: string }>;
+        downloadUpdate: () => Promise<{ success: boolean; error?: string }>;
+        installAndRestart: () => Promise<{ success: boolean }>;
+        onChecking: (callback: (event: any) => void) => () => void;
+        onUpdateAvailable: (callback: (event: any, info: { version: string; releaseNotes: string | null }) => void) => () => void;
+        onUpToDate: (callback: (event: any) => void) => () => void;
+        onDownloadProgress: (callback: (event: any, progress: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => void) => () => void;
+        onUpdateDownloaded: (callback: (event: any, info: { version: string }) => void) => () => void;
+        onError: (callback: (event: any, err: { message: string }) => void) => () => void;
+      };
     }
   }
 }

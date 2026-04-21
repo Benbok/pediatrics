@@ -19,9 +19,10 @@ export default defineConfig(({ mode }) => {
                 '@': path.resolve(__dirname, './src'),
             }
         },
-        // Expose env variables to the app
+        // Expose only non-secret env variables to the app.
+        // VITE_GEMINI_API_KEY is intentionally excluded — API keys are managed
+        // exclusively in the Electron main process via apiKeyStore (encrypted userData).
         define: {
-            'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
             'import.meta.env.VITE_GEMINI_MODEL': JSON.stringify(env.GEMINI_MODEL || 'gemini-2.5-flash'),
         },
         optimizeDeps: {

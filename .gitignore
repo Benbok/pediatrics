@@ -34,3 +34,12 @@ license.json
 *.sln
 *.sw?
 
+# Project-local task tracking and root notes
+/tasks/
+/*.md
+!README.md
+/.ai_rules_quickref.md
+/*.py
+/*.txt
+/*.pdf
+

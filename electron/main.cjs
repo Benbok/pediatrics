@@ -22,11 +22,12 @@ const { setupRecommendationTemplateHandlers } = require('./modules/recommendatio
 const { setupExamTextTemplateHandlers } = require('./modules/exam-text-templates/handlers.cjs');
 const { setupDashboardHandlers } = require('./modules/dashboard/handlers.cjs');
 const { setupNutritionHandlers } = require('./modules/nutrition/handlers.cjs');
-const { initializeDatabase, seedNutritionData } = require('./init-db.cjs');
+const { initializeDatabase, seedNutritionData, seedReferenceData } = require('./init-db.cjs');
 const { logger, logAudit } = require('./logger.cjs');
 const { setupLicenseHandlers } = require('./license/handlers.cjs');
 const { setupLicenseAdminHandlers } = require('./license/admin-handlers.cjs');
 const { setupLlmHandlers } = require('./modules/llm/handlers.cjs');
+const { setupUpdaterHandlers } = require('./modules/updater/handlers.cjs');
 const { runMigrations } = require('./migrate-db.cjs');
 const isDev = !app.isPackaged;
 
@@ -80,6 +81,7 @@ function createWindow() {
     } else {
         win.loadFile(path.join(__dirname, '../dist/index.html'));
     }
+    return win;
 }
 
 app.whenReady().then(async () => {
@@ -122,12 +124,19 @@ app.whenReady().then(async () => {
 
     // Create window IMMEDIATELY — native HTML splash shows right away, no white screen
     logger.info('[Main] Creating window...');
-    createWindow();
+    const win = createWindow();
+
+    // Setup auto-updater in production only (requires packaged app + GitHub releases)
+    if (!isDev) {
+        setupUpdaterHandlers(win);
+        logger.info('[Main] Auto-updater initialized');
+    }
 
     // ── Critical minimum: DB + auth handlers (must complete before login page) ──
     logger.info('[Main] Initializing database...');
     await initializeDatabase();
     await seedNutritionData();
+    await seedReferenceData();
     logger.info('[Main] Database initialization completed');
 
     // ── Background init — CDSS indexes, all feature handlers, API keys ──────────

@@ -1,5 +1,9 @@
 const { prisma } = require('./prisma-client.cjs');
 const bcrypt = require('bcryptjs');
+const path = require('path');
+const fs = require('fs');
+const Database = require('better-sqlite3');
+const { app } = require('electron');
 const { logger } = require('./logger.cjs');
 
 /**
@@ -418,4 +422,87 @@ async function seedNutritionData() {
     }
 }
 
-module.exports = { initializeDatabase, seedNutritionData };
+/**
+ * Seed reference tables (medications, diseases, disease_medications, disease_notes)
+ * from the bundled dev.db into the user's pediatrics.db.
+ *
+ * Only runs in packaged (prod) mode. Skips tables that already have data (idempotent).
+ * Uses better-sqlite3 directly to avoid Prisma overhead on raw batch inserts.
+ */
+async function seedReferenceData() {
+    const isDev = !app.isPackaged;
+    if (isDev) {
+        // In dev mode the app already reads dev.db directly — no seed needed.
+        return;
+    }
+
+    // Path to the bundled seed source.
+    // Files in asarUnpack are at app.asar.unpacked/ next to the asar archive.
+    // better-sqlite3 is a native module and cannot open files inside an asar archive,
+    // so we must resolve to the physical unpacked path.
+    const appPath = app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked');
+    const seedDbPath = path.join(appPath, 'prisma', 'dev.db');
+
+    if (!fs.existsSync(seedDbPath)) {
+        logger.warn('[DB Seed] Bundled dev.db not found at:', seedDbPath, '— skipping reference seed');
+        return;
+    }
+
+    // Path to the user's runtime database
+    const userDbPath = path.join(app.getPath('userData'), 'pediatrics.db');
+
+    const TABLES = [
+        'medications',
+        'diseases',
+        'disease_medications',
+        'disease_notes',
+    ];
+
+    let srcDb;
+    let dstDb;
+    try {
+        srcDb = new Database(seedDbPath, { readonly: true });
+        dstDb = new Database(userDbPath);
+        dstDb.pragma('journal_mode = WAL');
+        dstDb.pragma('busy_timeout = 5000');
+
+        for (const table of TABLES) {
+            // Check if user table already has data — idempotent, never overwrite.
+            const existingRow = dstDb.prepare(`SELECT COUNT(*) as cnt FROM "${table}"`).get();
+            if (existingRow && existingRow.cnt > 0) {
+                logger.info(`[DB Seed] Table "${table}" already has ${existingRow.cnt} rows — skipping`);
+                continue;
+            }
+
+            // Read all rows from seed source
+            const rows = srcDb.prepare(`SELECT * FROM "${table}"`).all();
+            if (rows.length === 0) {
+                logger.info(`[DB Seed] Table "${table}" is empty in seed source — skipping`);
+                continue;
+            }
+
+            // Build INSERT statement from column names of the first row
+            const columns = Object.keys(rows[0]);
+            const placeholders = columns.map(() => '?').join(', ');
+            const insertSql = `INSERT OR IGNORE INTO "${table}" (${columns.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`;
+            const insert = dstDb.prepare(insertSql);
+
+            const insertMany = dstDb.transaction((items) => {
+                for (const row of items) {
+                    insert.run(Object.values(row));
+                }
+            });
+
+            insertMany(rows);
+            logger.info(`[DB Seed] Seeded ${rows.length} rows into "${table}"`);
+        }
+    } catch (err) {
+        logger.error('[DB Seed] Reference seed failed:', err.message);
+        // Non-fatal — app can still run without pre-seeded reference data
+    } finally {
+        if (srcDb) srcDb.close();
+        if (dstDb) dstDb.close();
+    }
+}
+
+module.exports = { initializeDatabase, seedNutritionData, seedReferenceData };

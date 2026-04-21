@@ -27,10 +27,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialLogin = 'admin', in
             const result = await login(loginInput, password);
             if (!result.success) {
                 setError(result.error || 'Неверные учетные данные');
+                setPassword(''); // Очищаем пароль после неудачной попытки
                 setIsSubmitting(false);
             }
         } catch (err) {
             setError('Произошла непредвиденная ошибка');
+            setPassword(''); // Очищаем пароль после ошибки
             setIsSubmitting(false);
         }
     };

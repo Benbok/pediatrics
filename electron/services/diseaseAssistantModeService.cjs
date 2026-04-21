@@ -84,7 +84,7 @@ async function runAssistantQuery({ query, diseaseId, history = [], mode = 'rag' 
     });
 
     const messages = buildDirectMessages(query, history);
-    const llmProvider = await llmRouter.getProvider('rag');
+    const llmProvider = deps.localLlmService || await llmRouter.getProvider('rag');
     let answerText = '';
     const generation = await llmProvider.generate(
         messages,
@@ -122,7 +122,7 @@ async function runAssistantQueryStream({ query, diseaseId, history = [], mode = 
     });
 
     const messages = buildDirectMessages(query, history);
-    const llmProvider = await llmRouter.getProvider('rag');
+    const llmProvider = deps.localLlmService || await llmRouter.getProvider('rag');
     const generation = await llmProvider.generate(
         messages,
         buildDirectGenerationOptions(llmProvider),

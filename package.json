@@ -1,7 +1,7 @@
 {
   "name": "pediassist",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -10,6 +10,9 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "npx prisma generate && npm run build && electron-builder",
+    "electron:release": "dotenv -e .env.local -- cross-env-shell \"npx prisma generate && npm run build && electron-builder --publish always\"",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
     "test:vaccination": "node tests/vaccination-records.test.cjs",
     "test:revaccination": "node tests/polio-hib-revaccination.test.cjs",
     "test:vidal": "node tests/vidal-parser-test.cjs",
@@ -45,10 +48,24 @@
       "node_modules/better-sqlite3/**/*",
       "node_modules/.prisma/**/*",
       "node_modules/@prisma/client/**/*",
-      "**/*.node"
+      "**/*.node",
+      "prisma/dev.db"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "Benbok",
+      "repo": "pediatrics",
+      "private": false
+    },
     "win": {
-      "target": "nsis",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.png"
     },
     "nsis": {
@@ -60,13 +77,14 @@
     "@fontsource/inter": "^5.2.8",
     "@google/genai": "^1.33.0",
     "@journeyapps/sqlcipher": "^5.3.1",
-    "@prisma/adapter-better-sqlite3": "^7.2.0",
-    "@prisma/client": "^7.2.0",
+    "@prisma/adapter-better-sqlite3": "7.2.0",
+    "@prisma/client": "7.2.0",
     "@radix-ui/react-tabs": "^1.1.13",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.5.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
+    "electron-updater": "^6.8.3",
     "lodash": "^4.17.23",
     "lucide-react": "^0.562.0",
     "pdfjs-dist": "^5.4.530",
@@ -95,11 +113,12 @@
     "autoprefixer": "^10.4.23",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
+    "dotenv-cli": "^11.0.0",
     "electron": "^39.2.7",
     "electron-builder": "^25.1.8",
     "jsdom": "^29.0.2",
     "postcss": "^8.5.6",
-    "prisma": "^7.2.0",
+    "prisma": "7.2.0",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",

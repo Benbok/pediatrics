@@ -8,14 +8,9 @@ let ai: GoogleGenAI | null = null;
 let currentApiKey: string | null = null;
 
 const getAIClient = (): GoogleGenAI | null => {
-  // Priority 1: localStorage (user setting)
-  const storedKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
-
-  // Priority 2: environment variable
-  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-  // Use env key as source if localStorage is empty
-  const apiKey = (typeof window !== 'undefined' && localStorage.getItem('gemini_api_key')) || envKey;
+  // API keys are managed exclusively in the Electron main process (apiKeyStore).
+  // The renderer reads the active key from localStorage, which is populated via IPC.
+  const apiKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
 
   if (!apiKey) {
     console.warn("Gemini API key not found. AI features will be disabled.");
@@ -134,9 +129,8 @@ export const validateApiKey = async (key: string, baseUrl?: string): Promise<{ v
  * Gets the current API key (from localStorage or env)
  */
 export const getCurrentApiKey = (): string | null => {
-  const storedKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
-  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
-  return storedKey || envKey || null;
+  // Keys live only in localStorage (populated from Electron main via IPC).
+  return typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
 };
 
 /**

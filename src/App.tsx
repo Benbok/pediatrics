@@ -33,6 +33,7 @@ import { ChildProvider } from './context/ChildContext';
 import { DataCacheProvider } from './context/DataCacheContext';
 import { PdfViewerPage } from './pages/PdfViewerPage';
 import { ApiKeyWarningToast } from './components/ApiKeyWarningToast';
+import { UpdateNotification } from './components/UpdateNotification';
 import { ToastProvider } from './context/ToastContext';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { UploadProgressProvider } from './context/UploadProgressContext';
@@ -183,7 +184,7 @@ const AppContent: React.FC = () => {
         }
 
         if (!isAuthenticated) {
-            return <LoginPage initialLogin={loginPrefill?.login ?? 'admin'} initialPassword={loginPrefill?.password ?? 'admin'} />;
+            return <LoginPage initialLogin={loginPrefill?.login ?? 'admin'} initialPassword={loginPrefill?.password ?? ''} />;
         }
 
         return (
@@ -194,6 +195,7 @@ const AppContent: React.FC = () => {
                             <RouterProvider router={router} />
                             <PrintPreviewManager />
                             <ApiKeyWarningToast />
+                            <UpdateNotification />
                             <ToastContainer />
                         </UploadProgressProvider>
                     </ToastProvider>
@@ -265,6 +267,7 @@ const AppContent: React.FC = () => {
                         <RouterProvider router={router} />
                         <PrintPreviewManager />
                         <ApiKeyWarningToast />
+                        <UpdateNotification />
                         <ToastContainer />
                     </UploadProgressProvider>
                 </ToastProvider>
