@@ -62,6 +62,7 @@ function setupUpdaterHandlers(mainWindow) {
 
     autoUpdater.on('update-downloaded', (info) => {
         logger.info(`[Updater] Update downloaded: ${info.version}`);
+        isDownloading = false;
         if (!mainWindow.isDestroyed()) {
             mainWindow.webContents.send('updater:update-downloaded', {
                 version: info.version,
@@ -72,6 +73,8 @@ function setupUpdaterHandlers(mainWindow) {
     autoUpdater.on('error', (err) => {
         const message = err ? err.message : 'unknown error';
         logger.error(`[Updater] Error: ${message}`);
+        isDownloading = false;
+        isChecking = false;
         if (!mainWindow.isDestroyed()) {
             mainWindow.webContents.send('updater:error', { message });
         }
@@ -81,24 +84,41 @@ function setupUpdaterHandlers(mainWindow) {
     // IPC handlers — команды от renderer
     // ────────────────────────────────────────────────────────────
 
+    let isChecking = false;
+    let isDownloading = false;
+
     ipcMain.handle('updater:check', async () => {
+        if (isChecking || isDownloading) {
+            logger.info('[Updater] Check skipped — already checking or downloading');
+            return { success: true };
+        }
+        isChecking = true;
         try {
             await autoUpdater.checkForUpdates();
             return { success: true };
         } catch (err) {
             logger.error('[Updater] checkForUpdates failed:', err);
             return { success: false, error: err.message };
+        } finally {
+            isChecking = false;
         }
     });
 
     ipcMain.handle('updater:download', async () => {
+        if (isDownloading) {
+            logger.info('[Updater] Download skipped — already in progress');
+            return { success: true };
+        }
+        isDownloading = true;
         try {
             await autoUpdater.downloadUpdate();
             return { success: true };
         } catch (err) {
             logger.error('[Updater] downloadUpdate failed:', err);
+            isDownloading = false;
             return { success: false, error: err.message };
         }
+        // isDownloading resets on 'update-downloaded' or 'error' events below
     });
 
     ipcMain.handle('updater:install', () => {
@@ -109,9 +129,15 @@ function setupUpdaterHandlers(mainWindow) {
 
     // Автопроверка через 5 секунд после запуска
     setTimeout(() => {
-        autoUpdater.checkForUpdates().catch((err) => {
-            logger.warn('[Updater] Background check failed:', err.message);
-        });
+        if (isChecking || isDownloading) return;
+        isChecking = true;
+        autoUpdater.checkForUpdates()
+            .catch((err) => {
+                logger.warn('[Updater] Background check failed:', err.message);
+            })
+            .finally(() => {
+                isChecking = false;
+            });
     }, 5000);
 
     logger.info('[Updater] Auto-updater initialized');

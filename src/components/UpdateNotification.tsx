@@ -43,6 +43,7 @@ export const UpdateNotification: React.FC = () => {
     }, []);
 
     const handleDownload = () => {
+        setState({ status: 'downloading', percent: 0, bytesPerSecond: 0 });
         window.electronAPI.updater.downloadUpdate();
     };
 
