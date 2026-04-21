@@ -1182,6 +1182,7 @@ declare global {
         aiWarning: string | null;
         pdfPath: string;
       }>;
+      getAppVersion: () => Promise<string>;
       readPdfFile: (path: string) => Promise<Uint8Array>;
 
       // MEDICATIONS MODULE API

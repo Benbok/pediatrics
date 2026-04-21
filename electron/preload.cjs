@@ -281,6 +281,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     clearCacheNamespace: (namespace) => ipcRenderer.invoke('cache:clear-namespace', namespace),
 
     // SYSTEM API
+    getAppVersion: () => ipcRenderer.invoke('app:get-version'),
     openExternalPath: (path) => ipcRenderer.invoke('app:open-path', path),
     openPdfAtPage: (path, page) => ipcRenderer.invoke('app:open-pdf-at-page', path, page),
     readPdfFile: (path) => ipcRenderer.invoke('app:read-pdf-file', path),

@@ -602,6 +602,10 @@ app.whenReady().then(async () => {
         }
     });
 
+    ipcMain.handle('app:get-version', () => {
+        return app.getVersion();
+    });
+
     ipcMain.handle('app:read-pdf-file', async (_, filePath) => {
         try {
             logger.info(`[Main] Reading PDF file: ${filePath}`);

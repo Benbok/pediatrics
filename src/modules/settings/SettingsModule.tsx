@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag, Building2, Upload, FileCheck, ChevronDown, ChevronRight, Eye, EyeOff, Pencil, Star } from 'lucide-react';
+import { Key, Check, X, AlertCircle, Loader, Shield, Database, RefreshCw, RotateCcw, Zap, Trash2, Plus, FlaskConical, Stethoscope, Tag, Building2, Upload, FileCheck, ChevronDown, ChevronRight, Eye, EyeOff, Pencil, Star, Info, CalendarClock } from 'lucide-react';
 import { apiKeyService, ApiKeysConnectivityReport, PoolStatus, ApiKeyEntry } from '../../services/apiKeyService';
 import { aiRoutingService, AiRoutingEntry } from '../../services/aiRoutingService';
 import { organizationService, getDefaultOrganizationProfile } from '../../services/organization.service';
@@ -216,7 +216,9 @@ export const SettingsModule: React.FC = () => {
         availableBrands: []
     });
     const [brandDraft, setBrandDraft] = useState({ name: '', country: '', description: '' });
-    const [activeTab, setActiveTab] = useState<'api' | 'catalog' | 'organization' | 'cache' | 'security' | 'diseases' | 'licenses'>('api');
+    const [activeTab, setActiveTab] = useState<'api' | 'catalog' | 'organization' | 'cache' | 'security' | 'diseases' | 'licenses' | 'about'>('api');
+    const [appVersion, setAppVersion] = useState<string>('');
+    const [licenseInfo, setLicenseInfo] = useState<{ valid: boolean; userName?: string; expiresAt?: string | null; devMode?: boolean } | null>(null);
 
     // Diagnostic catalog CRUD state
     const [catalogEntries, setCatalogEntries] = useState<DiagnosticCatalogEntry[]>([]);
@@ -314,6 +316,19 @@ export const SettingsModule: React.FC = () => {
         window.electronAPI?.licenseAdminCheckKey?.()
             .then((res) => setHasPrivateKey(Boolean(res?.exists)))
             .catch(() => setHasPrivateKey(false));
+
+        // App version + license for About tab
+        window.electronAPI?.getAppVersion?.().then(setAppVersion).catch(() => {});
+        window.electronAPI?.checkLicense?.().then((res) => {
+            if (res) {
+                setLicenseInfo({
+                    valid: res.valid,
+                    userName: res.data?.userName,
+                    expiresAt: res.data?.expiresAt,
+                    devMode: res.devMode,
+                });
+            }
+        }).catch(() => {});
     }, []);
 
     // Load diagnostic catalog when tab is opened
@@ -980,6 +995,7 @@ export const SettingsModule: React.FC = () => {
         { id: 'cache'        as const, icon: Zap,         label: 'Производительность', description: 'Мониторинг кеша'          },
         { id: 'security'     as const, icon: Shield,      label: 'Безопасность',       description: 'Данные и резервные копии' },
         ...(canAccessLicenses ? [{ id: 'licenses' as const, icon: Key, label: 'Лицензии', description: 'Управление лицензиями' }] : []),
+        { id: 'about' as const, icon: Info, label: 'О программе', description: 'Версия и лицензия' },
     ];
 
     return (
@@ -2501,6 +2517,96 @@ export const SettingsModule: React.FC = () => {
             {isAdmin && activeTab === 'licenses' && (
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
                 <LicenseAdminPanel />
+            </div>
+            )}
+
+            {activeTab === 'about' && (
+            <div className="space-y-4">
+                {/* Version card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                    <div className="flex items-center gap-3 mb-5">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                            <Info className="text-blue-600 dark:text-blue-400" size={22} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">О программе</h2>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Информация о версии и лицензии</p>
+                        </div>
+                    </div>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Приложение</span>
+                            <span className="text-sm font-semibold text-slate-900 dark:text-white">PediAssist</span>
+                        </div>
+                        <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Версия</span>
+                            <span className="text-sm font-mono font-semibold text-blue-600 dark:text-blue-400">
+                                {appVersion ? `v${appVersion}` : '—'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* License card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                    <div className="flex items-center gap-3 mb-5">
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                            <CalendarClock className="text-emerald-600 dark:text-emerald-400" size={22} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Лицензия</h2>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Сведения об активации</p>
+                        </div>
+                    </div>
+                    {licenseInfo === null ? (
+                        <div className="flex items-center gap-2 text-slate-400 text-sm"><Loader size={14} className="animate-spin" /> Загрузка...</div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
+                                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Статус</span>
+                                {licenseInfo.devMode ? (
+                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400">
+                                        <Check size={14} /> Режим разработки
+                                    </span>
+                                ) : licenseInfo.valid ? (
+                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                                        <Check size={14} /> Активна
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-red-500">
+                                        <X size={14} /> Не активна
+                                    </span>
+                                )}
+                            </div>
+                            {licenseInfo.userName && (
+                                <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
+                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Лицензиат</span>
+                                    <span className="text-sm font-semibold text-slate-900 dark:text-white">{licenseInfo.userName}</span>
+                                </div>
+                            )}
+                            <div className="flex items-center justify-between py-3">
+                                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Срок действия</span>
+                                {licenseInfo.expiresAt ? (
+                                    (() => {
+                                        const exp = new Date(licenseInfo.expiresAt);
+                                        const daysLeft = Math.ceil((exp.getTime() - Date.now()) / 86400000);
+                                        const soonExpires = daysLeft <= 30;
+                                        return (
+                                            <span className={`text-sm font-semibold ${
+                                                soonExpires ? 'text-amber-500' : 'text-slate-900 dark:text-white'
+                                            }`}>
+                                                {exp.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                {soonExpires && <span className="ml-2 text-xs font-normal">(осталось {daysLeft} д.)</span>}
+                                            </span>
+                                        );
+                                    })()
+                                ) : (
+                                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Бессрочная</span>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
             )}
 
