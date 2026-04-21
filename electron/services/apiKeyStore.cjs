@@ -201,75 +201,44 @@ async function updateLabel(id, newLabel) {
 /**
  * Get all decrypted key values — for use in apiKeyManager (main process only).
  * NEVER expose this to renderer via IPC.
+ *
+ * Entries that fail decryption (encrypted with a different key) are automatically
+ * removed from the store so they don't appear as phantom entries in the UI.
  * @returns {Promise<{id: string, label: string, value: string}[]>}
  */
 async function getDecryptedKeys() {
     const store = await _readStore();
-    const primaryId = store.primaryId ?? store.keys[0]?.id ?? null;
-    // Sort: primary key first so apiKeyManager uses it as first in rotation
-    const sorted = [
-        ...store.keys.filter(k => k.id === primaryId),
-        ...store.keys.filter(k => k.id !== primaryId),
-    ];
-    return sorted.map(k => ({
-        id: k.id,
-        label: k.label,
-        model: k.model || DEFAULT_MODEL,
+
+    const decrypted = store.keys.map(k => ({
+        ...k,
         value: decrypt(k.encryptedValue),
     }));
-}
 
-/**
- * Migrate keys from environment variables (one-time, idempotent).
- * Reads GEMINI_API_KEYS or VITE_GEMINI_API_KEY and stores them if not already present.
- */
-async function migrateFromEnv() {
-    // Migrate only on first initialization, before store file is created.
-    // If the user later deletes all keys, we keep store empty and do not re-import env keys.
-    const hasStoreFile = await _storeFileExists();
-    if (hasStoreFile) {
-        return 0;
-    }
-
-    const store = await _readStore();
-    if (store.keys.length > 0) {
-        // Already have stored keys — skip migration
-        return 0;
-    }
-
-    const rawKeys = [];
-
-    const keysString = process.env.GEMINI_API_KEYS;
-    if (keysString) {
-        const parts = keysString.split(',').map(k => k.trim()).filter(k => k && k.startsWith('AIza') && k.length >= 30);
-        rawKeys.push(...parts);
-    }
-
-    const singleKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    if (singleKey && singleKey.startsWith('AIza') && singleKey.length >= 30 && !rawKeys.includes(singleKey)) {
-        rawKeys.push(singleKey);
-    }
-
-    if (rawKeys.length === 0) {
-        // Create an empty initialized store to prevent repeated env migration attempts.
+    // Remove entries whose encryption is broken (key mismatch / corruption)
+    const broken = decrypted.filter(k => k.value === '[DECRYPTION_ERROR]' || !k.value);
+    if (broken.length > 0) {
+        const brokenIds = new Set(broken.map(k => k.id));
+        logger.warn(`[ApiKeyStore] Removing ${broken.length} undecryptable key(s) from store: ${[...brokenIds].join(', ')}`);
+        store.keys = store.keys.filter(k => !brokenIds.has(k.id));
+        if (brokenIds.has(store.primaryId)) {
+            store.primaryId = store.keys[0]?.id ?? null;
+        }
         await _writeStore(store);
-        return 0;
     }
 
-    const now = new Date().toISOString();
-    rawKeys.forEach((rawValue, idx) => {
-        store.keys.push({
-            id: _generateId(),
-            label: rawKeys.length === 1 ? 'Основной ключ' : `Ключ ${idx + 1}`,
-            encryptedValue: encrypt(rawValue),
-            createdAt: now,
-            updatedAt: now,
-        });
-    });
-
-    await _writeStore(store);
-    logger.info(`[ApiKeyStore] Migrated ${rawKeys.length} key(s) from environment`);
-    return rawKeys.length;
+    const primaryId = store.primaryId ?? store.keys[0]?.id ?? null;
+    const valid = decrypted.filter(k => !broken.includes(k));
+    // Sort: primary key first so apiKeyManager uses it as first in rotation
+    const sorted = [
+        ...valid.filter(k => k.id === primaryId),
+        ...valid.filter(k => k.id !== primaryId),
+    ];
+    return sorted.map(({ id, label, model, value }) => ({
+        id,
+        label,
+        model: model || DEFAULT_MODEL,
+        value,
+    }));
 }
 
 /**
@@ -294,4 +263,4 @@ async function updateModel(id, model) {
     return true;
 }
 
-module.exports = { listKeys, addKey, deleteKey, updateLabel, updateModel, setPrimary, getDecryptedKeys, migrateFromEnv };
+module.exports = { listKeys, addKey, deleteKey, updateLabel, updateModel, setPrimary, getDecryptedKeys };

@@ -452,10 +452,26 @@ async function seedReferenceData() {
     const userDbPath = path.join(app.getPath('userData'), 'pediatrics.db');
 
     const TABLES = [
+        // ── Независимые справочники ──────────────────────────────────────────
         'medications',
         'diseases',
-        'disease_medications',
-        'disease_notes',
+        'vaccine_catalog_entries',
+        'vaccine_plan_templates',
+        'diagnostic_test_catalog',
+        'organization_profiles',
+        // ── Зависят от diseases ──────────────────────────────────────────────
+        'clinical_guidelines',       // → diseases
+        'guideline_chunks',          // → clinical_guidelines, diseases  (FTS перестраивается при старте ChunkIndexService)
+        'disease_medications',       // → diseases, medications
+        'disease_notes',             // → diseases, users(id=1)
+        // ── Шаблоны (created_by_id=1 в dev → admin id=1 в prod) ─────────────
+        'visit_templates',
+        'exam_text_templates',
+        'medication_templates',
+        'recommendation_templates',
+        'diagnostic_templates',
+        // ── Питание (nutrition_product_categories уже засеяны seedNutritionData) ──
+        'nutrition_products',
     ];
 
     let srcDb;
@@ -465,6 +481,7 @@ async function seedReferenceData() {
         dstDb = new Database(userDbPath);
         dstDb.pragma('journal_mode = WAL');
         dstDb.pragma('busy_timeout = 5000');
+        dstDb.pragma('foreign_keys = OFF'); // FK отключены на время seed — пользователь с id=1 создаётся в initializeDatabase до этого вызова
 
         for (const table of TABLES) {
             // Check if user table already has data — idempotent, never overwrite.

@@ -37,20 +37,9 @@ function validateApiKey(key) {
 
 /**
  * Загрузка ключей из зашифрованного хранилища.
- * При первом запуске выполняет миграцию из env-переменных.
  * @returns {Promise<string[]>}
  */
 async function loadKeysFromStore() {
-    // Миграция из env при первом запуске (idempotent — пропустит, если ключи уже есть)
-    try {
-        const migrated = await apiKeyStore.migrateFromEnv();
-        if (migrated > 0) {
-            logger.info(`[ApiKeyManager] Migrated ${migrated} key(s) from environment to store`);
-        }
-    } catch (err) {
-        logger.warn('[ApiKeyManager] Env migration failed:', err.message);
-    }
-
     try {
         const stored = await apiKeyStore.getDecryptedKeys();
         const valid = stored.filter(entry => validateApiKey(entry.value));

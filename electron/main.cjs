@@ -5,6 +5,57 @@ const { app, BrowserWindow, ipcMain, session, shell, dialog } = require('electro
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const crypto = require('crypto');
+
+/**
+ * Ensure DB_ENCRYPTION_KEY is set in process.env.
+ *
+ * In dev: loaded from .env.local (dotenv above).
+ * In prod: persisted in {userData}/encryption.key.
+ *   - First run: generate 32 random bytes (64 hex), save to file, set env var.
+ *   - Subsequent runs: read from file, set env var.
+ *
+ * Called synchronously before any module that uses crypto.cjs is imported.
+ * userData path is resolved manually before app.whenReady() via app.getPath(),
+ * which works after the app module is loaded even before 'ready' event.
+ */
+function ensureEncryptionKey() {
+    if (process.env.DB_ENCRYPTION_KEY) return; // dev: already set from .env.local
+
+    // app.getPath('userData') is safe to call before app ready on Electron 20+
+    let userDataDir;
+    try {
+        userDataDir = app.getPath('userData');
+    } catch (_) {
+        // Fallback for edge cases: derive from APPDATA / home
+        const base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+        userDataDir = path.join(base, 'PediAssist');
+    }
+
+    const keyPath = path.join(userDataDir, 'encryption.key');
+
+    if (fs.existsSync(keyPath)) {
+        const key = fs.readFileSync(keyPath, 'utf8').trim();
+        if (key && key.length >= 32) {
+            process.env.DB_ENCRYPTION_KEY = key;
+            return;
+        }
+    }
+
+    // First run in prod — generate a new 256-bit key and persist it permanently
+    const newKey = crypto.randomBytes(32).toString('hex'); // 64 hex chars
+    try {
+        fs.mkdirSync(userDataDir, { recursive: true });
+        fs.writeFileSync(keyPath, newKey, { encoding: 'utf8', mode: 0o600 });
+    } catch (writeErr) {
+        // Non-fatal: key will only live in memory this session
+        console.error('[Crypto] Failed to persist encryption key:', writeErr.message);
+    }
+    process.env.DB_ENCRYPTION_KEY = newKey;
+}
+
+// Must run synchronously before any module that uses crypto.cjs
+ensureEncryptionKey();
 const { setupDatabaseHandlers } = require('./database.cjs');
 const { setupAuthHandlers, ensureAuthenticated } = require('./auth.cjs');
 const { createBackupIfChanged } = require('./backup.cjs');
