@@ -13,12 +13,14 @@ interface VisitFormNavigationProps {
     sections: NavigationSection[];
     activeSection: string;
     onNavigate: (sectionId: string) => void;
+    layout?: 'horizontal' | 'sidebar';
 }
 
 export const VisitFormNavigation: React.FC<VisitFormNavigationProps> = ({
     sections,
     activeSection,
     onNavigate,
+    layout = 'horizontal',
 }) => {
     const visibleSections = useMemo(
         () => sections.filter(s => s.isVisible !== false),
@@ -33,12 +35,34 @@ export const VisitFormNavigation: React.FC<VisitFormNavigationProps> = ({
         [completedCount, visibleSections.length]
     );
 
+    const isSidebar = layout === 'sidebar';
+
     return (
         <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[24px] border border-slate-200/50 dark:border-slate-800/50 shadow-lg shadow-slate-900/5">
             <nav
-                className="flex items-center gap-1 px-5 py-3 flex-wrap"
+                className={isSidebar ? 'p-4 space-y-3' : 'flex items-center gap-1 px-5 py-3 flex-wrap'}
                 aria-label="Навигация по форме"
             >
+                {isSidebar && (
+                    <div className="pb-3 border-b border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Прогресс
+                            </span>
+                            <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                                {completedCount}/{visibleSections.length}
+                            </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                                style={{ width: `${progressPercent}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                <div className={isSidebar ? 'space-y-2' : 'contents'}>
                     {visibleSections.map((section) => {
                         const Icon = section.icon;
                         const isActive = activeSection === section.id;
@@ -48,8 +72,8 @@ export const VisitFormNavigation: React.FC<VisitFormNavigationProps> = ({
                                 key={section.id}
                                 onClick={() => onNavigate(section.id)}
                                 className={`
-                                    relative flex items-center gap-1.5 px-2 py-1.5 rounded-lg whitespace-nowrap
-                                    transition-all duration-200 flex-shrink-0
+                                    relative flex items-center gap-1.5 rounded-lg transition-all duration-200
+                                    ${isSidebar ? 'w-full px-3 py-2 text-left' : 'px-2 py-1.5 whitespace-nowrap flex-shrink-0'}
                                     ${isActive
                                         ? 'bg-blue-600 !text-white shadow-lg shadow-blue-500/30'
                                         : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700'
@@ -62,7 +86,7 @@ export const VisitFormNavigation: React.FC<VisitFormNavigationProps> = ({
                                     className={`w-3.5 h-3.5 ${isActive ? '!text-white' : ''}`}
                                     strokeWidth={isActive ? 2.5 : 2}
                                 />
-                                <span className={`text-xs font-semibold hidden sm:inline-block ${isActive ? '!text-white' : ''}`}>
+                                <span className={`text-xs font-semibold ${isSidebar ? 'inline-block' : 'hidden sm:inline-block'} ${isActive ? '!text-white' : ''}`}>
                                     {section.label}
                                 </span>
 
@@ -72,8 +96,9 @@ export const VisitFormNavigation: React.FC<VisitFormNavigationProps> = ({
                             </button>
                         );
                     })}
+                </div>
 
-                    {/* Progress indicator at the end */}
+                {!isSidebar && (
                     <div className="flex items-center gap-3 ml-auto pl-4 border-l border-slate-200 dark:border-slate-700 flex-shrink-0">
                         <div className="flex flex-col items-end gap-1">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -90,7 +115,8 @@ export const VisitFormNavigation: React.FC<VisitFormNavigationProps> = ({
                             />
                         </div>
                     </div>
-                </nav>
-            </div>
+                )}
+            </nav>
+        </div>
     );
 };

@@ -139,8 +139,10 @@ interface DiseaseHistorySectionProps {
     formData: Partial<Visit>;
     onChange: (field: keyof Visit, value: any) => void;
     onAnalyze?: () => void;
+    onOpenAiRecommendations?: () => void;
     isAnalyzing?: boolean;
     canAnalyze?: boolean;
+    aiSuggestionsCount?: number;
     errors?: Record<string, string>;
     onRefine?: (field: string, text: string) => void;
     refiningFields?: Set<string>;
@@ -159,8 +161,10 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
     formData,
     onChange,
     onAnalyze,
+    onOpenAiRecommendations,
     isAnalyzing = false,
     canAnalyze = true,
+    aiSuggestionsCount = 0,
     errors = {},
     onRefine,
     refiningFields = new Set(),
@@ -186,6 +190,19 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
             ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800'
             : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
     );
+    const canOpenAiRecommendations = isAnalyzing || aiSuggestionsCount > 0 || hasDiseaseHistoryData;
+
+    const handleOpenAiRecommendations = () => {
+        if (!canOpenAiRecommendations) {
+            return;
+        }
+
+        if (aiSuggestionsCount === 0 && !isAnalyzing) {
+            onAnalyze?.();
+        }
+
+        onOpenAiRecommendations?.();
+    };
 
     return (
         <Card className="p-6 rounded-[32px] border-slate-200 shadow-xl overflow-hidden">
@@ -198,46 +215,6 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                         АНАМНЕЗ ЗАБОЛЕВАНИЯ
                     </h2>
                 </div>
-                {onAnalyze && (
-                    <div className="flex items-center gap-2">
-                        <span
-                            title={analysisAiAvailable === false
-                                ? (analysisAiProvider === 'gemini'
-                                    ? 'Gemini API недоступен. Проверьте API ключи в настройках.'
-                                    : 'Локальный ИИ недоступен. Запустите LM Studio и загрузите модель.')
-                                : undefined}
-                            className={analysisAiAvailable === false ? 'cursor-not-allowed' : undefined}
-                        >
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={onAnalyze}
-                                disabled={isAnalyzing || !canAnalyze || !hasDiseaseHistoryData || analysisAiAvailable === false}
-                                className="flex items-center gap-2"
-                            >
-                                {isAnalyzing ? (
-                                    <>
-                                        <Sparkles className="w-4 h-4 animate-pulse" />
-                                        {analysisProgress > 0 && analysisProgress < 100 ? `Анализ ${analysisProgress}%` : 'Анализ AI...'}
-                                    </>
-                                ) : analysisAiAvailable === false ? (
-                                    <>
-                                        <WifiOff className="w-4 h-4" />
-                                        Анализ AI
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles className="w-4 h-4" />
-                                        Анализ AI
-                                    </>
-                                )}
-                            </Button>
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${providerBadgeClass(analysisAiProvider)}`}>
-                            {providerBadgeLabel(analysisAiProvider)}
-                        </span>
-                    </div>
-                )}
             </div>
 
             <div className="space-y-6">
@@ -248,46 +225,88 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                             <Activity className="w-4 h-4 text-red-500" />
                             Жалобы на момент поступления
                         </label>
-                        {onRefine && formData.complaints && (
-                            <div className="flex items-center gap-2">
-                                <span
-                                    title={refineAiAvailable === false
-                                        ? (refineAiProvider === 'gemini'
-                                            ? 'Gemini API недоступен. Проверьте API ключи в настройках.'
-                                            : 'Локальный ИИ недоступен. Запустите LM Studio и загрузите модель.')
-                                        : undefined}
-                                    className={refineAiAvailable === false ? 'cursor-not-allowed' : undefined}
-                                >
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => onRefine('complaints', formData.complaints || '')}
-                                        disabled={refiningFields.size > 0 || isAnalyzing || refineAiAvailable === false}
-                                        className="flex items-center gap-1.5 text-xs"
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                            {onAnalyze && (
+                                <>
+                                    <span
+                                        title={analysisAiAvailable === false
+                                            ? (analysisAiProvider === 'gemini'
+                                                ? 'Gemini API недоступен. Проверьте API ключи в настройках.'
+                                                : 'Локальный ИИ недоступен. Запустите LM Studio и загрузите модель.')
+                                            : undefined}
+                                        className={analysisAiAvailable === false ? 'cursor-not-allowed' : undefined}
                                     >
-                                        {refiningFields.has('complaints') ? (
-                                            <>
-                                                <Sparkles className="w-3 h-3 animate-pulse" />
-                                                Рефайнинг...
-                                            </>
-                                        ) : refineAiAvailable === false ? (
-                                            <>
-                                                <WifiOff className="w-3 h-3" />
-                                                Рефайн
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Sparkles className="w-3 h-3" />
-                                                Рефайн
-                                            </>
-                                        )}
-                                    </Button>
-                                </span>
-                                <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${providerBadgeClass(refineAiProvider)}`}>
-                                    {providerBadgeLabel(refineAiProvider)}
-                                </span>
-                            </div>
-                        )}
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={handleOpenAiRecommendations}
+                                            disabled={!canOpenAiRecommendations || (analysisAiAvailable === false && aiSuggestionsCount === 0) || !canAnalyze}
+                                            className="flex items-center gap-2 text-xs"
+                                        >
+                                            {isAnalyzing ? (
+                                                <>
+                                                    <Sparkles className="w-3 h-3 animate-pulse" />
+                                                    {analysisProgress > 0 && analysisProgress < 100 ? `AI ${analysisProgress}%` : 'Анализ AI...'}
+                                                </>
+                                            ) : analysisAiAvailable === false ? (
+                                                <>
+                                                    <WifiOff className="w-3 h-3" />
+                                                    AI диагнозы
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Sparkles className="w-3 h-3" />
+                                                    {aiSuggestionsCount > 0 ? `AI диагнозы (${aiSuggestionsCount})` : 'AI диагнозы'}
+                                                </>
+                                            )}
+                                        </Button>
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${providerBadgeClass(analysisAiProvider)}`}>
+                                        {providerBadgeLabel(analysisAiProvider)}
+                                    </span>
+                                </>
+                            )}
+                            {onRefine && formData.complaints && (
+                                <>
+                                    <span
+                                        title={refineAiAvailable === false
+                                            ? (refineAiProvider === 'gemini'
+                                                ? 'Gemini API недоступен. Проверьте API ключи в настройках.'
+                                                : 'Локальный ИИ недоступен. Запустите LM Studio и загрузите модель.')
+                                            : undefined}
+                                        className={refineAiAvailable === false ? 'cursor-not-allowed' : undefined}
+                                    >
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => onRefine('complaints', formData.complaints || '')}
+                                            disabled={refiningFields.size > 0 || isAnalyzing || refineAiAvailable === false}
+                                            className="flex items-center gap-1.5 text-xs"
+                                        >
+                                            {refiningFields.has('complaints') ? (
+                                                <>
+                                                    <Sparkles className="w-3 h-3 animate-pulse" />
+                                                    Рефайнинг...
+                                                </>
+                                            ) : refineAiAvailable === false ? (
+                                                <>
+                                                    <WifiOff className="w-3 h-3" />
+                                                    Рефайн
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Sparkles className="w-3 h-3" />
+                                                    Рефайн
+                                                </>
+                                            )}
+                                        </Button>
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${providerBadgeClass(refineAiProvider)}`}>
+                                        {providerBadgeLabel(refineAiProvider)}
+                                    </span>
+                                </>
+                            )}
+                        </div>
                     </div>
                     <textarea
                         value={streamPreview.complaints || formData.complaints || ''}
@@ -320,6 +339,13 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                         <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
                             {errors.complaints}
                         </p>
+                    )}
+                    {onAnalyze && (isAnalyzing || aiSuggestionsCount > 0) && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {isAnalyzing
+                                ? 'Модальное окно AI-рекомендаций уже можно открыть: результаты появятся автоматически после завершения анализа.'
+                                : `Доступно AI-вариантов диагноза: ${aiSuggestionsCount}. Откройте список через кнопку рядом с жалобами.`}
+                        </div>
                     )}
                 </div>
 

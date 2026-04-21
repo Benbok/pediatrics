@@ -33,6 +33,7 @@ import { DiagnosticTemplateSelector } from './components/DiagnosticTemplateSelec
 import { DiagnosticTemplateBatchEditor } from './components/DiagnosticTemplateBatchEditor';
 import { DiagnosticBrowser } from './components/DiagnosticBrowser';
 import { RecommendationsBrowser } from './components/RecommendationsBrowser';
+import { AiDiagnosisRecommendationsModal } from './components/AiDiagnosisRecommendationsModal';
 import { diagnosticTemplateService } from './services/diagnosticTemplateService';
 import { RecommendationsSection } from './components/RecommendationsSection';
 import { RecommendationTemplateSelector } from './components/RecommendationTemplateSelector';
@@ -58,7 +59,6 @@ import {
     Save,
     Stethoscope,
     Activity,
-    Sparkles,
     Pill,
     ClipboardList,
     AlertCircle,
@@ -173,6 +173,7 @@ export const VisitFormPage: React.FC = () => {
     const [isRecommendationTemplateSelectorOpen, setIsRecommendationTemplateSelectorOpen] = useState(false);
     const [isCreateRecommendationTemplateOpen, setIsCreateRecommendationTemplateOpen] = useState(false);
     const [isRecommendationBrowserOpen, setIsRecommendationBrowserOpen] = useState(false);
+    const [isAiDiagnosisModalOpen, setIsAiDiagnosisModalOpen] = useState(false);
 
     // Модальные окна
     const [isIcdSearchOpen, setIsIcdSearchOpen] = useState(false);
@@ -1926,12 +1927,13 @@ export const VisitFormPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Sticky Navigation Bar - Same width as header */}
-            <div className="sticky top-6 z-30">
+            {/* Top navigation overview */}
+            <div>
                 <VisitFormNavigation
                     sections={navigationSections}
                     activeSection={activeSection}
                     onNavigate={scrollToSection}
+                    layout="horizontal"
                 />
             </div>
 
@@ -2122,8 +2124,10 @@ export const VisitFormPage: React.FC = () => {
                             formData={formData}
                             onChange={handleFieldChange}
                             onAnalyze={() => runAnalysis()}
+                            onOpenAiRecommendations={() => setIsAiDiagnosisModalOpen(true)}
                             isAnalyzing={visitAnalysis.isAnalyzing}
                             canAnalyze={visitAnalysis.canAnalyze}
+                            aiSuggestionsCount={suggestions.length}
                             onRefine={handleRefineField}
                             refiningFields={refiningFields}
                             streamPreview={streamPreview}
@@ -2504,160 +2508,15 @@ export const VisitFormPage: React.FC = () => {
                 </div>
 
                 <div className="lg:col-span-1">
-                    <div className="sticky top-[110px] space-y-6 self-start transition-all duration-300">
-                        <Card className="p-5 rounded-[32px] bg-gradient-to-br from-primary-50 to-white dark:from-primary-950/20 dark:to-slate-900 border-primary-100 shadow-lg">
-                            <h2 className="text-sm font-black text-primary-700 dark:text-primary-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <Sparkles className="w-4 h-4" />
-                                AI рекомендации диагнозов
-                                {visitAnalysis.isAnalyzing && (
-                                    <span className="ml-2 text-xs text-slate-500">Анализ...</span>
-                                )}
-                                {suggestions.some(s => s.isUsingFallback) && (
-                                    <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-semibold">
-                                        ⚠️ Упрощённый анализ
-                                    </span>
-                                )}
-                            </h2>
-
-                            {suggestions.length > 0 ? (
-                                <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
-                                    {suggestions.map((s, idx) => {
-                                        const confidencePercent = Math.round(s.confidence * 100);
-                                        const confidenceColor = s.confidence > 0.7 ? 'text-green-600' : s.confidence > 0.4 ? 'text-yellow-600' : 'text-red-600';
-                                        const confidenceBg = s.confidence > 0.7 ? 'bg-green-50 dark:bg-green-950/20' : s.confidence > 0.4 ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'bg-red-50 dark:bg-red-950/20';
-
-                                        return (
-                                            <div
-                                                key={idx}
-                                                className={`p-3 bg-white dark:bg-slate-800 rounded-2xl border shadow-sm group ${
-                                                    s.isUsingFallback 
-                                                        ? 'border-yellow-300 bg-yellow-50/50 dark:bg-yellow-950/10' 
-                                                        : 'border-slate-100 dark:border-slate-700'
-                                                }`}
-                                            >
-                                                {s.isUsingFallback && (
-                                                    <div className="mb-2 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded-lg font-semibold border border-yellow-200 dark:border-yellow-800">
-                                                        ⚠️ Упрощённый анализ (AI недоступен)
-                                                    </div>
-                                                )}
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <Badge variant="primary" size="sm" className="font-mono text-[10px]">
-                                                        {s.disease.icd10Code}
-                                                    </Badge>
-                                                    <div className={`text-[10px] font-black ${confidenceColor} ml-auto flex items-center gap-1`}>
-                                                        <Sparkles className="w-3 h-3" />
-                                                        {confidencePercent}%
-                                                    </div>
-                                                </div>
-                                                {s.disease.id ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => navigate(`/diseases/${s.disease.id}`)}
-                                                        className="font-bold text-slate-800 dark:text-white text-sm mb-1 hover:underline underline-offset-2 text-left"
-                                                        title="Открыть карточку заболевания"
-                                                    >
-                                                        {s.disease.nameRu}
-                                                    </button>
-                                                ) : (
-                                                    <div className="font-bold text-slate-800 dark:text-white text-sm mb-1">
-                                                        {s.disease.nameRu}
-                                                    </div>
-                                                )}
-                                                {s.matchedSymptoms && s.matchedSymptoms.length > 0 && (
-                                                    <div className="text-xs text-slate-500 mb-2">
-                                                        Совпало: {s.matchedSymptoms.join(', ')}
-                                                    </div>
-                                                )}
-                                                <div className={`text-xs p-2 rounded-lg ${confidenceBg} border border-slate-100 dark:border-slate-700 mb-2`}>
-                                                    <div className="font-semibold text-slate-700 dark:text-slate-300 mb-1">Обоснование:</div>
-                                                    <div className="text-slate-600 dark:text-slate-400 italic">{s.reasoning}</div>
-                                                </div>
-                                                <div className="mt-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-2">
-                                                    <div
-                                                        className={`h-1.5 rounded-full transition-all ${s.confidence > 0.7 ? 'bg-green-500' :
-                                                            s.confidence > 0.4 ? 'bg-yellow-500' :
-                                                                'bg-red-500'
-                                                            }`}
-                                                        style={{ width: `${confidencePercent}%` }}
-                                                    />
-                                                </div>
-                                                <Button
-                                                    variant="primary"
-                                                    size="sm"
-                                                    onClick={() => selectDiagnosis(s.disease)}
-                                                    className="w-full"
-                                                >
-                                                    Выбрать
-                                                </Button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <div className="text-center py-6">
-                                    <Stethoscope className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                                    <p className="text-xs text-slate-400 font-medium italic">
-                                        {visitAnalysis.isAnalyzing
-                                            ? 'AI анализирует данные...'
-                                            : 'Заполните анамнез и клинический осмотр для получения рекомендаций'}
-                                    </p>
-                                </div>
-                            )}
-                        </Card>
-
-                        {primaryDiagnosis && (
-                            <Card className="p-5 rounded-[32px] border-slate-200 shadow-sm animate-in zoom-in-95 duration-200">
-                                <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <ClipboardList className="w-4 h-4" />
-                                    Выбранный диагноз
-                                </h2>
-
-                                <div className="space-y-4 max-h-[40vh] overflow-y-auto custom-scrollbar pr-1">
-                                    {/* Primary Diagnosis */}
-                                    <div className="p-3 bg-primary-600 rounded-2xl text-white shadow-lg shadow-primary-500/30">
-                                        <div className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-1">Основной</div>
-                                        {primaryDiagnosis.code && (
-                                            <div className="text-xs font-black text-white/80">{primaryDiagnosis.code}</div>
-                                        )}
-                                        <div className="font-bold">{primaryDiagnosis.nameRu}</div>
-                                        {primaryDiagnosis.diseaseId && (
-                                            <div className="text-[10px] text-white/60 mt-1 italic">Из базы знаний</div>
-                                        )}
-                                    </div>
-
-                                    {/* Complications */}
-                                    {complications.length > 0 && (
-                                        <div className="space-y-2">
-                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Осложнения</div>
-                                            {complications.map((c: any, i: number) => (
-                                                <div key={i} className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-900/40">
-                                                    {c.code && (
-                                                        <div className="text-[10px] font-black text-amber-600 dark:text-amber-400">{c.code}</div>
-                                                    )}
-                                                    <div className="text-sm font-bold text-slate-800 dark:text-slate-200">{c.nameRu}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Comorbidities */}
-                                    {comorbidities.length > 0 && (
-                                        <div className="space-y-2">
-                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Сопутствующие</div>
-                                            {comorbidities.map((c: any, i: number) => (
-                                                <div key={i} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
-                                                    {c.code && (
-                                                        <div className="text-[10px] font-black text-slate-500">{c.code}</div>
-                                                    )}
-                                                    <div className="text-sm font-bold text-slate-700 dark:text-slate-300">{c.nameRu}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </Card>
-                        )}
-
+                    <div className="sticky top-6 self-start transition-all duration-300">
+                        <div className="hidden lg:block max-h-[calc(100vh-48px)] overflow-y-auto custom-scrollbar pr-2">
+                            <VisitFormNavigation
+                                sections={navigationSections}
+                                activeSection={activeSection}
+                                onNavigate={scrollToSection}
+                                layout="sidebar"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2989,6 +2848,15 @@ export const VisitFormPage: React.FC = () => {
                     ...comorbidities.map((c: any) => c.code).filter(Boolean),
                 ]}
                 selectedTexts={recommendations}
+            />
+
+            <AiDiagnosisRecommendationsModal
+                isOpen={isAiDiagnosisModalOpen}
+                onClose={() => setIsAiDiagnosisModalOpen(false)}
+                suggestions={suggestions}
+                isAnalyzing={visitAnalysis.isAnalyzing}
+                onSelectDiagnosis={selectDiagnosis}
+                onOpenDiseaseCard={(diseaseId) => navigate(`/diseases/${diseaseId}`)}
             />
 
             {/* ==================== RECOMMENDATION TEMPLATE MODALS ==================== */}
