@@ -8,6 +8,7 @@ const { logger } = require('../logger.cjs');
 // Конфигурация namespace с TTL (в миллисекундах)
 const NAMESPACE_CONFIG = {
     children: { ttl: 60000 },      // 1 минута - часто меняются
+    dashboard: { ttl: 60000 },     // 1 минута - сводные dashboard-агрегаты
     diseases: { ttl: 300000 },     // 5 минут - редко меняются
     medications: { ttl: 300000 },  // 5 минут - редко меняются
     profiles: { ttl: 60000 },      // 1 минута - могут часто обновляться

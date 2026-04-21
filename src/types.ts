@@ -930,6 +930,35 @@ export interface DashboardSummary {
   weeklyVisitsCount: number;
 }
 
+export interface DashboardVisitAnalyticsRequest {
+  dateFrom: string;
+  dateTo: string;
+}
+
+export interface DashboardVisitAnalyticsPatientItem {
+  childId: number;
+  visitsCount: number;
+  lastVisitId: number;
+  lastVisitDate: string;
+  lastVisitTime: string | null;
+  child: {
+    id: number;
+    name: string;
+    surname: string;
+    birthDate: string;
+  } | null;
+}
+
+export interface DashboardVisitAnalytics {
+  dateFrom: string;
+  dateTo: string;
+  totalVisitsCount: number;
+  uniquePatientsCount: number;
+  completedVisitsCount: number;
+  draftVisitsCount: number;
+  patients: DashboardVisitAnalyticsPatientItem[];
+}
+
 // ============= GLOBAL TYPES =============
 
 // Global window extension for Electron API
@@ -977,6 +1006,7 @@ declare global {
 
       // DASHBOARD MODULE API
       getDashboardSummary: (date?: string) => Promise<DashboardSummary>;
+      getDashboardVisitAnalytics: (params: DashboardVisitAnalyticsRequest) => Promise<DashboardVisitAnalytics>;
       updateVisitNotes: (visitId: number, notes: string) => Promise<boolean>;
       // PATIENTS MODULE API
       getChildren: () => Promise<ChildProfile[]>;

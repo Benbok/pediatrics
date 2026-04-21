@@ -204,6 +204,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // DASHBOARD MODULE API
     getDashboardSummary: (date) => ipcRenderer.invoke('dashboard:get-summary', date),
+    getDashboardVisitAnalytics: (params) => ipcRenderer.invoke('dashboard:get-visit-analytics', params),
     updateVisitNotes: (visitId, notes) => ipcRenderer.invoke('dashboard:update-visit-notes', visitId, notes),
 
     // LOGGING API

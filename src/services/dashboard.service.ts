@@ -1,7 +1,14 @@
 import { z } from 'zod';
-import { DashboardSummary } from '../types';
+import { DashboardSummary, DashboardVisitAnalytics, DashboardVisitAnalyticsRequest } from '../types';
+import {
+    DashboardDateSchema,
+    DashboardVisitAnalyticsRequestSchema,
+    DashboardVisitAnalyticsSchema,
+} from '../validators/dashboard.validator';
 
-const DateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD').optional();
+const OptionalDateSchema = DashboardDateSchema.optional();
+const VisitIdSchema = z.number().int().positive();
+const NotesSchema = z.string();
 
 /**
  * DASHBOARD SERVICE
@@ -16,11 +23,17 @@ export const dashboardService = {
      * @param date - ISO date string YYYY-MM-DD (defaults to today on the backend)
      */
     async getSummary(date?: string): Promise<DashboardSummary> {
-        const validatedDate = date ? DateSchema.parse(date) : undefined;
+        const validatedDate = date ? OptionalDateSchema.parse(date) : undefined;
         return window.electronAPI.getDashboardSummary(validatedDate);
     },
 
+    async getVisitAnalytics(range: DashboardVisitAnalyticsRequest): Promise<DashboardVisitAnalytics> {
+        const validatedRange = DashboardVisitAnalyticsRequestSchema.parse(range);
+        const response = await window.electronAPI.getDashboardVisitAnalytics(validatedRange);
+        return DashboardVisitAnalyticsSchema.parse(response);
+    },
+
     async updateNotes(visitId: number, notes: string): Promise<boolean> {
-        return window.electronAPI.updateVisitNotes(visitId, notes);
+        return window.electronAPI.updateVisitNotes(VisitIdSchema.parse(visitId), NotesSchema.parse(notes));
     }
 };

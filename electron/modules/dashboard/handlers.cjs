@@ -3,9 +3,17 @@ const { prisma } = require('../../prisma-client.cjs');
 const { ensureAuthenticated, getSession } = require('../../auth.cjs');
 const { decrypt } = require('../../crypto.cjs');
 const { logger } = require('../../logger.cjs');
+const { CacheService } = require('../../services/cacheService.cjs');
 const { z } = require('zod');
 
 const DateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
+const VisitAnalyticsRequestSchema = z.object({
+    dateFrom: DateSchema,
+    dateTo: DateSchema,
+}).refine(({ dateFrom, dateTo }) => dateFrom <= dateTo, {
+    message: 'dateFrom must be less than or equal to dateTo',
+    path: ['dateTo'],
+});
 
 /**
  * Get start and end of day for a date string (YYYY-MM-DD)
@@ -42,6 +50,21 @@ function serializeDateOnly(date) {
         return new Date(date).toISOString().split('T')[0];
     }
     return date.toISOString().split('T')[0];
+}
+
+function decryptChild(child) {
+    if (!child) return null;
+
+    return {
+        id: child.id,
+        name: decrypt(child.name),
+        surname: decrypt(child.surname),
+        birthDate: decrypt(child.birthDate)
+    };
+}
+
+function buildAnalyticsCacheKey(doctorId, dateFrom, dateTo) {
+    return `doctor_${doctorId}_${dateFrom}_${dateTo}`;
 }
 
 const setupDashboardHandlers = () => {
@@ -122,14 +145,7 @@ const setupDashboardHandlers = () => {
                 complaints: v.complaints ?? null,
                 notes: v.notes ?? null,
                 primaryDiagnosis: v.primaryDiagnosis ? (typeof v.primaryDiagnosis === 'string' ? JSON.parse(v.primaryDiagnosis) : v.primaryDiagnosis) : null,
-                child: v.child
-                    ? {
-                        id: v.child.id,
-                        name: decrypt(v.child.name),
-                        surname: decrypt(v.child.surname),
-                        birthDate: decrypt(v.child.birthDate)
-                    }
-                    : null
+                child: decryptChild(v.child)
             }));
 
             return {
@@ -140,6 +156,86 @@ const setupDashboardHandlers = () => {
             };
         } catch (error) {
             logger.error('[DashboardHandler] get-summary failed:', error);
+            throw error;
+        }
+    }));
+
+    /**
+     * dashboard:get-visit-analytics
+     * Returns visit analytics for the current doctor within a custom date range.
+     */
+    ipcMain.handle('dashboard:get-visit-analytics', ensureAuthenticated(async (_, params) => {
+        try {
+            const session = getSession();
+            const doctorId = session?.user?.id;
+            if (!doctorId) throw new Error('Unauthorized');
+
+            const { dateFrom, dateTo } = VisitAnalyticsRequestSchema.parse(params ?? {});
+            const cacheKey = buildAnalyticsCacheKey(doctorId, dateFrom, dateTo);
+            const cached = CacheService.get('dashboard', cacheKey);
+            if (cached) {
+                return cached;
+            }
+
+            const range = {
+                gte: new Date(`${dateFrom}T00:00:00.000`),
+                lte: new Date(`${dateTo}T23:59:59.999`),
+            };
+
+            const visits = await prisma.visit.findMany({
+                where: {
+                    doctorId,
+                    visitDate: range,
+                },
+                include: {
+                    child: {
+                        select: { id: true, name: true, surname: true, birthDate: true }
+                    }
+                },
+                orderBy: [{ visitDate: 'desc' }, { visitTime: 'desc' }]
+            });
+
+            const patientsMap = new Map();
+            let completedVisitsCount = 0;
+            let draftVisitsCount = 0;
+
+            for (const visit of visits) {
+                if (visit.status === 'completed') {
+                    completedVisitsCount += 1;
+                } else {
+                    draftVisitsCount += 1;
+                }
+
+                const existing = patientsMap.get(visit.childId);
+                if (existing) {
+                    existing.visitsCount += 1;
+                    continue;
+                }
+
+                patientsMap.set(visit.childId, {
+                    childId: visit.childId,
+                    visitsCount: 1,
+                    lastVisitId: visit.id,
+                    lastVisitDate: serializeDateOnly(visit.visitDate),
+                    lastVisitTime: visit.visitTime ?? null,
+                    child: decryptChild(visit.child),
+                });
+            }
+
+            const result = {
+                dateFrom,
+                dateTo,
+                totalVisitsCount: visits.length,
+                uniquePatientsCount: patientsMap.size,
+                completedVisitsCount,
+                draftVisitsCount,
+                patients: Array.from(patientsMap.values()),
+            };
+
+            CacheService.set('dashboard', cacheKey, result);
+            return result;
+        } catch (error) {
+            logger.error('[DashboardHandler] get-visit-analytics failed:', error);
             throw error;
         }
     }));
