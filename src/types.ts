@@ -1095,7 +1095,7 @@ declare global {
       logout: () => Promise<{ success: boolean }>;
       checkSession: () => Promise<AuthSession>;
 
-      // USER MANAGEMENT API (Admin only)
+      // USER MANAGEMENT API
       registerUser: (data: { username: string; password: string; lastName: string; firstName?: string; middleName?: string; isAdmin: boolean }) => Promise<{ success: boolean; user?: User; error?: string }>;
       getAllUsers: () => Promise<User[]>;
       deactivateUser: (userId: number) => Promise<{ success: boolean; error?: string }>;

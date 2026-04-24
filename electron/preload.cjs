@@ -60,7 +60,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     logout: () => ipcRenderer.invoke('auth:logout'),
     checkSession: () => ipcRenderer.invoke('auth:check-session'),
 
-    // USER MANAGEMENT API (Admin only)
+    // USER MANAGEMENT API (section is available to all authenticated users)
     registerUser: (data) => ipcRenderer.invoke('auth:register-user', data),
     getAllUsers: () => ipcRenderer.invoke('auth:get-all-users'),
     deactivateUser: (userId) => ipcRenderer.invoke('auth:deactivate-user', userId),

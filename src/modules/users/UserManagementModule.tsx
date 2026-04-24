@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 export const UserManagementModule: React.FC = () => {
     const { currentUser } = useAuth();
     const navigate = useNavigate();
+    const isAdmin = Boolean(currentUser?.roles?.includes('admin'));
 
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -26,6 +27,11 @@ export const UserManagementModule: React.FC = () => {
     };
 
     const closeNotify = () => setNotify((s) => ({ ...s, isOpen: false }));
+
+    const canEditUser = (userId: number) => {
+        if (!currentUser) return false;
+        return isAdmin || currentUser.id === userId;
+    };
 
     useEffect(() => {
         loadUsers();
@@ -135,13 +141,15 @@ export const UserManagementModule: React.FC = () => {
                         </p>
                     </div>
                 </div>
-                <button
-                    onClick={() => navigate('/users/new')}
-                    className="flex items-center justify-center gap-2 h-12 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 font-semibold whitespace-nowrap"
-                >
-                    <UserPlus size={20} />
-                    <span>Добавить врача</span>
-                </button>
+                {isAdmin && (
+                    <button
+                        onClick={() => navigate('/users/new')}
+                        className="flex items-center justify-center gap-2 h-12 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 font-semibold whitespace-nowrap"
+                    >
+                        <UserPlus size={20} />
+                        <span>Добавить врача</span>
+                    </button>
+                )}
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -210,31 +218,36 @@ export const UserManagementModule: React.FC = () => {
                                     <div className="flex items-center justify-end gap-1">
                                         <button
                                             onClick={() => navigate(`/users/${user.id}/edit`)}
-                                            className="p-2.5 rounded-lg transition-all text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 hover:scale-110 active:scale-95"
-                                            title="Редактировать"
+                                            disabled={!canEditUser(user.id)}
+                                            className={`p-2.5 rounded-lg transition-all text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 hover:scale-110 active:scale-95 ${!canEditUser(user.id) ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
+                                            title={canEditUser(user.id) ? 'Редактировать' : 'Можно редактировать только свой профиль'}
                                         >
                                             <Pencil size={18} />
                                         </button>
-                                        <button
-                                            onClick={() => handleToggleActive(user.id, user.isActive)}
-                                            disabled={currentUser?.id === user.id}
-                                            className={`p-2.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${
-                                                user.isActive
-                                                    ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 dark:text-amber-400'
-                                                    : 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 dark:text-emerald-400'
-                                            } ${currentUser?.id === user.id ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
-                                            title={currentUser?.id === user.id ? 'Нельзя изменить статус своей учетной записи' : user.isActive ? 'Деактивировать' : 'Активировать'}
-                                        >
-                                            {user.isActive ? <UserX size={18} /> : <UserCheck size={18} />}
-                                        </button>
-                                        <button
-                                            onClick={() => setUserToDelete(user)}
-                                            disabled={currentUser?.id === user.id}
-                                            className={`p-2.5 rounded-lg transition-all text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:scale-110 active:scale-95 ${currentUser?.id === user.id ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
-                                            title={currentUser?.id === user.id ? 'Нельзя удалить свою учетную запись' : 'Удалить пользователя'}
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
+                                        {isAdmin && (
+                                            <>
+                                                <button
+                                                    onClick={() => handleToggleActive(user.id, user.isActive)}
+                                                    disabled={currentUser?.id === user.id}
+                                                    className={`p-2.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${
+                                                        user.isActive
+                                                            ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 dark:text-amber-400'
+                                                            : 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 dark:text-emerald-400'
+                                                    } ${currentUser?.id === user.id ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
+                                                    title={currentUser?.id === user.id ? 'Нельзя изменить статус своей учетной записи' : user.isActive ? 'Деактивировать' : 'Активировать'}
+                                                >
+                                                    {user.isActive ? <UserX size={18} /> : <UserCheck size={18} />}
+                                                </button>
+                                                <button
+                                                    onClick={() => setUserToDelete(user)}
+                                                    disabled={currentUser?.id === user.id}
+                                                    className={`p-2.5 rounded-lg transition-all text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:scale-110 active:scale-95 ${currentUser?.id === user.id ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
+                                                    title={currentUser?.id === user.id ? 'Нельзя удалить свою учетную запись' : 'Удалить пользователя'}
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </td>
                             </tr>

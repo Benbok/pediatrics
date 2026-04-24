@@ -7,6 +7,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { PUBLIC_KEY } = require('./license/verify.cjs');
+const {
+    hasAdminRole,
+    canViewUsersModule,
+    canEditUserProfile,
+    validateRolesAssignment,
+} = require('./modules/users/access.cjs');
 
 /**
  * AUTHENTICATION SERVICE (Backend)
@@ -292,10 +298,14 @@ function setupAuthHandlers() {
     })));
 
     /**
-     * Get All Users (Admin Only)
+     * Get All Users (Authenticated)
      */
-    ipcMain.handle('auth:get-all-users', ensureAuthenticated(ensureAdmin(async () => {
+    ipcMain.handle('auth:get-all-users', ensureAuthenticated(async () => {
         try {
+            if (!canViewUsersModule(currentSession.user)) {
+                throw new Error('Недостаточно прав для просмотра пользователей');
+            }
+
             const users = await prisma.user.findMany({
                 select: {
                     id: true,
@@ -327,17 +337,23 @@ function setupAuthHandlers() {
             logger.error('[Auth] Get users error:', error);
             throw new Error('Ошибка при загрузке списка пользователей');
         }
-    })));
+    }));
 
     /**
-     * Update User (Admin Only)
+     * Update User (Self or Admin)
      */
-    ipcMain.handle('auth:update-user', ensureAuthenticated(ensureAdmin(async (_, data) => {
+    ipcMain.handle('auth:update-user', ensureAuthenticated(async (_, data) => {
         try {
             const { userId, username, lastName, firstName, middleName, isActive } = UpdateUserSchema.parse(data);
 
+            if (!canEditUserProfile(currentSession.user, userId)) {
+                return { success: false, error: 'Недостаточно прав для редактирования профиля' };
+            }
+
+            const isAdminActor = hasAdminRole(currentSession.user);
+
             // Prevent self-deactivation
-            if (userId === currentSession.user.id && !isActive) {
+            if (!isAdminActor && !isActive) {
                 return { success: false, error: 'Нельзя деактивировать свою учетную запись' };
             }
 
@@ -362,7 +378,14 @@ function setupAuthHandlers() {
 
             const updated = await prisma.user.update({
                 where: { id: userId },
-                data: { username, lastName, firstName: firstName ?? '', middleName: middleName ?? '', isActive },
+                data: {
+                    username,
+                    lastName,
+                    firstName: firstName ?? '',
+                    middleName: middleName ?? '',
+                    // Non-admin users can only keep their account active.
+                    isActive: isAdminActor ? isActive : true,
+                },
                 select: { id: true, username: true, lastName: true, firstName: true, middleName: true, isActive: true, createdAt: true }
             });
 
@@ -391,14 +414,19 @@ function setupAuthHandlers() {
             }
             return { success: false, error: 'Ошибка при обновлении пользователя' };
         }
-    })));
+    }));
 
     /**
-     * Set User Roles (Admin Only)
+     * Set User Roles (Self without escalation or Admin)
      */
-    ipcMain.handle('auth:set-user-roles', ensureAuthenticated(ensureAdmin(async (_, data) => {
+    ipcMain.handle('auth:set-user-roles', ensureAuthenticated(async (_, data) => {
         try {
             const { userId, roles } = SetUserRolesSchema.parse(data);
+
+            const roleValidation = validateRolesAssignment(currentSession.user, userId, roles);
+            if (!roleValidation.ok) {
+                return { success: false, error: roleValidation.error };
+            }
 
             await prisma.$transaction(async (tx) => {
                 await setRolesForUser(tx, userId, roles);
@@ -418,7 +446,7 @@ function setupAuthHandlers() {
             }
             return { success: false, error: error.message || 'Ошибка при обновлении ролей' };
         }
-    })));
+    }));
 
     /**
      * Deactivate User (Admin Only)

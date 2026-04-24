@@ -12,6 +12,7 @@ export const EditUserPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { currentUser, refreshSession } = useAuth();
+    const isCurrentUserAdmin = Boolean(currentUser?.roles?.includes('admin'));
 
     const [isFetching, setIsFetching] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -42,6 +43,12 @@ export const EditUserPage: React.FC = () => {
                     setError('Пользователь не найден');
                     return;
                 }
+
+                if (!isCurrentUserAdmin && user.id !== currentUser?.id) {
+                    setError('Недостаточно прав для редактирования чужого профиля');
+                    return;
+                }
+
                 setEditingUser(user);
                 setForm({
                     username: user.username,
@@ -57,7 +64,7 @@ export const EditUserPage: React.FC = () => {
                 setError(err.message || 'Не удалось загрузить данные пользователя');
             })
             .finally(() => setIsFetching(false));
-    }, [id]);
+    }, [id, isCurrentUserAdmin, currentUser?.id]);
 
     const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -79,13 +86,15 @@ export const EditUserPage: React.FC = () => {
                 return;
             }
 
-            const rolesResult = await userService.setUserRoles({
-                userId: editingUser.id,
-                roles: form.roles,
-            });
-            if (!rolesResult.success) {
-                setError(rolesResult.error || 'Ошибка при обновлении ролей');
-                return;
+            if (isCurrentUserAdmin) {
+                const rolesResult = await userService.setUserRoles({
+                    userId: editingUser.id,
+                    roles: form.roles,
+                });
+                if (!rolesResult.success) {
+                    setError(rolesResult.error || 'Ошибка при обновлении ролей');
+                    return;
+                }
             }
 
             if (editingUser.id === currentUser?.id) {
@@ -126,6 +135,8 @@ export const EditUserPage: React.FC = () => {
     };
 
     const toggleRole = (role: UserRoleKey, checked: boolean) => {
+        if (!isCurrentUserAdmin) return;
+
         setForm((s) => {
             const next = new Set<UserRoleKey>(s.roles);
             if (checked) next.add(role);
@@ -139,6 +150,17 @@ export const EditUserPage: React.FC = () => {
         return (
             <div className="flex items-center justify-center p-16 text-slate-400">
                 <Loader className="animate-spin" size={28} />
+            </div>
+        );
+    }
+
+    if (!editingUser) {
+        return (
+            <div className="p-6 max-w-3xl mx-auto space-y-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-red-200 dark:border-red-900/60 p-5">
+                    <p className="text-red-600 dark:text-red-400 font-semibold">{error || 'Пользователь не найден'}</p>
+                </div>
+                <Button variant="secondary" onClick={() => navigate('/users')}>Назад к списку</Button>
             </div>
         );
     }
@@ -247,62 +269,64 @@ export const EditUserPage: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Роли */}
-                    <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
-                        <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4">
-                            Права доступа
-                        </h2>
-                        <div className="flex flex-col gap-3">
-                            <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                    {isCurrentUserAdmin && (
+                        <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
+                            <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4">
+                                Права доступа
+                            </h2>
+                            <div className="flex flex-col gap-3">
+                                <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.roles.includes('doctor')}
+                                        onChange={(e) => toggleRole('doctor', e.target.checked)}
+                                        className="w-4 h-4 rounded text-blue-600"
+                                    />
+                                    <Stethoscope size={18} className="text-blue-500 shrink-0" />
+                                    <div>
+                                        <div className="text-sm font-semibold text-slate-900 dark:text-white">Врач</div>
+                                        <div className="text-xs text-slate-500">Базовый доступ к системе</div>
+                                    </div>
+                                </label>
+                                <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.roles.includes('admin')}
+                                        onChange={(e) => toggleRole('admin', e.target.checked)}
+                                        className="w-4 h-4 rounded text-purple-600"
+                                    />
+                                    <Shield size={18} className="text-purple-500 shrink-0" />
+                                    <div>
+                                        <div className="text-sm font-semibold text-slate-900 dark:text-white">Администратор</div>
+                                        <div className="text-xs text-slate-500">Полный доступ к управлению системой</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    )}
+
+                    {isCurrentUserAdmin && (
+                        <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
+                            <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4">
+                                Статус учётной записи
+                            </h2>
+                            <label className={`flex items-center gap-3 p-4 rounded-xl border transition ${isSelf ? 'opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-700' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
                                 <input
                                     type="checkbox"
-                                    checked={form.roles.includes('doctor')}
-                                    onChange={(e) => toggleRole('doctor', e.target.checked)}
-                                    className="w-4 h-4 rounded text-blue-600"
+                                    checked={form.isActive}
+                                    disabled={isSelf}
+                                    onChange={(e) => setForm((s) => ({ ...s, isActive: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-emerald-600"
                                 />
-                                <Stethoscope size={18} className="text-blue-500 shrink-0" />
                                 <div>
-                                    <div className="text-sm font-semibold text-slate-900 dark:text-white">Врач</div>
-                                    <div className="text-xs text-slate-500">Базовый доступ к системе</div>
-                                </div>
-                            </label>
-                            <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
-                                <input
-                                    type="checkbox"
-                                    checked={form.roles.includes('admin')}
-                                    onChange={(e) => toggleRole('admin', e.target.checked)}
-                                    className="w-4 h-4 rounded text-purple-600"
-                                />
-                                <Shield size={18} className="text-purple-500 shrink-0" />
-                                <div>
-                                    <div className="text-sm font-semibold text-slate-900 dark:text-white">Администратор</div>
-                                    <div className="text-xs text-slate-500">Полный доступ к управлению системой</div>
+                                    <div className="text-sm font-semibold text-slate-900 dark:text-white">Учётная запись активна</div>
+                                    {isSelf && (
+                                        <div className="text-xs text-slate-500">Нельзя деактивировать свою учётную запись</div>
+                                    )}
                                 </div>
                             </label>
                         </div>
-                    </div>
-
-                    {/* Статус */}
-                    <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
-                        <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4">
-                            Статус учётной записи
-                        </h2>
-                        <label className={`flex items-center gap-3 p-4 rounded-xl border transition ${isSelf ? 'opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-700' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
-                            <input
-                                type="checkbox"
-                                checked={form.isActive}
-                                disabled={isSelf}
-                                onChange={(e) => setForm((s) => ({ ...s, isActive: e.target.checked }))}
-                                className="w-4 h-4 rounded text-emerald-600"
-                            />
-                            <div>
-                                <div className="text-sm font-semibold text-slate-900 dark:text-white">Учётная запись активна</div>
-                                {isSelf && (
-                                    <div className="text-xs text-slate-500">Нельзя деактивировать свою учётную запись</div>
-                                )}
-                            </div>
-                        </label>
-                    </div>
+                    )}
 
                     {/* Actions */}
                     <div className="flex items-center justify-end gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
@@ -326,8 +350,8 @@ export const EditUserPage: React.FC = () => {
                 </form>
             </div>
 
-            {/* Password Reset card */}
-            <div className="bg-white dark:bg-slate-900 rounded-[28px] p-8 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 border border-slate-100 dark:border-slate-800">
+            {isCurrentUserAdmin && (
+                <div className="bg-white dark:bg-slate-900 rounded-[28px] p-8 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="p-2.5 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
                         <Key className="w-5 h-5 text-amber-600 dark:text-amber-400" />
@@ -375,7 +399,8 @@ export const EditUserPage: React.FC = () => {
                         {isResettingPassword ? 'Сброс...' : 'Сбросить пароль'}
                     </button>
                 </div>
-            </div>
+                </div>
+            )}
         </div>
     );
 };

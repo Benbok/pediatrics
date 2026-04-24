@@ -5,9 +5,12 @@ import { userService } from '../../services/user.service';
 import { Button } from '../../components/ui/Button';
 import { formatFioOnChange, formatFioOnBlur } from '../../utils/fioFormat';
 import { logger } from '../../services/logger';
+import { useAuth } from '../../context/AuthContext';
 
 export const CreateUserPage: React.FC = () => {
     const navigate = useNavigate();
+    const { currentUser } = useAuth();
+    const isAdmin = Boolean(currentUser?.roles?.includes('admin'));
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [form, setForm] = useState({
@@ -21,6 +24,11 @@ export const CreateUserPage: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (!isAdmin) {
+            setError('Недостаточно прав для создания пользователей');
+            return;
+        }
+
         setError(null);
         setIsLoading(true);
 
@@ -49,6 +57,17 @@ export const CreateUserPage: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    if (!isAdmin) {
+        return (
+            <div className="p-6 max-w-3xl mx-auto space-y-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-red-200 dark:border-red-900/60 p-5">
+                    <p className="text-red-600 dark:text-red-400 font-semibold">Только администратор может создавать пользователей.</p>
+                </div>
+                <Button variant="secondary" onClick={() => navigate('/users')}>Назад к списку</Button>
+            </div>
+        );
+    }
 
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">

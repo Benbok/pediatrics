@@ -49,8 +49,6 @@ export const AppShell: React.FC = () => {
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
-  const isAdmin = Boolean(currentUser?.roles?.includes('admin'));
-
   const roleLabels: Record<string, string> = { admin: 'Администратор', doctor: 'Врач' };
   const currentRoleLabels = (currentUser?.roles ?? [])
     .map((r) => roleLabels[r])
@@ -63,7 +61,7 @@ export const AppShell: React.FC = () => {
     { to: '/diseases', icon: BookOpen, label: 'База знаний' },
     { to: '/icd-codes', icon: FileText, label: 'Коды МКБ' },
     { to: '/medications', icon: Pill, label: 'Препараты' },
-    ...(isAdmin ? [{ to: '/users', icon: Users, label: 'Пользователи' }] : []),
+    { to: '/users', icon: Users, label: 'Пользователи' },
   ];
 
   return (
