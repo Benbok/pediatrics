@@ -206,9 +206,15 @@ export const BirthSection: React.FC<BirthSectionProps> = ({ data, onChange }) =>
 
                     <Input
                         label="Масса при рождении (г)"
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={4}
                         value={birthData.birthWeight?.toString() || ''}
-                        onChange={(e) => handleChange('birthWeight', e.target.value ? parseInt(e.target.value) : null)}
+                        onChange={(e) => {
+                            const sanitizedValue = e.target.value.replace(/\D/g, '').slice(0, 4);
+                            handleChange('birthWeight', sanitizedValue ? parseInt(sanitizedValue, 10) : null);
+                        }}
                         placeholder="3500"
                         min={500}
                         max={7000}
@@ -218,9 +224,15 @@ export const BirthSection: React.FC<BirthSectionProps> = ({ data, onChange }) =>
                 <div className="grid grid-cols-2 gap-4">
                     <Input
                         label="Рост при рождении (см)"
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={2}
                         value={birthData.birthHeight?.toString() || ''}
-                        onChange={(e) => handleChange('birthHeight', e.target.value ? parseInt(e.target.value) : null)}
+                        onChange={(e) => {
+                            const sanitizedValue = e.target.value.replace(/\D/g, '').slice(0, 2);
+                            handleChange('birthHeight', sanitizedValue ? parseInt(sanitizedValue, 10) : null);
+                        }}
                         placeholder="50"
                         min={20}
                         max={70}

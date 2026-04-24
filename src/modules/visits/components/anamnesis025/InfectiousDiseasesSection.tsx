@@ -11,6 +11,13 @@ interface InfectiousDiseasesSectionProps {
 export const InfectiousDiseasesSection: React.FC<InfectiousDiseasesSectionProps> = ({ data, onChange }) => {
     const infectiousData: InfectiousDiseasesData = data || {};
 
+    const parseBoundedAgeValue = (rawValue: string, maxValue: number): number | null => {
+        const sanitizedValue = rawValue.replace(/\D/g, '').slice(0, 2);
+        if (!sanitizedValue) return null;
+
+        return Math.min(parseInt(sanitizedValue, 10), maxValue);
+    };
+
     const handleDiseaseChange = (diseaseName: string, had: boolean) => {
         const current = infectiousData[diseaseName as keyof InfectiousDiseasesData] as any;
         onChange({
@@ -113,10 +120,13 @@ export const InfectiousDiseasesSection: React.FC<InfectiousDiseasesSectionProps>
                                     <div className="flex flex-col gap-1">
                                         <label className="text-xs text-slate-500 dark:text-slate-400">Лет (0–18)</label>
                                         <input
-                                            type="number"
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            maxLength={2}
                                             value={diseaseData?.ageYears?.toString() ?? ''}
                                             onChange={(e) => {
-                                                const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                                                const val = parseBoundedAgeValue(e.target.value, 18);
                                                 handleAgeYearsChange(disease.key, val);
                                             }}
                                             min={0}
@@ -132,10 +142,13 @@ export const InfectiousDiseasesSection: React.FC<InfectiousDiseasesSectionProps>
                                     <div className="flex flex-col gap-1">
                                         <label className="text-xs text-slate-500 dark:text-slate-400">Мес. (0–11)</label>
                                         <input
-                                            type="number"
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            maxLength={2}
                                             value={diseaseData?.ageMonths?.toString() ?? ''}
                                             onChange={(e) => {
-                                                const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                                                const val = parseBoundedAgeValue(e.target.value, 11);
                                                 handleAgeMonthsChange(disease.key, val);
                                             }}
                                             min={0}

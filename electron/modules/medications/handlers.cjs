@@ -63,19 +63,14 @@ const setupMedicationHandlers = () => {
             return cached;
         }
 
+        // MedicationService.list() already parses all JSON fields (forms, pediatricDosing, etc.)
+        // Do NOT re-apply safeJsonParse — it would return [] for already-parsed arrays
         const meds = await MedicationService.list();
-        const parsed = meds.map(m => ({
-            ...m,
-            forms: safeJsonParse(m.forms, []),
-            pediatricDosing: safeJsonParse(m.pediatricDosing, []),
-            indications: safeJsonParse(m.indications, []),
-            userTags: safeJsonParse(m.userTags, [])
-        }));
 
         // Сохраняем в кеш
-        CacheService.set('medications', cacheKey, parsed);
-        
-        return parsed;
+        CacheService.set('medications', cacheKey, meds);
+
+        return meds;
     }));
 
     ipcMain.handle('medications:get-by-id', ensureAuthenticated(async (_, id) => {

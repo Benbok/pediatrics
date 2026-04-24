@@ -17,6 +17,10 @@
 const { logger } = require('../logger.cjs');
 const localLlm = require('./localLlmService.cjs');
 
+function resolveLlmProvider(llmProvider) {
+    return llmProvider || localLlm;
+}
+
 // ── Конфигурация ────────────────────────────────────────────────────────────
 
 const CFG = {
@@ -180,17 +184,18 @@ function stripChunkMeta(text) {
  * Семантическая разбивка одной секции через LLM.
  * @returns {Promise<Array<{text: string, summary: string, keywords: string}>>}
  */
-async function semanticSplitSection(sectionTitle, sectionText) {
+async function semanticSplitSection(sectionTitle, sectionText, llmProvider = null) {
+    const llm = resolveLlmProvider(llmProvider);
     // Too short → keep as single chunk, just enrich
     if (sectionText.length < CFG.minSectionCharsForSplit) {
-        const meta = await enrichSingleChunk(sectionText);
+        const meta = await enrichSingleChunk(sectionText, llm);
         return [{ text: sectionText, summary: meta.summary, keywords: meta.keywords }];
     }
 
     // Too long for LLM context → fallback split, enrich each
     if (sectionText.length > CFG.maxSectionCharsForLlm) {
         logger.info(`[ChunkEnhancer] Section "${sectionTitle}" too long (${sectionText.length} ch), fallback split + enrich`);
-        return fallbackWithEnrich(sectionText);
+        return fallbackWithEnrich(sectionText, llm);
     }
 
     // ── LLM semantic split ──
@@ -198,26 +203,27 @@ async function semanticSplitSection(sectionTitle, sectionText) {
     let response = '';
 
     try {
-        const result = await localLlm.generate(
+        const result = await llm.generate(
             messages,
             {
                 temperature: CFG.temperature,
                 maxTokens: CFG.splitMaxTokens,
                 timeoutMs: CFG.splitTimeoutMs,
                 forceNonStream: true,
+                thinkingBudget: 0,
             },
             (token) => { response += token; },
         );
 
         if (result.status !== 'completed' || !response.trim()) {
             logger.warn(`[ChunkEnhancer] LLM split failed (${result.status}), fallback for "${sectionTitle}"`);
-            return fallbackWithEnrich(sectionText);
+            return fallbackWithEnrich(sectionText, llm);
         }
 
         const parsed = extractJsonFromResponse(response);
         if (!Array.isArray(parsed) || parsed.length === 0) {
             logger.warn('[ChunkEnhancer] LLM returned non-array JSON, fallback');
-            return fallbackWithEnrich(sectionText);
+            return fallbackWithEnrich(sectionText, llm);
         }
 
         // Validate each chunk
@@ -231,34 +237,36 @@ async function semanticSplitSection(sectionTitle, sectionText) {
 
         if (valid.length === 0) {
             logger.warn('[ChunkEnhancer] No valid chunks from LLM, fallback');
-            return fallbackWithEnrich(sectionText);
+            return fallbackWithEnrich(sectionText, llm);
         }
 
         logger.info(`[ChunkEnhancer] LLM split "${sectionTitle}" → ${valid.length} semantic chunks`);
         return valid;
     } catch (err) {
         logger.warn(`[ChunkEnhancer] LLM split error: ${err.message}, fallback`);
-        return fallbackWithEnrich(sectionText);
+        return fallbackWithEnrich(sectionText, llm);
     }
 }
 
 /**
  * Обогащение одного чанка: резюме + ключевые слова.
  */
-async function enrichSingleChunk(chunkText) {
+async function enrichSingleChunk(chunkText, llmProvider = null) {
+    const llm = resolveLlmProvider(llmProvider);
     if (!chunkText || chunkText.length < 50) {
         return { summary: '', keywords: '' };
     }
 
     let response = '';
     try {
-        const result = await localLlm.generate(
+        const result = await llm.generate(
             buildEnrichPrompt(chunkText),
             {
                 temperature: 0,
                 maxTokens: CFG.enrichMaxTokens,
                 timeoutMs: CFG.enrichTimeoutMs,
                 forceNonStream: true,
+                thinkingBudget: 0,
             },
             (token) => { response += token; },
         );
@@ -284,11 +292,12 @@ async function enrichSingleChunk(chunkText) {
 /**
  * Fallback: character split → enrich each chunk.
  */
-async function fallbackWithEnrich(sectionText) {
+async function fallbackWithEnrich(sectionText, llmProvider = null) {
+    const llm = resolveLlmProvider(llmProvider);
     const rawChunks = fallbackCharSplit(sectionText);
     const results = [];
     for (const chunk of rawChunks) {
-        const meta = await enrichSingleChunk(chunk);
+        const meta = await enrichSingleChunk(chunk, llm);
         results.push({ text: chunk, summary: meta.summary, keywords: meta.keywords });
     }
     return results;
@@ -308,12 +317,13 @@ async function fallbackWithEnrich(sectionText) {
 async function processSections(rawSections, options = {}) {
     const enableLlm = options.enableLlm !== false;
     const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+    const llm = resolveLlmProvider(options.llmProvider);
 
     // ── Check LLM availability ──
     let llmAvailable = false;
     if (enableLlm) {
         try {
-            const health = await localLlm.healthCheck();
+            const health = await llm.healthCheck();
             llmAvailable = health.available;
         } catch {
             llmAvailable = false;
@@ -337,7 +347,7 @@ async function processSections(rawSections, options = {}) {
         let chunks;
 
         if (llmAvailable) {
-            chunks = await semanticSplitSection(section.sectionTitle, text);
+            chunks = await semanticSplitSection(section.sectionTitle, text, llm);
         } else {
             // No LLM — plain char split, no enrichment
             const splitTexts = fallbackCharSplit(text);

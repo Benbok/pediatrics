@@ -28,6 +28,7 @@ const FEATURES = {
     'refine-field': { label: 'Рефайн текста (визиты)', default: 'local' },
     'visit-analysis': { label: 'AI-анализ визита', default: 'local' },
     'rag':          { label: 'Клинические рекомендации (RAG)', default: 'local' },
+    'guideline-enrichment': { label: 'Обогащение чанков рекомендаций', default: 'local' },
 };
 
 const VALID_PROVIDERS = new Set(['local', 'gemini']);

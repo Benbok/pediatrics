@@ -93,6 +93,55 @@ type PendingFieldRefinement = {
     refined: string;
 };
 
+function hasPositiveNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function formatMlToTenths(value: number): string {
+    return value.toFixed(1);
+}
+
+function formatPrescriptionCalculationDetails(prescription: any): string | null {
+    const dilution = prescription?.dilution;
+    if (!dilution) return null;
+
+    if (dilution.suspensionEnabled) {
+        const suspensionParts: string[] = [];
+
+        if (hasPositiveNumber(dilution.suspensionBaseMg) && hasPositiveNumber(dilution.suspensionBaseVolumeMl)) {
+            suspensionParts.push(`${dilution.suspensionBaseMg} мг/${dilution.suspensionBaseVolumeMl} мл`);
+        }
+        if (hasPositiveNumber(dilution.concentrationMgPerMl)) {
+            suspensionParts.push(`${dilution.concentrationMgPerMl} мг/мл`);
+        }
+        if (hasPositiveNumber(dilution.volumeToDrawMl)) {
+            suspensionParts.push(`отмерить ${formatMlToTenths(dilution.volumeToDrawMl)} мл суспензии`);
+        }
+
+        return suspensionParts.length > 0 ? `суспензия: ${suspensionParts.join(', ')}` : 'суспензия';
+    }
+
+    if (!dilution.enabled) return null;
+
+    const dilutionParts: string[] = [];
+    if (hasPositiveNumber(dilution.powderVialMg) && hasPositiveNumber(dilution.reconstitutionVolumeMl)) {
+        dilutionParts.push(`порошок ${dilution.powderVialMg} мг/${dilution.reconstitutionVolumeMl} мл`);
+    } else if (hasPositiveNumber(dilution.drugAmountMg)) {
+        dilutionParts.push(`ампула ${dilution.drugAmountMg} мг`);
+    }
+    if (dilution.diluentType) {
+        dilutionParts.push(`${getDiluentLabel(dilution.diluentType || null)}${hasPositiveNumber(dilution.diluentVolumeMl) ? ` ${dilution.diluentVolumeMl} мл` : ''}`);
+    }
+    if (hasPositiveNumber(dilution.concentrationMgPerMl)) {
+        dilutionParts.push(`конц. ${dilution.concentrationMgPerMl} мг/мл`);
+    }
+    if (hasPositiveNumber(dilution.volumeToDrawMl)) {
+        dilutionParts.push(`набрать ${dilution.volumeToDrawMl} мл`);
+    }
+
+    return dilutionParts.length > 0 ? `разведение: ${dilutionParts.join(', ')}` : 'разведение';
+}
+
 export const VisitFormPage: React.FC = () => {
     const { childId, id } = useParams<{ childId: string; id?: string }>();
     const navigate = useNavigate();
@@ -2301,9 +2350,15 @@ export const VisitFormPage: React.FC = () => {
                                             <div className="text-xs text-slate-500 mt-1">
                                                 Разовая доза: {p.singleDoseMg ?? '—'} мг
                                                 {p.timesPerDay ? ` × ${p.timesPerDay} раз в день` : ''}
+                                                {formatPrescriptionCalculationDetails(p) ? ` (${formatPrescriptionCalculationDetails(p)})` : ''}
                                             </div>
                                         )}
-                                        {p.dilution && p.dilution.enabled && (
+                                        {p.dilution && p.daySchedule?.length > 1 && formatPrescriptionCalculationDetails(p) && (
+                                            <div className="text-xs text-slate-500 mt-1">
+                                                Расчёт: {formatPrescriptionCalculationDetails(p)}
+                                            </div>
+                                        )}
+                                        {p.dilution && p.dilution.enabled && !p.dilution.suspensionEnabled && (
                                             <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900/40">
                                                 <div className="font-semibold mb-1 flex items-center gap-1">
                                                     <Beaker className="w-3 h-3" />
@@ -2454,9 +2509,6 @@ export const VisitFormPage: React.FC = () => {
                                         <div key={idx} className="p-3 border border-slate-200 dark:border-slate-700 rounded-xl flex justify-between items-start bg-slate-50 dark:bg-slate-800/50">
                                             <div className="flex-1">
                                                 <p className="font-medium text-slate-900 dark:text-white">{test.test}</p>
-                                                {test.rationale && (
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{test.rationale}</p>
-                                                )}
                                             </div>
                                             <Button
                                                 variant="ghost"
@@ -2484,9 +2536,6 @@ export const VisitFormPage: React.FC = () => {
                                         <div key={idx} className="p-3 border border-slate-200 dark:border-slate-700 rounded-xl flex justify-between items-start bg-slate-50 dark:bg-slate-800/50">
                                             <div className="flex-1">
                                                 <p className="font-medium text-slate-900 dark:text-white">{test.test}</p>
-                                                {test.rationale && (
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{test.rationale}</p>
-                                                )}
                                             </div>
                                             <Button
                                                 variant="ghost"
@@ -2561,6 +2610,7 @@ export const VisitFormPage: React.FC = () => {
                     await addPrescription(medication);
                 }}
                 medicationAllergyText={medicationAllergyText}
+                patientAgeMonths={ageMonths}
                 currentIcd10Codes={[
                     // Собираем коды всех диагнозов (основной + осложнения + сопутствующие)
                     ...(primaryDiagnosis?.code ? [primaryDiagnosis.code] : []),

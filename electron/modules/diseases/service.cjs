@@ -16,6 +16,7 @@ const { normalizeDiseaseData, resolveTestNameFromCatalog, normalizeTestName } = 
 const { CacheService } = require('../../services/cacheService.cjs');
 const { ChunkIndexService } = require('../../services/chunkIndexService.cjs');
 const chunkEnhancer = require('../../services/chunkEnhancerService.cjs');
+const llmRouter = require('../../services/llmRouter.cjs');
 const {
     SYMPTOM_WEIGHT_PATHOGNOMONIC,
     SYMPTOM_WEIGHT_HIGH,
@@ -85,6 +86,76 @@ function sendBatchFinishedEvent(batchId, data) {
     const mainWindow = BrowserWindow.getAllWindows()[0];
     if (mainWindow) {
         mainWindow.webContents.send('guideline:upload-batch-finished', { batchId, ...data });
+    }
+}
+
+function sendEnrichmentFinishedEvent(guidelineId, diseaseId) {
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (mainWindow) {
+        mainWindow.webContents.send('guideline:enrichment-finished', { guidelineId, diseaseId });
+    }
+}
+
+// Guideline enrichment runtime state (in-memory, per app session)
+const _enrichQueuedGuidelineIds = new Set();
+const _enrichRunningGuidelineIds = new Set();
+
+function isGuidelineEnrichmentInProgress(guidelineId) {
+    const id = Number(guidelineId);
+    return _enrichQueuedGuidelineIds.has(id) || _enrichRunningGuidelineIds.has(id);
+}
+
+async function enrichGuidelinesWithAiStatus(guidelines) {
+    if (!Array.isArray(guidelines) || guidelines.length === 0) return guidelines || [];
+
+    const guidelineIds = guidelines
+        .map((guideline) => Number(guideline?.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+    if (guidelineIds.length === 0) return guidelines;
+
+    try {
+        const totalByGuideline = await prisma.guidelineChunk.groupBy({
+            by: ['guidelineId'],
+            where: { guidelineId: { in: guidelineIds } },
+            _count: { _all: true },
+        });
+
+        const enrichedByGuideline = await prisma.guidelineChunk.groupBy({
+            by: ['guidelineId'],
+            where: {
+                guidelineId: { in: guidelineIds },
+                text: { startsWith: '@@SUMMARY:' },
+            },
+            _count: { _all: true },
+        });
+
+        const totalMap = new Map(totalByGuideline.map((row) => [Number(row.guidelineId), Number(row._count?._all || 0)]));
+        const enrichedMap = new Map(enrichedByGuideline.map((row) => [Number(row.guidelineId), Number(row._count?._all || 0)]));
+
+        return guidelines.map((guideline) => {
+            const guidelineId = Number(guideline.id);
+            const aiTotalChunks = totalMap.get(guidelineId) || 0;
+            const aiEnrichedChunks = enrichedMap.get(guidelineId) || 0;
+            const aiEnrichmentInProgress = isGuidelineEnrichmentInProgress(guidelineId);
+
+            return {
+                ...guideline,
+                aiTotalChunks,
+                aiEnrichedChunks,
+                aiEnrichmentInProgress,
+                aiEnrichmentCompleted: aiEnrichedChunks > 0 && !aiEnrichmentInProgress,
+            };
+        });
+    } catch (error) {
+        logger.warn('[DiseaseService] Failed to compute AI enrichment status for guidelines:', error.message);
+        return guidelines.map((guideline) => ({
+            ...guideline,
+            aiTotalChunks: 0,
+            aiEnrichedChunks: 0,
+            aiEnrichmentInProgress: isGuidelineEnrichmentInProgress(guideline.id),
+            aiEnrichmentCompleted: false,
+        }));
     }
 }
 
@@ -519,11 +590,13 @@ const DiseaseService = {
         } = disease;
 
         const parsedSymptoms = _parseSymptoms(disease.symptoms);
+        const guidelinesWithAiStatus = await enrichGuidelinesWithAiStatus(disease.guidelines || []);
 
         return {
             ...diseaseWithoutJsonFields,
             icd10Codes: diseaseIcd10Codes,
             symptoms: parsedSymptoms,
+            guidelines: guidelinesWithAiStatus,
             diagnosticPlan: parsedDiagnosticPlan,
             treatmentPlan: parsedTreatmentPlan,
             clinicalRecommendations: parsedClinicalRecommendations,
@@ -927,6 +1000,57 @@ const DiseaseService = {
                 content: data.content
             }
         });
+    },
+
+    /**
+     * Re-run AI enrichment for chunks of a single guideline.
+     * Existing @@SUMMARY/@@KEYWORDS metadata is stripped first, then enrichment is queued again.
+     */
+    async rerunGuidelineEnrichment(guidelineId) {
+        const id = Number(guidelineId);
+        if (!Number.isFinite(id) || id <= 0) {
+            throw new Error('Некорректный ID файла');
+        }
+
+        const guideline = await prisma.clinicalGuideline.findUnique({
+            where: { id },
+            select: { id: true, diseaseId: true }
+        });
+
+        if (!guideline) {
+            throw new Error('Файл не найден');
+        }
+
+        const chunks = await prisma.guidelineChunk.findMany({
+            where: { guidelineId: id },
+            select: { id: true, text: true }
+        });
+
+        let resetCount = 0;
+        for (const chunk of chunks) {
+            const strippedText = chunkEnhancer.stripChunkMeta(chunk.text || '');
+            if (strippedText !== (chunk.text || '')) {
+                await prisma.guidelineChunk.update({
+                    where: { id: chunk.id },
+                    data: { text: strippedText }
+                });
+                resetCount++;
+            }
+        }
+
+        if (resetCount > 0) {
+            await ChunkIndexService.rebuildFts().catch(() => {});
+        }
+
+        _scheduleEnrichment(id);
+
+        return {
+            ok: true,
+            guidelineId: id,
+            diseaseId: Number(guideline.diseaseId),
+            resetChunks: resetCount,
+            queued: true,
+        };
     },
 
     /**
@@ -1870,7 +1994,7 @@ const DiseaseService = {
  * Runs AFTER the guideline is already saved, so it never blocks the upload or PDF search.
  * Skips chunks that are already enriched (start with @@SUMMARY).
  */
-async function _enrichChunksBackground(guidelineId) {
+async function _enrichChunksBackground(guidelineId, llmProvider = null) {
     logger.info(`[DiseaseService] Background LLM enrichment started for guideline ${guidelineId}`);
 
     const chunks = await prisma.guidelineChunk.findMany({
@@ -1883,7 +2007,7 @@ async function _enrichChunksBackground(guidelineId) {
         if (!chunk.text || chunk.text.startsWith('@@SUMMARY')) continue;
 
         try {
-            const meta = await chunkEnhancer.enrichSingleChunk(chunk.text);
+            const meta = await chunkEnhancer.enrichSingleChunk(chunk.text, llmProvider);
             if (meta.summary || meta.keywords) {
                 const enrichedText = chunkEnhancer.formatChunkWithMeta(chunk.text, meta.summary, meta.keywords);
                 await prisma.guidelineChunk.update({
@@ -1903,6 +2027,20 @@ async function _enrichChunksBackground(guidelineId) {
     }
 
     logger.info(`[DiseaseService] Background LLM enrichment done: ${enriched}/${chunks.length} chunks for guideline ${guidelineId}`);
+
+    // Invalidate get-by-id cache so next frontend request reflects updated AI status
+    try {
+        const guideline = await prisma.clinicalGuideline.findUnique({
+            where: { id: guidelineId },
+            select: { diseaseId: true },
+        });
+        if (guideline?.diseaseId) {
+            CacheService.invalidate('diseases', `id_${guideline.diseaseId}`);
+            sendEnrichmentFinishedEvent(guidelineId, guideline.diseaseId);
+        }
+    } catch (e) {
+        logger.warn(`[DiseaseService] Failed to invalidate cache after enrichment for guideline ${guidelineId}:`, e.message);
+    }
 }
 
 // --- Serial enrichment queue -----------------------------------------------
@@ -1913,7 +2051,9 @@ const _enrichQueue = [];
 let _enrichWorkerRunning = false;
 
 function _scheduleEnrichment(guidelineId) {
-    _enrichQueue.push(guidelineId);
+    const id = Number(guidelineId);
+    _enrichQueue.push(id);
+    _enrichQueuedGuidelineIds.add(id);
     if (!_enrichWorkerRunning) {
         _enrichWorkerRunning = true;
         setImmediate(_runEnrichWorker);
@@ -1922,11 +2062,16 @@ function _scheduleEnrichment(guidelineId) {
 
 async function _runEnrichWorker() {
     while (_enrichQueue.length > 0) {
-        const guidelineId = _enrichQueue.shift();
+        const guidelineId = Number(_enrichQueue.shift());
+        _enrichQueuedGuidelineIds.delete(guidelineId);
+        _enrichRunningGuidelineIds.add(guidelineId);
         try {
-            await _enrichChunksBackground(guidelineId);
+            const llmProvider = await llmRouter.getProvider('guideline-enrichment');
+            await _enrichChunksBackground(guidelineId, llmProvider);
         } catch (err) {
             logger.warn(`[DiseaseService] Enrichment worker error for guideline ${guidelineId}:`, err.message);
+        } finally {
+            _enrichRunningGuidelineIds.delete(guidelineId);
         }
     }
     _enrichWorkerRunning = false;

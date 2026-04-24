@@ -9,6 +9,11 @@ import { Badge } from '../../../components/ui/Badge';
 import { PrettySelect, type SelectOption } from '../../vaccination/components/PrettySelect';
 import { sanitizeDisplayText } from '../../../utils/textSanitizers';
 import { extractMedicationAllergyTerms, getMedicationAllergyRiskForMedication } from '../services/medicationAllergyRisk.service';
+import {
+    excludeMedicationsWithAllergyRisk,
+    filterMedicationsForAge,
+    sortMedicationsByFavoriteThenName,
+} from '../utils/medicationSort';
 import { Pill, Search, X, Plus, Loader2, AlertTriangle } from 'lucide-react';
 
 const DISPLAY_LIMIT = 50;
@@ -19,6 +24,7 @@ interface MedicationBrowserProps {
     onSelect: (medication: Medication) => void;
     currentIcd10Codes?: string[]; // Для фильтрации по ICD-10
     medicationAllergyText?: string | null;
+    patientAgeMonths?: number;
 }
 
 export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
@@ -27,10 +33,13 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
     onSelect,
     currentIcd10Codes = [],
     medicationAllergyText = null,
+    patientAgeMonths,
 }) => {
     const { medications: cachedMedications, loadMedications, isLoadingMedications } = useDataCache();
     const [searchTerm, setSearchTerm] = useState('');
     const [filterByIcd10, setFilterByIcd10] = useState(false);
+    const [excludeAllergyRisk, setExcludeAllergyRisk] = useState(false);
+    const [filterByAge, setFilterByAge] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState('');
     const [expandedIcdCodes, setExpandedIcdCodes] = useState<string[]>([]);
     const [displayCount, setDisplayCount] = useState(DISPLAY_LIMIT);
@@ -44,6 +53,8 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
         loadExpandedIcdCodes();
         // Сбрасываем поиск и фильтры при открытии
         setSearchTerm('');
+        setExcludeAllergyRisk(false);
+        setFilterByAge(false);
         setSelectedGroup('');
         setDisplayCount(DISPLAY_LIMIT);
     }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -96,6 +107,16 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
     const allergyTerms = useMemo(
         () => extractMedicationAllergyTerms(medicationAllergyText),
         [medicationAllergyText]
+    );
+
+    const hasMedicationAllergyText = useMemo(
+        () => Boolean(medicationAllergyText?.trim()),
+        [medicationAllergyText]
+    );
+
+    const hasPatientAge = useMemo(
+        () => typeof patientAgeMonths === 'number' && Number.isFinite(patientAgeMonths),
+        [patientAgeMonths]
     );
 
     const allergyRiskByMedicationId = useMemo(() => {
@@ -194,10 +215,31 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
 
         if (filterByIcd10 && diagnosisFilterCodes.length > 0) {
             filtered = filtered.filter(med => hasDiagnosisMatch(med.icd10Codes, diagnosisFilterCodes));
+            filtered = sortMedicationsByFavoriteThenName(filtered);
+        }
+
+        if (filterByAge && hasPatientAge) {
+            filtered = filterMedicationsForAge(filtered, patientAgeMonths as number);
+        }
+
+        if (excludeAllergyRisk && allergyTerms.length > 0) {
+            filtered = excludeMedicationsWithAllergyRisk(filtered, allergyRiskByMedicationId);
         }
 
         return filtered;
-    }, [cachedMedications, searchTerm, selectedGroup, filterByIcd10, diagnosisFilterCodes]);
+    }, [
+        cachedMedications,
+        searchTerm,
+        selectedGroup,
+        filterByIcd10,
+        diagnosisFilterCodes,
+        filterByAge,
+        hasPatientAge,
+        patientAgeMonths,
+        excludeAllergyRisk,
+        allergyTerms,
+        allergyRiskByMedicationId,
+    ]);
 
     // Сброс пагинации при смене результатов фильтрации
     useEffect(() => {
@@ -231,13 +273,25 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
 
                 {/* Search and Filters */}
                 <div className="p-6 border-b border-slate-200 dark:border-slate-800 space-y-3 flex-shrink-0">
-                    {allergyTerms.length > 0 && (
-                        <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl">
-                            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                            <p className="text-xs text-amber-700 dark:text-amber-300">
-                                У пациента указана лекарственная аллергия. Препараты и группы риска помечены в списке.
-                            </p>
-                        </div>
+                    {hasMedicationAllergyText && (
+                        <>
+                            <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                    У пациента указана лекарственная аллергия. Препараты и группы риска помечены в списке.
+                                </p>
+                            </div>
+                            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    id="exclude-allergy-risk"
+                                    checked={excludeAllergyRisk}
+                                    onChange={(e) => setExcludeAllergyRisk(e.target.checked)}
+                                    className="w-4 h-4 rounded border-slate-300 text-amber-600"
+                                />
+                                Исключить препараты риска аллергии
+                            </label>
+                        </>
                     )}
                     <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -295,6 +349,18 @@ export const MedicationBrowser: React.FC<MedicationBrowserProps> = ({
                                 className="w-4 h-4 rounded border-slate-300 text-indigo-600"
                             />
                             Показать только препараты для выбранного диагноза
+                        </label>
+                    )}
+                    {hasPatientAge && (
+                        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                id="filter-age"
+                                checked={filterByAge}
+                                onChange={(e) => setFilterByAge(e.target.checked)}
+                                className="w-4 h-4 rounded border-slate-300 text-emerald-600"
+                            />
+                            Показывать препараты для данного возраста
                         </label>
                     )}
                 </div>

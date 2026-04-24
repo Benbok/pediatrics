@@ -23,6 +23,26 @@ export interface PrintPrescription {
     singleDoseMg?: number;
     /** Раз в день */
     timesPerDay?: number;
+    daySchedule?: Array<{
+        dayLabel: string;
+        singleDoseMg?: number | null;
+        timesPerDay?: number | null;
+        routeOfAdmin?: string | null;
+        note?: string | null;
+    }>;
+    dilution?: {
+        enabled: boolean;
+        suspensionEnabled?: boolean | null;
+        suspensionBaseVolumeMl?: number | null;
+        suspensionBaseMg?: number | null;
+        powderVialMg?: number | null;
+        reconstitutionVolumeMl?: number | null;
+        drugAmountMg?: number | null;
+        diluentType?: 'nacl_0_9' | 'glucose_5' | 'glucose_10' | 'water_inj' | null;
+        diluentVolumeMl?: number | null;
+        concentrationMgPerMl?: number | null;
+        volumeToDrawMl?: number | null;
+    } | null;
 }
 
 /**
@@ -164,6 +184,8 @@ export function parsePrescriptions(prescriptions: string | object[] | null): Pri
         routeOfAdmin: p.routeOfAdmin,
         singleDoseMg: p.singleDoseMg,
         timesPerDay: p.timesPerDay,
+        daySchedule: Array.isArray(p.daySchedule) ? p.daySchedule : [],
+        dilution: p.dilution || null,
     }));
 }
 

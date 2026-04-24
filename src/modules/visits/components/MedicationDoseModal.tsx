@@ -37,6 +37,9 @@ export interface DoseData {
     daySchedule?: DayDose[] | null;
     dilution?: {
         enabled: boolean;
+        suspensionEnabled?: boolean | null;
+        suspensionBaseVolumeMl?: number | null;
+        suspensionBaseMg?: number | null;
         /** Powder: mg in one vial */
         powderVialMg?: number | null;
         /** Powder: ml of solvent added during reconstitution */
@@ -220,6 +223,16 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
         initialDoseData?.dilution?.diluentVolumeMl?.toString() || ''
     );
 
+    // ---- Suspension calculator state ----
+    const [suspensionCalcEnabled, setSuspensionCalcEnabled] = useState(
+        initialDoseData?.dilution?.suspensionEnabled ?? false
+    );
+    const [suspensionMgInBottle, setSuspensionMgInBottle] = useState(
+        initialDoseData?.dilution?.suspensionBaseMg?.toString() || ''
+    );
+    const [suspensionVolumeMl, setSuspensionVolumeMl] = useState(
+        initialDoseData?.dilution?.suspensionBaseVolumeMl?.toString() || ''
+    );
     const instructionSearchQuery = instructionSearch.trim();
 
     const escapeRegExp = useCallback((value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), []);
@@ -321,6 +334,10 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
     );
 
     const isPowderForm = useMemo(() => selectedForm?.type === 'powder', [selectedForm]);
+    const isSuspensionForm = useMemo(
+        () => ['suspension', 'syrup', 'drops'].includes(selectedForm?.type || ''),
+        [selectedForm]
+    );
 
     // Primary dose = first row (for dilution calc)
     const primaryDoseMg = useMemo(() => {
@@ -341,6 +358,27 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
         if (!selectedForm?.mgPerMl || !primaryDoseMg) return null;
         return Math.round((primaryDoseMg / selectedForm.mgPerMl) * 100) / 100;
     }, [primaryDoseMg, selectedForm]);
+
+    // Suspension calculator memos
+    const suspensionCalcMgPerMl = useMemo(() => {
+        const mg = parseFloat(suspensionMgInBottle);
+        const vol = parseFloat(suspensionVolumeMl);
+        if (mg > 0 && vol > 0) return Math.round((mg / vol) * 1000) / 1000;
+        return null;
+    }, [suspensionMgInBottle, suspensionVolumeMl]);
+    const perDaySuspensionResults = useMemo(() => {
+        if (!suspensionCalcMgPerMl || suspensionCalcMgPerMl <= 0) return [];
+        return daySchedule.map(row => {
+            const doseMg = parseFloat(row.singleDoseMg);
+            if (isNaN(doseMg) || doseMg <= 0) return { label: row.dayLabel, doseMg: null, volumeMl: null };
+            return { label: row.dayLabel, doseMg, volumeMl: Math.round((doseMg / suspensionCalcMgPerMl) * 10) / 10 };
+        });
+    }, [suspensionCalcMgPerMl, daySchedule]);
+
+    const formatSuspensionVolumeMl = useCallback((value: number | null | undefined) => {
+        if (value == null || !Number.isFinite(value)) return '—';
+        return `${value.toFixed(1)} мл`;
+    }, []);
 
     // Powder auto-concentration
     const autoConcentrationMgPerMl = useMemo(() => {
@@ -496,6 +534,9 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             setVolumeToDrawOverride(false);
             setCalcOpenRowId(null);
             setCalcMgPerKg('');
+            setSuspensionCalcEnabled(false);
+            setSuspensionMgInBottle('');
+            setSuspensionVolumeMl('');
         }
     }, [isOpen]);
 
@@ -541,25 +582,38 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
         }));
 
         let dilutionData: DoseData['dilution'] = null;
-        if (dilutionEnabled) {
-            if (isPowderForm) {
-                dilutionData = {
-                    enabled: true,
-                    powderVialMg: powderVialMg ? parseFloat(powderVialMg) : null,
-                    reconstitutionVolumeMl: reconstitutionVolumeMl ? parseFloat(reconstitutionVolumeMl) : null,
-                    diluentType: (diluentType || null) as DiluentType | null,
-                    concentrationMgPerMl: effectiveConcentration,
-                    volumeToDrawMl: effectiveVolumeToDraw,
-                };
-            } else {
-                dilutionData = {
-                    enabled: true,
-                    drugAmountMg: drugAmountMg ? parseFloat(drugAmountMg) : null,
-                    diluentType: (diluentType || null) as DiluentType | null,
-                    diluentVolumeMl: diluentVolumeMl ? parseFloat(diluentVolumeMl) : null,
-                    concentrationMgPerMl: standardDilutionResult?.concentrationMgPerMl || null,
-                    volumeToDrawMl: standardDilutionResult?.volumeToDrawMl || null,
-                };
+        if (dilutionEnabled || suspensionCalcEnabled) {
+            dilutionData = {
+                enabled: dilutionEnabled,
+                suspensionEnabled: suspensionCalcEnabled,
+                suspensionBaseVolumeMl: suspensionCalcEnabled && suspensionVolumeMl ? parseFloat(suspensionVolumeMl) : null,
+                suspensionBaseMg: suspensionCalcEnabled && suspensionMgInBottle ? parseFloat(suspensionMgInBottle) : null,
+                concentrationMgPerMl: suspensionCalcEnabled ? suspensionCalcMgPerMl : null,
+                volumeToDrawMl: suspensionCalcEnabled ? (perDaySuspensionResults[0]?.volumeMl ?? null) : null,
+            };
+
+            if (dilutionEnabled) {
+                if (isPowderForm) {
+                    dilutionData = {
+                        ...dilutionData,
+                        enabled: true,
+                        powderVialMg: powderVialMg ? parseFloat(powderVialMg) : null,
+                        reconstitutionVolumeMl: reconstitutionVolumeMl ? parseFloat(reconstitutionVolumeMl) : null,
+                        diluentType: (diluentType || null) as DiluentType | null,
+                        concentrationMgPerMl: effectiveConcentration,
+                        volumeToDrawMl: effectiveVolumeToDraw,
+                    };
+                } else {
+                    dilutionData = {
+                        ...dilutionData,
+                        enabled: true,
+                        drugAmountMg: drugAmountMg ? parseFloat(drugAmountMg) : null,
+                        diluentType: (diluentType || null) as DiluentType | null,
+                        diluentVolumeMl: diluentVolumeMl ? parseFloat(diluentVolumeMl) : null,
+                        concentrationMgPerMl: standardDilutionResult?.concentrationMgPerMl || null,
+                        volumeToDrawMl: standardDilutionResult?.volumeToDrawMl || null,
+                    };
+                }
             }
         }
 
@@ -1138,6 +1192,129 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                             </p>
                         )}
                     </div>
+
+                    {/* ==== РАСЧЁТ СУСПЕНЗИИ ==== */}
+                    {isSuspensionForm && (
+                        <div className="space-y-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Beaker className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        Расчёт суспензии
+                                    </label>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0 mr-1">
+                                    <input
+                                        type="checkbox"
+                                        checked={suspensionCalcEnabled}
+                                        onChange={(e) => setSuspensionCalcEnabled(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className={`relative overflow-hidden w-11 h-6 rounded-full transition-colors duration-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 ${suspensionCalcEnabled ? 'bg-teal-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                        <span
+                                            className="absolute top-[2px] left-[2px] h-5 w-5 rounded-full border border-slate-300 bg-white transition-transform duration-200"
+                                            style={{ transform: suspensionCalcEnabled ? 'translateX(20px)' : 'translateX(0px)' }}
+                                        />
+                                    </div>
+                                </label>
+                            </div>
+
+                            {suspensionCalcEnabled && (
+                                <div className="space-y-3">
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Укажите объём суспензии, количество мг препарата в этом объёме и разовую дозу в расписании выше.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-3 items-start">
+                                        <div className="space-y-1.5">
+                                            <label className="block min-h-[2.5rem] text-xs font-medium text-slate-700 dark:text-slate-300">
+                                                Объём суспензии (мл)
+                                            </label>
+                                            <Input
+                                                type="number"
+                                                step="0.1"
+                                                value={suspensionVolumeMl}
+                                                onChange={e => setSuspensionVolumeMl(e.target.value)}
+                                                placeholder="5"
+                                                className="w-full"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="block min-h-[2.5rem] text-xs font-medium text-slate-700 dark:text-slate-300">
+                                                Количество препарата в этом объёме (мг)
+                                            </label>
+                                            <Input
+                                                type="number"
+                                                step="0.1"
+                                                value={suspensionMgInBottle}
+                                                onChange={e => setSuspensionMgInBottle(e.target.value)}
+                                                placeholder="200"
+                                                className="w-full"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {perDaySuspensionResults.length > 0 && suspensionCalcMgPerMl ? (
+                                        isMultiDay ? (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-xs text-slate-500">Концентрация:</p>
+                                                    <span className="text-xs font-bold text-teal-600 dark:text-teal-400">
+                                                        {suspensionCalcMgPerMl} мг/мл
+                                                    </span>
+                                                </div>
+                                                <div className="rounded-lg border border-teal-200 dark:border-teal-800/50 overflow-hidden">
+                                                    <div className="grid grid-cols-3 px-3 py-1.5 bg-teal-50 dark:bg-teal-950/20 border-b border-teal-200 dark:border-teal-800/50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                                        <span>Период</span><span>Доза</span><span>Отмерить</span>
+                                                    </div>
+                                                    {perDaySuspensionResults.map((r, i) => (
+                                                        <div key={i} className={`grid grid-cols-3 px-3 py-2 ${i > 0 ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}>
+                                                            <span className="text-xs text-slate-600 dark:text-slate-300">{r.label}</span>
+                                                            <span className="text-xs text-slate-700 dark:text-slate-200">{r.doseMg != null ? `${r.doseMg} мг` : '—'}</span>
+                                                            <span className={`text-xs font-bold ${r.volumeMl != null ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`}>
+                                                                {formatSuspensionVolumeMl(r.volumeMl)}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-3 gap-3 p-3 bg-white dark:bg-slate-900 rounded-lg border border-teal-200 dark:border-teal-800/50">
+                                                <div>
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Дозировка</p>
+                                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                        {perDaySuspensionResults[0]?.doseMg != null ? `${perDaySuspensionResults[0].doseMg} мг` : '—'}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Концентрация</p>
+                                                    <p className="text-sm font-bold text-teal-600 dark:text-teal-400">
+                                                        {suspensionCalcMgPerMl} мг/мл
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Отмерить суспензии</p>
+                                                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                                                        {formatSuspensionVolumeMl(perDaySuspensionResults[0]?.volumeMl)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )
+                                    ) : null}
+
+                                    {!suspensionCalcMgPerMl && (
+                                        <p className="text-xs text-amber-500">
+                                            Укажите объём суспензии и количество мг препарата в этом объёме
+                                        </p>
+                                    )}
+                                    {suspensionCalcMgPerMl && perDaySuspensionResults.every(r => r.doseMg == null) && (
+                                        <p className="text-xs text-amber-500">
+                                            Укажите разовую дозу (мг) в расписании выше
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* ==== РАЗВЕДЕНИЕ ==== */}
                     <div className="space-y-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">

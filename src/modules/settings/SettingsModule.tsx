@@ -1260,7 +1260,14 @@ export const SettingsModule: React.FC = () => {
                 <div className="space-y-3">
                     {aiRouting.map(route => (
                         <div key={route.id} className="flex items-center justify-between gap-4 p-3 rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40">
-                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1">{route.label}</span>
+                            <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{route.label}</span>
+                                {route.id === 'guideline-enrichment' ? (
+                                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                        Влияет на фоновое создание @@SUMMARY и @@KEYWORDS после автонарезки рекомендаций.
+                                    </p>
+                                ) : null}
+                            </div>
                             <div className="flex items-center gap-1 bg-slate-200 dark:bg-slate-700 rounded-lg p-1">
                                 <button
                                     onClick={() => handleSetRouting(route.id, 'local')}

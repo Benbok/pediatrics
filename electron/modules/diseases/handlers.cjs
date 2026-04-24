@@ -188,6 +188,19 @@ const setupDiseaseHandlers = () => {
         return true;
     }));
 
+    ipcMain.handle('diseases:rerun-guideline-enrichment', ensureAuthenticated(async (_, guidelineId) => {
+        const id = z.number().int().positive().parse(Number(guidelineId));
+        const result = await DiseaseService.rerunGuidelineEnrichment(id);
+        logAudit('GUIDELINE_ENRICHMENT_RERUN', { guidelineId: id, resetChunks: result.resetChunks });
+
+        if (result && result.diseaseId) {
+            CacheService.invalidate('diseases', `id_${result.diseaseId}`);
+            CacheService.invalidate('diseases', getRagLastCacheKey(result.diseaseId));
+        }
+
+        return result;
+    }));
+
     ipcMain.handle('diseases:search', ensureAuthenticated(async (_, symptoms) => {
         return await DiseaseService.searchBySymptoms(symptoms);
     }));

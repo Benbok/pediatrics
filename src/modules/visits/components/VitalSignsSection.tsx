@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
@@ -140,6 +140,47 @@ const VITALS_FIELDS: (keyof Visit)[] = [
     'oxygenSaturation',
 ];
 
+const parseBoundedIntegerInput = (rawValue: string, maxValue?: number): number | null => {
+    const sanitizedValue = rawValue.replace(/\D/g, '').slice(0, 3);
+    if (!sanitizedValue) return null;
+
+    const parsedValue = parseInt(sanitizedValue, 10);
+    return typeof maxValue === 'number' ? Math.min(parsedValue, maxValue) : parsedValue;
+};
+
+const sanitizeTemperatureInput = (rawValue: string): string => {
+    const normalizedValue = rawValue.replace(',', '.').replace(/[^\d.]/g, '');
+    const [integerPart = '', ...decimalParts] = normalizedValue.split('.');
+    const safeIntegerPart = integerPart.slice(0, 2);
+    const safeDecimalPart = decimalParts.join('').slice(0, 1);
+
+    if (normalizedValue.includes('.')) {
+        return safeDecimalPart ? `${safeIntegerPart}.${safeDecimalPart}` : `${safeIntegerPart}.`;
+    }
+
+    return safeIntegerPart;
+};
+
+const normalizeTemperatureValue = (rawValue: string): { value: number | null; display: string } => {
+    const sanitizedValue = sanitizeTemperatureInput(rawValue);
+    if (!sanitizedValue || sanitizedValue === '.') {
+        return { value: null, display: '' };
+    }
+
+    const parsedValue = parseFloat(sanitizedValue);
+    if (Number.isNaN(parsedValue)) {
+        return { value: null, display: '' };
+    }
+
+    const clampedValue = Math.min(43, Math.max(33, parsedValue));
+    const roundedValue = Math.round(clampedValue * 10) / 10;
+
+    return {
+        value: roundedValue,
+        display: roundedValue.toString(),
+    };
+};
+
 export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
     formData,
     onChange,
@@ -148,6 +189,14 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
     onClear,
     onFillNorm,
 }) => {
+    const [temperatureInput, setTemperatureInput] = useState(
+        formData.temperature != null ? formData.temperature.toString() : ''
+    );
+
+    useEffect(() => {
+        setTemperatureInput(formData.temperature != null ? formData.temperature.toString() : '');
+    }, [formData.temperature]);
+
     const pulseNorm = getPulseNormByAge(ageMonths);
     const bpNorm = getBPNormByAge(ageMonths);
     const pulseValidation = validatePulse(formData.pulse, ageMonths);
@@ -233,19 +282,25 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                     )}
                     <div className="flex items-center gap-2">
                         <Input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={3}
                             placeholder="САД"
                             value={formData.bloodPressureSystolic || ''}
-                            onChange={(e) => onChange('bloodPressureSystolic', e.target.value ? parseInt(e.target.value) : null)}
+                            onChange={(e) => onChange('bloodPressureSystolic', parseBoundedIntegerInput(e.target.value))}
                             error={errors.bloodPressureSystolic}
                             className="flex-1"
                         />
                         <span className="text-slate-400 font-medium">/</span>
                         <Input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={3}
                             placeholder="ДАД"
                             value={formData.bloodPressureDiastolic || ''}
-                            onChange={(e) => onChange('bloodPressureDiastolic', e.target.value ? parseInt(e.target.value) : null)}
+                            onChange={(e) => onChange('bloodPressureDiastolic', parseBoundedIntegerInput(e.target.value))}
                             error={errors.bloodPressureDiastolic}
                             className="flex-1"
                         />
@@ -277,10 +332,13 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                     )}
                     <div className="flex items-center gap-2">
                         <Input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={3}
                             placeholder="уд/мин"
                             value={formData.pulse || ''}
-                            onChange={(e) => onChange('pulse', e.target.value ? parseInt(e.target.value) : null)}
+                            onChange={(e) => onChange('pulse', parseBoundedIntegerInput(e.target.value))}
                             error={errors.pulse}
                             leftIcon={<Activity className="w-4 h-4" />}
                             className="flex-1"
@@ -306,11 +364,29 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                     </p>
                     <div className="flex items-center gap-2">
                         <Input
-                            type="number"
-                            step="0.1"
+                            type="text"
+                            inputMode="decimal"
                             placeholder="°C"
-                            value={formData.temperature || ''}
-                            onChange={(e) => onChange('temperature', e.target.value ? parseFloat(e.target.value) : null)}
+                            value={temperatureInput}
+                            onChange={(e) => {
+                                const nextValue = sanitizeTemperatureInput(e.target.value);
+                                setTemperatureInput(nextValue);
+
+                                if (!nextValue) {
+                                    onChange('temperature', null);
+                                    return;
+                                }
+
+                                if (!nextValue.endsWith('.')) {
+                                    const parsedValue = parseFloat(nextValue);
+                                    onChange('temperature', Number.isNaN(parsedValue) ? null : parsedValue);
+                                }
+                            }}
+                            onBlur={() => {
+                                const normalizedValue = normalizeTemperatureValue(temperatureInput);
+                                setTemperatureInput(normalizedValue.display);
+                                onChange('temperature', normalizedValue.value);
+                            }}
                             error={errors.temperature}
                             leftIcon={<Thermometer className="w-4 h-4" />}
                             className="flex-1"
@@ -336,10 +412,13 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                     )}
                     <div className="flex items-center gap-2">
                         <Input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={3}
                             placeholder="в минуту"
                             value={formData.respiratoryRate || ''}
-                            onChange={(e) => onChange('respiratoryRate', e.target.value ? parseInt(e.target.value) : null)}
+                            onChange={(e) => onChange('respiratoryRate', parseBoundedIntegerInput(e.target.value))}
                             error={errors.respiratoryRate}
                             leftIcon={<Wind className="w-4 h-4" />}
                             className="flex-1"
@@ -363,12 +442,15 @@ export const VitalSignsSection: React.FC<VitalSignsSectionProps> = ({
                     </p>
                     <div className="flex items-center gap-2">
                         <Input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={3}
                             placeholder="%"
                             min="0"
                             max="100"
                             value={formData.oxygenSaturation || ''}
-                            onChange={(e) => onChange('oxygenSaturation', e.target.value ? parseInt(e.target.value) : null)}
+                            onChange={(e) => onChange('oxygenSaturation', parseBoundedIntegerInput(e.target.value, 100))}
                             error={errors.oxygenSaturation}
                             leftIcon={<Droplet className="w-4 h-4" />}
                             className="flex-1"

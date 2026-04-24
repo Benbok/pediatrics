@@ -391,6 +391,12 @@ export interface ClinicalGuideline {
   rehabilitation?: string | null;
   prevention?: string | null;
   medications?: string | null; // JSON string array of medications
+
+  // AI enrichment status for guideline chunks (@@SUMMARY/@@KEYWORDS)
+  aiEnrichmentInProgress?: boolean;
+  aiEnrichmentCompleted?: boolean;
+  aiEnrichedChunks?: number;
+  aiTotalChunks?: number;
 }
 
 export interface UploadJob {
@@ -838,6 +844,9 @@ export interface VisitTemplate {
 
 export interface DilutionInfo {
   enabled: boolean;
+  suspensionEnabled?: boolean | null;
+  suspensionBaseVolumeMl?: number | null;
+  suspensionBaseMg?: number | null;
   diluentType?: 'nacl_0_9' | 'glucose_5' | 'glucose_10' | 'water_inj' | null;
   diluentVolumeMl?: number | null;
   concentrationMgPerMl?: number | null;
@@ -1127,8 +1136,10 @@ declare global {
       getUploadStatus: (jobIds: string[]) => Promise<UploadProgress[]>;
       onUploadProgress: (callback: (event: any, progress: UploadProgress) => void) => () => void;
       onUploadBatchFinished: (callback: (event: any, data: UploadBatchFinishedEvent) => void) => () => void;
+      onEnrichmentFinished: (callback: (event: any, data: { guidelineId: number; diseaseId: number }) => void) => () => void;
       updateGuideline: (id: number, data: Partial<ClinicalGuideline>) => Promise<ClinicalGuideline>;
       deleteGuideline: (guidelineId: number) => Promise<boolean>;
+      rerunGuidelineEnrichment: (guidelineId: number) => Promise<{ ok: boolean; guidelineId: number; diseaseId: number; resetChunks: number; queued: boolean }>;
       searchDiseases: (symptoms: string[]) => Promise<Disease[]>;
       getGuidelinePlan: (diseaseId: number) => Promise<GuidelinePlan>;
       importDiseaseFromJson: (jsonString: string) => Promise<{

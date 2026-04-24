@@ -5,7 +5,7 @@ import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
-import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload, Edit3, Check, X, AlertCircle } from 'lucide-react';
+import { FileText, Download, Trash2, Calendar, ExternalLink, Loader2, Upload, Edit3, Check, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '../../../context/ToastContext';
 import { useUploadProgress } from '../../../context/UploadProgressContext';
 
@@ -27,6 +27,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editingTitle, setEditingTitle] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
+    const [rerunningId, setRerunningId] = useState<number | null>(null);
     const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
     const [rejectedFiles, setRejectedFiles] = useState<RejectedUploadFile[]>([]);
 
@@ -50,6 +51,16 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
 
         return () => unsubscribe();
     }, [activeBatchId, diseaseId]);
+
+    // Auto-reload when background AI enrichment finishes for this disease
+    useEffect(() => {
+        const unsubscribe = window.electronAPI.onEnrichmentFinished((_event, data) => {
+            if (data.diseaseId === diseaseId) {
+                loadGuidelines();
+            }
+        });
+        return () => unsubscribe();
+    }, [diseaseId]);
 
     useEffect(() => {
         loadGuidelines();
@@ -167,6 +178,19 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
             showToast('Ошибка при обновлении названия файла', 'error');
         } finally {
             setIsUpdating(false);
+        }
+    };
+
+    const handleRerunEnrichment = async (guidelineId: number) => {
+        setRerunningId(guidelineId);
+        try {
+            const result = await diseaseService.rerunGuidelineEnrichment(guidelineId);
+            await loadGuidelines();
+            showToast(`AI дополнение поставлено в очередь (сброшено чанков: ${result.resetChunks})`, 'info');
+        } catch (error: any) {
+            showToast(error?.message || 'Не удалось повторно запустить AI дополнение', 'error');
+        } finally {
+            setRerunningId(null);
         }
     };
 
@@ -356,6 +380,7 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
 
             {guidelines.map((guideline) => {
                 const isDeleting = deletingId === guideline.id;
+                const isRerunning = rerunningId === guideline.id;
 
                 return (
                     <Card
@@ -414,11 +439,24 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                                             </button>
                                         </div>
                                     )}
-                                    <div className="flex items-center gap-3 text-xs text-slate-500 mb-2">
+                                    <div className="flex items-center gap-3 text-xs text-slate-500 mb-2 flex-wrap">
                                         <div className="flex items-center gap-1">
                                             <Calendar className="w-3 h-3" />
                                             {formatDate(guideline.createdAt)}
                                         </div>
+                                        {guideline.aiEnrichmentInProgress ? (
+                                            <Badge variant="outline" size="sm" className="text-[10px] border-amber-200 text-amber-700 dark:border-amber-800 dark:text-amber-300">
+                                                AI дополнение в процессе
+                                            </Badge>
+                                        ) : Number(guideline.aiEnrichedChunks || 0) > 0 ? (
+                                            <Badge variant="outline" size="sm" className="text-[10px] border-emerald-200 text-emerald-700 dark:border-emerald-800 dark:text-emerald-300">
+                                                AI дополнение: {Number(guideline.aiEnrichedChunks || 0)}/{Number(guideline.aiTotalChunks || 0)}
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" size="sm" className="text-[10px] border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                                AI дополнение не выполнено
+                                            </Badge>
+                                        )}
                                         {guideline.source && guideline.source !== 'Минздрав РФ' && (
                                             <Badge variant="outline" size="sm" className="text-[10px]">
                                                 {guideline.source}
@@ -435,6 +473,20 @@ export const GuidelinesList: React.FC<GuidelinesListProps> = ({
                             <div className="flex items-center gap-2 flex-shrink-0">
                                 {guideline.pdfPath && (
                                     <>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleRerunEnrichment(guideline.id)}
+                                            disabled={isRerunning}
+                                            className="rounded-xl"
+                                            title="Повторить AI дополнение"
+                                        >
+                                            {isRerunning ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <RefreshCw className="w-4 h-4" />
+                                            )}
+                                        </Button>
                                         <Button
                                             variant="ghost"
                                             size="sm"

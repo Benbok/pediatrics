@@ -182,6 +182,9 @@ export const VisitSchema = z.object({
         })).nullable().optional(),
         dilution: z.object({
             enabled: z.boolean(),
+            suspensionEnabled: z.boolean().nullable().optional(),
+            suspensionBaseVolumeMl: z.number().positive().nullable().optional(),
+            suspensionBaseMg: z.number().positive().nullable().optional(),
             powderVialMg: z.number().positive().nullable().optional(),
             reconstitutionVolumeMl: z.number().positive().nullable().optional(),
             drugAmountMg: z.number().positive().nullable().optional(),

@@ -331,6 +331,20 @@ export const diseaseService = {
     },
 
     /**
+     * Re-run AI enrichment for a specific uploaded guideline file.
+     */
+    async rerunGuidelineEnrichment(guidelineId: number): Promise<{ ok: boolean; guidelineId: number; diseaseId: number; resetChunks: number; queued: boolean }> {
+        try {
+            const result = await window.electronAPI.rerunGuidelineEnrichment(guidelineId);
+            dataEvents.notifyUpdated('diseases');
+            return result;
+        } catch (error) {
+            logger.error('[DiseaseService] Failed to rerun guideline enrichment', { error });
+            throw error;
+        }
+    },
+
+    /**
      * Search for diseases based on symptoms
      */
     async searchBySymptoms(symptoms: string[]): Promise<Disease[]> {
