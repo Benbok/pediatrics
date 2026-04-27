@@ -103,7 +103,8 @@ export const visitFormStyles = `
 
 .body-content .section {
     margin-bottom: 14px;
-    page-break-inside: avoid;
+    page-break-inside: auto;
+    break-inside: auto;
 }
 
 .body-content .section-title {
@@ -165,6 +166,10 @@ export const visitFormStyles = `
 }
 
 .body-content .anamnesis-disease-content p {
+    font-weight: 400;
+}
+
+.body-content .objective-systems-content p {
     font-weight: 400;
 }
 
@@ -385,6 +390,10 @@ export const visitFormStyles = `
     margin: 3px 0 1px 0;
 }
 
+.body-content .objective-systems-content p {
+    font-weight: 400;
+}
+
 .body-content .section-content ul {
     margin: 0 0 4px 0;
     padding-left: 16px;
@@ -473,7 +482,8 @@ export const visitFormStyles = `
     }
 
     .section {
-        page-break-inside: avoid;
+        page-break-inside: auto;
+        break-inside: auto;
     }
 
     .prescriptions-table {

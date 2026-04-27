@@ -38,6 +38,10 @@ function hasPositiveNumber(value: unknown): value is number {
     return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
+function hasFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
 function formatMlToTenths(value: number): string {
     return value.toFixed(1);
 }
@@ -250,6 +254,41 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
 
     const doctorDisplayName = (doctorName ?? '').trim() || '—';
 
+    const vitalsSummaryItems: string[] = [];
+    if (hasFiniteNumber(visit.pulse)) {
+        vitalsSummaryItems.push(`ЧСС ${visit.pulse}/мин`);
+    }
+    if (hasFiniteNumber(visit.respiratoryRate)) {
+        vitalsSummaryItems.push(`ЧД ${visit.respiratoryRate}/мин`);
+    }
+    if (hasFiniteNumber(visit.bloodPressureSystolic) || hasFiniteNumber(visit.bloodPressureDiastolic)) {
+        vitalsSummaryItems.push(`АД ${visit.bloodPressureSystolic ?? '—'}/${visit.bloodPressureDiastolic ?? '—'} мм рт. ст.`);
+    }
+    if (hasFiniteNumber(visit.temperature)) {
+        vitalsSummaryItems.push(`T ${visit.temperature}°C`);
+    }
+    if (hasFiniteNumber(visit.oxygenSaturation)) {
+        vitalsSummaryItems.push(`SpO2 ${visit.oxygenSaturation}%`);
+    }
+
+    const systemsExamLines = [
+        visit.generalCondition,
+        visit.consciousness,
+        visit.skinMucosa,
+        visit.lymphNodes,
+        visit.musculoskeletal,
+        visit.respiratory,
+        visit.cardiovascular,
+        visit.abdomen,
+        visit.urogenital,
+        visit.nervousSystem,
+        visit.physicalExam,
+    ]
+        .map((line) => (line ?? '').trim())
+        .filter(Boolean);
+
+    const hasObjectiveExamBySystems = vitalsSummaryItems.length > 0 || systemsExamLines.length > 0;
+
     const formatDiagnosesSentence = (items: Array<{ nameRu?: string | null }>): string => {
         const normalized = items
             .map((item) => (item.nameRu ?? '').trim())
@@ -329,6 +368,36 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                                     <span className="value">{visit.bmi.toFixed(1)}</span>
                                 </>
                             )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Выставленный диагноз */}
+            <div className="section">
+                <div className="section-title">Выставленный диагноз</div>
+                <div className="diagnoses">
+                    {primaryDiagnosis && (
+                        <div className="diagnosis primary">
+                            <span className="diagnosis-label">Основной:</span>
+                            {primaryDiagnosis.code && <span className="diagnosis-code">{primaryDiagnosis.code}</span>}
+                            <span className="diagnosis-name">{primaryDiagnosis.nameRu}</span>
+                        </div>
+                    )}
+                    {complications.length > 0 && (
+                        <div className="diagnosis-group">
+                            <div className="diagnosis">
+                                <span className="diagnosis-label">Осложнение:</span>
+                                <span className="diagnosis-name">{formatDiagnosesSentence(complications)}</span>
+                            </div>
+                        </div>
+                    )}
+                    {comorbidities.length > 0 && (
+                        <div className="diagnosis-group">
+                            <div className="diagnosis">
+                                <span className="diagnosis-label">Сопутствующий:</span>
+                                <span className="diagnosis-name">{formatDiagnosesSentence(comorbidities)}</span>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -423,43 +492,20 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                 </div>
             )}
 
-            {/* Объективный осмотр */}
-            {visit.physicalExam && (
+            {/* Объективный осмотр по системам */}
+            {hasObjectiveExamBySystems && (
                 <div className="section">
-                    <div className="section-title">Объективный осмотр</div>
-                    <div className="section-content">{visit.physicalExam}</div>
+                    <div className="section-title">Объективный осмотр по системам</div>
+                    <div className="section-content objective-systems-content">
+                        {vitalsSummaryItems.length > 0 && (
+                            <p>{vitalsSummaryItems.join(', ')}</p>
+                        )}
+                        {systemsExamLines.map((line, index) => (
+                            <p key={`system-exam-${index}`}>{line}</p>
+                        ))}
+                    </div>
                 </div>
             )}
-
-            {/* Диагнозы */}
-            <div className="section">
-                <div className="section-title">Диагноз</div>
-                <div className="diagnoses">
-                    {primaryDiagnosis && (
-                        <div className="diagnosis primary">
-                            <span className="diagnosis-label">Основной:</span>
-                            {primaryDiagnosis.code && <span className="diagnosis-code">{primaryDiagnosis.code}</span>}
-                            <span className="diagnosis-name">{primaryDiagnosis.nameRu}</span>
-                        </div>
-                    )}
-                    {complications.length > 0 && (
-                        <div className="diagnosis-group">
-                            <div className="diagnosis">
-                                <span className="diagnosis-label">Осложнение:</span>
-                                <span className="diagnosis-name">{formatDiagnosesSentence(complications)}</span>
-                            </div>
-                        </div>
-                    )}
-                    {comorbidities.length > 0 && (
-                        <div className="diagnosis-group">
-                            <div className="diagnosis">
-                                <span className="diagnosis-label">Сопутствующий:</span>
-                                <span className="diagnosis-name">{formatDiagnosesSentence(comorbidities)}</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
 
             {/* Назначения */}
             {prescriptions.length > 0 && (

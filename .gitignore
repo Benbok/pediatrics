@@ -36,6 +36,7 @@ license.json
 
 # Project-local task tracking and root notes
 /.github/
+/.cursor/
 /tasks/
 /*.md
 !README.md
