@@ -63,6 +63,31 @@ function decryptChild(child) {
     };
 }
 
+/**
+ * Safely decrypt a text field. Returns null if decryption failed or value is absent.
+ */
+function safeDecryptField(value) {
+    if (value == null) return null;
+    const decrypted = decrypt(value);
+    if (decrypted === '[DECRYPTION_ERROR]') return null;
+    return decrypted;
+}
+
+/**
+ * Safely decrypt a JSON field. Returns parsed object or null.
+ */
+function safeDecryptJsonField(value) {
+    if (value == null) return null;
+    const decrypted = decrypt(value);
+    if (decrypted === '[DECRYPTION_ERROR]') return null;
+    if (typeof decrypted !== 'string') return decrypted;
+    try {
+        return JSON.parse(decrypted);
+    } catch {
+        return null;
+    }
+}
+
 function buildAnalyticsCacheKey(doctorId, dateFrom, dateTo) {
     return `doctor_${doctorId}_${dateFrom}_${dateTo}`;
 }
@@ -142,9 +167,9 @@ const setupDashboardHandlers = () => {
                 visitDate: serializeDateOnly(v.visitDate),
                 visitTime: v.visitTime ?? null,
                 visitType: v.visitType ?? null,
-                complaints: v.complaints ?? null,
-                notes: v.notes ?? null,
-                primaryDiagnosis: v.primaryDiagnosis ? (typeof v.primaryDiagnosis === 'string' ? JSON.parse(v.primaryDiagnosis) : v.primaryDiagnosis) : null,
+                complaints: safeDecryptField(v.complaints),
+                notes: safeDecryptField(v.notes),
+                primaryDiagnosis: safeDecryptJsonField(v.primaryDiagnosis),
                 child: decryptChild(v.child)
             }));
 

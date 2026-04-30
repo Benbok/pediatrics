@@ -9,6 +9,7 @@ const aiRoutingStore = require('../../services/aiRoutingStore.cjs');
 const { DiseaseService } = require('../diseases/service.cjs');
 const { assertCanDeleteVisit } = require('./access.cjs');
 const { encrypt, decrypt } = require('../../crypto.cjs');
+const { CacheService } = require('../../services/cacheService.cjs');
 const { MAX_FALLBACK_CONFIDENCE, MIN_FALLBACK_MATCHES, MAX_FALLBACK_SUGGESTIONS } = require('../../config/cdssConfig.cjs');
 
 const VISIT_TEXT_FIELDS = [
@@ -576,9 +577,13 @@ const VisitService = {
 
         assertCanDeleteVisit(sessionUser, visit);
 
-        return await prisma.visit.delete({
+        const deleted = await prisma.visit.delete({
             where: { id: visitId },
         });
+
+        CacheService.invalidate('dashboard');
+
+        return deleted;
     },
 
     /**
