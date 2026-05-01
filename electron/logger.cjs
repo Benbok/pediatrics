@@ -1,18 +1,17 @@
 const winston = require('winston');
 const path = require('path');
 const { app } = require('electron');
+const { getPaths } = require('./config/paths.cjs');
 
 /**
  * LOGGER SERVICE
- * 
+ *
  * Provides centralized logging with rotation and audit trail capabilities.
- * Logs are stored in the user data directory.
+ * Log directory is determined by paths.cjs (supports portable mode).
  */
 
-const userDataPath = app && typeof app.getPath === 'function'
-    ? app.getPath('userData')
-    : process.cwd();
-const logDir = path.join(userDataPath, 'logs');
+// Portable-aware log directory
+const logDir = getPaths().logDir;
 
 // Custom format for readable logs
 const customFormat = winston.format.printf(({ level, message, timestamp, ...metadata }) => {

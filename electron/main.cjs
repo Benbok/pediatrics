@@ -3,36 +3,24 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env.loc
 
 const { app, BrowserWindow, ipcMain, session, shell, dialog } = require('electron');
 const path = require('path');
-const os = require('os');
-const fs = require('fs');
+const os   = require('os');
+const fs   = require('fs');
 const crypto = require('crypto');
+
+// ── Portable / Standard path resolution ─────────────────────────────────────
+// MUST be the first electron module initialized — logger, prisma-client and
+// backup all depend on it at require time.
+const { initPaths, getPaths } = require('./config/paths.cjs');
+initPaths();
 
 /**
  * Ensure DB_ENCRYPTION_KEY is set in process.env.
- *
- * In dev: loaded from .env.local (dotenv above).
- * In prod: persisted in {userData}/encryption.key.
- *   - First run: generate 32 random bytes (64 hex), save to file, set env var.
- *   - Subsequent runs: read from file, set env var.
- *
- * Called synchronously before any module that uses crypto.cjs is imported.
- * userData path is resolved manually before app.whenReady() via app.getPath(),
- * which works after the app module is loaded even before 'ready' event.
+ * Uses paths.cjs so the key is stored in portable dataRoot when in portable mode.
  */
 function ensureEncryptionKey() {
     if (process.env.DB_ENCRYPTION_KEY) return; // dev: already set from .env.local
 
-    // app.getPath('userData') is safe to call before app ready on Electron 20+
-    let userDataDir;
-    try {
-        userDataDir = app.getPath('userData');
-    } catch (_) {
-        // Fallback for edge cases: derive from APPDATA / home
-        const base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-        userDataDir = path.join(base, 'PediAssist');
-    }
-
-    const keyPath = path.join(userDataDir, 'encryption.key');
+    const keyPath = getPaths().encryptionKeyPath;
 
     if (fs.existsSync(keyPath)) {
         const key = fs.readFileSync(keyPath, 'utf8').trim();
@@ -45,7 +33,8 @@ function ensureEncryptionKey() {
     // First run in prod — generate a new 256-bit key and persist it permanently
     const newKey = crypto.randomBytes(32).toString('hex'); // 64 hex chars
     try {
-        fs.mkdirSync(userDataDir, { recursive: true });
+        const keyDir = path.dirname(keyPath);
+        fs.mkdirSync(keyDir, { recursive: true });
         fs.writeFileSync(keyPath, newKey, { encoding: 'utf8', mode: 0o600 });
     } catch (writeErr) {
         // Non-fatal: key will only live in memory this session

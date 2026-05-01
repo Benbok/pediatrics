@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ShieldCheck, ShieldX, Copy, CheckCheck, Upload, AlertCircle, Loader2, KeyRound } from 'lucide-react';
+import { ShieldX, Copy, CheckCheck, Upload, AlertCircle, Loader2, KeyRound, HardDrive, FolderOpen } from 'lucide-react';
 
 interface ActivationPageProps {
     /** Вызывается после успешной активации — App.tsx убирает экран */
     onActivated: () => void;
 }
 
-type ActivationStatus = 'checking' | 'unlicensed' | 'importing' | 'error';
+type ActivationStatus = 'checking' | 'unlicensed' | 'importing' | 'error'
+    | 'portable_missing' | 'portable_mismatch' | 'portable_tamper' | 'portable_invalid';
 
 export const ActivationPage: React.FC<ActivationPageProps> = ({ onActivated }) => {
     const [status, setStatus] = useState<ActivationStatus>('checking');
     const [machineId, setMachineId] = useState<string>('');
     const [machineIdFull, setMachineIdFull] = useState<string>('');
     const [errorMessage, setErrorMessage] = useState<string>('');
+    const [portableDeviceDisplayId, setPortableDeviceDisplayId] = useState<string>('');
     const [copied, setCopied] = useState(false);
 
     const checkLicense = useCallback(async () => {
@@ -23,7 +25,27 @@ export const ActivationPage: React.FC<ActivationPageProps> = ({ onActivated }) =
                 onActivated();
                 return;
             }
-            // Not valid — load fingerprint for display
+
+            // Portable mode — specific error screens, no machine ID needed
+            if (result.isPortable) {
+                setErrorMessage(result.reason || 'Ошибка portable-режима');
+                if (result.portableDeviceDisplayId) {
+                    setPortableDeviceDisplayId(result.portableDeviceDisplayId);
+                }
+                const errorCode = (result as any).errorCode as string | undefined;
+                if (errorCode === 'LICENSE_MISSING') {
+                    setStatus('portable_missing');
+                } else if (errorCode === 'DEVICE_MISMATCH') {
+                    setStatus('portable_mismatch');
+                } else if (errorCode === 'STATE_TAMPER') {
+                    setStatus('portable_tamper');
+                } else {
+                    setStatus('portable_invalid');
+                }
+                return;
+            }
+
+            // Standard mode — load fingerprint for display
             const fpResult = await window.electronAPI.getLicenseFingerprint();
             setMachineId(fpResult.display || 'ОШИБКА');
             setMachineIdFull(fpResult.fingerprint || '');
@@ -95,6 +117,100 @@ export const ActivationPage: React.FC<ActivationPageProps> = ({ onActivated }) =
                 <div className="flex flex-col items-center gap-4">
                     <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
                     <span className="text-slate-500 dark:text-slate-400 font-medium">Проверка лицензионного файла...</span>
+                </div>
+            </div>
+        );
+    }
+
+    // ── Portable: лицензия не найдена ────────────────────────────────────────
+
+    if (status === 'portable_missing') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+                <div className="max-w-md w-full text-center animate-in fade-in zoom-in-95 duration-500">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-2xl shadow-lg shadow-blue-600/30 mb-6">
+                        <HardDrive className="w-10 h-10 text-white" strokeWidth={1.5} />
+                    </div>
+                    <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">PediAssist — Portable</h1>
+                    <p className="text-slate-500 dark:text-slate-400 mb-8">Файл лицензии не найден</p>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 text-left">
+                        <div className="flex items-start gap-3 mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-800 dark:text-amber-300">
+                                Поместите файл <strong>portable-license.json</strong> в папку <strong>data\</strong> на этом диске
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono text-sm text-slate-700 dark:text-slate-300">
+                            <FolderOpen className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                            <span className="break-all">data\portable-license.json</span>
+                        </div>
+                        <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
+                            Сгенерируйте лицензию командой:<br />
+                            <span className="font-mono">node tools/generate-license.cjs --portable --drive &lt;буква&gt;:</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ── Portable: несоответствие диска ───────────────────────────────────────
+
+    if (status === 'portable_mismatch') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+                <div className="max-w-md w-full text-center animate-in fade-in zoom-in-95 duration-500">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-red-500 rounded-2xl shadow-lg shadow-red-500/30 mb-6">
+                        <ShieldX className="w-10 h-10 text-white" strokeWidth={1.5} />
+                    </div>
+                    <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">PediAssist — Portable</h1>
+                    <p className="text-slate-500 dark:text-slate-400 mb-8">Лицензия не соответствует диску</p>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 text-left">
+                        <div className="flex items-start gap-3 mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-red-800 dark:text-red-300">{errorMessage}</p>
+                        </div>
+                        {portableDeviceDisplayId && (
+                            <div className="mt-3">
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider font-semibold">Device ID текущего диска</p>
+                                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono text-sm text-slate-700 dark:text-slate-300 break-all select-all">
+                                    {portableDeviceDisplayId}
+                                </div>
+                                <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                                    Пересоздайте лицензию для этого диска командой --portable --drive
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ── Portable: tamper / generic invalid ───────────────────────────────────
+
+    if (status === 'portable_tamper' || status === 'portable_invalid') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+                <div className="max-w-md w-full text-center animate-in fade-in zoom-in-95 duration-500">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-red-500 rounded-2xl shadow-lg shadow-red-500/30 mb-6">
+                        <ShieldX className="w-10 h-10 text-white" strokeWidth={1.5} />
+                    </div>
+                    <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">PediAssist — Portable</h1>
+                    <p className="text-slate-500 dark:text-slate-400 mb-8">
+                        {status === 'portable_tamper' ? 'Нарушение целостности' : 'Ошибка лицензии'}
+                    </p>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+                        <div className="flex items-start gap-3 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-red-800 dark:text-red-300 text-left">{errorMessage}</p>
+                        </div>
+                        {status === 'portable_tamper' && (
+                            <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
+                                Для восстановления пересоздайте portable-лицензию с помощью CLI-инструмента.
+                            </p>
+                        )}
+                    </div>
                 </div>
             </div>
         );

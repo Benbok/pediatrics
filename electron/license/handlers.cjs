@@ -22,11 +22,11 @@ const { prisma } = require('../prisma-client.cjs');
 const isDev = !app.isPackaged;
 
 /**
- * Возвращает путь к файлу лицензии в userData директории.
- * В продакшне: %APPDATA%\pediassist\license.json
+ * Возвращает путь к файлу лицензии. Portable-aware через paths.cjs.
  */
 function getLicensePath() {
-    return path.join(app.getPath('userData'), 'license.json');
+    const { getPaths } = require('../config/paths.cjs');
+    return getPaths().licenseFilePath;
 }
 
 function toPublicLicenseData(data) {
@@ -137,14 +137,29 @@ async function autoProvisionUserFromLicense(licenseData) {
 
 /**
  * Проверяет текущую лицензию.
- * @returns {{ valid: boolean, reason?: string, data?: object, devMode?: boolean }}
+ * Поддерживает два режима: portable (isPortable=true) и стандартный machine-bound.
+ * @returns {{ valid: boolean, reason?: string, data?: object, devMode?: boolean, isPortable?: boolean, licenseType?: string }}
  */
 async function checkCurrentLicense() {
     // Dev mode bypass — полная функциональность без лицензии
     if (isDev) {
-        return { valid: true, devMode: true, data: { userName: 'Разработчик', expiresAt: null } };
+        return { valid: true, devMode: true, isPortable: false, data: { userName: 'Разработчик', expiresAt: null } };
     }
 
+    // ── Portable mode branch ────────────────────────────────────────────────
+    const { getPaths } = require('../config/paths.cjs');
+    const paths = getPaths();
+    if (paths.isPortable) {
+        const { bootstrapPortable } = require('./portable-bootstrap.cjs');
+        const result = await bootstrapPortable(paths);
+        return {
+            ...result,
+            isPortable:  true,
+            licenseType: 'PORTABLE_PERSONAL',
+        };
+    }
+
+    // ── Standard machine-bound branch ──────────────────────────────────────
     const licensePath = getLicensePath();
 
     if (!fs.existsSync(licensePath)) {
@@ -160,11 +175,13 @@ async function checkCurrentLicense() {
     }
 
     const result = verifyLicense(licensePath, fingerprint);
-    if (!result.valid) return result;
+    if (!result.valid) return { ...result, isPortable: false };
 
     return {
         ...result,
-        data: toPublicLicenseData(result.data),
+        isPortable:  false,
+        licenseType: 'MACHINE_BOUND',
+        data:        toPublicLicenseData(result.data),
     };
 }
 

@@ -10,6 +10,9 @@
  *   node tools/generate-license.cjs --fingerprint <hex> --user "Иванов И.И." [--expires 2027-01-01] [--key ./keys/private.pem] [--out ./license.json]
  *       Создаёт подписанный файл лицензии для конкретного пользователя/машины
  *
+ *   node tools/generate-license.cjs --portable --drive D: [--user "Разработчик"] [--expires 2027-01-01] [--allow-host <fingerprint>] [--key ./keys/private.pem] [--out ./portable-license.json]
+ *       Создаёт portable-лицензию v2 для конкретного USB-диска
+ *
  *   node tools/generate-license.cjs --verify ./license.json --pub ./keys/public.pem
  *       Проверяет лицензионный файл (без привязки к fingerprint)
  */
@@ -112,6 +115,7 @@ if (getArg('--fingerprint')) {
     const signature = sign.sign(privateKey, 'base64');
 
     const licenseFile = { payload: payloadB64, signature };
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, JSON.stringify(licenseFile, null, 2), 'utf8');
 
     console.log('\n✅  Лицензия создана:', outPath);
@@ -121,6 +125,126 @@ if (getArg('--fingerprint')) {
     console.log(`    Выдана:        ${payloadObj.issuedAt}`);
     console.log(`    Истекает:      ${payloadObj.expiresAt || 'Бессрочно'}`);
     console.log('\n📤  Отправьте этот файл пользователю. Он должен импортироватез экран активации.ь его чер');
+    process.exit(0);
+}
+
+// ─── Generate portable license (v2) ──────────────────────────────────────────
+
+if (hasFlag('--portable')) {
+    const driveLetter = getArg('--drive');
+    const userName    = getArg('--user') || 'Разработчик';
+    const expiresAt   = getArg('--expires') || null;
+    const keyPath     = getArg('--key') || path.join(__dirname, '..', 'keys', 'private.pem');
+    const outPath     = getArg('--out') || path.join(process.cwd(), 'portable-license.json');
+
+    // Collect all --allow-host values (can be specified multiple times)
+    const allowedHostFingerprints = [];
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === '--allow-host' && args[i + 1]) {
+            allowedHostFingerprints.push(args[i + 1]);
+        }
+    }
+
+    if (!driveLetter) {
+        console.error('\n❌  Укажите букву диска: --drive D:');
+        console.error('    Пример: node tools/generate-license.cjs --portable --drive D: --user "Разработчик"');
+        process.exit(1);
+    }
+
+    if (!fs.existsSync(keyPath)) {
+        console.error(`\n❌  Приватный ключ не найден: ${keyPath}`);
+        console.error('    Сначала запустите: node tools/generate-license.cjs --generate-keys');
+        process.exit(1);
+    }
+
+    if (expiresAt) {
+        const expDate = new Date(expiresAt);
+        if (isNaN(expDate.getTime())) {
+            console.error(`\n❌  Неверный формат даты: ${expiresAt}. Используйте YYYY-MM-DD`);
+            process.exit(1);
+        }
+        if (expDate < new Date()) {
+            console.warn('\n⚠️   Предупреждение: дата истечения лицензии уже в прошлом!');
+        }
+    }
+
+    // Validate allowed host fingerprints format
+    for (const fp of allowedHostFingerprints) {
+        if (!/^[a-f0-9]{64}$/i.test(fp)) {
+            console.error(`\n❌  Неверный формат host fingerprint: ${fp}`);
+            console.error('    Fingerprint должен быть 64 hex-символа (SHA-256).');
+            process.exit(1);
+        }
+    }
+
+    // Get portable device ID from the specified drive
+    const { execSync } = require('child_process');
+    const letter = driveLetter.replace(/[:\\/]+/g, '').toUpperCase().charAt(0);
+
+    console.log(`\n🔍  Определение ID диска ${letter}:...`);
+
+    let portableDeviceId;
+    try {
+        const volOutput = execSync(`vol ${letter}:`, {
+            encoding: 'utf8',
+            windowsHide: true,
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        const serialMatch = volOutput.match(/\b([A-F0-9]{4}-[A-F0-9]{4})\b/i);
+        const labelMatch  = volOutput.match(/(?:Volume in drive [A-Z] is|Том в устройстве [A-Z] имеет метку)\s+(.+)/i);
+
+        if (!serialMatch) {
+            console.error(`\n❌  Не удалось определить серийный номер тома ${letter}:`);
+            console.error('    Убедитесь, что диск подключён и отформатирован.');
+            process.exit(1);
+        }
+
+        const volumeSerial = serialMatch[1].toUpperCase();
+        const volumeLabel  = labelMatch ? labelMatch[1].trim().toUpperCase() : 'NO_LABEL';
+        const input        = `PORTABLE::${letter}:${volumeSerial}:${volumeLabel}`;
+        portableDeviceId   = crypto.createHash('sha256').update(input).digest('hex');
+
+        console.log(`    Метка тома:     ${volumeLabel}`);
+        console.log(`    Серийный номер: ${volumeSerial}`);
+        console.log(`    Device ID:      ${portableDeviceId.substring(0, 32).toUpperCase().match(/.{8}/g).join('-')}`);
+    } catch (err) {
+        console.error(`\n❌  Ошибка получения данных тома: ${err.message}`);
+        process.exit(1);
+    }
+
+    const payloadObj = {
+        licenseType:             'PORTABLE_PERSONAL',
+        portableDeviceId,
+        allowedHostFingerprints: allowedHostFingerprints.length > 0 ? allowedHostFingerprints : [],
+        ownerId:                 'developer',
+        userName,
+        issuedAt:                new Date().toISOString(),
+        expiresAt:               expiresAt ? new Date(expiresAt).toISOString() : null,
+        version:                 2,
+    };
+
+    const payloadB64   = Buffer.from(JSON.stringify(payloadObj)).toString('base64');
+    const privateKey   = fs.readFileSync(keyPath, 'utf8');
+    const sign         = crypto.createSign('RSA-SHA256');
+    sign.update(payloadB64);
+    const signature    = sign.sign(privateKey, 'base64');
+    const licenseFile  = { payload: payloadB64, signature };
+
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, JSON.stringify(licenseFile, null, 2), 'utf8');
+
+    console.log('\n✅  Portable-лицензия создана:', outPath);
+    console.log('\n📋  Параметры:');
+    console.log(`    Тип:           PORTABLE_PERSONAL (v2)`);
+    console.log(`    Пользователь:  ${payloadObj.userName}`);
+    console.log(`    Диск:          ${letter}:`);
+    console.log(`    Выдана:        ${payloadObj.issuedAt}`);
+    console.log(`    Истекает:      ${payloadObj.expiresAt || 'Бессрочно'}`);
+    console.log(`    Whitelist:     ${allowedHostFingerprints.length > 0 ? allowedHostFingerprints.join(', ') : 'Любой ПК'}`);
+    console.log('\n📂  Куда положить:');
+    console.log(`    ${letter}:\\<папка с exe>\\data\\portable-license.json`);
+    console.log('\n⚠️   При замене/форматировании диска пересоздайте лицензию этой командой.');
     process.exit(0);
 }
 
@@ -178,13 +302,26 @@ PediAssist License Generator
 Генерация ключей:
   node tools/generate-license.cjs --generate-keys [--out-dir ./keys]
 
-Выпуск лицензии:
+Выпуск лицензии (machine-bound v1):
   node tools/generate-license.cjs \\
     --fingerprint <64-hex-chars> \\
     --user "Иванов Иван Иванович" \\
     [--expires 2027-12-31] \\
     [--key ./keys/private.pem] \\
     [--out ./license.json]
+
+Выпуск portable-лицензии (v2) для USB-диска:
+  node tools/generate-license.cjs \\
+    --portable \\
+    --drive D: \\
+    --user "Разработчик" \\
+    [--expires 2027-12-31] \\
+    [--allow-host <machine-fingerprint-hex>] \\
+    [--key ./keys/private.pem] \\
+    [--out ./portable-license.json]
+
+  Примечание: --allow-host можно указать несколько раз (до 3 машин).
+  Без --allow-host: диск работает на любом ПК.
 
 Проверка лицензии:
   node tools/generate-license.cjs --verify ./license.json [--pub ./keys/public.pem]

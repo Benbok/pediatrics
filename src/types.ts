@@ -968,6 +968,32 @@ export interface DashboardVisitAnalytics {
   patients: DashboardVisitAnalyticsPatientItem[];
 }
 
+// ============= LICENSE TYPES =============
+
+export type LicenseType = 'MACHINE_BOUND' | 'PORTABLE_PERSONAL';
+
+export type PortableLicenseErrorCode =
+    | 'LICENSE_MISSING'
+    | 'DEVICE_MISMATCH'
+    | 'STATE_TAMPER'
+    | 'LICENSE_INVALID'
+    | 'DEVICE_ID_ERROR';
+
+export interface LicenseCheckResult {
+    valid: boolean;
+    reason?: string;
+    devMode?: boolean;
+    isPortable?: boolean;
+    licenseType?: LicenseType;
+    errorCode?: PortableLicenseErrorCode;
+    portableDeviceDisplayId?: string;
+    data?: {
+        userName?: string;
+        expiresAt?: string | null;
+        username?: string;
+    };
+}
+
 // ============= GLOBAL TYPES =============
 
 // Global window extension for Electron API
@@ -976,7 +1002,7 @@ declare global {
     electronAPI?: {
       // LICENSE ACTIVATION API (no auth required)
       getLicenseFingerprint: () => Promise<{ fingerprint: string | null; display: string; error?: string }>;
-      checkLicense: () => Promise<{ valid: boolean; reason?: string; devMode?: boolean; data?: { userName: string; expiresAt: string | null; username?: string } }>;
+      checkLicense: () => Promise<LicenseCheckResult>;
       importLicense: () => Promise<{ success: boolean; reason?: string; data?: { userName: string; expiresAt: string | null; username?: string }; autoProvisioned?: boolean; requiresManualCredentials?: boolean; username?: string }>;
 
       // LICENSE ADMIN API (developer-only, requires private.pem in userData)

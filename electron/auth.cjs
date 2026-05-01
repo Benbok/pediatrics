@@ -715,8 +715,10 @@ function setupAuthHandlers() {
             const { checkCurrentLicense } = require('./license/handlers.cjs');
             const licenseResult = await checkCurrentLicense();
             if (!licenseResult.valid && !licenseResult.devMode) {
-                return { success: false, error: 'Лицензия не найдена или недействительна. Сначала импортируйте license.json.' };
+                return { success: false, error: 'Лицензия не найдена или недействительна. Проверьте файл лицензии (license.json / portable-license.json).' };
             }
+
+            const isPortableBootstrap = licenseResult.isPortable === true;
 
             const passwordHash = await bcrypt.hash(password.trim(), 10);
 
@@ -728,26 +730,28 @@ function setupAuthHandlers() {
                         lastName: (lastName || '').trim(),
                         firstName: '',
                         middleName: '',
-                        isAdmin: false,
+                        isAdmin: isPortableBootstrap,
                         isActive: true,
                     },
                 });
 
-                const roleDoctor = await tx.role.upsert({
-                    where: { key: 'doctor' },
+                const primaryRoleKey = isPortableBootstrap ? 'admin' : 'doctor';
+
+                const primaryRole = await tx.role.upsert({
+                    where: { key: primaryRoleKey },
                     update: {},
-                    create: { key: 'doctor' },
+                    create: { key: primaryRoleKey },
                 });
 
                 await tx.userRole.create({
-                    data: { userId: created.id, roleId: roleDoctor.id },
+                    data: { userId: created.id, roleId: primaryRole.id },
                 });
 
                 return created;
             });
 
-            logger.info(`[Auth] First-run user setup complete. Doctor user "${newUser.username}" created.`);
-            logAudit('FIRST_RUN_USER_SETUP', { userId: newUser.id, username: newUser.username });
+            logger.info(`[Auth] First-run user setup complete. ${isPortableBootstrap ? 'Admin' : 'Doctor'} user "${newUser.username}" created.`);
+            logAudit('FIRST_RUN_USER_SETUP', { userId: newUser.id, username: newUser.username, isPortable: isPortableBootstrap, grantedRole: isPortableBootstrap ? 'admin' : 'doctor' });
 
             return { success: true, username: newUser.username };
         } catch (err) {

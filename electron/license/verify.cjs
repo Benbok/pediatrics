@@ -157,4 +157,159 @@ function verifyLicense(licenseFilePath, machineFingerprint) {
     return { valid: true, data };
 }
 
-module.exports = { verifyLicense, PUBLIC_KEY };
+// ─── Portable License Verification (v2) ──────────────────────────────────────
+
+/**
+ * Верифицирует PORTABLE_PERSONAL лицензию (payload version = 2).
+ *
+ * Payload v2:
+ * {
+ *   "licenseType": "PORTABLE_PERSONAL",
+ *   "portableDeviceId": "<sha256 тома>",
+ *   "allowedHostFingerprints": ["<sha256>", ...],  // пустой = любой хост
+ *   "ownerId": "developer",
+ *   "userName": "Разработчик",
+ *   "issuedAt": "2026-...",
+ *   "expiresAt": null,
+ *   "version": 2
+ * }
+ *
+ * @param {string} licenseFilePath      - Путь к portable-license.json
+ * @param {string} portableDeviceId     - SHA-256 текущего тома (из getPortableDeviceId)
+ * @param {string} [hostFingerprint]    - SHA-256 текущей машины (для whitelist-проверки)
+ * @returns {LicenseVerifyResult}
+ */
+function verifyPortableLicense(licenseFilePath, portableDeviceId, hostFingerprint) {
+    // 1. Read file
+    let raw;
+    try {
+        raw = fs.readFileSync(licenseFilePath, 'utf8');
+    } catch (err) {
+        logger.warn('[License] Cannot read portable license file:', err.message);
+        return { valid: false, reason: 'Файл portable-лицензии не найден или недоступен' };
+    }
+
+    // 2. Parse JSON
+    let licenseObj;
+    try {
+        licenseObj = JSON.parse(raw);
+    } catch {
+        return { valid: false, reason: 'Файл portable-лицензии повреждён (некорректный JSON)' };
+    }
+
+    const { payload, signature } = licenseObj;
+    if (!payload || !signature) {
+        return { valid: false, reason: 'Файл portable-лицензии повреждён (отсутствует payload или signature)' };
+    }
+
+    // 3. Verify RSA-SHA256 signature (same PUBLIC_KEY as machine licenses)
+    let signatureValid = false;
+    try {
+        const verify = crypto.createVerify('RSA-SHA256');
+        verify.update(payload);
+        signatureValid = verify.verify(PUBLIC_KEY, signature, 'base64');
+    } catch (err) {
+        logger.error('[License] Portable signature verification error:', err.message);
+        return { valid: false, reason: 'Ошибка проверки подписи portable-лицензии' };
+    }
+
+    if (!signatureValid) {
+        logger.warn('[License] Portable: invalid RSA signature detected');
+        return { valid: false, reason: 'Подпись portable-лицензии недействительна — файл изменён или подделан' };
+    }
+
+    // 4. Decode payload
+    let data;
+    try {
+        data = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+    } catch {
+        return { valid: false, reason: 'Файл portable-лицензии повреждён (не удалось декодировать данные)' };
+    }
+
+    // 5. Version and type checks
+    if (data.version !== 2) {
+        return { valid: false, reason: 'Неверная версия portable-лицензии (ожидается v2)' };
+    }
+    if (data.licenseType !== 'PORTABLE_PERSONAL') {
+        return { valid: false, reason: 'Тип лицензии не соответствует portable-режиму' };
+    }
+    if (!data.portableDeviceId) {
+        return { valid: false, reason: 'Portable-лицензия не содержит ID диска' };
+    }
+
+    // 6. Portable device ID check
+    if (data.portableDeviceId.toLowerCase() !== portableDeviceId.toLowerCase()) {
+        logger.warn('[License] Portable: device ID mismatch');
+        return {
+            valid: false,
+            reason: 'Лицензия привязана к другому диску (Device ID не совпадает)',
+        };
+    }
+
+    // 7. Optional host fingerprint whitelist check
+    if (
+        hostFingerprint &&
+        Array.isArray(data.allowedHostFingerprints) &&
+        data.allowedHostFingerprints.length > 0
+    ) {
+        const allowed = data.allowedHostFingerprints.map((fp) => fp.toLowerCase());
+        if (!allowed.includes(hostFingerprint.toLowerCase())) {
+            logger.warn('[License] Portable: host fingerprint not in whitelist');
+            return {
+                valid: false,
+                reason: 'Этот компьютер не входит в список разрешённых для данной portable-лицензии',
+            };
+        }
+    }
+
+    // 8. Expiry check
+    if (data.expiresAt) {
+        const expiryDate = new Date(data.expiresAt);
+        if (isNaN(expiryDate.getTime())) {
+            return { valid: false, reason: 'Недействительная дата истечения portable-лицензии' };
+        }
+        if (expiryDate < new Date()) {
+            logger.warn('[License] Portable license expired:', data.expiresAt);
+            return {
+                valid: false,
+                reason: `Срок действия portable-лицензии истёк ${expiryDate.toLocaleDateString('ru-RU')}`,
+            };
+        }
+    }
+
+    logger.info('[License] Portable license verified for:', data.userName || data.ownerId);
+    return { valid: true, data };
+}
+
+/**
+ * Авто-маршрутизатор: определяет версию лицензии и вызывает нужный верификатор.
+ * Позволяет handlers.cjs не знать о деталях версий.
+ *
+ * @param {string} licenseFilePath
+ * @param {{ portableDeviceId?: string, hostFingerprint?: string, machineFingerprint?: string }} context
+ * @returns {LicenseVerifyResult}
+ */
+function verifyLicenseAuto(licenseFilePath, context) {
+    // Peek at payload to detect version without full verification
+    let payloadData;
+    try {
+        const raw         = fs.readFileSync(licenseFilePath, 'utf8');
+        const licenseObj  = JSON.parse(raw);
+        payloadData = JSON.parse(Buffer.from(licenseObj.payload || '', 'base64').toString('utf8'));
+    } catch {
+        return { valid: false, reason: 'Файл лицензии не найден или повреждён' };
+    }
+
+    if (payloadData.version === 2 && payloadData.licenseType === 'PORTABLE_PERSONAL') {
+        return verifyPortableLicense(
+            licenseFilePath,
+            context.portableDeviceId || '',
+            context.hostFingerprint
+        );
+    }
+
+    // Default: v1 machine-bound
+    return verifyLicense(licenseFilePath, context.machineFingerprint || '');
+}
+
+module.exports = { verifyLicense, verifyPortableLicense, verifyLicenseAuto, PUBLIC_KEY };

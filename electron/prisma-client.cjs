@@ -2,12 +2,14 @@ const { app } = require('electron');
 const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
+const { getPaths } = require('./config/paths.cjs');
 
 /**
  * SHARED PRISMA CLIENT
- * 
+ *
  * Single source of truth for Prisma instance.
  * All modules (auth, database, init-db) should import from here.
+ * Database path is determined by paths.cjs (supports portable mode).
  */
 
 // Configure Prisma paths BEFORE creating client
@@ -18,10 +20,8 @@ if (!isDev) {
     process.env.PRISMA_SCHEMA_ENGINE_BINARY = path.join(appPath, 'node_modules', '.prisma', 'client', 'schema-engine-windows.exe');
 }
 
-// Database path
-const dbPath = isDev
-    ? path.join(__dirname, '../prisma/dev.db')
-    : path.join(app.getPath('userData'), 'pediatrics.db');
+// Database path — from paths.cjs (portable-aware)
+const dbPath = getPaths().dbPath;
 
 // Create adapter with busy timeout for SQLite
 // busy_timeout позволяет избежать ошибок "database is locked" при параллельных запросах

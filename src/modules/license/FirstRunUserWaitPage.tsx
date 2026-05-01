@@ -10,6 +10,7 @@ type Step = 'share-id' | 'import-license' | 'enter-credentials';
 
 export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props) {
   const [step, setStep] = useState<Step>('share-id');
+  const [isPortableMode, setIsPortableMode] = useState(false);
   const [fingerprint, setFingerprint] = useState('');
   const [display, setDisplay] = useState('');
   const [copied, setCopied] = useState(false);
@@ -22,12 +23,40 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
   const [password, setPassword] = useState('');
 
   useEffect(() => {
-    window.electronAPI?.getLicenseFingerprint?.().then((res) => {
-      setFingerprint(res?.fingerprint || '');
-      setDisplay(res?.display || '');
-    }).catch(() => {
-      setError('Не удалось получить Machine ID');
-    });
+    let mounted = true;
+
+    (async () => {
+      try {
+        const check = await window.electronAPI?.checkLicense?.();
+
+        // Portable mode: license is already bound to USB, no machine ID/license.json flow.
+        if (check?.isPortable) {
+          if (!mounted) return;
+          setIsPortableMode(true);
+          setStep('enter-credentials');
+
+          if (!check.valid && !check.devMode) {
+            setError(check.reason || 'Portable-лицензия недействительна. Проверьте файл data/portable-license.json.');
+          }
+          return;
+        }
+      } catch {
+        // Fallback to standard flow below.
+      }
+
+      window.electronAPI?.getLicenseFingerprint?.().then((res) => {
+        if (!mounted) return;
+        setFingerprint(res?.fingerprint || '');
+        setDisplay(res?.display || '');
+      }).catch(() => {
+        if (!mounted) return;
+        setError('Не удалось получить Machine ID');
+      });
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   async function handleCopy() {
@@ -92,11 +121,13 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
   }
 
   // ── Step indicator ──────────────────────────────────────────────────────────
-  const steps: { key: Step; label: string }[] = [
-    { key: 'share-id',         label: 'Получить лицензию' },
-    { key: 'import-license',   label: 'Импорт license.json' },
-    { key: 'enter-credentials',label: 'Ввести данные входа' },
-  ];
+  const steps: { key: Step; label: string }[] = isPortableMode
+    ? [{ key: 'enter-credentials', label: 'Ввести данные входа' }]
+    : [
+        { key: 'share-id',          label: 'Получить лицензию' },
+        { key: 'import-license',    label: 'Импорт license.json' },
+        { key: 'enter-credentials', label: 'Ввести данные входа' },
+      ];
   const stepIndex = steps.findIndex(s => s.key === step);
 
   return (
@@ -106,7 +137,11 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Активация пользователя</h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">Получите и импортируйте license.json для начала работы</p>
+          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
+            {isPortableMode
+              ? 'Portable-лицензия обнаружена. Введите данные для входа в систему.'
+              : 'Получите и импортируйте license.json для начала работы'}
+          </p>
         </div>
 
         {/* Step indicator */}
@@ -132,7 +167,7 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
         </div>
 
         {/* ── Step 1: Share Machine ID ─────────────────────────────────────── */}
-        {step === 'share-id' && (
+        {!isPortableMode && step === 'share-id' && (
           <div className="space-y-4">
             <p className="text-slate-700 dark:text-slate-300 text-sm">
               Скопируйте ваш <strong className="text-slate-900 dark:text-white">Machine ID</strong> и отправьте его администратору.
@@ -175,7 +210,7 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
         )}
 
         {/* ── Step 2: Import license.json ──────────────────────────────────── */}
-        {step === 'import-license' && (
+        {!isPortableMode && step === 'import-license' && (
           <div className="space-y-4">
             <p className="text-slate-700 dark:text-slate-300 text-sm">
               Нажмите кнопку и выберите файл <code className="text-emerald-700 dark:text-emerald-300 bg-slate-100 dark:bg-slate-800 px-1 rounded">license.json</code>, который прислал администратор.
@@ -207,7 +242,9 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
         {step === 'enter-credentials' && (
           <form onSubmit={handleActivate} className="space-y-4">
             <p className="text-slate-700 dark:text-slate-300 text-sm">
-              {manualCredentialsRequired
+              {isPortableMode
+                ? 'Portable-лицензия уже привязана к этому USB-носителю. Введите логин и пароль, чтобы создать первую учётную запись.'
+                : manualCredentialsRequired
                 ? 'Лицензия принята. Введите логин и пароль, которые сообщил администратор (fallback для раннего формата лицензии).'
                 : 'Лицензия принята. Введите логин и пароль, которые сообщил администратор.'}
             </p>
@@ -242,7 +279,16 @@ export default function FirstRunUserWaitPage({ onBack, onAccessGranted }: Props)
             {error && <p className="text-xs text-amber-400">{error}</p>}
 
             <div className="flex flex-wrap gap-2 pt-1">
-              <button type="button" onClick={() => { setError(''); setStep('import-license'); }}
+              <button
+                type="button"
+                onClick={() => {
+                  setError('');
+                  if (isPortableMode) {
+                    onBack();
+                  } else {
+                    setStep('import-license');
+                  }
+                }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">
                 <ArrowLeft className="w-4 h-4" />Назад
               </button>

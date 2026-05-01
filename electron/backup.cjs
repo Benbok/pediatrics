@@ -1,17 +1,17 @@
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
 const { logger, logAudit } = require('./logger.cjs');
+const { getPaths } = require('./config/paths.cjs');
 
 /**
  * BACKUP SERVICE
- * 
+ *
  * Manages automated and manual backups of the database.
- * Stores backups in the user data directory.
+ * Backup directory is determined by paths.cjs (supports portable mode).
  */
 
 const MAX_BACKUPS = 10;
-const backupDir = path.join(app.getPath('userData'), 'backups');
+const backupDir = getPaths().backupDir;
 
 /**
  * Create a backup of the current database

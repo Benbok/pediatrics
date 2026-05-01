@@ -66,4 +66,74 @@ function getDisplayFingerprint() {
     }
 }
 
-module.exports = { getFingerprint, getDisplayFingerprint, getMachineGuid };
+// ─── Portable Device ID ───────────────────────────────────────────────────────
+
+/**
+ * Возвращает уникальный ID носителя (тома диска) для portable-лицензии.
+ * Привязка к диску, а не к машине — диск работает на любом ПК, но только с этим томом.
+ *
+ * Алгоритм: SHA-256(буква + серийный_номер_тома + метка_тома).
+ * Серийник меняется при форматировании диска (желаемое поведение).
+ *
+ * @param {string} driveLetter - Буква диска: 'D', 'D:' или 'D:\'
+ * @returns {string} SHA-256 hex (64 символа)
+ */
+function getPortableDeviceId(driveLetter) {
+    // Нормализация: 'D', 'D:', 'D:\' → 'D'
+    const letter = driveLetter.replace(/[:\\/]+/g, '').toUpperCase().charAt(0);
+    if (!letter || !/[A-Z]/.test(letter)) {
+        throw new Error(`Некорректная буква диска: ${driveLetter}`);
+    }
+
+    let raw;
+    try {
+        raw = execSync(`vol ${letter}:`, {
+            encoding: 'utf8',
+            windowsHide: true,
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+    } catch (err) {
+        throw new Error(`Не удалось получить информацию о томе ${letter}: ${err.message}`);
+    }
+
+    // Поддерживаем локализованный вывод Windows (EN/RU и др.):
+    // серийный номер всегда имеет стабильный формат XXXX-XXXX.
+    const serialMatch = raw.match(/\b([A-F0-9]{4}-[A-F0-9]{4})\b/i);
+    const labelMatch  = raw.match(/(?:Volume in drive [A-Z] is|Том в устройстве [A-Z] имеет метку)\s+(.+)/i);
+
+    if (!serialMatch) {
+        throw new Error(
+            `Не удалось определить серийный номер тома ${letter}: ` +
+            `Убедитесь, что диск подключён и имеет файловую систему (FAT32, exFAT, NTFS).`
+        );
+    }
+
+    const volumeSerial = serialMatch[1].toUpperCase();
+    const volumeLabel  = labelMatch ? labelMatch[1].trim().toUpperCase() : 'NO_LABEL';
+    const input        = `PORTABLE::${letter}:${volumeSerial}:${volumeLabel}`;
+
+    return crypto.createHash('sha256').update(input).digest('hex');
+}
+
+/**
+ * Читаемое представление portable device ID (первые 32 символа, группами по 8).
+ * Формат: XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX
+ * @param {string} driveLetter
+ * @returns {string}
+ */
+function getDisplayPortableDeviceId(driveLetter) {
+    try {
+        const id = getPortableDeviceId(driveLetter);
+        return id.substring(0, 32).toUpperCase().match(/.{8}/g).join('-');
+    } catch {
+        return 'ОШИБКА-ПОЛУЧЕНИЯ-ID-ДИСКА';
+    }
+}
+
+module.exports = {
+    getFingerprint,
+    getDisplayFingerprint,
+    getMachineGuid,
+    getPortableDeviceId,
+    getDisplayPortableDeviceId,
+};
