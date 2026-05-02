@@ -68,18 +68,14 @@ export const DiseaseDetailPage: React.FC = () => {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-                <Loader2 className="w-12 h-12 text-primary-500 animate-spin" />
-                <p className="text-slate-500 font-medium">Загрузка базы знаний...</p>
-            </div>
-        );
-    }
-
-    if (error || !disease) {
-        return (
-            <div className="p-6 max-w-4xl mx-auto">
+    return (
+        <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {loading ? (
+                <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+                    <Loader2 className="w-12 h-12 text-primary-500 animate-spin" />
+                    <p className="text-slate-500 font-medium">Загрузка базы знаний...</p>
+                </div>
+            ) : (error || !disease) ? (
                 <div className="bg-rose-50 border border-rose-100 p-8 rounded-[32px] text-center">
                     <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-rose-900 mb-2">Упс! Что-то пошло не так</h2>
@@ -88,52 +84,50 @@ export const DiseaseDetailPage: React.FC = () => {
                         Вернуться к списку
                     </Button>
                 </div>
-            </div>
-        );
-    }
+            ) : (
+                <>
+                    <div className="flex items-center justify-between">
+                        <Button variant="ghost" onClick={() => navigate('/diseases')} className="rounded-xl">
+                            <ChevronLeft className="w-5 h-5 mr-1" />
+                            К списку
+                        </Button>
 
-    return (
-        <div className="p-6 max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center justify-between">
-                <Button variant="ghost" onClick={() => navigate('/diseases')} className="rounded-xl">
-                    <ChevronLeft className="w-5 h-5 mr-1" />
-                    К списку
-                </Button>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="secondary"
+                                onClick={() => navigate(`/diseases/edit/${disease.id}`)}
+                                className="rounded-xl"
+                            >
+                                <Edit className="w-5 h-5 mr-2" />
+                                Редактировать
+                            </Button>
 
-                <div className="flex gap-2">
-                    <Button
-                        variant="secondary"
-                        onClick={() => navigate(`/diseases/edit/${disease.id}`)}
-                        className="rounded-xl"
-                    >
-                        <Edit className="w-5 h-5 mr-2" />
-                        Редактировать
-                    </Button>
+                            <Button
+                                variant="ghost"
+                                onClick={handleDeleteClick}
+                                isLoading={isDeleting}
+                                className="rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/10"
+                            >
+                                <Trash2 className="w-5 h-5 mr-2" />
+                                Удалить
+                            </Button>
+                        </div>
+                    </div>
 
-                    <Button
-                        variant="ghost"
-                        onClick={handleDeleteClick}
-                        isLoading={isDeleting}
-                        className="rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/10"
-                    >
-                        <Trash2 className="w-5 h-5 mr-2" />
-                        Удалить
-                    </Button>
-                </div>
-            </div>
+                    <DiseaseKnowledgeView disease={disease} />
 
-            <DiseaseKnowledgeView disease={disease} />
-
-            <ConfirmDialog
-                isOpen={showDeleteConfirm}
-                title="Удаление заболевания"
-                message={`Вы уверены, что хотите удалить заболевание "${disease?.nameRu}"?\n\nЭто действие нельзя отменить.`}
-                confirmText="Удалить"
-                cancelText="Отмена"
-                variant="danger"
-                onConfirm={handleDeleteConfirm}
-                onCancel={() => setShowDeleteConfirm(false)}
-            />
+                    <ConfirmDialog
+                        isOpen={showDeleteConfirm}
+                        title="Удаление заболевания"
+                        message={`Вы уверены, что хотите удалить заболевание "${disease?.nameRu}"?\n\nЭто действие нельзя отменить.`}
+                        confirmText="Удалить"
+                        cancelText="Отмена"
+                        variant="danger"
+                        onConfirm={handleDeleteConfirm}
+                        onCancel={() => setShowDeleteConfirm(false)}
+                    />
+                </>
+            )}
         </div>
     );
 };
