@@ -244,6 +244,7 @@ export const VisitFormPage: React.FC = () => {
     const [hasLocalChanges, setHasLocalChanges] = useState(false);
     const initialLoadDone = useRef(false);
     const tabRegistered = useRef(false);
+    const successHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Tabs integration
     const { openTab, closeTab, markDirty, registerSaveHandler, unregisterSaveHandler } = useTabs();
@@ -254,6 +255,14 @@ export const VisitFormPage: React.FC = () => {
     const resolvePersistStatus = useCallback((status?: Visit['status']) => (
         status === 'completed' ? 'completed' : 'draft'
     ), []);
+
+    useEffect(() => {
+        return () => {
+            if (successHideTimeoutRef.current) {
+                clearTimeout(successHideTimeoutRef.current);
+            }
+        };
+    }, []);
 
     // Обработчик выхода из формы: при наличии изменений сохраняем черновик (localStorage + бэкенд), затем закрываем
     const handleBack = useCallback(async () => {
@@ -923,6 +932,13 @@ export const VisitFormPage: React.FC = () => {
                     : 'Черновик успешно сохранен!'
             );
             setSuccess(true);
+            if (successHideTimeoutRef.current) {
+                clearTimeout(successHideTimeoutRef.current);
+            }
+            successHideTimeoutRef.current = setTimeout(() => {
+                setSuccess(false);
+                successHideTimeoutRef.current = null;
+            }, 3000);
             
             // Очищаем черновик и помечаем вкладку как "чистую" после успешного сохранения
             draftService.removeDraft(draftKey);

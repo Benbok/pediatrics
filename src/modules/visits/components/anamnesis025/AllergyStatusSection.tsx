@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { AutoResizeTextarea } from '../../../../components/ui/AutoResizeTextarea';
 import { AllergyStatusData } from '../../../../types';
 
 interface AllergyStatusSectionProps {
@@ -31,7 +32,7 @@ export const AllergyStatusSection: React.FC<AllergyStatusSectionProps> = ({ data
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Пищевая аллергия на
                     </label>
-                    <textarea
+                    <AutoResizeTextarea
                         value={allergyData.food || ''}
                         onChange={(e) => handleChange('food', e.target.value)}
                         placeholder="Укажите пищевые аллергены..."
@@ -44,7 +45,7 @@ export const AllergyStatusSection: React.FC<AllergyStatusSectionProps> = ({ data
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Лекарственная аллергия на
                     </label>
-                    <textarea
+                    <AutoResizeTextarea
                         value={allergyData.medication || ''}
                         onChange={(e) => handleChange('medication', e.target.value)}
                         placeholder="Укажите лекарственные препараты..."
@@ -57,7 +58,7 @@ export const AllergyStatusSection: React.FC<AllergyStatusSectionProps> = ({ data
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Аллергия на материалы
                     </label>
-                    <textarea
+                    <AutoResizeTextarea
                         value={allergyData.materials || ''}
                         onChange={(e) => handleChange('materials', e.target.value)}
                         placeholder="Укажите материалы (латекс, металлы и т.д.)..."
@@ -70,7 +71,7 @@ export const AllergyStatusSection: React.FC<AllergyStatusSectionProps> = ({ data
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Реакции на укусы насекомых
                     </label>
-                    <textarea
+                    <AutoResizeTextarea
                         value={allergyData.insectBites || ''}
                         onChange={(e) => handleChange('insectBites', e.target.value)}
                         placeholder="Опишите реакции на укусы..."
@@ -83,7 +84,7 @@ export const AllergyStatusSection: React.FC<AllergyStatusSectionProps> = ({ data
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Сезонные аллергии
                     </label>
-                    <textarea
+                    <AutoResizeTextarea
                         value={allergyData.seasonal || ''}
                         onChange={(e) => handleChange('seasonal', e.target.value)}
                         placeholder="Укажите сезонные аллергены (пыльца, плесень и т.д.)..."

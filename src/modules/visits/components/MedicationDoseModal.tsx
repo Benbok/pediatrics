@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { X, AlertCircle, Pill, Beaker, Calculator, ChevronDown, ChevronUp, Plus, Trash2, BookOpen } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { AutoResizeTextarea } from '../../../components/ui/AutoResizeTextarea';
 import { PrettySelect, type SelectOption } from '../../vaccination/components/PrettySelect';
 import { Medication, MedicationForm } from '../../../types';
 import type { MatchingRuleSummary, CalculationBreakdown } from '../../../types/medication.types';
@@ -1148,7 +1149,7 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                             <AlertCircle className="w-4 h-4 text-slate-400" />
                             Инструкция по применению
                         </label>
-                        <textarea
+                        <AutoResizeTextarea
                             value={dosing}
                             onChange={(e) => setDosing(e.target.value)}
                             placeholder={autoDosingPreview || 'Например: По 10 мг/кг каждые 12 часов...'}

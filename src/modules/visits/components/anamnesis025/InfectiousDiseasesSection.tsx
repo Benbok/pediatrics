@@ -1,5 +1,6 @@
 import React from 'react';
 import { Input } from '../../../../components/ui/Input';
+import { AutoResizeTextarea } from '../../../../components/ui/AutoResizeTextarea';
 import { Bug } from 'lucide-react';
 import { InfectiousDiseasesData } from '../../../../types';
 
@@ -196,7 +197,7 @@ export const InfectiousDiseasesSection: React.FC<InfectiousDiseasesSectionProps>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Прочие
                     </label>
-                    <textarea
+                    <AutoResizeTextarea
                         value={infectiousData.other || ''}
                         onChange={(e) => handleOtherChange(e.target.value)}
                         placeholder="Другие перенесенные инфекционные заболевания..."

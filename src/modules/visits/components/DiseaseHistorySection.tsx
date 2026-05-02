@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
+import { AutoResizeTextarea } from '../../../components/ui/AutoResizeTextarea';
 import { Activity, Sparkles, Clock, TrendingUp, Pill, Check, X, WifiOff } from 'lucide-react';
 import { Visit } from '../../../types';
 
@@ -308,7 +309,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                             )}
                         </div>
                     </div>
-                    <textarea
+                    <AutoResizeTextarea
                         value={streamPreview.complaints || formData.complaints || ''}
                         onChange={(e) => onChange('complaints', e.target.value)}
                         placeholder="Например: температура 38.5, сухой кашель, одышка..."
@@ -397,7 +398,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                             </div>
                         )}
                     </div>
-                    <textarea
+                    <AutoResizeTextarea
                         value={streamPreview.diseaseOnset || formData.diseaseOnset || ''}
                         onChange={(e) => onChange('diseaseOnset', e.target.value)}
                         placeholder="Опишите когда началось заболевание, первые симптомы, как они появились..."
@@ -479,7 +480,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                             </div>
                         )}
                     </div>
-                    <textarea
+                    <AutoResizeTextarea
                         value={streamPreview.diseaseCourse || formData.diseaseCourse || ''}
                         onChange={(e) => onChange('diseaseCourse', e.target.value)}
                         placeholder="Опишите динамику развития заболевания, изменение симптомов, периоды улучшения/ухудшения..."
@@ -561,7 +562,7 @@ export const DiseaseHistorySection: React.FC<DiseaseHistorySectionProps> = ({
                             </div>
                         )}
                     </div>
-                    <textarea
+                    <AutoResizeTextarea
                         value={streamPreview.treatmentBeforeVisit || formData.treatmentBeforeVisit || ''}
                         onChange={(e) => onChange('treatmentBeforeVisit', e.target.value)}
                         placeholder="Укажите какие препараты принимались, дозировки, длительность приема, эффект от лечения..."

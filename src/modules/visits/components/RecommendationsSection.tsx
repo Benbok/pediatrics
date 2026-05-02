@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
+import { AutoResizeTextarea } from '../../../components/ui/AutoResizeTextarea';
 import {
     FileSignature,
     Save,
@@ -71,15 +71,15 @@ export const RecommendationsSection: React.FC<RecommendationsSectionProps> = ({
         handleCancelEdit();
     }, [editingText, editingIndex, items, onChange, disabled, handleCancelEdit]);
 
-    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
+    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             handleAddItem();
         }
     }, [handleAddItem]);
 
-    const handleEditKeyDown = useCallback((e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
+    const handleEditKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             handleSaveEdit();
         } else if (e.key === 'Escape') {
@@ -141,18 +141,18 @@ export const RecommendationsSection: React.FC<RecommendationsSectionProps> = ({
                 {items.map((item, idx) => (
                     <div
                         key={idx}
-                        className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl flex items-center gap-3 group transition-all"
+                        className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl flex items-start gap-3 group transition-all"
                     >
                         {editingIndex === idx ? (
                             // Edit mode
                             <>
-                                <FileSignature className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-                                <input
-                                    type="text"
+                                <FileSignature className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-2" />
+                                <AutoResizeTextarea
                                     value={editingText}
                                     onChange={(e) => setEditingText(e.target.value)}
                                     onKeyDown={handleEditKeyDown}
-                                    className="flex-1 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-lg px-3 py-1.5 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                                    rows={3}
+                                    className="flex-1 resize-y bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                                     autoFocus
                                 />
                                 <Button
@@ -177,8 +177,8 @@ export const RecommendationsSection: React.FC<RecommendationsSectionProps> = ({
                         ) : (
                             // Display mode
                             <>
-                                <FileSignature className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-                                <span className="flex-1 text-sm text-slate-800 dark:text-white">
+                                <FileSignature className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
+                                <span className="flex-1 text-sm text-slate-800 dark:text-white whitespace-pre-wrap">
                                     {item}
                                 </span>
                                 <Button
@@ -214,13 +214,14 @@ export const RecommendationsSection: React.FC<RecommendationsSectionProps> = ({
             </div>
 
             {/* Add new item */}
-            <div className="flex gap-2">
-                <Input
+            <div className="flex items-end gap-2">
+                <AutoResizeTextarea
                     value={newItemText}
                     onChange={(e) => setNewItemText(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Введите рекомендацию..."
-                    className="flex-1"
+                    rows={3}
+                    className="flex-1 resize-y rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     disabled={disabled}
                 />
                 <Button

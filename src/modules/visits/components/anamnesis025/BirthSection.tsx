@@ -1,5 +1,6 @@
 import React from 'react';
 import { Input } from '../../../../components/ui/Input';
+import { AutoResizeTextarea } from '../../../../components/ui/AutoResizeTextarea';
 import { Baby } from 'lucide-react';
 import { BirthData } from '../../../../types';
 
@@ -133,7 +134,7 @@ export const BirthSection: React.FC<BirthSectionProps> = ({ data, onChange }) =>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Течение беременности
                     </label>
-                    <textarea
+                    <AutoResizeTextarea
                         value={birthData.pregnancyCourse || ''}
                         onChange={(e) => handleChange('pregnancyCourse', e.target.value)}
                         placeholder="Опишите течение беременности..."
@@ -146,7 +147,7 @@ export const BirthSection: React.FC<BirthSectionProps> = ({ data, onChange }) =>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Акушерский анамнез
                     </label>
-                    <textarea
+                    <AutoResizeTextarea
                         value={birthData.obstetricalHistory || ''}
                         onChange={(e) => handleChange('obstetricalHistory', e.target.value)}
                         placeholder="Акушерский анамнез..."

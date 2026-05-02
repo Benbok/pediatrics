@@ -63,16 +63,8 @@ export const EditPatientPage: React.FC = () => {
         }
     };
 
-    if (isFetching) {
-        return (
-            <div className="flex items-center justify-center p-16 text-slate-400">
-                <Loader className="animate-spin" size={28} />
-            </div>
-        );
-    }
-
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
+        <div className="space-y-8 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header */}
             <div className="flex items-center gap-4">
                 <Button
@@ -93,6 +85,12 @@ export const EditPatientPage: React.FC = () => {
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-[32px] p-10 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 border border-slate-100 dark:border-slate-800">
+                {isFetching ? (
+                    <div className="flex items-center justify-center py-16 text-slate-400">
+                        <Loader className="animate-spin" size={28} />
+                    </div>
+                ) : (
+                <>
                 {error && (
                     <div className="mb-8 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl flex gap-3 items-center animate-in slide-in-from-top-2">
                         <AlertCircle className="text-red-500 shrink-0" size={20} />
@@ -122,6 +120,8 @@ export const EditPatientPage: React.FC = () => {
                         </Button>
                     </div>
                 </form>
+                </>
+                )}
             </div>
         </div>
     );

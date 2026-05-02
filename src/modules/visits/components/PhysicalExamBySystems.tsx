@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
+import { AutoResizeTextarea } from '../../../components/ui/AutoResizeTextarea';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { ChevronDown, ChevronUp, Eye, Heart, Brain, Activity, Stethoscope, FileText, ChevronsDownUp, Save, Trash2, Pencil } from 'lucide-react';
 import { Visit } from '../../../types';
@@ -385,7 +386,7 @@ export const PhysicalExamBySystems: React.FC<PhysicalExamBySystemsProps> = ({
                                             </Button>
                                         </div>
                                     )}
-                                    <textarea
+                                    <AutoResizeTextarea
                                         value={value || ''}
                                         onChange={(e) => onChange(system.key, e.target.value)}
                                         placeholder={system.placeholder}

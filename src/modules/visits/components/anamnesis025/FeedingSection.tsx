@@ -1,5 +1,6 @@
 import React from 'react';
 import { Input } from '../../../../components/ui/Input';
+import { AutoResizeTextarea } from '../../../../components/ui/AutoResizeTextarea';
 import { Baby } from 'lucide-react';
 import { FeedingData } from '../../../../types';
 
@@ -107,7 +108,7 @@ export const FeedingSection: React.FC<FeedingSectionProps> = ({ data, onChange }
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Особенности питания
                     </label>
-                    <textarea
+                    <AutoResizeTextarea
                         value={feedingData.nutritionFeatures || ''}
                         onChange={(e) => handleChange('nutritionFeatures', e.target.value)}
                         placeholder="Опишите особенности питания..."
