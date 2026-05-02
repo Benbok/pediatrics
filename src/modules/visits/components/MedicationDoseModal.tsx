@@ -30,6 +30,8 @@ export interface DoseData {
     formId?: string | null;
     /** Physical form type: tablet | powder | solution | ... */
     formType?: string | null;
+    /** Form concentration for the recipe Rp. line, e.g. "200 мг+28.5 мг/5 мл" */
+    formConcentration?: string | null;
     timesPerDay?: number | null;
     routeOfAdmin?: string | null;
     packagingDescription?: string | null;
@@ -101,7 +103,8 @@ const FORM_TYPE_LABELS: Record<string, string> = {
 };
 
 const buildFormLabel = (form: MedicationForm): string => {
-    const parts = [form.type, form.concentration].filter(Boolean);
+    const localizedType = form.type ? (FORM_TYPE_LABELS[form.type] || form.type) : '';
+    const parts = [localizedType, form.concentration].filter(Boolean);
     return parts.length > 0 ? parts.join(' • ') : form.id;
 };
 
@@ -165,9 +168,6 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
 
     // ---- Form of drug ----
     const [formId, setFormId] = useState<string>(initialDoseData?.formId || '');
-    const [packagingDescription, setPackagingDescription] = useState(
-        initialDoseData?.packagingDescription || ''
-    );
 
     // ---- Dosing text + duration ----
     const [duration, setDuration] = useState(initialDoseData?.duration || '5-7 дней');
@@ -353,12 +353,6 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
 
 
 
-    // ml preview for solution forms
-    const singleDoseMlPreview = useMemo(() => {
-        if (!selectedForm?.mgPerMl || !primaryDoseMg) return null;
-        return Math.round((primaryDoseMg / selectedForm.mgPerMl) * 100) / 100;
-    }, [primaryDoseMg, selectedForm]);
-
     // Suspension calculator memos
     const suspensionCalcMgPerMl = useMemo(() => {
         const mg = parseFloat(suspensionMgInBottle);
@@ -462,15 +456,6 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             const resolvedFormId = initialDoseData.formId || defaultRuleFormId || '';
             setFormId(resolvedFormId);
 
-            const resolvedForm = resolvedFormId
-                ? (medication?.forms || []).find(f => f.id === resolvedFormId) || null
-                : null;
-            setPackagingDescription(
-                initialDoseData.packagingDescription ||
-                buildFormDescription(resolvedForm) ||
-                medication?.packageDescription || ''
-            );
-
             if (initialDoseData.daySchedule?.length) {
                 setDaySchedule(initialDoseData.daySchedule.map(d => ({
                     id: newRowId(),
@@ -499,9 +484,11 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             setManualVolumeToDraw(initialDoseData.dilution?.volumeToDrawMl?.toString() || '');
             setConcentrationOverride(false);
             setVolumeToDrawOverride(false);
+            setSuspensionCalcEnabled(initialDoseData.dilution?.suspensionEnabled || false);
+            setSuspensionMgInBottle(initialDoseData.dilution?.suspensionBaseMg?.toString() || '');
+            setSuspensionVolumeMl(initialDoseData.dilution?.suspensionBaseVolumeMl?.toString() || '');
         } else if (medication) {
             setRouteOfAdmin(medication.routeOfAdmin || '');
-            setPackagingDescription(medication.packageDescription || '');
             const defaultRuleFormId =
                 appliedRuleIndex != null && medication.pediatricDosing?.[appliedRuleIndex]?.formId
                     ? medication.pediatricDosing[appliedRuleIndex].formId!
@@ -517,7 +504,6 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             setDosing('');
             setDuration('5-7 дней');
             setFormId('');
-            setPackagingDescription('');
             setDaySchedule([{
                 id: newRowId(), dayLabel: 'Весь курс',
                 singleDoseMg: '', timesPerDay: '', routeOfAdmin: '',
@@ -617,6 +603,9 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             }
         }
 
+        const resolvedPackagingDescription =
+            buildFormDescription(selectedForm) || initialDoseData?.packagingDescription || medication.packageDescription || '';
+
         const doseData: DoseData = {
             dosing: finalDosing,
             duration: duration.trim() || '5-7 дней',
@@ -625,7 +614,8 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
             routeOfAdmin: firstRow?.routeOfAdmin || routeOfAdmin || null,
             formId: formId || null,
             formType: selectedForm?.type || null,
-            packagingDescription: packagingDescription.trim() || buildFormDescription(selectedForm) || null,
+            formConcentration: selectedForm?.concentration || null,
+            packagingDescription: resolvedPackagingDescription.trim() || null,
             daySchedule: outSchedule,
             dilution: dilutionData,
         };
@@ -1036,11 +1026,6 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                                                             ~{Math.round(parseFloat(row.singleDoseMg) / patientWeight * 10) / 10} мг/кг по весу
                                                         </p>
                                                     )}
-                                                    {singleDoseMlPreview && (
-                                                        <p className="text-xs text-primary-600 dark:text-primary-400">
-                                                            ≈ {singleDoseMlPreview} мл
-                                                        </p>
-                                                    )}
                                                     <button
                                                         type="button"
                                                         onClick={() => {
@@ -1143,21 +1128,6 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                         </div>
                     )}
 
-                    {/* ==== Описание упаковки + Длительность ==== */}
-                    <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                            Упаковка
-                        </label>
-                        <Input
-                            type="text"
-                            value={packagingDescription}
-                            onChange={(e) => setPackagingDescription(e.target.value)}
-                            placeholder="Флакон 500 мг"
-                            className="w-full"
-                        />
-                    </div>
-
                     {/* ==== Длительность ==== */}
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -1171,7 +1141,6 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                             className="w-full"
                         />
                     </div>
-                    </div>{/* end packaging+duration grid */}
 
                     {/* ==== Инструкция по применению (свободный текст) ==== */}
                     <div className="space-y-1.5">
@@ -1193,14 +1162,14 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                         )}
                     </div>
 
-                    {/* ==== РАСЧЁТ СУСПЕНЗИИ ==== */}
+                    {/* ==== РАСЧЁТ СУСПЕНЗИИ/КАПЕЛЬ ==== */}
                     {isSuspensionForm && (
                         <div className="space-y-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Beaker className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                        Расчёт суспензии
+                                        Расчёт суспензии/капель
                                     </label>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer shrink-0 mr-1">
@@ -1227,7 +1196,7 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                                     <div className="grid grid-cols-2 gap-3 items-start">
                                         <div className="space-y-1.5">
                                             <label className="block min-h-[2.5rem] text-xs font-medium text-slate-700 dark:text-slate-300">
-                                                Объём суспензии (мл)
+                                                Объём препарата (мл)
                                             </label>
                                             <Input
                                                 type="number"
@@ -1264,7 +1233,7 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                                                 </div>
                                                 <div className="rounded-lg border border-teal-200 dark:border-teal-800/50 overflow-hidden">
                                                     <div className="grid grid-cols-3 px-3 py-1.5 bg-teal-50 dark:bg-teal-950/20 border-b border-teal-200 dark:border-teal-800/50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                                                        <span>Период</span><span>Доза</span><span>Отмерить</span>
+                                                        <span>Период</span><span>Доза</span><span>Количество/мл</span>
                                                     </div>
                                                     {perDaySuspensionResults.map((r, i) => (
                                                         <div key={i} className={`grid grid-cols-3 px-3 py-2 ${i > 0 ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}>
@@ -1292,7 +1261,7 @@ export const MedicationDoseModal: React.FC<MedicationDoseModalProps> = ({
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Отмерить суспензии</p>
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Количество/мл</p>
                                                     <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                                                         {formatSuspensionVolumeMl(perDaySuspensionResults[0]?.volumeMl)}
                                                     </p>

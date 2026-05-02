@@ -13,6 +13,7 @@ import { useVisitAnalysis } from '../../hooks/useVisitAnalysis';
 import debounce from 'lodash/debounce';
 import { Visit, ChildProfile, Disease, Medication, DiagnosisSuggestion, DiagnosisEntry, MedicationRecommendation, AllergyStatusData, getFullName } from '../../types';
 import { MedicationBrowser } from './components/MedicationBrowser';
+import { RecipePreviewModal } from './components/RecipePreviewModal';
 import { VisitTypeSelector, VisitType } from './components/VisitTypeSelector';
 import { AnamnesisSection } from './components/AnamnesisSection';
 import { DiseaseHistorySection } from './components/DiseaseHistorySection';
@@ -106,19 +107,24 @@ function formatPrescriptionCalculationDetails(prescription: any): string | null 
     if (!dilution) return null;
 
     if (dilution.suspensionEnabled) {
-        const suspensionParts: string[] = [];
+        const concentration = hasPositiveNumber(dilution.concentrationMgPerMl)
+            ? `${dilution.concentrationMgPerMl} мг/мл`
+            : null;
+        const amountMl = hasPositiveNumber(dilution.volumeToDrawMl)
+            ? `${formatMlToTenths(dilution.volumeToDrawMl)} мл`
+            : null;
 
-        if (hasPositiveNumber(dilution.suspensionBaseMg) && hasPositiveNumber(dilution.suspensionBaseVolumeMl)) {
-            suspensionParts.push(`${dilution.suspensionBaseMg} мг/${dilution.suspensionBaseVolumeMl} мл`);
+        if (concentration && amountMl) {
+            return `Концентрация ${concentration} - Количество/мл ${amountMl}`;
         }
-        if (hasPositiveNumber(dilution.concentrationMgPerMl)) {
-            suspensionParts.push(`${dilution.concentrationMgPerMl} мг/мл`);
+        if (concentration) {
+            return `Концентрация ${concentration}`;
         }
-        if (hasPositiveNumber(dilution.volumeToDrawMl)) {
-            suspensionParts.push(`отмерить ${formatMlToTenths(dilution.volumeToDrawMl)} мл суспензии`);
+        if (amountMl) {
+            return `Количество/мл ${amountMl}`;
         }
 
-        return suspensionParts.length > 0 ? `суспензия: ${suspensionParts.join(', ')}` : 'суспензия';
+        return null;
     }
 
     if (!dilution.enabled) return null;
@@ -181,6 +187,7 @@ export const VisitFormPage: React.FC = () => {
     const [medicationRecommendations, setMedicationRecommendations] = useState<any[]>([]);
     const [isLoadingMedications, setIsLoadingMedications] = useState(false);
     const [isMedicationBrowserOpen, setIsMedicationBrowserOpen] = useState(false);
+    const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
     const [autoDetectedVisitType, setAutoDetectedVisitType] = useState<VisitType | null>(null);
 
     // Модальное окно редактирования дозировки
@@ -244,6 +251,9 @@ export const VisitFormPage: React.FC = () => {
     // Ключ для черновика в localStorage
     const draftKey = draftService.getVisitDraftKey(Number(childId), id ? Number(id) : null);
     const tabId = id ? `visit-${childId}-${id}` : `visit-${childId}-new`;
+    const resolvePersistStatus = useCallback((status?: Visit['status']) => (
+        status === 'completed' ? 'completed' : 'draft'
+    ), []);
 
     // Обработчик выхода из формы: при наличии изменений сохраняем черновик (localStorage + бэкенд), затем закрываем
     const handleBack = useCallback(async () => {
@@ -257,7 +267,7 @@ export const VisitFormPage: React.FC = () => {
                     const payload = buildVisitPayload(
                         { ...formData, childId: childIdNum, doctorId: doctorIdNum },
                         recommendations,
-                        'draft'
+                        resolvePersistStatus(formData.status)
                     );
                     await visitService.upsertVisit(payload);
                     draftService.removeDraft(draftKey);
@@ -270,7 +280,7 @@ export const VisitFormPage: React.FC = () => {
         setTimeout(() => {
             navigate(`/patients/${childId}/visits`);
         }, 0);
-    }, [closeTab, tabId, navigate, childId, hasLocalChanges, formData, draftKey, recommendations, suggestions, currentUser?.id]);
+    }, [closeTab, tabId, navigate, childId, hasLocalChanges, formData, draftKey, recommendations, suggestions, currentUser?.id, resolvePersistStatus]);
 
     // Анимация прогресса AI анализа
     useEffect(() => {
@@ -382,7 +392,7 @@ export const VisitFormPage: React.FC = () => {
                 const payload = buildVisitPayload(
                     { ...data, childId: childIdNum, doctorId: doctorIdNum },
                     recs,
-                    'draft'
+                    resolvePersistStatus(data.status)
                 );
                 const savedVisit = await visitService.upsertVisit(payload);
                 if (!data.id && savedVisit.id) {
@@ -393,7 +403,7 @@ export const VisitFormPage: React.FC = () => {
                 logger.warn('[VisitFormPage] Draft backend save failed', { error: err?.message });
             }
         }, 2500),
-        [draftKey, childId, currentUser?.id]
+        [draftKey, childId, currentUser?.id, resolvePersistStatus]
     );
 
     // Автосохранение при изменении formData (localStorage + бэкенд)
@@ -421,7 +431,7 @@ export const VisitFormPage: React.FC = () => {
                 const payload = buildVisitPayload(
                     { ...formData, childId: childIdNum, doctorId: doctorIdNum },
                     recommendations,
-                    'draft'
+                    resolvePersistStatus(formData.status)
                 );
                 await visitService.upsertVisit(payload);
                 draftService.removeDraft(draftKey);
@@ -431,7 +441,7 @@ export const VisitFormPage: React.FC = () => {
                 logger.warn('[VisitFormPage] Save draft on close failed', { error: err?.message });
             }
         };
-    }, [formData, recommendations, childId, currentUser?.id, draftKey, setDirty]);
+    }, [formData, recommendations, childId, currentUser?.id, draftKey, setDirty, resolvePersistStatus]);
     useEffect(() => {
         registerSaveHandler(tabId, async () => { await saveDraftForCloseRef.current?.(); });
         return () => unregisterSaveHandler(tabId);
@@ -919,8 +929,6 @@ export const VisitFormPage: React.FC = () => {
             setDirty(false);
             setHasLocalChanges(false);
             logger.info('[VisitFormPage] Visit saved, draft cleared', { draftKey });
-
-            setTimeout(() => handleBack(), 1500);
         } catch (err: any) {
             const errorMessage = err.message || 'Ошибка сохранения';
             setError(errorMessage);
@@ -1517,6 +1525,7 @@ export const VisitFormPage: React.FC = () => {
             timesPerDay: doseData.timesPerDay,
             formId: doseData.formId || null,
             formType: doseData.formType || null,
+            formConcentration: doseData.formConcentration || null,
             routeOfAdmin: doseData.routeOfAdmin || selectedMedicationForDose.routeOfAdmin || null,
             packagingDescription: doseData.packagingDescription || null,
             daySchedule: doseData.daySchedule?.length ? doseData.daySchedule : null,
@@ -1889,6 +1898,16 @@ export const VisitFormPage: React.FC = () => {
                         >
                             <Printer className="w-4 h-4 mr-2" />
                             Печать
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => setIsRecipeModalOpen(true)}
+                            className="rounded-xl h-10 px-4 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            title="Рецептурный бланк 107-1/у"
+                            disabled={!formData.prescriptions?.length}
+                        >
+                            <FileSignature className="w-4 h-4 mr-2" />
+                            Рецепт 107-1/у
                         </Button>
                         {isCompletedVisit ? (
                             <Button 
@@ -2349,7 +2368,7 @@ export const VisitFormPage: React.FC = () => {
                                         ) : (p.singleDoseMg || p.timesPerDay) && (
                                             <div className="text-xs text-slate-500 mt-1">
                                                 Разовая доза: {p.singleDoseMg ?? '—'} мг
-                                                {p.timesPerDay ? ` × ${p.timesPerDay} раз в день` : ''}
+                                                {p.timesPerDay ? ` * ${p.timesPerDay} р/сутки` : ''}
                                                 {formatPrescriptionCalculationDetails(p) ? ` (${formatPrescriptionCalculationDetails(p)})` : ''}
                                             </div>
                                         )}
@@ -2955,6 +2974,18 @@ export const VisitFormPage: React.FC = () => {
                     }}
                     items={recommendations}
                     userId={currentUser.id}
+                />
+            )}
+
+            {/* Рецептурный бланк 107-1/у */}
+            {isRecipeModalOpen && child && (
+                <RecipePreviewModal
+                    isOpen={isRecipeModalOpen}
+                    onClose={() => setIsRecipeModalOpen(false)}
+                    prescriptions={formData.prescriptions || []}
+                    child={child}
+                    currentUser={currentUser}
+                    visitDate={formData.visitDate || new Date().toISOString().split('T')[0]}
                 />
             )}
         </div>

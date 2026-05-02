@@ -46,28 +46,28 @@ function formatMlToTenths(value: number): string {
     return value.toFixed(1);
 }
 
-function formatPrescriptionCalculationDetails(prescription: VisitFormPrintData['visit']['prescriptions'] extends any ? any : never): string | null {
+function formatPrescriptionCalculationDetails(prescription: any): string | null {
     const dilution = prescription?.dilution;
     if (!dilution) return null;
 
+    // Суспензия: «Концентрация X мг/мл - Количество/мл Y мл» (формат как в карточке приёма)
     if (dilution.suspensionEnabled) {
-        const suspensionParts: string[] = [];
+        const concentration = hasPositiveNumber(dilution.concentrationMgPerMl)
+            ? `${dilution.concentrationMgPerMl} мг/мл`
+            : null;
+        const amountMl = hasPositiveNumber(dilution.volumeToDrawMl)
+            ? `${formatMlToTenths(dilution.volumeToDrawMl)} мл`
+            : null;
 
-        if (hasPositiveNumber(dilution.suspensionBaseMg) && hasPositiveNumber(dilution.suspensionBaseVolumeMl)) {
-            suspensionParts.push(`${dilution.suspensionBaseMg} мг/${dilution.suspensionBaseVolumeMl} мл`);
-        }
-        if (hasPositiveNumber(dilution.concentrationMgPerMl)) {
-            suspensionParts.push(`${dilution.concentrationMgPerMl} мг/мл`);
-        }
-        if (hasPositiveNumber(dilution.volumeToDrawMl)) {
-            suspensionParts.push(`отмерить ${formatMlToTenths(dilution.volumeToDrawMl)} мл суспензии`);
-        }
-
-        return suspensionParts.length > 0 ? `суспензия: ${suspensionParts.join(', ')}` : 'суспензия';
+        if (concentration && amountMl) return `Концентрация ${concentration} - Количество/мл ${amountMl}`;
+        if (concentration) return `Концентрация ${concentration}`;
+        if (amountMl) return `Количество/мл ${amountMl}`;
+        return null;
     }
 
     if (!dilution.enabled) return null;
 
+    // Разведение инъекций
     const dilutionParts: string[] = [];
     if (hasPositiveNumber(dilution.powderVialMg) && hasPositiveNumber(dilution.reconstitutionVolumeMl)) {
         dilutionParts.push(`порошок ${dilution.powderVialMg} мг/${dilution.reconstitutionVolumeMl} мл`);
@@ -528,13 +528,14 @@ export const VisitForm: React.FC<PrintTemplateProps<VisitFormPrintData>> = ({
                                     <td>{p.name}</td>
                                     <td>
                                         {p.dosing}
-                                        {p.singleDoseMg && p.timesPerDay && (
+                                        {(p.singleDoseMg || p.timesPerDay) && (
                                             <div className="dose-detail">
-                                                {p.singleDoseMg} мг × {p.timesPerDay} р/день
+                                                Разовая доза: {p.singleDoseMg ?? '—'} мг
+                                                {p.timesPerDay ? ` * ${p.timesPerDay} р/сутки` : ''}
                                                 {formatPrescriptionCalculationDetails(p) ? ` (${formatPrescriptionCalculationDetails(p)})` : ''}
                                             </div>
                                         )}
-                                        {(!p.singleDoseMg || !p.timesPerDay) && formatPrescriptionCalculationDetails(p) && (
+                                        {!p.singleDoseMg && !p.timesPerDay && formatPrescriptionCalculationDetails(p) && (
                                             <div className="dose-detail">
                                                 {formatPrescriptionCalculationDetails(p)}
                                             </div>

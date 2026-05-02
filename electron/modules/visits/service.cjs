@@ -329,6 +329,17 @@ const VisitSchema = z.object({
         singleDoseMg: z.number().nullable().optional(),
         timesPerDay: z.number().nullable().optional(),
         routeOfAdmin: z.string().nullable().optional(),
+        formId: z.string().nullable().optional(),
+        formType: z.string().nullable().optional(),
+        formConcentration: z.string().nullable().optional(),
+        packagingDescription: z.string().nullable().optional(),
+        daySchedule: z.array(z.object({
+            dayLabel: z.string(),
+            singleDoseMg: z.number().nullable().optional(),
+            timesPerDay: z.number().nullable().optional(),
+            routeOfAdmin: z.string().nullable().optional(),
+            note: z.string().nullable().optional(),
+        })).nullable().optional(),
         dilution: z.object({
             enabled: z.boolean(),
             suspensionEnabled: z.boolean().nullable().optional(),

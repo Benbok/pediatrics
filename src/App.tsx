@@ -24,6 +24,7 @@ import { NutritionModule } from './modules/nutrition/NutritionModule';
 // Register print templates
 import './modules/printing/templates/vaccination/register';
 import './modules/printing/templates/visit/register';
+import './modules/printing/templates/recipe/register';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './modules/auth/LoginPage';
 import FirstRunSetupPage from './modules/license/FirstRunSetupPage';

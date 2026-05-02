@@ -171,6 +171,7 @@ export const VisitSchema = z.object({
         timesPerDay: z.number().nullable().optional(),
         formId: z.string().nullable().optional(),
         formType: z.string().nullable().optional(),
+        formConcentration: z.string().nullable().optional(),
         routeOfAdmin: z.string().nullable().optional(),
         packagingDescription: z.string().nullable().optional(),
         daySchedule: z.array(z.object({
