@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     calculateBMI,
     calculateBSA,
+    calculateBMIZScore,
     getBMICategory,
     getBMICategoryLabel,
     formatBMI,
@@ -64,21 +65,64 @@ describe('Visit Utils', () => {
             });
         });
 
-        describe('BMI category', () => {
-            it('should categorize BMI for child correctly', () => {
-                const bmi = 18;
-                const ageMonths = 60; // 5 years
-                const category = getBMICategory(bmi, ageMonths);
-                
-                expect(['underweight', 'normal', 'overweight', 'obese']).toContain(category);
+        describe('BMI Z-score (WHO LMS)', () => {
+            it('should return Z≈0 at median BMI for boy age 24 months', () => {
+                // WHO median for boys at 24 months is ~16.02
+                const z = calculateBMIZScore(16.02, 24, 'male');
+                expect(z).not.toBeNull();
+                expect(z!).toBeCloseTo(0, 0);
             });
 
-            it('should return label for BMI category', () => {
-                const category = 'normal';
-                const label = getBMICategoryLabel(category);
-                
-                expect(typeof label).toBe('string');
-                expect(label.length).toBeGreaterThan(0);
+            it('should return Z≈0 at median BMI for girl age 24 months', () => {
+                // WHO median for girls at 24 months is ~15.69
+                const z = calculateBMIZScore(15.69, 24, 'female');
+                expect(z).not.toBeNull();
+                expect(z!).toBeCloseTo(0, 0);
+            });
+
+            it('should return Z≈0 at median BMI for boy age 120 months (10 years)', () => {
+                // WHO 2007 median for boys at 120 months
+                const z = calculateBMIZScore(16.59, 120, 'male');
+                expect(z).not.toBeNull();
+                expect(z!).toBeCloseTo(0, 0);
+            });
+
+            it('should return null for age beyond 228 months', () => {
+                const z = calculateBMIZScore(22, 240, 'male');
+                expect(z).toBeNull();
+            });
+
+            it('should classify high BMI as overweight (Z > +1)', () => {
+                // Boys 60 months: SD1 ≈ 16.6
+                const category = getBMICategory(17.5, 60, 'male');
+                expect(['overweight', 'obese', 'obese_severe']).toContain(category);
+            });
+
+            it('should classify very low BMI as thinness (Z < -2)', () => {
+                // Boys 60 months: SD-2 ≈ 12.9
+                const category = getBMICategory(11.5, 60, 'male');
+                expect(['thinness', 'thinness_severe']).toContain(category);
+            });
+
+            it('should classify median BMI as normal', () => {
+                const category = getBMICategory(15.2, 60, 'male');
+                expect(category).toBe('normal');
+            });
+
+            it('should fallback gracefully when gender is undefined', () => {
+                const category = getBMICategory(18, 60);
+                expect(['thinness_severe', 'thinness', 'normal', 'overweight', 'obese', 'obese_severe']).toContain(category);
+            });
+        });
+
+        describe('BMI category label', () => {
+            it('should return label for all WHO categories', () => {
+                const categories = ['thinness_severe', 'thinness', 'normal', 'overweight', 'obese', 'obese_severe'] as const;
+                for (const cat of categories) {
+                    const label = getBMICategoryLabel(cat);
+                    expect(typeof label).toBe('string');
+                    expect(label.length).toBeGreaterThan(0);
+                }
             });
         });
 

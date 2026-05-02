@@ -82,7 +82,7 @@ import {
     BookOpen,
     Loader2
 } from 'lucide-react';
-import { calculateBMI, calculateBSA, getBMICategory, getBMICategoryLabel, formatBMI, formatBSA, validateAnthropometry } from '../../utils/anthropometry';
+import { calculateBMI, calculateBSA, calculateBMIZScore, calculateHeightZScore, getHeightCategory, getHeightCategoryLabel, getBMICategory, getBMICategoryLabel, formatBMI, formatBSA, validateAnthropometry } from '../../utils/anthropometry';
 import { calculateAgeInMonths, getFormattedAge } from '../../utils/ageUtils';
 import { getRouteLabel } from '../../utils/routeOfAdmin';
 import { getDiluentLabel } from '../../utils/diluentTypes';
@@ -2157,38 +2157,91 @@ export const VisitFormPage: React.FC = () => {
                             </div>
                         </div>
 
-                        {(calculatedBMI || calculatedBSA) && (
-                            <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
-                                {calculatedBMI && (
-                                    <div>
-                                        <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                                            ИМТ
-                                        </div>
-                                        <div className="text-lg font-bold text-slate-900 dark:text-white">
-                                            {formatBMI(calculatedBMI)}
-                                        </div>
-                                        {child && ageMonths !== undefined && (
-                                            <div className="text-xs text-slate-500 mt-1">
-                                                {getBMICategoryLabel(getBMICategory(calculatedBMI, ageMonths))}
+                        {(calculatedBMI || calculatedBSA) && (() => {
+                            const bmiChipColors: Record<string, string> = {
+                                thinness_severe: 'bg-red-100 text-red-700 border border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
+                                thinness:        'bg-orange-100 text-orange-700 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700',
+                                normal:          'bg-emerald-100 text-emerald-700 border border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700',
+                                overweight:      'bg-yellow-100 text-yellow-700 border border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700',
+                                obese:           'bg-orange-100 text-orange-700 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700',
+                                obese_severe:    'bg-red-100 text-red-700 border border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
+                            };
+                            const heightChipColors: Record<string, string> = {
+                                severely_stunted: 'bg-red-100 text-red-700 border border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
+                                stunted:          'bg-orange-100 text-orange-700 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700',
+                                normal:           'bg-emerald-100 text-emerald-700 border border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700',
+                                tall:             'bg-sky-100 text-sky-700 border border-sky-300 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-700',
+                            };
+                            return (
+                                <div className="flex flex-col gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                    {/* Строка 1: ИМТ + ППТ */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {calculatedBMI && (
+                                            <div>
+                                                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                                                    ИМТ
+                                                </div>
+                                                <div className="text-lg font-bold text-slate-900 dark:text-white">
+                                                    {formatBMI(calculatedBMI)}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {calculatedBSA && (
+                                            <div>
+                                                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                                                    ППТ (площадь тела)
+                                                </div>
+                                                <div className="text-lg font-bold text-slate-900 dark:text-white">
+                                                    {formatBSA(calculatedBSA)}
+                                                </div>
+                                                <div className="text-xs text-slate-500 mt-1">
+                                                    Формула Мостеллера
+                                                </div>
                                             </div>
                                         )}
                                     </div>
-                                )}
-                                {calculatedBSA && (
-                                    <div>
-                                        <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                                            ППТ (площадь тела)
+                                    {/* Строка 2: Z-score массы + Z-score роста */}
+                                    {child && ageMonths !== undefined && (calculatedBMI || formData.currentHeight) && (
+                                        <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                                            {calculatedBMI && (() => {
+                                                const zScore = calculateBMIZScore(calculatedBMI, ageMonths, child.gender);
+                                                const category = getBMICategory(calculatedBMI, ageMonths, child.gender);
+                                                return zScore !== null ? (
+                                                    <div>
+                                                        <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                                                            Z-score массы
+                                                        </div>
+                                                        <div className="text-lg font-bold text-slate-900 dark:text-white mb-1.5">
+                                                            {zScore > 0 ? '+' : ''}{zScore.toFixed(2)}
+                                                        </div>
+                                                        <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${bmiChipColors[category] ?? bmiChipColors.normal}`}>
+                                                            {getBMICategoryLabel(category)}
+                                                        </span>
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                            {formData.currentHeight && (() => {
+                                                const zScore = calculateHeightZScore(formData.currentHeight, ageMonths, child.gender);
+                                                const category = getHeightCategory(formData.currentHeight, ageMonths, child.gender);
+                                                return zScore !== null ? (
+                                                    <div>
+                                                        <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                                                            Z-score роста
+                                                        </div>
+                                                        <div className="text-lg font-bold text-slate-900 dark:text-white mb-1.5">
+                                                            {zScore > 0 ? '+' : ''}{zScore.toFixed(2)}
+                                                        </div>
+                                                        <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${heightChipColors[category] ?? heightChipColors.normal}`}>
+                                                            {getHeightCategoryLabel(category)}
+                                                        </span>
+                                                    </div>
+                                                ) : null;
+                                            })()}
                                         </div>
-                                        <div className="text-lg font-bold text-slate-900 dark:text-white">
-                                            {formatBSA(calculatedBSA)}
-                                        </div>
-                                        <div className="text-xs text-slate-500 mt-1">
-                                            Формула Мостеллера
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </Card>
 
                     {/* Анамнез жизни 025/у (только для primary/consultation) */}
