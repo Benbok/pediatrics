@@ -592,6 +592,18 @@ export const VisitFormPage: React.FC = () => {
                 const autoType = await determineVisitType();
                 updateFormData(prev => ({ ...prev, visitType: autoType }));
                 setAutoDetectedVisitType(autoType);
+
+                // Подтягиваем allergyStatusData из последнего первичного приема
+                try {
+                    const prevVisits = await visitService.getVisits(Number(childId));
+                    const lastPrimary = prevVisits.find(v => v.visitType === 'primary' && v.allergyStatusData);
+                    if (lastPrimary?.allergyStatusData) {
+                        updateFormData(prev => ({ ...prev, allergyStatusData: lastPrimary.allergyStatusData }));
+                        logger.info('[VisitFormPage] allergyStatusData inherited from primary visit', { visitId: lastPrimary.id });
+                    }
+                } catch (err) {
+                    logger.warn('[VisitFormPage] Failed to inherit allergyStatusData:', { error: String(err) });
+                }
             }
             
             // Помечаем, что начальная загрузка завершена
