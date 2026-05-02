@@ -115,7 +115,7 @@ export const Recipe107Form: React.FC<PrintTemplateProps<Recipe107PrintData>> = (
             {/* ── Заголовок «РЕЦЕПТ» ── */}
             <div className="recipe-title-block">
                 <div className="recipe-title">РЕЦЕПТ</div>
-                <div className="recipe-subtitle">(взрослый, детский – нужное подчеркнуть)</div>
+                <div className="recipe-subtitle">(взрослый, <span style={{ textDecoration: 'underline' }}>детский</span> – нужное подчеркнуть)</div>
                 <div className="recipe-date-line">
                     «<span className="date-filled">{date.day}</span>»{' '}
                     <span className="date-filled">{date.month}</span>{' '}
